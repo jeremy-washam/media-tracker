@@ -1,0 +1,7 @@
+{
+  "name": "@media-tracker/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hono API and Cloudflare event handlers"
+}

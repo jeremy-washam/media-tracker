@@ -1,0 +1,7 @@
+{
+  "name": "@media-tracker/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Canonical media types, events, identity, and normalization rules"
+}

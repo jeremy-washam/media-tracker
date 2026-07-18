@@ -1,0 +1,7 @@
+{
+  "name": "@media-tracker/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Private responsive web client"
+}

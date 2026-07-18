@@ -1,0 +1,7 @@
+{
+  "name": "@media-tracker/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Historical import, replay, export, and recovery commands"
+}

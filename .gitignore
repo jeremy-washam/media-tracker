@@ -1,0 +1,16 @@
+.DS_Store
+.dev.vars
+.env
+.env.*
+!.env.example
+.wrangler/
+coverage/
+dist/
+node_modules/
+.pnpm-store/
+playwright-report/
+test-results/
+*.local
+*.log
+*.sqlite
+*.sqlite3

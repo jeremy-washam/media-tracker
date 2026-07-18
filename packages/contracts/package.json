@@ -1,0 +1,7 @@
+{
+  "name": "@media-tracker/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zod API and job-message contracts"
+}
