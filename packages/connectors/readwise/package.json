@@ -2,5 +2,13 @@
   "name": "@media-tracker/connector-readwise",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "probe": "node --env-file-if-exists=../../../.env.local src/probe.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "catalog:"
+  }
 }

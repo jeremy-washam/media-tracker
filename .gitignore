@@ -3,9 +3,11 @@
 .env
 .env.*
 !.env.example
+.private/
 .wrangler/
 coverage/
 dist/
+exports/
 node_modules/
 .pnpm-store/
 playwright-report/

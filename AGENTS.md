@@ -18,6 +18,8 @@ it concise and follow its links instead of duplicating detailed documentation.
    interface structure or visual design.
 6. Read [the long-term vision](docs/product/long-term-vision.md) before designing
    Topics, Feed, Explore, recaps, recommendations, or LLM features.
+7. Read [the source-reconnaissance index](docs/sources/README.md) and the
+   relevant source report before changing a connector or the canonical schema.
 
 ## Non-negotiable product boundaries
 
@@ -25,8 +27,9 @@ it concise and follow its links instead of duplicating detailed documentation.
   multi-tenant, public-registration, or team abstractions.
 - The frontend is React with Vite, not Next.js.
 - The backend is an API-first Hono service on Cloudflare Workers.
-- Preserve raw source records, provenance, external identities, and distinct
-  event timestamps. Imported facts must remain traceable and replayable.
+- Preserve raw source records, provenance, external identities, source date
+  precision, and distinct consumed/source-recorded/ingested timestamps. Imported
+  facts must remain traceable and replayable.
 - Connector writes and queue processing must be idempotent. Never advance a sync
   cursor before its records are durably committed.
 - Keep domain and connector logic independent of Cloudflare so storage and

@@ -60,7 +60,7 @@ For public YouTube discovery, use the YouTube Data API rather than treating tran
 
 Keep the first implementation focused on a trustworthy personal media ledger:
 
-1. Define canonical media items, external identities, and consumption events.
+1. Define canonical media items, external identities, and Archive entries.
 2. Preserve raw source records and complete sync provenance.
 3. Backfill and reconcile Readwise Reader history.
 4. Add Hardcover and Letterboxd history ingestion.
@@ -88,13 +88,16 @@ Use official APIs, webhooks, RSS feeds, and user data exports as appropriate. Pr
 
 - A centralized queue of content to consume later. The local application should be the reliable source of truth. Mirror queue changes to upstream services such as Letterboxd's watchlist when an official, dependable integration permits it, but upstream bidirectional sync is not critical.
 - LLM-assisted search over the owner's saved media, history, metadata, notes, highlights, and authorized full text. Arbitrary natural-language queries should return traceable answers grounded in stored records and source provenance rather than opaque unsupported responses.
-- An iOS application. Mobile is not an initial priority, and the owner dislikes mobile apps, so avoid making the native client foundational. Keep the backend API-first and make the web interface responsive; pursue a native client later only if it provides clear value beyond the web experience.
+- An iOS application. Mobile is not an initial priority, and the owner dislikes
+  mobile apps, so avoid making the native client foundational. Keep the backend
+  API-first, design the initial web client for desktop, and pursue mobile as a
+  separate experience later only if it provides clear value.
 
 ## Technical foundation
 
 The hardest technical problem is a trustworthy canonical personal-media ledger, not the LLM integration.
 
-Maintain a common model roughly like:
+Maintain a small common model roughly like:
 
 ```text
 MediaItem
@@ -102,15 +105,24 @@ MediaItem
   title, creator, canonical URL/IDs, source, dates, duration
   available text/transcript/metadata, provenance
 
-Event
-  saved | started | completed | highlighted | rated | skipped | abandoned
-  timestamp, progress, source platform, notes/highlights
+ArchiveEntry
+  consumed media item, optional consumed date/precision
+  source-recorded and ingested timestamps, rating/review, provenance
+
+QueueEntry
+  explicit future intent, local state, optional upstream mirror
 
 TopicIntent
-  original user sentence, status, derived concepts, linked items/events
+  original user sentence, status, derived concepts, linked items
 ```
 
-Do not collapse all engagement into a single "liked" signal. Saving, opening, completing, highlighting, rating, rewatching, and skipping mean different things.
+Archive is the canonical consumption-history ledger. It does not need a
+universal progress or engagement event vocabulary. Admission is source-specific:
+completion-like evidence is appropriate for films, books, and archived Reader
+documents, while any positive Spotify podcast playback counts as consumed.
+Preserve richer upstream facts such as Readwise highlights, Spotify play
+segments, ratings, reviews, and rereads in raw evidence and source-specific
+records. An admitted item may have an unknown consumption date.
 
 Preserve raw source data/provenance so sync logic can be rerun and the system can answer why an item was recommended.
 

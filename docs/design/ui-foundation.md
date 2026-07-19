@@ -28,7 +28,7 @@ general library workflow:
 - Clear workspace-level tabs and controls
 
 The goal is not to clone Reader or inherit its product model. Media Tracker has a
-broader archive, stronger cross-media filtering, a canonical event ledger, and
+broader archive, stronger cross-media filtering, a canonical Archive ledger, and
 future generated experiences that Reader does not define.
 
 ### Letterboxd
@@ -97,8 +97,8 @@ Selecting an item opens a persistent right-hand panel without removing the user
 from the collection. The inspector can eventually contain:
 
 - Full metadata and source links
-- Consumption-event timeline
-- Rating, progress, and notes
+- Archive occurrences and source timestamps
+- Rating, notes, and source details
 - Highlights or authorized text
 - Sync provenance and coverage confidence
 - Related media
@@ -121,7 +121,7 @@ Inspired by Reader:
 - Short description when useful
 - Source and media type
 - Consumption date or most relevant event date
-- Duration, length, progress, or rating when available
+- Duration, length, or rating when available
 - Fast scanning across mixed media
 
 ### Grid view
@@ -144,7 +144,7 @@ include:
 - Media type
 - Source service
 - Consumed, saved, or completion date range
-- Completion and progress state
+- Known, unknown, or inferred consumption date
 - Rating
 - Creator
 - Tags

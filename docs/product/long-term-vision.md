@@ -17,7 +17,7 @@ foundations but are not commitments to build every described feature.
 ### Archive
 
 Archive is the canonical history of consumed media. It is backed by media items,
-external identities, and consumption events with source provenance. Imported
+external identities, and Archive entries with source provenance. Imported
 facts remain authoritative and replayable.
 
 Calendar views, recaps, recommendations, feeds, and LLM answers are projections
@@ -72,7 +72,7 @@ flowchart LR
 
 ### Calendar and recaps
 
-A calendar provides another lens over consumption events rather than another
+A calendar provides another lens over Archive entries rather than another
 history system. Recaps may summarize a week, month, year, topic, or period in a
 more editorial form, similar in spirit to Spotify Wrapped.
 
@@ -116,7 +116,7 @@ alone cannot infer.
 ### LLM search and chat
 
 Natural-language search should answer arbitrary questions over the owner's saved
-history, metadata, events, notes, highlights, and authorized text. Answers must
+history, metadata, Archive entries, notes, highlights, and authorized text. Answers must
 cite stored evidence and distinguish facts from inference.
 
 Chat may eventually be a global destination with saved conversations, while the

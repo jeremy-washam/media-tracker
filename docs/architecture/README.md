@@ -18,7 +18,7 @@ External services and exports
   -> API, cron, or CLI ingestion entry point
   -> raw payload in private R2
   -> idempotent normalization
-  -> canonical items and events in D1
+  -> canonical media items and Archive entries in D1
   -> REST API
   -> React web client
 ```

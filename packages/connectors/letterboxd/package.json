@@ -2,5 +2,19 @@
   "name": "@media-tracker/connector-letterboxd",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "probe:export": "node src/probe-export.ts",
+    "probe:rss": "node src/probe-rss.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.1",
+    "fast-xml-parser": "5.10.1",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "catalog:"
+  }
 }

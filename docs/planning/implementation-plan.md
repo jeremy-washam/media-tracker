@@ -66,7 +66,7 @@ Before implementation, record concise architectural decisions covering:
 
 - Cloudflare-native deployment
 - React/Vite instead of Next.js
-- Event-based media ledger
+- Canonical Archive ledger with source-specific evidence
 - Raw-source preservation
 - Idempotent connector processing
 - D1/R2 storage boundary
@@ -99,7 +99,7 @@ Deliverable: documented decisions and stable package boundaries.
 
 ### Frontend
 
-Build a minimal responsive shell with:
+Build a minimal desktop shell with:
 
 - Navigation
 - History placeholder
@@ -149,7 +149,23 @@ Configure local simulations for:
 
 Deliverable: `pnpm dev` starts a working local web app and API without requiring real credentials.
 
-## 5. Phase 2: Canonical media ledger
+## 5. Phase 2: Payload reconnaissance and canonical Archive ledger
+
+### Source-reconnaissance gate
+
+Do not finalize the D1 schema around documentation examples alone. For each
+source, first:
+
+1. document the official API, export, feed, and webhook surfaces;
+2. inventory published response fields and date semantics;
+3. run a credential-safe private probe that emits shapes and aggregates rather
+   than personal content;
+4. create synthetic fixtures for the observed variants; and
+5. compare all source reports before choosing canonical fields.
+
+Readwise, Spotify, Hardcover, and Letterboxd reconnaissance can proceed in
+parallel under the ownership contract in `docs/sources/README.md`. YouTube
+follows once these four sources establish the smallest common Archive model.
 
 ### Core tables
 
@@ -162,19 +178,17 @@ raw_objects
 
 media_items
 external_identities
-contributors
-media_contributors
-media_relations
-
-events
-documents
-highlights
+archive_entries
 queue_entries
 ```
 
+Add contributor, relation, document, highlight, or typed-extension tables only
+when observed source payloads require them. Do not pre-build a universal event
+system.
+
 ### Media items
 
-Support:
+Support these initial types:
 
 ```text
 article
@@ -185,7 +199,9 @@ book
 song
 ```
 
-Do not force every media type into identical metadata. Common fields belong on `media_items`; specialized fields can use typed extension tables or structured attributes.
+Do not force every media type into identical metadata. Common fields belong on
+`media_items`; specialized fields can use typed extension tables or structured
+attributes after their need is demonstrated by payloads.
 
 ### External identities
 
@@ -199,44 +215,41 @@ canonical_url
 metadata
 ```
 
-Examples include Letterboxd film IDs, TMDB IDs, Spotify episode URIs, YouTube video IDs, Readwise document IDs, Hardcover edition/work IDs, and ISBNs. Unique constraints should prevent duplicate source identities.
+Examples include Letterboxd film IDs, TMDB IDs, Spotify episode URIs, YouTube
+video IDs, Readwise document IDs, Hardcover edition/work IDs, and ISBNs. Unique
+constraints should prevent duplicate source identities.
 
-### Events
+### Archive entries
 
-Initial event vocabulary:
-
-```text
-saved
-queued
-started
-progressed
-completed
-abandoned
-skipped
-rated
-reviewed
-liked
-highlighted
-removed
-```
-
-Each event should distinguish:
+Archive is the canonical history of consumed media. Admission follows a
+documented source-specific rule: completion-like evidence for films, books, and
+archived Reader documents, but any positive Spotify podcast playback. One media
+item may have multiple Archive entries for a trustworthy repeated consumption.
 
 ```text
-occurred_at       when the activity happened
-recorded_at       when the source recorded it
-ingested_at       when this app received it
+media_item_id
+source
+source_entry_id
+consumed_at
+consumed_at_precision
+source_recorded_at
+ingested_at
+source_rating
+review_or_note
+raw_object_id
+parser_version
 ```
 
-Also preserve:
+`consumed_at` may be null when a source proves Archive admission but provides no
+trustworthy date. Preserve date-only versus instant precision and never replace
+a missing consumption date with a save, publication, source-recorded, or
+ingestion timestamp.
 
-- Original source value
-- Original rating scale
-- Normalized rating, if calculated
-- Progress amount and unit
-- Source event ID
-- Raw-object reference
-- Parser version
+The initial model does not track progress, started, paused, skipped, abandoned,
+or other universal engagement events. Preserve relevant upstream values in raw
+evidence and source-owned records. Ratings, reviews, likes, tags, Readwise
+highlights, and Spotify play segments may enrich Archive or future search, but
+they do not require a broad event vocabulary.
 
 ### Raw objects
 
@@ -251,9 +264,11 @@ Every import page, webhook, RSS response, and export file gets:
 - Parsing status
 - Error details when parsing fails
 
-### Derived state
+### Queue boundary
 
-Current state should be calculated from events and optionally cached. Examples include currently reading, completed, last progress, current rating, and queued. The event history remains authoritative.
+Queue is explicit future intent and remains separate from Archive. Its schema
+can be created minimally now, but queue UI and upstream mirroring remain outside
+the ingestion milestone.
 
 Deliverable: migrations, repository methods, seed fixtures, and replay-safe persistence tests.
 
@@ -272,7 +287,9 @@ Readwise is the architecture-validation connector.
 
 - Fetch every Reader document using cursor pagination.
 - Save every response page in R2.
-- Normalize documents, highlights, notes, tags, progress, and timestamps.
+- Normalize archived documents and their trustworthy metadata. Preserve
+  highlights, notes, tags, source progress, and timestamps for later source-owned
+  detail/search support without adding universal progress events.
 - Support articles, PDFs, EPUBs, videos, RSS items, emails, and notes without misclassifying them as all being articles.
 - Track a complete sync run with counts and errors.
 
@@ -314,15 +331,14 @@ History page:
 
 - Document list
 - Title, author, source, and type
-- Saved, opened, and completed dates
-- Progress
+- Completion date when known, plus explicit unknown/inferred precision
 - Tags
 - Filters and sorting
 
 Detail page:
 
 - Source metadata
-- Event timeline
+- Source details and timestamps
 - Notes and highlights
 - Provenance
 - Link back to Reader
@@ -337,26 +353,28 @@ Readwise is complete when:
 - Webhooks update records promptly.
 - A failed page or webhook can be replayed.
 - Every normalized item traces back to raw input.
-- The UI accurately reflects completion and progress.
+- The UI accurately reflects Archive membership and date uncertainty.
 
-No other connector begins until this gate passes.
+Readwise is the first production connector, but official research and private
+payload probes for other connectors may proceed in parallel. Do not productionize
+multiple connectors against an unproven raw-object and Archive schema.
 
 ## 7. Phase 4: Hardcover
 
 - Authenticate with the Hardcover API token.
-- Import books, editions, statuses, ratings, reviews, read dates, and progress.
+- Import Read books, editions, ratings, reviews, and read dates. Preserve source
+  progress only in raw/source-owned evidence.
 - Preserve Hardcover work and edition identities separately.
-- Map rereads to separate completion events.
-- Add scheduled reconciliation.
-- Determine whether source modification timestamps permit incremental polling; otherwise use idempotent reconciliation.
+- Map finished rereads to separate Archive entries.
+- Poll `user_books.updated_at` with overlap and periodically run a full
+  idempotent reconciliation because `user_book_reads` has no update timestamp.
 
 Do not collapse:
 
 - Book work versus edition
 - Physical, ebook, and audiobook formats
-- Multiple reading sessions
 - Read status versus a dated completion
-- DNF versus ordinary abandonment
+- Multiple finished rereads
 
 Acceptance gate: Hardcover history repeatedly reconciles without duplicates and represents rereads correctly.
 
@@ -370,18 +388,26 @@ Build a local CLI importer:
 pnpm media import letterboxd ./letterboxd-export.zip
 ```
 
-Parse watched films, diary entries, ratings, reviews, likes, tags, watchlist entries, and relevant lists. Preserve the original ZIP in R2.
+Parse watched films, diary entries, ratings, reviews, likes, tags, and watchlist
+entries. Preserve the original ZIP in R2. A watched-only film belongs in Archive
+with an unknown consumption date; each Diary viewing is a distinct Archive
+entry.
 
 ### Ongoing sync
 
 - Poll the profile RSS feed.
-- Import new diary entries, reviews, and lists.
+- Import recent public diary entries and reviews.
 - Record the RSS item identifier and payload.
 - Reconcile overlapping entries because feeds may reorder or update.
+- Periodically request another export to recover old edits, private records,
+  watched-only films, and deletions that RSS cannot represent.
 
-RSS will not provide a perfect account mirror. The UI must show that Letterboxd sync is partial rather than implying complete coverage.
+Letterboxd's published policy excludes personal/LLM projects from API access.
+RSS will not provide a perfect account mirror, so the UI must show the date of
+the last authoritative export separately from the last RSS poll.
 
-Acceptance gate: export backfill and RSS updates merge into the same film identities without duplicate watch events.
+Acceptance gate: export backfill and RSS updates merge into the same film
+identities without duplicate Archive entries.
 
 ## 9. Phase 6: Spotify
 
@@ -401,22 +427,28 @@ CLI import:
 pnpm media import spotify ./spotify-extended-history/
 ```
 
-Normalize tracks, podcast episodes, playback timestamps, milliseconds played, skip indicators, offline/private-session fields when present, and Spotify URIs and metadata.
+Preserve tracks, podcast episodes, playback timestamps, milliseconds played,
+skip/end evidence, offline/private-session fields, and Spotify URIs. Any positive
+podcast playback admits the episode to Archive; use the real export to reconcile
+missing episodes, dates, and repeated-listen patterns.
 
 ### Song synchronization
 
 - Poll recently played tracks every few minutes.
-- Use `played_at` plus Spotify track ID as the primary idempotency basis.
-- Preserve repeated listens as separate events.
+- Use `played_at` plus Spotify track ID as the initial idempotency basis, then
+  validate collisions against real data.
+- Preserve repeated listens as separate source plays.
 - Avoid treating every short play as a completed listen without evidence.
 
 ### Podcast synchronization
 
-- Poll currently playing with episode support.
-- Record progress snapshots.
-- Reconcile saved episodes and their resume points.
-- Derive completion only when evidence crosses a configurable threshold.
-- Mark inferred events explicitly as inferred.
+- Reconcile saved episodes, saved shows, known-show catalogs, and current
+  `fully_played` observations as best-effort discovery.
+- Do not treat saved state or partial playback as Archive membership.
+- Derive completion only from a documented rule over probed export/API evidence,
+  preserve its confidence, and allow an unknown completion date.
+- Re-import Extended Streaming History periodically to close gaps because the
+  recently-played endpoint explicitly excludes podcasts.
 
 Acceptance gate: song playback is reliable; podcast status clearly communicates its confidence and limitations.
 
@@ -504,12 +536,10 @@ queue_entries
   notes
 ```
 
-Possible states:
+Initial states:
 
 ```text
 queued
-in_progress
-completed
 removed
 ```
 
@@ -552,7 +582,7 @@ The app should be recoverable without turning Cloudflare into the only copy of t
 - Rating conversions
 - Timestamp handling
 - Identity matching
-- Event derivation
+- Archive projection and date precision
 - Completion heuristics
 
 ### Fixture tests
@@ -636,14 +666,19 @@ Connections should report:
 
 ## 16. Credential and user-input checkpoints
 
-Credentials should be requested only when required:
+Credentials and exports should be requested only for an implemented,
+content-safe probe or connector step:
 
-1. No credentials for scaffold and schema work.
-2. Readwise token when the connector is ready.
-3. Hardcover token after Readwise acceptance.
-4. Letterboxd username and export ZIP for its phase.
-5. Spotify developer credentials and export directory.
-6. Google Cloud OAuth configuration during YouTube work.
+1. No credentials for the scaffold or official-documentation reconnaissance.
+2. Request Spotify Extended Streaming History early because delivery is manual
+   and may take time; no Spotify credential is needed to import it.
+3. Request a fresh Letterboxd account export for its read-only shape probe; the
+   public username is sufficient for RSS research.
+4. Request Readwise and Hardcover tokens only after the local probe harnesses
+   guarantee that tokens and personal content are not printed or committed.
+5. Create a Spotify development-mode app and enter its credentials only when
+   the read-only OAuth probe is ready.
+6. Configure Google Cloud OAuth during later YouTube reconnaissance.
 
 Secrets should be entered into local or Cloudflare secret storage, not pasted into chat or committed to Git.
 
@@ -663,13 +698,20 @@ The ingestion milestone is complete when:
 
 ## 18. Immediate implementation sequence
 
-The first six reviewable changes should be:
+After the completed workspace and React/Hono scaffold, the next six reviewable
+changes should be:
 
-1. Architecture records and pnpm workspace scaffold
-2. React/Hono local application with Cloudflare bindings
-3. Canonical D1 schema and repository layer
-4. R2 raw-object store and replay framework
-5. Fixture-backed Readwise backfill
-6. Readwise history UI, reconciliation, and webhooks
+1. Complete official reconnaissance for Readwise, Spotify, Hardcover, and
+   Letterboxd.
+2. Add credential-safe local probe tooling and verified private-data handling.
+3. Run the four private probes and create synthetic fixtures from their field
+   and semantics reports.
+4. Decide and document the smallest canonical Archive schema from the observed
+   payloads.
+5. Implement D1 repositories plus the R2 raw-object/replay framework.
+6. Build the fixture-backed Readwise vertical slice, then reuse the proven
+   boundaries for the other connectors.
 
-This sequence proves the most consequential choices before investing in the harder integrations.
+This sequence tests the data assumptions before migrations make them expensive
+to change, while allowing independent source research and probe preparation to
+proceed in parallel.

@@ -17,6 +17,11 @@
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
 
+## Sources
+
+- [Source reconnaissance](sources/README.md): parallel research contract and
+  current Readwise, Spotify, Hardcover, and Letterboxd capability reports
+
 ## Architecture
 
 - [Architecture overview](architecture/README.md): system shape, package
