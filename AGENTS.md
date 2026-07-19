@@ -14,6 +14,10 @@ it concise and follow its links instead of duplicating detailed documentation.
    choosing or sequencing work.
 4. Consult [the ADR index](docs/decisions/README.md) before revisiting an accepted
    architectural choice.
+5. Read [the desktop UI foundation](docs/design/ui-foundation.md) before changing
+   interface structure or visual design.
+6. Read [the long-term vision](docs/product/long-term-vision.md) before designing
+   Topics, Feed, Explore, recaps, recommendations, or LLM features.
 
 ## Non-negotiable product boundaries
 

@@ -4,6 +4,13 @@
 
 - [Product context](product/context.md): purpose, scope, priorities, and future
   direction
+- [Long-term vision](product/long-term-vision.md): exploratory Topics, Feed,
+  Explore, recap, and LLM concepts
+
+## Design
+
+- [Desktop UI foundation](design/ui-foundation.md): information architecture,
+  visual references, collection views, and interaction principles
 
 ## Planning
 

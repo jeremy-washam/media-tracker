@@ -132,3 +132,8 @@ Preserve raw source data/provenance so sync logic can be rerun and the system ca
 - Import-first and honest about data gaps.
 - Store metadata, links, and authorized/available text or transcripts; do not depend on permanently mirroring proprietary media.
 - Treat AI as an editor/planner over structured data, not as the database or sole source of truth.
+
+See the [long-term product vision](./long-term-vision.md) for the exploratory
+relationship among Archive, Queue, Topics, Feed, Explore, recaps, and LLM chat.
+See the [desktop UI foundation](../design/ui-foundation.md) for the current
+interface direction.

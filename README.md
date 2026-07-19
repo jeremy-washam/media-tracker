@@ -78,6 +78,8 @@ committed.
 
 - [Documentation index](docs/README.md)
 - [Product context](docs/product/context.md)
+- [Long-term vision](docs/product/long-term-vision.md)
+- [Desktop UI foundation](docs/design/ui-foundation.md)
 - [Implementation plan](docs/planning/implementation-plan.md)
 - [Architecture](docs/architecture/README.md)
 - [Architecture decisions](docs/decisions/README.md)
