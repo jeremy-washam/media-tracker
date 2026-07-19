@@ -43,12 +43,36 @@ Requirements: Node.js 24 or newer and pnpm 11 or newer.
 
 ```sh
 pnpm install
-pnpm check
+pnpm dev
 ```
 
-The working development server will be added during the application-scaffold
-phase. Real provider credentials are not required for the local scaffold and
-must never be committed.
+Open `http://127.0.0.1:5173`. The command starts:
+
+- the Vite web client on port 5173; and
+- the Hono Worker with local Cloudflare bindings on port 8787.
+
+Useful local endpoints:
+
+- `http://127.0.0.1:8787/api/health`
+- `http://127.0.0.1:8787/api/openapi.json`
+- `http://127.0.0.1:8787/__scheduled?cron=0+*+*+*+*` for a local cron trigger
+
+No Cloudflare account or provider credentials are required for local
+development. Wrangler simulates D1, R2, Queues, Cron, and static asset bindings.
+The IDs in `apps/api/wrangler.jsonc` are local placeholders and must be replaced
+before remote deployment.
+
+## Checks
+
+```sh
+pnpm check
+pnpm build
+pnpm test:e2e
+```
+
+Playwright's Chromium browser is installed once with
+`pnpm exec playwright install chromium`. Real provider credentials must never be
+committed.
 
 ## Documentation
 

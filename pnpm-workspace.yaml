@@ -3,9 +3,16 @@ packages:
   - packages/*
   - packages/connectors/*
 
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+
 catalog:
   typescript: 6.0.3
 
 catalogMode: strict
 
-onlyBuiltDependencies: []
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20260718.1'
+  - hono@4.12.31
