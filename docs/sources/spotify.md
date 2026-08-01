@@ -1,9 +1,9 @@
 # Spotify Source Reconnaissance
 
 - Status: Feasible as a hybrid import, with important podcast sync gaps
-- Research date: 2026-07-18
+- Last verified: 2026-07-19
 - Priority: Podcasts first; songs are secondary
-- Sources: Official Spotify support and developer documentation only
+- Sources: Official Spotify documentation and private aggregate probes
 
 ## Executive assessment
 
@@ -517,38 +517,93 @@ The remaining API probes for saved shows, show episodes, individual episode
 enrichment, current playback, and played/unplayed state transitions are useful
 follow-ups but no longer block the saved-episode ingestion design.
 
+### Private Extended Streaming History observation
+
+The delivered archive contained one official Read Me PDF plus 26 JSON files:
+16 annual/split audio files and 10 annual video files. The English PDF pages
+visually confirmed the 21 documented fields and their meanings. The JSON probe
+then inspected every row without printing titles, URIs, platforms, countries,
+or private values.
+
+Overall export:
+
+- 158,787 rows from 2013-06-09 through 2026-07-18;
+- 152,231 song segments, 6,416 podcast segments, 139 audiobook segments, and
+  one row without a recognized media identity;
+- 3,341 rows marked offline, 1,992 incognito, and 32,993 skipped;
+- 497 exact duplicate full rows, all within a single JSON file and none across
+  files; and
+- `username`, `ip_addr_decrypted`, and `user_agent_decrypted` were absent from
+  every row despite appearing in the Read Me schema, while an undocumented
+  `ip_addr` key was present on every row and remains sensitive raw data.
+
+The JSON also included `audiobook_title`, `audiobook_uri`,
+`audiobook_chapter_title`, and `audiobook_chapter_uri` on every row, populated
+for 139 audiobook segments. Of those, 136 had positive playback, spanning seven
+audiobook URIs and 79 chapter URIs and totaling 29.2 source-reported hours.
+These rows must remain distinct from songs, podcasts, and unidentified playback.
+Whether they should project into the book Archive or reconcile with Hardcover
+is a later product decision.
+
+Podcast subset:
+
+- 6,416 total segments across 2,600 episode URIs;
+- 5,921 positive-playback segments;
+- 2,443 unique episode URIs with positive playback and therefore Archive
+  admission;
+- 157 episode URIs represented only by zero-playback segments;
+- 1,756 positive segments shorter than 30 seconds;
+- no podcast segment missing its episode URI;
+- 1,543.6 source-reported listening hours, including source duplicate rows; and
+- date range 2017-11-22 through 2026-07-18.
+
+The reason enums are more varied than the documentation examples. Podcast
+starts include `appload`, `backbtn`, `clickrow`, `fwdbtn`, `playbtn`,
+`reconnect`, `remote`, `trackdone`, `trackerror`, and `unknown`. Ends additionally
+include `endplay`, `logout`, `unexpected-exit`, and
+`unexpected-exit-while-paused`. These values are source evidence, not Archive
+admission thresholds: the owner explicitly chose any positive podcast playback.
+
+The 497 identical rows must not be discarded merely because their full hashes
+match. They occur inside individual source arrays and could reflect genuine
+duplicate records or same-second source behavior. Use raw object plus member
+name plus array index as the snapshot-local idempotency identity. Compare a
+future overlapping export before adopting any cross-export deduplication key.
+
+This export resolves the automatic saved-episode gap: the historical backfill
+contains 2,443 positively played episode identities, compared with 13 currently
+saved episodes that expose positive resume positions. The Web API remains the
+ongoing Queue/Archive signal; the export is the authoritative lifetime playback
+snapshot and reconciliation source.
+
 ## Unresolved questions
 
-1. What are the actual file/member names, JSON types, nullability, and enum values
-   in the owner's current Extended Streaming History ZIP?
-2. How long does Spotify take to produce this export for this account, and how
-   frequently can it be requested?
-3. Are overlapping exports stable in row contents and ordering, and can rows ever
+1. How frequently can Extended Streaming History be requested for this account?
+2. Are overlapping exports stable in row contents and ordering, and can rows ever
    be revised or removed?
-4. How should play segments be grouped into a listening session without merging
+3. How should play segments be grouped into a listening session without merging
    genuine relistens?
-5. Which `reason_end` values distinguish useful playback from accidental starts
+4. Which `reason_end` values distinguish useful playback from accidental starts
    across app versions and devices?
-6. Does `fully_played` remain true after an episode is replayed, and what happens
+5. Does `fully_played` remain true after an episode is replayed, and what happens
    when the owner manually marks an episode played or unplayed?
-7. Are all podcasts the owner cares about saved as shows, or are unsaved-show
+6. Are all podcasts the owner cares about saved as shows, or are unsaved-show
    plays common enough that the automatic gap is unacceptable?
-8. Does Spotify retain useful episode URIs and names for catalog entries that are
+7. Does Spotify retain useful episode URIs and names for catalog entries that are
    later removed?
-9. Is periodically reauthorizing every six months acceptable for this private
+8. Is periodically reauthorizing every six months acceptable for this private
    app's definition of “automatic” sync?
-10. What future Queue conflict policy should apply when an episode is saved or
-    removed directly in Spotify?
+9. What future Queue conflict policy should apply when an episode is saved or
+   removed directly in Spotify?
+10. Should Spotify audiobook playback enter the book Archive, and can its
+    audiobook identity be reconciled safely with a Hardcover work or edition?
 
 ## Recommended next action
 
-Request the owner's Extended Streaming History now. While Spotify prepares it,
-create a single-user development-mode app and perform the read-only API probe
-with `user-library-read`, `user-read-playback-position`, and—only if current
-playback sampling is being evaluated—`user-read-playback-state`.
-
-Use the established rule that any positive podcast playback belongs in Archive.
-The real export is still required to recover episodes that were never saved and
-to provide historical playback timestamps. The first connector milestone should
-be a replay-safe raw ZIP parser plus URI-based metadata enrichment, followed by
-saved-episode polling for ongoing Queue-versus-Archive reconciliation.
+The payload evidence is sufficient for the initial schema. Implement a replay-
+safe raw-file importer using member name plus array index, retain every playback
+segment as Spotify-owned evidence, admit each episode URI with positive playback
+to Archive, and reconcile current saved episodes into Queue/Archive/unresolved
+state. Preserve audiobook segments separately pending an explicit admission and
+cross-source matching rule. Defer session grouping and relisten occurrence
+inference.

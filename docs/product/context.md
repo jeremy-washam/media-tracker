@@ -119,9 +119,10 @@ TopicIntent
 Archive is the canonical consumption-history ledger. It does not need a
 universal progress or engagement event vocabulary. Admission is source-specific:
 completion-like evidence is appropriate for films, books, and archived Reader
-documents, while any positive Spotify podcast playback counts as consumed.
-Preserve richer upstream facts such as Readwise highlights, Spotify play
-segments, ratings, reviews, and rereads in raw evidence and source-specific
+documents; any positive Spotify podcast playback counts as consumed; and each
+timestamped YouTube `Watched` activity is consumption evidence. Preserve richer
+upstream facts such as Readwise highlights, Spotify play segments, YouTube
+activity cards, ratings, reviews, and rereads in raw evidence and source-specific
 records. An admitted item may have an unknown consumption date.
 
 Preserve raw source data/provenance so sync logic can be rerun and the system can answer why an item was recommended.

@@ -1,6 +1,6 @@
 # Media Tracker Implementation Plan
 
-Last updated: 2026-07-18
+Last updated: 2026-08-01
 
 ## 1. Product and architectural boundaries
 
@@ -163,9 +163,9 @@ source, first:
 4. create synthetic fixtures for the observed variants; and
 5. compare all source reports before choosing canonical fields.
 
-Readwise, Spotify, Hardcover, and Letterboxd reconnaissance can proceed in
-parallel under the ownership contract in `docs/sources/README.md`. YouTube
-follows once these four sources establish the smallest common Archive model.
+Reconnaissance and private shape probes are complete for Readwise, Spotify,
+Hardcover, Letterboxd, and YouTube. Their reports in `docs/sources` are now the
+evidence base for the smallest common Archive model.
 
 ### Core tables
 
@@ -179,7 +179,6 @@ raw_objects
 media_items
 external_identities
 archive_entries
-queue_entries
 ```
 
 Add contributor, relation, document, highlight, or typed-extension tables only
@@ -223,8 +222,9 @@ constraints should prevent duplicate source identities.
 
 Archive is the canonical history of consumed media. Admission follows a
 documented source-specific rule: completion-like evidence for films, books, and
-archived Reader documents, but any positive Spotify podcast playback. One media
-item may have multiple Archive entries for a trustworthy repeated consumption.
+archived Reader documents; any positive Spotify podcast playback; and a
+timestamped YouTube `Watched` activity. One media item may have multiple Archive
+entries when the source provides trustworthy evidence of repeated consumption.
 
 ```text
 media_item_id
@@ -266,9 +266,10 @@ Every import page, webhook, RSS response, and export file gets:
 
 ### Queue boundary
 
-Queue is explicit future intent and remains separate from Archive. Its schema
-can be created minimally now, but queue UI and upstream mirroring remain outside
-the ingestion milestone.
+Queue is explicit future intent and remains separate from Archive. Do not add a
+Queue table to the initial ingestion schema merely to reserve its shape; design
+it from concrete Queue behavior later. Source-owned Queue evidence such as
+Watch Later, Want to Read, and saved episodes remains preserved in raw input.
 
 Deliverable: migrations, repository methods, seed fixtures, and replay-safe persistence tests.
 
@@ -365,7 +366,11 @@ multiple connectors against an unproven raw-object and Archive schema.
 - Import Read books, editions, ratings, reviews, and read dates. Preserve source
   progress only in raw/source-owned evidence.
 - Preserve Hardcover work and edition identities separately.
-- Map finished rereads to separate Archive entries.
+- Treat Hardcover's Read status as sufficient Archive admission even when an
+  imported book has no dated child read.
+- Map finished rereads to separate Archive entries only when Hardcover exposes
+  distinct child read rows. Preserve `read_count`, but do not invent dated or
+  separate reread events when the import did not retain them.
 - Poll `user_books.updated_at` with overlap and periodically run a full
   idempotent reconciliation because `user_book_reads` has no update timestamp.
 
@@ -376,7 +381,9 @@ Do not collapse:
 - Read status versus a dated completion
 - Multiple finished rereads
 
-Acceptance gate: Hardcover history repeatedly reconciles without duplicates and represents rereads correctly.
+Acceptance gate: Hardcover history repeatedly reconciles without duplicates,
+preserves the source's declared read count, and represents only the reread
+events for which Hardcover supplies distinct evidence.
 
 ## 8. Phase 5: Letterboxd
 
@@ -442,11 +449,13 @@ missing episodes, dates, and repeated-listen patterns.
 
 ### Podcast synchronization
 
-- Reconcile saved episodes, saved shows, known-show catalogs, and current
-  `fully_played` observations as best-effort discovery.
-- Do not treat saved state or partial playback as Archive membership.
-- Derive completion only from a documented rule over probed export/API evidence,
-  preserve its confidence, and allow an unknown completion date.
+- Reconcile saved episodes, saved shows, and resume-point observations as
+  best-effort discovery.
+- Treat any positive podcast playback as Archive membership. A saved episode
+  with zero observed playback is a Queue candidate; unavailable or null playback
+  evidence remains unresolved rather than being guessed into either state.
+- Preserve `fully_played`, resume position, and individual playback segments as
+  source evidence without requiring completion for Archive admission.
 - Re-import Extended Streaming History periodically to close gaps because the
   recently-played endpoint explicitly excludes podcasts.
 
@@ -454,45 +463,40 @@ Acceptance gate: song playback is reliable; podcast status clearly communicates 
 
 ## 10. Phase 7: YouTube
 
-### Google setup
+### Historical import
 
-This phase requires:
-
-- Google Cloud project
-- Billing enabled
-- Data Portability API enabled
-- OAuth consent configuration
-- Redirect URI
-- Restricted YouTube activity scope
-- Personal-use/unverified application setup
-
-### Portability workflow
-
-Implement a persisted state machine:
-
-```text
-authorization obtained
--> export initiated
--> job ID stored
--> status polled
--> signed archive URLs received
--> archives streamed to R2
--> parsing jobs queued
--> records normalized
--> next permitted export scheduled
-```
-
-Never wait synchronously for an archive.
+Use manual Google Takeout archives for the first version. This does not require
+a Google Cloud project, OAuth consent flow, billing, or restricted scopes.
+Preserve each source archive independently in R2 and make overlapping reimports
+idempotent without collapsing separate views of the same video.
 
 ### Watch-history normalization
 
-Import video IDs or URLs, watch timestamps, channel information, activity details, and the distinction between search and watch activity. Do not treat a watch-history entry as proof that the video was completed.
+Import only timestamped `Watched` activities into Archive. Preserve video IDs or
+URLs, timestamps, channel information, product, and the original activity card.
+Keep non-watch activity out of Archive and do not inspect unrelated Takeout
+history such as searches unless a future feature needs it. A watch entry proves
+historical consumption for this product, not full-video completion.
+
+Parse Watch Later separately as future Queue evidence. Queue and Archive are
+independent, so a video may legitimately appear in both.
 
 ### Metadata enrichment
 
-Use the ordinary YouTube Data API to enrich known video IDs with current title, channel, duration, description, thumbnail, publication date, and availability state. Preserve original historical titles when supplied because videos may later change or disappear.
+Use the ordinary YouTube Data API later to enrich known video IDs with current
+title, channel, duration, description, thumbnail, publication date, and
+availability state. Preserve original historical titles when supplied because
+videos may later change or disappear. An API key is sufficient for public video
+metadata; no OAuth is required for the initial import.
 
-Acceptance gate: one-time history import plus daily incremental sync works and survives delayed Google archive jobs.
+Automated watch-history sync remains an explicit limitation. Repeated manual
+Takeout imports are the initial reconciliation path. Reconsider the Data
+Portability API only if its verification and export cadence become practical for
+this personal application.
+
+Acceptance gate: one-time Takeout history import is replayable and idempotent;
+later Takeout snapshots reconcile without losing distinct watch events; and the
+UI clearly reports that continuous YouTube history sync is unavailable.
 
 ## 11. Search readiness
 
@@ -524,36 +528,15 @@ Do not add embeddings yet. When LLM search begins, add chunking and vector retri
 
 ## 12. Queue readiness
 
-Create the local queue model now:
+Keep Queue conceptually separate from Archive and preserve upstream intent
+signals during ingestion without projecting them into canonical Queue rows yet.
+When Queue implementation begins, design its states, local ownership, removal
+history, priority, notes, and upstream-mirroring behavior together rather than
+precommitting to placeholder columns now.
 
-```text
-queue_entries
-  media_item_id
-  state
-  priority
-  added_at
-  desired_by
-  notes
-```
-
-Initial states:
-
-```text
-queued
-removed
-```
-
-Reserve fields for upstream mirroring:
-
-```text
-source
-external_id
-sync_state
-last_sync_attempt
-sync_error
-```
-
-Do not implement upstream queue synchronization during ingestion work. The first goal is to avoid a future schema redesign.
+The current ingestion schema must not make Queue difficult to add: media items
+and external identities are shared foundations, while source evidence remains
+replayable. Upstream Queue synchronization remains outside ingestion v1.
 
 ## 13. Security and privacy
 
@@ -583,7 +566,7 @@ The app should be recoverable without turning Cloudflare into the only copy of t
 - Timestamp handling
 - Identity matching
 - Archive projection and date precision
-- Completion heuristics
+- Source-specific Archive admission rules
 
 ### Fixture tests
 
@@ -666,19 +649,16 @@ Connections should report:
 
 ## 16. Credential and user-input checkpoints
 
-Credentials and exports should be requested only for an implemented,
-content-safe probe or connector step:
+The initial private reconnaissance inputs are complete: Readwise and Hardcover
+tokens, Spotify development-mode OAuth, Spotify Extended Streaming History, a
+Letterboxd export and public RSS feed, and two Google Takeout archives have all
+been probed through content-safe local tooling.
 
-1. No credentials for the scaffold or official-documentation reconnaissance.
-2. Request Spotify Extended Streaming History early because delivery is manual
-   and may take time; no Spotify credential is needed to import it.
-3. Request a fresh Letterboxd account export for its read-only shape probe; the
-   public username is sufficient for RSS research.
-4. Request Readwise and Hardcover tokens only after the local probe harnesses
-   guarantee that tokens and personal content are not printed or committed.
-5. Create a Spotify development-mode app and enter its credentials only when
-   the read-only OAuth probe is ready.
-6. Configure Google Cloud OAuth during later YouTube reconnaissance.
+Request additional credentials or exports only for an implemented connector
+step. No new Google credential is needed for initial YouTube ingestion; add a
+Google Cloud API key only when public metadata enrichment is implemented. A
+future export is needed to measure Spotify or YouTube cross-export
+reconciliation behavior.
 
 Secrets should be entered into local or Cloudflare secret storage, not pasted into chat or committed to Git.
 
@@ -689,7 +669,8 @@ The ingestion milestone is complete when:
 - Readwise and Hardcover histories are fully backfilled and continuously synchronized.
 - Letterboxd history is backfilled and new RSS-visible activity is synchronized.
 - Spotify lifetime history is imported, songs synchronize automatically, and podcast limitations are visible.
-- YouTube watch history is imported and incrementally refreshed through Data Portability.
+- YouTube watch history is imported from Takeout, later snapshots can be
+  reconciled, and the lack of seamless incremental sync is visible.
 - All connectors are idempotent and replayable.
 - The application provides useful history browsing, filtering, and provenance.
 - Connection health and failures are visible.
@@ -698,19 +679,16 @@ The ingestion milestone is complete when:
 
 ## 18. Immediate implementation sequence
 
-After the completed workspace and React/Hono scaffold, the next six reviewable
-changes should be:
+After the completed workspace, React/Hono scaffold, and five source probes, the
+next four reviewable changes should be:
 
-1. Complete official reconnaissance for Readwise, Spotify, Hardcover, and
-   Letterboxd.
-2. Add credential-safe local probe tooling and verified private-data handling.
-3. Run the four private probes and create synthetic fixtures from their field
-   and semantics reports.
-4. Decide and document the smallest canonical Archive schema from the observed
-   payloads.
-5. Implement D1 repositories plus the R2 raw-object/replay framework.
-6. Build the fixture-backed Readwise vertical slice, then reuse the proven
-   boundaries for the other connectors.
+1. Decide and document the smallest canonical Archive schema from the observed
+   Readwise, Hardcover, Letterboxd, Spotify, and YouTube payloads.
+2. Implement D1 repositories plus the R2 raw-object/replay framework.
+3. Build the fixture-backed Readwise vertical slice, including a local backfill
+   and incremental reconciliation.
+4. Reuse those proven boundaries for the other connectors, beginning with the
+   already-validated historical export importers.
 
 This sequence tests the data assumptions before migrations make them expensive
 to change, while allowing independent source research and probe preparation to

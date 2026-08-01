@@ -1,7 +1,7 @@
 # Spotify connector
 
-Status: official reconnaissance and private saved-episode API probe complete;
-private export inspection pending.
+Status: official reconnaissance, private saved-episode API probe, and full
+Extended Streaming History inspection complete.
 
 This package will own Extended Streaming History import, saved-episode polling,
 podcast/song metadata enrichment, best-effort reconciliation, and
@@ -58,3 +58,23 @@ The first complete scan authenticated successfully and returned 71 saved rows:
 This confirmed that the live API can violate the reference schema's required
 field examples. The parser preserves unavailable rows and never equates a null
 playback position with an untouched episode.
+
+## Extended Streaming History probe
+
+Run the aggregate-only probe against the extracted export directory:
+
+```sh
+pnpm --filter @media-tracker/connector-spotify probe:history -- \
+  "exports/Spotify Extended Streaming History"
+```
+
+The private export contained 158,787 rows across 26 annual audio/video files.
+Podcast history included 6,416 segments for 2,600 episode URIs; 5,921 segments
+had positive playback and admit 2,443 unique episodes to Archive. It also
+contained 139 audiobook segments, which remain separate pending a product rule,
+and 497 exact duplicate rows, all within individual files. Duplicate rows remain
+source evidence and are not silently deduplicated.
+
+The probe reports aggregate counts, date ranges, field types/nullability, and
+reason enums. It does not print titles, show names, track/episode URIs, platform
+strings, countries, or sensitive row content. Tests use synthetic rows only.

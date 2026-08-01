@@ -44,7 +44,7 @@ export async function fetchSavedEpisodes(
 ): Promise<{ episodes: SavedEpisode[]; totalReported: number }> {
   const episodes: SavedEpisode[] = []
   let offset = 0
-  let totalReported = 0
+  let totalReported: number
 
   do {
     const url = new URL('https://api.spotify.com/v1/me/episodes')

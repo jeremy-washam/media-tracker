@@ -25,9 +25,7 @@ describe('Spotify saved episode classification', () => {
   })
 
   it('puts any partially played episode in Archive', () => {
-    expect(classifySavedEpisode(episode({ resumePositionMs: 1 }))).toBe(
-      'archive_partially_played',
-    )
+    expect(classifySavedEpisode(episode({ resumePositionMs: 1 }))).toBe('archive_partially_played')
   })
 
   it('puts fully played episodes in Archive even when the resume position is zero', () => {

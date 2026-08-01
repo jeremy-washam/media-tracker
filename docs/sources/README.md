@@ -57,6 +57,8 @@ the owner explicitly starts the private probe.
 - [Spotify](spotify.md)
 - [Hardcover](hardcover.md)
 - [Letterboxd](letterboxd.md)
+- [YouTube](youtube.md)
 
-YouTube will follow the same contract after these four sources establish the
-minimal Archive model.
+All five initial source families now have a report and at least one private
+payload observation. Letterboxd, Spotify, and YouTube still require manual
+exports for complete history.

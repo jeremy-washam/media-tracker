@@ -6,7 +6,8 @@ initial goal is trustworthy historical backfill and ongoing synchronization.
 Future work includes a centralized queue, evidence-backed LLM search, and
 possibly an iOS client.
 
-The project is currently in its architecture and application-scaffolding phase.
+The application scaffold and initial source-payload reconnaissance are complete.
+The next phase is the canonical ingestion schema and replay-safe persistence.
 
 ## Architecture
 

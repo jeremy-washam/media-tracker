@@ -1,9 +1,8 @@
 # Hardcover source reconnaissance
 
-- Status: Authentication and current-reading payload probe complete; imported
-  historical Read/reread cases pending
+- Status: Authentication and complete imported-library payload probe complete
 - Priority: Historical books first; optional Queue mirroring later
-- Researched: 2026-07-18
+- Last verified: 2026-07-19
 - Upstream status: The official GraphQL API is explicitly beta and may change
 
 ## Recommendation
@@ -356,47 +355,64 @@ facts.
 
 ## Private payload observation
 
-The owner-account probe authenticated successfully. The first run found no
-library records; after two books were added, a second run confirmed:
+The owner-account probe authenticated successfully. The first two manually
+added records validated current-reading nesting and edition identity. After the
+Goodreads and StoryGraph imports completed, a fully paginated scan returned:
 
-- two `user_books`, both status ID `2` (`Currently Reading`);
-- one `user_book_reads` row per book with `started_at` present and `finished_at`
-  absent;
-- `read_count = 0` for both, consistent with no completed read yet;
-- work and edition IDs are distinct numeric identities;
-- both editions exposed ISBN-10, ISBN-13, page count, reading-format ID, release
-  date, and timestamps;
-- `edition.release_year` was null even when `edition.release_date` was present,
-  so the connector must preserve source nullability rather than derive one field
-  into the other; and
-- rating, review, reviewed-at, merge lineage, and canonical IDs were nullable in
-  this small sample.
+- 1,115 `user_books` total;
+- 1,113 rows marked imported;
+- status counts: 988 Want to Read (`1`), 2 Currently Reading (`2`), and 125 Read
+  (`3`);
+- 110 rated rows and 5 reviewed rows;
+- `read_count` values: 999 zero, 112 one, and 4 two, for 120 declared read
+  occurrences;
+- 114 child `user_book_reads` rows, of which 112 have `finished_at` and 2 are the
+  current-reading rows without it;
+- 13 Read-status books without a finished child read row;
+- zero books with multiple child read rows, including all four books whose
+  `read_count` is two;
+- finished date range 2013-01-01 through 2026-06-14; and
+- all observed `finished_at` values were date strings while
+  `finished_at_precision` remained null.
 
-This validates authentication, nesting, current-reading dates, work/edition
-identity, and the basic `user_book_reads` relationship. It does not yet validate
-the initial Archive cases: status `3` (`Read`), `finished_at` precision, imported
-history, ratings/reviews, or rereads. Goodreads and StoryGraph imports are still
-processing, so those cases should be probed again when the import completes.
+This establishes an important admission rule: status `3` is the reliable proof
+that a book belongs in Archive. Requiring a finished child row would silently
+drop 13 read books. Conversely, child rows and `read_count` do not form a
+complete reread ledger: four declared rereads are not represented by multiple
+children, and the declared occurrence total exceeds finished child rows.
+
+Preserve `read_count`, child rows, first/last-read dates, ratings, reviews, and
+the raw GraphQL snapshot, but do not manufacture distinct reread occurrences
+when Hardcover supplies only a count. A Read-status book without a trustworthy
+date belongs in Archive with null `consumed_at`.
+
+Other observed nullability remains significant:
+
+- every book has numeric work and edition IDs, but canonical IDs are almost
+  entirely null;
+- ISBN-10 is absent for 87 editions and ISBN-13 for 59;
+- edition release year is null for every row even when release date exists;
+- `first_read_date` is null for every row, while `last_read_date` is present for
+  only 103 rows; and
+- imported raw review data is often present even when normalized review text is
+  absent, so it remains private raw evidence and is never logged.
 
 ## Remaining credential-safe probe plan
 
-No credential or real response belongs in the repository. Authentication and a
-25-row page shape are verified. After the imports finish:
+No credential or real response belongs in the repository. Authentication,
+pagination, imported statuses, ratings, reviews, dates, and partial reread shape
+are verified. Remaining behavioral probes are optional:
 
-1. Fetch representative private cases without committing them: a plain read, a
-   reread, an imported read, a missing completion date, a reviewed/rated book,
-   an audiobook or ebook edition, and a Want to Read entry.
-2. Compare `read_count`, `first_read_date`, `last_read_date`, and all
-   `user_book_reads` rows for those cases. Determine the actual values of
-   `finished_at_precision`.
-3. Inspect whether child read edits change `user_books.updated_at`. Make one
+1. Inspect whether child read edits change `user_books.updated_at`. Make one
    harmless change in the Hardcover UI, poll before and after, then restore it.
-4. Confirm pagination ordering, nullable fields, numeric JSON encoding, error
-   envelopes, `429` headers, and maximum accepted query depth.
-5. Store private raw responses only in an ignored local path during development
+2. Confirm error envelopes, `429` headers, and maximum accepted query depth;
+   pagination ordering and numeric encoding are already observed.
+3. Determine whether newly created rereads produce multiple child rows even
+   though imported rereads did not.
+4. Store private raw responses only in an ignored local path during development
    and private R2 in production. Derive synthetic fixtures with replacement IDs,
    titles, people, URLs, notes, and reviews.
-6. Defer mutation testing. Later, with explicit approval, use one disposable
+5. Defer mutation testing. Later, with explicit approval, use one disposable
    Want to Read entry to validate insert/update/delete and conflict behavior.
 
 The probe report should contain counts, field-presence matrices, timestamp
@@ -425,8 +441,7 @@ precision, and semantic conclusions—not private payload values.
 
 ## Recommended next action
 
-Rerun the read-only probe after the Goodreads and StoryGraph imports finish.
-Compare `read_count`, first/last-read dates, finished read-through rows,
-ratings/reviews, and duplicate imported records. Then create synthetic fixtures
-for the observed imported and reread shapes before finalizing Hardcover
-normalization. Current-reading records remain outside Archive.
+The payload evidence is sufficient for the initial schema. Admit status `3` to
+Archive, retain a nullable consumed date, preserve declared read counts without
+inventing reread occurrences, keep status `2` outside Archive and Queue, and
+defer importing status `1` into Queue until Queue behavior is implemented.

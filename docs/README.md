@@ -19,8 +19,8 @@
 
 ## Sources
 
-- [Source reconnaissance](sources/README.md): parallel research contract and
-  current Readwise, Spotify, Hardcover, and Letterboxd capability reports
+- [Source reconnaissance](sources/README.md): research contract and current
+  Readwise, Spotify, Hardcover, Letterboxd, and YouTube capability reports
 
 ## Architecture
 

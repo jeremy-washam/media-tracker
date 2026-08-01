@@ -25,7 +25,9 @@ if (clientId === undefined || clientId.length === 0) {
       result = await fetchSavedEpisodes(accessToken)
     }
 
-    console.log(JSON.stringify(summarizeSavedEpisodes(result.episodes, result.totalReported), null, 2))
+    console.log(
+      JSON.stringify(summarizeSavedEpisodes(result.episodes, result.totalReported), null, 2),
+    )
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'Spotify probe failed')
     process.exitCode = 1

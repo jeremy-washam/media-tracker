@@ -2,5 +2,18 @@
   "name": "@media-tracker/connector-youtube",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "probe:takeout": "node src/probe-takeout.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0",
+    "csv-parse": "7.0.1",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "catalog:"
+  }
 }

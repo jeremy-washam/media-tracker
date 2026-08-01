@@ -7,9 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 
 const spotifyTokenUrl = 'https://accounts.spotify.com/api/token'
-const tokenFile = fileURLToPath(
-  new URL('../../../../.private/spotify-oauth.json', import.meta.url),
-)
+const tokenFile = fileURLToPath(new URL('../../../../.private/spotify-oauth.json', import.meta.url))
 const requiredScopes = ['user-library-read', 'user-read-playback-position'] as const
 
 const storedTokenSchema = z.object({
@@ -47,9 +45,7 @@ export function createPkcePair(): { challenge: string; verifier: string } {
 function equalState(actual: string, expected: string): boolean {
   const actualBytes = Buffer.from(actual)
   const expectedBytes = Buffer.from(expected)
-  return (
-    actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
-  )
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
 }
 
 function validateRedirectUri(value: string): URL {
@@ -157,10 +153,13 @@ async function waitForAuthorizationCode(redirectUri: URL, expectedState: string)
       resolve(code)
     })
 
-    const timeout = setTimeout(() => {
-      server.close()
-      reject(new Error('Spotify authorization timed out after five minutes'))
-    }, 5 * 60 * 1000)
+    const timeout = setTimeout(
+      () => {
+        server.close()
+        reject(new Error('Spotify authorization timed out after five minutes'))
+      },
+      5 * 60 * 1000,
+    )
     timeout.unref()
 
     server.once('close', () => clearTimeout(timeout))
@@ -212,7 +211,8 @@ async function refresh(clientId: string, token: StoredToken): Promise<StoredToke
 function assertScopes(scope: string): void {
   const granted = new Set(scope.split(' '))
   const missing = requiredScopes.filter((required) => !granted.has(required))
-  if (missing.length > 0) throw new Error(`Spotify did not grant required scopes: ${missing.join(', ')}`)
+  if (missing.length > 0)
+    throw new Error(`Spotify did not grant required scopes: ${missing.join(', ')}`)
 }
 
 export async function getSpotifyAccessToken(input: {

@@ -9,10 +9,7 @@ export interface SavedEpisode {
 }
 
 export type SavedEpisodeDisposition =
-  | 'archive_fully_played'
-  | 'archive_partially_played'
-  | 'queue_unplayed'
-  | 'unresolved_playback'
+  'archive_fully_played' | 'archive_partially_played' | 'queue_unplayed' | 'unresolved_playback'
 
 export interface ProbeEpisode extends SavedEpisode {
   disposition: SavedEpisodeDisposition
@@ -52,17 +49,15 @@ export function summarizeSavedEpisodes(episodes: SavedEpisode[], totalReported: 
     rowsReturned: probed.length,
     classification: {
       archive: archive.length,
-      fullyPlayed: archive.filter(
-        (episode) => episode.disposition === 'archive_fully_played',
-      ).length,
+      fullyPlayed: archive.filter((episode) => episode.disposition === 'archive_fully_played')
+        .length,
       partiallyPlayed: archive.filter(
         (episode) => episode.disposition === 'archive_partially_played',
       ).length,
       queue: queue.length,
       unresolved: unresolved.length,
       unavailableMetadata: probed.filter(
-        (episode) =>
-          episode.title === null || episode.show === null || episode.durationMs === null,
+        (episode) => episode.title === null || episode.show === null || episode.durationMs === null,
       ).length,
       missingExternalIdentity: probed.filter((episode) => !episode.hasExternalIdentity).length,
     },
