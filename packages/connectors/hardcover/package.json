@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "probe": "node --env-file-if-exists=../../../.env.local src/probe.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"

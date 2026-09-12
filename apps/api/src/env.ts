@@ -8,6 +8,7 @@ import {
 export interface Bindings {
   ASSETS: Fetcher
   DB: D1Database
+  HARDCOVER_TOKEN?: string
   LETTERBOXD_USERNAME?: string
   RAW_BUCKET: R2Bucket
   READWISE_TOKEN?: string

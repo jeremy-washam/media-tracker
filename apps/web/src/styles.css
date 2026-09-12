@@ -414,6 +414,53 @@ a {
   gap: 9px;
 }
 
+.media-filters {
+  margin-bottom: -24px;
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.media-filters button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid #d4cec1;
+  border-radius: 999px;
+  color: #66665d;
+  background: rgb(255 255 255 / 45%);
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.media-filters button:hover {
+  color: #282923;
+  border-color: #aaa395;
+}
+
+.media-filters button.active {
+  color: #f8f5ee;
+  border-color: #30322b;
+  background: #30322b;
+}
+
+.media-filters span {
+  margin-left: 4px;
+  opacity: 0.62;
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-empty {
+  padding: 32px;
+  color: #85837a;
+  border: 1px dashed #cbc4b7;
+  border-radius: 14px;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
 .media-row {
   min-height: 74px;
   padding: 13px 18px;
@@ -459,6 +506,19 @@ a {
 
 .media-type-podcast_episode {
   background: #5851a7;
+}
+
+.media-type-movie {
+  background: #37515e;
+}
+
+.media-type-book {
+  background: #6d587d;
+}
+
+.media-type-song {
+  color: #173a24;
+  background: #6dc88c;
 }
 
 .connection-skeleton {

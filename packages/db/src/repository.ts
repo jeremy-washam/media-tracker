@@ -612,7 +612,7 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
     }
   }
 
-  async listMedia(limit = 500): Promise<readonly MediaSummaryRecord[]> {
+  async listMedia(limit = 1000): Promise<readonly MediaSummaryRecord[]> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
       throw new RangeError('Media list limit must be an integer from 1 through 1000')
     }

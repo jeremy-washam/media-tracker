@@ -3,8 +3,8 @@
 Status: official reconnaissance and full private-library probe complete after
 Goodreads and StoryGraph import.
 
-This package will own book-history backfill, scheduled reconciliation, edition
-and reread identity, and source-specific normalization. See the
+This package owns book-history backfill, scheduled full reconciliation, edition
+and reread identity, and source-specific parsing. See the
 [Hardcover source reconnaissance](../../../docs/sources/hardcover.md) for the
 current capability assessment, field inventory, limitations, and probe plan.
 
@@ -26,3 +26,17 @@ finished child row, and four `read_count = 2` books do not expose multiple child
 rows. Status is therefore the reliable Archive admission signal; child read rows
 and `read_count` are optional source evidence rather than a complete occurrence
 ledger.
+
+The production connector fetches only Read-status user books in stable ID order.
+The API Worker retains every exact GraphQL page, projects one work-level media
+item per Hardcover book, keeps work, edition, ISBN, and ASIN identities distinct,
+and creates separate Archive occurrences only for finished child read rows. A
+Read book without such a row receives one undated fallback occurrence. Manual
+and hourly scheduled syncs currently perform a complete idempotent reconciliation
+because this small private library fits comfortably within Hardcover's published
+rate limit and nested read rows do not expose a reliable change timestamp.
+
+The 2026-09-12 live validation imported 127 Read books in two pages. Repeating
+the reconciliation retained exactly 127 work-level book items and 127 supported
+Archive occurrences. The observed API can encode `finished_at_precision` as a
+number or string; both remain accepted and preserved in the raw page.

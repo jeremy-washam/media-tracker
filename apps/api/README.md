@@ -37,3 +37,12 @@ and reconciles recent entries to the export using provider identities or exact
 title/year and viewing-date matches. Feed entries that cannot be reconciled are
 retained as unresolved; disappearance from the finite feed never deletes local
 history.
+
+## Hardcover sync
+
+Set `HARDCOVER_TOKEN` in `.dev.vars`, then use **Connections → Hardcover → Sync
+now** for the initial import. The same sync runs hourly through the Worker Cron
+Trigger. It reads the current Read shelf, stores each exact GraphQL response page
+in private R2, and projects books into the Archive without manufacturing rereads
+from aggregate counts. Repeating the sync reconciles the full Read shelf
+idempotently.

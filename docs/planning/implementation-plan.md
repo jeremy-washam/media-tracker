@@ -382,6 +382,13 @@ multiple connectors against an unproven raw-object and Archive schema.
 
 ## 7. Phase 4: Hardcover
 
+Implementation status: complete and validated locally against the owner account.
+The full Read-shelf connector, raw-page retention, canonical projection, manual
+sync, hourly scheduled sync, and media-type browsing filter are implemented. An
+initial import and repeated reconciliation each returned 127 Read books and 127
+supported occurrences without canonical duplicates; the combined scheduled
+handler also completed successfully.
+
 - Authenticate with the Hardcover API token.
 - Import Read books, editions, ratings, reviews, and read dates. Preserve source
   progress only in raw/source-owned evidence.
@@ -708,9 +715,7 @@ ZIP ingestion is also implemented and validated against the owner export. The
 project is intentionally prioritizing a visible working Archive over a general
 ingestion platform. The next three reviewable changes should be:
 
-1. Reuse the completed Readwise and Letterboxd vertical slices for Hardcover
-   history and polling, followed by
-   the already-validated YouTube and Spotify historical exports.
+1. Implement the already-validated YouTube and Spotify historical exports.
 2. Add Spotify's persistent OAuth synchronization and Readwise incremental
    reconciliation before the larger unified Archive UI iteration, then add
    broader replay and recovery tooling in response to observed operational

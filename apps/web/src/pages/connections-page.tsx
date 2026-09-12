@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchConnections, importLetterboxd, syncLetterboxd, syncReadwise } from '../api'
+import {
+  fetchConnections,
+  importLetterboxd,
+  syncHardcover,
+  syncLetterboxd,
+  syncReadwise,
+} from '../api'
 
 const sourceNames = {
   readwise: 'Readwise Reader',
@@ -27,6 +33,15 @@ export function ConnectionsPage() {
   })
   const letterboxdImport = useMutation({
     mutationFn: (archive: File) => importLetterboxd(archive),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
+  })
+  const hardcoverSync = useMutation({
+    mutationFn: () => syncHardcover(),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
@@ -81,6 +96,15 @@ export function ConnectionsPage() {
               >
                 {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
               </button>
+            ) : connection.source === 'hardcover' ? (
+              <button
+                className="sync-button"
+                type="button"
+                disabled={hardcoverSync.isPending}
+                onClick={() => hardcoverSync.mutate()}
+              >
+                {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
+              </button>
             ) : connection.source === 'letterboxd' ? (
               <div className="connection-actions">
                 <button
@@ -130,6 +154,18 @@ export function ConnectionsPage() {
       {readwiseSync.isError ? (
         <p className="checkpoint-note sync-error" role="alert">
           Readwise sync failed. Confirm the Worker has a valid READWISE_TOKEN secret.
+        </p>
+      ) : null}
+      {hardcoverSync.isSuccess ? (
+        <p className="checkpoint-note">
+          {hardcoverSync.data.mode === 'backfill' ? 'Imported' : 'Reconciled'}{' '}
+          {hardcoverSync.data.books} read books and {hardcoverSync.data.archiveEntries} supported
+          reading occurrences from Hardcover.
+        </p>
+      ) : null}
+      {hardcoverSync.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Hardcover sync failed. Confirm the Worker has a valid HARDCOVER_TOKEN secret.
         </p>
       ) : null}
       {letterboxdImport.isSuccess ? (

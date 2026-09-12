@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   ConnectionsResponseSchema,
+  HardcoverSyncResponseSchema,
   HealthResponseSchema,
   LetterboxdImportResponseSchema,
   LetterboxdRssSyncResponseSchema,
@@ -16,6 +17,7 @@ import { mediaItemId } from '@media-tracker/domain'
 import type { ApiError } from '@media-tracker/contracts'
 
 import { createLedgerRepository, type AppEnv } from './env'
+import { HardcoverTokenMissingError, syncHardcover } from './hardcover-sync'
 import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-import'
 import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
@@ -80,6 +82,16 @@ const letterboxdImportRoute = createRoute({
   responses: {
     200: jsonContent(LetterboxdImportResponseSchema, 'Completed Letterboxd export import'),
     400: jsonContent(ApiErrorSchema, 'The upload is not a supported Letterboxd export'),
+  },
+})
+
+const hardcoverSyncRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/hardcover/sync',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(HardcoverSyncResponseSchema, 'Completed Hardcover Read-books sync'),
+    503: jsonContent(ApiErrorSchema, 'Hardcover is not configured or unavailable'),
   },
 })
 
@@ -166,6 +178,24 @@ app.openapi(readwiseSyncRoute, async (context) => {
         error: {
           code: 'SERVICE_UNAVAILABLE',
           message: 'Readwise is not configured. Add READWISE_TOKEN to the Worker secrets.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
+  }
+})
+
+app.openapi(hardcoverSyncRoute, async (context) => {
+  try {
+    return context.json(HardcoverSyncResponseSchema.parse(await syncHardcover(context.env)), 200)
+  } catch (error) {
+    if (!(error instanceof HardcoverTokenMissingError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Hardcover is not configured. Add HARDCOVER_TOKEN to the Worker secrets.',
           requestId: context.get('requestId'),
         },
       }),

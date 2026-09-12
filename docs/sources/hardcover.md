@@ -2,8 +2,32 @@
 
 - Status: Authentication and complete imported-library payload probe complete
 - Priority: Historical books first; optional Queue mirroring later
-- Last verified: 2026-07-19
+- Last verified: 2026-09-12
 - Upstream status: The official GraphQL API is explicitly beta and may change
+
+## Implemented MVP behavior
+
+The first production path is implemented in the Hardcover connector and API
+Worker. Manual and hourly scheduled syncs fetch the complete Read shelf in stable
+user-book ID order. A full reconciliation is intentionally used for every poll:
+the observed Read shelf needs only two pages, this remains well inside the
+60-request-per-minute limit, and it catches nested read-through changes that an
+`updated_at`-only poll can miss.
+
+Each exact GraphQL response page is stored content-addressed in R2 before its
+records are projected. Hardcover book, edition, canonical target, ISBN-10,
+ISBN-13, and ASIN identities stay distinct while the visible media item remains
+work-level. Finished child read rows create dated occurrences; Read-status books
+without one receive a single undated fallback occurrence. `read_count` and all
+other richer fields remain in raw evidence and never generate synthetic rereads.
+
+Live validation on 2026-09-12 returned 127 Read books across two pages. The
+initial import and an immediate full reconciliation both projected 127 books and
+127 supported Archive occurrences without creating canonical duplicates. The
+local scheduled handler then completed Hardcover and Letterboxd reconciliation
+together. One newly observed payload variant has a numeric
+`finished_at_precision`; the parser accepts both numeric and string values while
+the exact representation remains preserved in raw evidence.
 
 ## Recommendation
 

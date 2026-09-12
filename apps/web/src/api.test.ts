@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchHealth, fetchMedia, importLetterboxd, syncLetterboxd, syncReadwise } from './api'
+import {
+  fetchHealth,
+  fetchMedia,
+  importLetterboxd,
+  syncHardcover,
+  syncLetterboxd,
+  syncReadwise,
+} from './api'
 
 const validHealthResponse = {
   status: 'ok',
@@ -60,6 +67,24 @@ describe('API client', () => {
     expect(fetcher).toHaveBeenCalledWith(
       '/api/connections/letterboxd/import',
       expect.objectContaining({ method: 'POST', body: archive }),
+    )
+  })
+
+  it('starts a Hardcover sync with POST', async () => {
+    const response = {
+      syncRunId: 'run-hardcover',
+      mode: 'backfill',
+      pages: 2,
+      sourceRecords: 125,
+      books: 125,
+      archiveEntries: 125,
+    }
+    const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
+
+    await expect(syncHardcover(fetcher)).resolves.toEqual(response)
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/connections/hardcover/sync',
+      expect.objectContaining({ method: 'POST' }),
     )
   })
 

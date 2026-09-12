@@ -1,5 +1,6 @@
 import {
   ConnectionsResponseSchema,
+  HardcoverSyncResponseSchema,
   HealthResponseSchema,
   LetterboxdImportResponseSchema,
   LetterboxdRssSyncResponseSchema,
@@ -9,6 +10,7 @@ import {
 
 import type {
   ConnectionsResponse,
+  HardcoverSyncResponse,
   HealthResponse,
   LetterboxdImportResponse,
   LetterboxdRssSyncResponse,
@@ -51,6 +53,17 @@ export const syncReadwise = async (
   })
   if (!response.ok) throw new Error(`Readwise sync failed with status ${response.status}.`)
   return ReadwiseSyncResponseSchema.parse(await response.json())
+}
+
+export const syncHardcover = async (
+  fetcher: typeof fetch = fetch,
+): Promise<HardcoverSyncResponse> => {
+  const response = await fetcher('/api/connections/hardcover/sync', {
+    method: 'POST',
+    headers: { accept: 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Hardcover sync failed with status ${response.status}.`)
+  return HardcoverSyncResponseSchema.parse(await response.json())
 }
 
 export const importLetterboxd = async (

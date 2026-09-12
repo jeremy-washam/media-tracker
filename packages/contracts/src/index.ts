@@ -45,6 +45,15 @@ export const ReadwiseSyncResponseSchema = z.object({
   archiveItems: z.number().int().nonnegative(),
 })
 
+export const HardcoverSyncResponseSchema = z.object({
+  syncRunId: z.string(),
+  mode: z.enum(['backfill', 'reconcile']),
+  pages: z.number().int().nonnegative(),
+  sourceRecords: z.number().int().nonnegative(),
+  books: z.number().int().nonnegative(),
+  archiveEntries: z.number().int().nonnegative(),
+})
+
 export const LetterboxdImportResponseSchema = z.object({
   syncRunId: z.string(),
   alreadyImported: z.boolean(),
@@ -96,6 +105,7 @@ export type ApiError = z.infer<typeof ApiErrorSchema>
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>
 export type ConnectionsResponse = z.infer<typeof ConnectionsResponseSchema>
 export type HealthResponse = z.infer<typeof HealthResponseSchema>
+export type HardcoverSyncResponse = z.infer<typeof HardcoverSyncResponseSchema>
 export type LetterboxdImportResponse = z.infer<typeof LetterboxdImportResponseSchema>
 export type LetterboxdRssSyncResponse = z.infer<typeof LetterboxdRssSyncResponseSchema>
 export type MediaListResponse = z.infer<typeof MediaListResponseSchema>
