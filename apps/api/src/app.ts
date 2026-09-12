@@ -4,15 +4,18 @@ import {
   HealthResponseSchema,
   MediaListResponseSchema,
   MediaSummarySchema,
+  ReadwiseSyncResponseSchema,
   SyncRunsResponseSchema,
 } from '@media-tracker/contracts'
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi'
 import { HTTPException } from 'hono/http-exception'
+import { mediaItemId } from '@media-tracker/domain'
 
 import type { ApiError } from '@media-tracker/contracts'
 
-import type { AppEnv } from './env'
+import { createLedgerRepository, type AppEnv } from './env'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
+import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
 
 const apiVersion = '0.0.0'
 
@@ -56,6 +59,16 @@ const mediaDetailRoute = createRoute({
   },
 })
 
+const readwiseSyncRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/readwise/sync',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(ReadwiseSyncResponseSchema, 'Completed Readwise Archive import'),
+    503: jsonContent(ApiErrorSchema, 'Readwise is not configured or unavailable'),
+  },
+})
+
 const connectionsRoute = createRoute({
   method: 'get',
   path: '/api/connections',
@@ -93,12 +106,16 @@ app.openapi(healthRoute, (context) => {
   )
 })
 
-app.openapi(mediaRoute, (context) => {
-  return context.json(MediaListResponseSchema.parse({ data: [], nextCursor: null }), 200)
+app.openapi(mediaRoute, async (context) => {
+  const data = await createLedgerRepository(context.env.DB).listMedia()
+  return context.json(MediaListResponseSchema.parse({ data, nextCursor: null }), 200)
 })
 
-app.openapi(mediaDetailRoute, (context) => {
+app.openapi(mediaDetailRoute, async (context) => {
   const id = context.req.valid('param').id
+  const item = await createLedgerRepository(context.env.DB).findMedia(mediaItemId(id))
+
+  if (item !== null) return context.json(MediaSummarySchema.parse(item), 200)
 
   return context.json(
     ApiErrorSchema.parse({
@@ -112,14 +129,49 @@ app.openapi(mediaDetailRoute, (context) => {
   )
 })
 
-app.openapi(connectionsRoute, (context) => {
+app.openapi(readwiseSyncRoute, async (context) => {
+  try {
+    return context.json(
+      ReadwiseSyncResponseSchema.parse(await syncReadwiseArchive(context.env)),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof ReadwiseTokenMissingError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Readwise is not configured. Add READWISE_TOKEN to the Worker secrets.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
+  }
+})
+
+app.openapi(connectionsRoute, async (context) => {
+  const repository = createLedgerRepository(context.env.DB)
+  const sources = ['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube'] as const
+  const data = []
+  for (const source of sources) {
+    const connection = await repository.findConnectionBySource(source)
+    const lastSuccessfulSyncAt =
+      connection === null ? null : await repository.findLastSuccessfulSyncAt(connection.id)
+    data.push({
+      source,
+      status:
+        connection === null
+          ? ('disconnected' as const)
+          : connection.status === 'connected'
+            ? ('connected' as const)
+            : ('degraded' as const),
+      lastSuccessfulSyncAt,
+    })
+  }
   return context.json(
     ConnectionsResponseSchema.parse({
-      data: ['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube'].map((source) => ({
-        source,
-        status: 'disconnected',
-        lastSuccessfulSyncAt: null,
-      })),
+      data,
     }),
     200,
   )

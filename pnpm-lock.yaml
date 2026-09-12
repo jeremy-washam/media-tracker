@@ -12,6 +12,9 @@ catalogs:
     typescript:
       specifier: 6.0.3
       version: 6.0.3
+    ulid:
+      specifier: ^3.0.2
+      version: 3.0.2
 
 importers:
 
@@ -59,15 +62,24 @@ importers:
       '@hono/zod-openapi':
         specifier: 1.5.1
         version: 1.5.1(hono@4.12.31)(zod@4.4.3)
+      '@media-tracker/connector-readwise':
+        specifier: workspace:*
+        version: link:../../packages/connectors/readwise
       '@media-tracker/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       '@media-tracker/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@media-tracker/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       hono:
         specifier: 4.12.31
         version: 4.12.31
+      ulid:
+        specifier: 'catalog:'
+        version: 3.0.2
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -75,6 +87,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: 5.20260718.1
         version: 5.20260718.1
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -160,6 +175,13 @@ importers:
         version: 6.0.3
 
   packages/connectors/readwise:
+    dependencies:
+      '@media-tracker/domain':
+        specifier: workspace:*
+        version: link:../../domain
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 26.1.1
@@ -1982,6 +2004,10 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  ulid@3.0.2:
+    resolution: {integrity: sha512-yu26mwteFYzBAot7KVMqFGCVpsF6g8wXfJzQUHvu1no3+rRRSFcSV2nKeYvNPLD2J4b08jYBDhHUjeH0ygIl9w==}
+    hasBin: true
+
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
@@ -3676,6 +3702,8 @@ snapshots:
       - supports-color
 
   typescript@6.0.3: {}
+
+  ulid@3.0.2: {}
 
   undici-types@8.3.0: {}
 

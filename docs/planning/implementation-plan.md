@@ -702,14 +702,20 @@ The ingestion milestone is complete when:
 
 The workspace, React/Hono scaffold, five source probes, canonical ledger
 specification, initial D1 migration, and D1 repository boundary are complete.
-The next three reviewable changes should be:
+The project is intentionally prioritizing a visible working Archive over a
+general ingestion platform. The next three reviewable changes should be:
 
-1. Implement the R2 raw-object/replay framework against the completed D1
-   manifests and atomic write boundary.
-2. Build the fixture-backed Readwise vertical slice, including a local backfill
-   and incremental reconciliation.
-3. Reuse those proven boundaries for the other connectors, beginning with the
-   already-validated historical export importers.
+1. Exercise the implemented fixture-backed Readwise Archive import against the
+   owner account and verify the resulting History UI.
+2. Reuse the thin vertical slice for the other historical sources, beginning
+   with the already-validated export importers.
+3. Add Readwise incremental reconciliation after the full Archive import is
+   correct, then add broader replay and recovery tooling in response to observed
+   operational needs.
+
+The MVP retains exact raw pages and respects idempotency and cursor safety, but
+defers generalized replay infrastructure, multipart upload orchestration, and
+advanced recovery automation.
 
 This sequence tests the data assumptions before migrations make them expensive
 to change, while allowing independent source research and probe preparation to

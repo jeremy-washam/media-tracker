@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchConnections } from '../api'
+import { fetchConnections, syncReadwise } from '../api'
 
 const sourceNames = {
   readwise: 'Readwise Reader',
@@ -11,9 +11,19 @@ const sourceNames = {
 } as const
 
 export function ConnectionsPage() {
+  const queryClient = useQueryClient()
   const connections = useQuery({
     queryKey: ['connections'],
     queryFn: () => fetchConnections(),
+  })
+  const readwiseSync = useMutation({
+    mutationFn: () => syncReadwise(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
   })
 
   return (
@@ -38,9 +48,24 @@ export function ConnectionsPage() {
             </div>
             <div className="connection-copy">
               <h2>{sourceNames[connection.source]}</h2>
-              <p>Not configured</p>
+              <p>
+                {connection.lastSuccessfulSyncAt === null
+                  ? 'No completed sync yet'
+                  : `Last synced ${new Date(connection.lastSuccessfulSyncAt).toLocaleString()}`}
+              </p>
             </div>
-            <span className="connection-state">Disconnected</span>
+            {connection.source === 'readwise' ? (
+              <button
+                className="sync-button"
+                type="button"
+                disabled={readwiseSync.isPending}
+                onClick={() => readwiseSync.mutate()}
+              >
+                {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
+              </button>
+            ) : (
+              <span className="connection-state">{connection.status}</span>
+            )}
           </article>
         ))}
 
@@ -51,10 +76,17 @@ export function ConnectionsPage() {
           : null}
       </div>
 
-      <p className="checkpoint-note">
-        No credentials are needed yet. Provider setup begins with Readwise after the data ledger is
-        in place.
-      </p>
+      {readwiseSync.isSuccess ? (
+        <p className="checkpoint-note">
+          Imported {readwiseSync.data.archiveItems} Archive items from{' '}
+          {readwiseSync.data.sourceRecords} Reader records.
+        </p>
+      ) : null}
+      {readwiseSync.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Readwise sync failed. Confirm the Worker has a valid READWISE_TOKEN secret.
+        </p>
+      ) : null}
     </section>
   )
 }

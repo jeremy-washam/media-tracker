@@ -1,0 +1,69 @@
+{
+  "count": 7,
+  "nextPageCursor": null,
+  "results": [
+    {
+      "id": "reader-article-1",
+      "url": "https://read.readwise.io/read/reader-article-1",
+      "source_url": "https://example.test/articles/one",
+      "title": "A synthetic article",
+      "author": "Example Author",
+      "summary": "Fixture content written for tests.",
+      "image_url": "https://example.test/images/one.jpg",
+      "category": "article",
+      "location": "archive",
+      "published_date": "2026-08-01",
+      "updated_at": "2026-09-10T20:30:00Z",
+      "last_moved_at": "2026-09-10T20:00:00Z"
+    },
+    {
+      "id": "reader-pdf-1",
+      "title": "A synthetic PDF",
+      "category": "pdf",
+      "location": "archive",
+      "published_date": "2025",
+      "updated_at": "2026-09-09T12:00:00Z",
+      "last_moved_at": "2026-09-09T11:00:00Z"
+    },
+    {
+      "id": "reader-rss-1",
+      "title": "A synthetic feed item",
+      "category": "rss",
+      "location": "archive",
+      "updated_at": "2026-09-08T12:00:00Z",
+      "last_moved_at": "2026-09-08T11:00:00Z"
+    },
+    {
+      "id": "reader-video-1",
+      "title": "A synthetic video",
+      "category": "video",
+      "location": "archive",
+      "updated_at": "2026-09-07T12:00:00Z",
+      "last_moved_at": "2026-09-07T11:00:00Z"
+    },
+    {
+      "id": "reader-podcast-1",
+      "title": "A synthetic podcast episode",
+      "category": "podcast",
+      "location": "archive",
+      "updated_at": "2026-09-06T12:00:00Z",
+      "last_moved_at": "2026-09-06T11:00:00Z"
+    },
+    {
+      "id": "reader-tweet-1",
+      "title": "A synthetic post",
+      "category": "tweet",
+      "location": "archive",
+      "updated_at": "2026-09-05T12:00:00Z",
+      "last_moved_at": "2026-09-05T11:00:00Z"
+    },
+    {
+      "id": "reader-later-1",
+      "title": "Not consumed yet",
+      "category": "article",
+      "location": "later",
+      "updated_at": "2026-09-04T12:00:00Z",
+      "last_moved_at": "2026-09-04T11:00:00Z"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ allowBuilds:
 catalog:
   drizzle-orm: ^0.45.2
   typescript: 6.0.3
+  ulid: ^3.0.2
 
 catalogMode: strict
 

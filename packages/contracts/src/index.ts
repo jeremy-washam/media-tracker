@@ -38,6 +38,13 @@ export const MediaListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 })
 
+export const ReadwiseSyncResponseSchema = z.object({
+  syncRunId: z.string(),
+  pages: z.number().int().nonnegative(),
+  sourceRecords: z.number().int().nonnegative(),
+  archiveItems: z.number().int().nonnegative(),
+})
+
 export const ConnectionSummarySchema = z.object({
   source: z.enum(['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube']),
   status: z.enum(['connected', 'disconnected', 'degraded']),
@@ -71,4 +78,7 @@ export type ApiError = z.infer<typeof ApiErrorSchema>
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>
 export type ConnectionsResponse = z.infer<typeof ConnectionsResponseSchema>
 export type HealthResponse = z.infer<typeof HealthResponseSchema>
+export type MediaListResponse = z.infer<typeof MediaListResponseSchema>
+export type MediaSummary = z.infer<typeof MediaSummarySchema>
+export type ReadwiseSyncResponse = z.infer<typeof ReadwiseSyncResponseSchema>
 export type SyncJob = z.infer<typeof SyncJobSchema>

@@ -319,6 +319,18 @@ describe('canonical ledger migration and repository', () => {
     await expect(repository.findSyncCursor(data.connection.id, data.cursor.name)).resolves.toEqual(
       data.cursor,
     )
+    await expect(repository.findConnectionBySource('spotify')).resolves.toEqual(data.connection)
+    await expect(repository.findLastSuccessfulSyncAt(data.connection.id)).resolves.toBe(
+      data.succeededSyncRun.finishedAt,
+    )
+    await expect(repository.listMedia()).resolves.toEqual([
+      { id: data.mediaItem.id, type: data.mediaItem.type, title: data.mediaItem.title },
+    ])
+    await expect(repository.findMedia(data.mediaItem.id)).resolves.toEqual({
+      id: data.mediaItem.id,
+      type: data.mediaItem.type,
+      title: data.mediaItem.title,
+    })
 
     const archive = database
       .prepare(

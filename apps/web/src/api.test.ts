@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchHealth } from './api'
+import { fetchHealth, fetchMedia, syncReadwise } from './api'
 
 const validHealthResponse = {
   status: 'ok',
@@ -21,5 +21,26 @@ describe('API client', () => {
     const fetcher = vi.fn(async () => Response.json({ status: 'maybe' })) as unknown as typeof fetch
 
     await expect(fetchHealth(fetcher)).rejects.toThrow()
+  })
+
+  it('loads and validates media summaries', async () => {
+    const response = {
+      data: [{ id: 'media-1', type: 'article', title: 'A synthetic article' }],
+      nextCursor: null,
+    }
+    const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
+
+    await expect(fetchMedia(fetcher)).resolves.toEqual(response)
+  })
+
+  it('starts a Readwise sync with POST', async () => {
+    const response = { syncRunId: 'run-1', pages: 1, sourceRecords: 7, archiveItems: 5 }
+    const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
+
+    await expect(syncReadwise(fetcher)).resolves.toEqual(response)
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/connections/readwise/sync',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 })

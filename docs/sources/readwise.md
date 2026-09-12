@@ -435,8 +435,8 @@ Later samples, HTML availability, and the v2 highlight join. Remaining work:
 
 ## Recommended next action
 
-Use the verified field shapes to create synthetic Reader v3 and Readwise v2
-fixtures, then implement raw-page persistence for all records and replay-safe
-normalization for the eligible Archive subset. Keep `last_moved_at` explicitly
-inferred. Validate webhook security/delivery and raw-source behavior only after
-the Worker route and private R2 boundary exist.
+The synthetic Reader v3 fixture, manual Archive pagination, raw-page R2 storage,
+and eligible-media normalization are implemented. Exercise that path against the
+owner account, then add incremental reconciliation only after the initial
+Archive is visible and correct. Readwise v2 highlights, webhook delivery, and
+raw-source downloads remain deferred.

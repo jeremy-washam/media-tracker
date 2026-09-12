@@ -12,6 +12,7 @@ export type {
   CanonicalWriteBatch,
   ExternalIdentityLookup,
   ExternalIdentityReference,
+  MediaSummaryRecord,
 } from './repository'
 export { SqlCanonicalLedgerRepository } from './repository'
 export * from './schema'

@@ -12,13 +12,17 @@
   },
   "dependencies": {
     "@hono/zod-openapi": "1.5.1",
+    "@media-tracker/connector-readwise": "workspace:*",
     "@media-tracker/contracts": "workspace:*",
     "@media-tracker/db": "workspace:*",
+    "@media-tracker/domain": "workspace:*",
     "hono": "4.12.31",
+    "ulid": "catalog:",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260718.1",
+    "@types/node": "26.1.1",
     "typescript": "catalog:",
     "wrangler": "4.112.0"
   }

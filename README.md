@@ -6,9 +6,9 @@ initial goal is trustworthy historical backfill and ongoing synchronization.
 Future work includes a centralized queue, evidence-backed LLM search, and
 possibly an iOS client.
 
-The application scaffold, source-payload reconnaissance, canonical ledger
-semantics, and initial D1 persistence layer are complete. The next storage step
-is the R2 raw-object/replay framework.
+The application scaffold, source-payload reconnaissance, canonical ledger, and
+initial D1 persistence layer are complete. The first thin vertical slice imports
+the current Readwise Archive and displays it in History.
 
 ## Architecture
 
@@ -46,6 +46,7 @@ Requirements: Node.js 24 or newer and pnpm 11 or newer.
 ```sh
 pnpm install
 pnpm db:migrate:local
+cp apps/api/.dev.vars.example apps/api/.dev.vars
 pnpm dev
 ```
 
@@ -62,7 +63,8 @@ Useful local endpoints:
 
 No Cloudflare account or provider credentials are required for local
 development. Wrangler simulates D1, R2, Queues, Cron, and static asset bindings.
-The IDs in `apps/api/wrangler.jsonc` are local placeholders and must be replaced
+A Readwise token is required only to run the manual Reader Archive import. The
+IDs in `apps/api/wrangler.jsonc` are local placeholders and must be replaced
 before remote deployment.
 
 ## Checks

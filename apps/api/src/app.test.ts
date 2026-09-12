@@ -4,9 +4,35 @@ import {
   ApiErrorSchema,
   ConnectionsResponseSchema,
   HealthResponseSchema,
+  MediaListResponseSchema,
 } from '@media-tracker/contracts'
 
 import app from './app'
+import type { Bindings } from './env'
+
+const emptyStatement = {
+  bind() {
+    return this
+  },
+  async first() {
+    return null
+  },
+  async all() {
+    return { results: [], success: true }
+  },
+  async run() {
+    return { success: true }
+  },
+}
+
+const testBindings = {
+  DB: {
+    prepare: () => ({ ...emptyStatement }),
+    async batch(statements: unknown[]) {
+      return statements.map(() => ({ success: true }))
+    },
+  },
+} as unknown as Bindings
 
 describe('API', () => {
   beforeEach(() => {
@@ -37,7 +63,7 @@ describe('API', () => {
   })
 
   it('returns all planned source connection placeholders', async () => {
-    const response = await app.request('/api/connections')
+    const response = await app.request('/api/connections', undefined, testBindings)
     const payload = ConnectionsResponseSchema.parse(await response.json())
 
     expect(payload.data.map(({ source }) => source)).toEqual([
@@ -49,6 +75,25 @@ describe('API', () => {
     ])
   })
 
+  it('returns media from the database contract', async () => {
+    const response = await app.request('/api/media', undefined, testBindings)
+    const payload = MediaListResponseSchema.parse(await response.json())
+
+    expect(payload).toEqual({ data: [], nextCursor: null })
+  })
+
+  it('explains when Readwise has not been configured', async () => {
+    const response = await app.request(
+      '/api/connections/readwise/sync',
+      { method: 'POST' },
+      testBindings,
+    )
+    const payload = ApiErrorSchema.parse(await response.json())
+
+    expect(response.status).toBe(503)
+    expect(payload.error.code).toBe('SERVICE_UNAVAILABLE')
+  })
+
   it('generates an OpenAPI document for the scaffold routes', async () => {
     const response = await app.request('/api/openapi.json')
     const document = (await response.json()) as { paths?: Record<string, unknown> }
@@ -56,6 +101,7 @@ describe('API', () => {
     expect(document.paths).toHaveProperty('/api/health')
     expect(document.paths).toHaveProperty('/api/media')
     expect(document.paths).toHaveProperty('/api/connections')
+    expect(document.paths).toHaveProperty('/api/connections/readwise/sync')
     expect(document.paths).toHaveProperty('/api/sync-runs')
   })
 })

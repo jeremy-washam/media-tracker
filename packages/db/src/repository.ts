@@ -12,6 +12,7 @@ import type {
 } from '@media-tracker/domain'
 import {
   archiveEntryId,
+  connectionId,
   externalIdentityId,
   mediaItemId,
   rawObjectId,
@@ -23,9 +24,11 @@ import {
   type ConnectionId,
   type ExternalIdentityId,
   type IdentityNamespace,
+  type MediaSource,
   type MediaItemId,
   type RawObjectId,
   type SourceRecordId,
+  type UtcInstant,
 } from '@media-tracker/domain'
 
 import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './database'
@@ -58,9 +61,17 @@ export interface ExternalIdentityReference {
   readonly mediaItemId: MediaItemId
 }
 
+export interface MediaSummaryRecord {
+  readonly id: MediaItemId
+  readonly type: MediaItem['type']
+  readonly title: string | null
+}
+
 export interface CanonicalLedgerRepository {
   saveConnection(connection: SourceConnection): Promise<void>
   saveSyncRun(syncRun: SyncRun): Promise<void>
+  findConnectionBySource(source: MediaSource): Promise<SourceConnection | null>
+  findLastSuccessfulSyncAt(connectionId: ConnectionId): Promise<UtcInstant | null>
   findRawObjectId(connectionId: ConnectionId, acquisitionKey: string): Promise<RawObjectId | null>
   findSourceRecordId(
     rawObjectId: RawObjectId,
@@ -73,6 +84,8 @@ export interface CanonicalLedgerRepository {
     sourceOccurrenceKey: string,
   ): Promise<ArchiveEntryId | null>
   findSyncCursor(connectionId: ConnectionId, name: string): Promise<SyncCursor | null>
+  listMedia(limit?: number): Promise<readonly MediaSummaryRecord[]>
+  findMedia(id: MediaItemId): Promise<MediaSummaryRecord | null>
   commit(batch: CanonicalWriteBatch): Promise<void>
 }
 
@@ -398,6 +411,44 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
     await this.#run([syncRunStatement(this.#database, syncRun)])
   }
 
+  async findConnectionBySource(source: MediaSource): Promise<SourceConnection | null> {
+    const row = await statement(
+      this.#database,
+      `SELECT id, source, label, status, coverage, created_at, updated_at
+       FROM connections WHERE source = ? ORDER BY created_at LIMIT 1`,
+      [source],
+    ).first<{
+      id: string
+      source: MediaSource
+      label: string
+      status: SourceConnection['status']
+      coverage: SourceConnection['coverage']
+      created_at: string
+      updated_at: string
+    }>()
+    if (row === null) return null
+    return {
+      id: connectionId(row.id),
+      source: row.source,
+      label: row.label,
+      status: row.status,
+      coverage: row.coverage,
+      createdAt: utcInstant(row.created_at),
+      updatedAt: utcInstant(row.updated_at),
+    }
+  }
+
+  async findLastSuccessfulSyncAt(connectionId: ConnectionId): Promise<UtcInstant | null> {
+    const row = await statement(
+      this.#database,
+      `SELECT finished_at FROM sync_runs
+       WHERE connection_id = ? AND status = 'succeeded' AND finished_at IS NOT NULL
+       ORDER BY finished_at DESC LIMIT 1`,
+      [connectionId],
+    ).first<{ finished_at: string }>()
+    return row === null ? null : utcInstant(row.finished_at)
+  }
+
   async findRawObjectId(
     connectionId: ConnectionId,
     acquisitionKey: string,
@@ -482,6 +533,40 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
       committedAt: utcInstant(row.committed_at),
       syncRunId: syncRunId(row.sync_run_id),
     }
+  }
+
+  async listMedia(limit = 500): Promise<readonly MediaSummaryRecord[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      throw new RangeError('Media list limit must be an integer from 1 through 1000')
+    }
+    const result = await statement(
+      this.#database,
+      `SELECT media_items.id, media_items.type, media_items.title
+       FROM media_items
+       INNER JOIN archive_entries ON archive_entries.media_item_id = media_items.id
+       GROUP BY media_items.id, media_items.type, media_items.title
+       ORDER BY MAX(COALESCE(archive_entries.consumed_at_value, archive_entries.created_at)) DESC,
+                media_items.id DESC
+       LIMIT ?`,
+      [limit],
+    ).all<{ id: string; type: MediaItem['type']; title: string | null }>()
+    return result.results.map((row) => ({
+      id: mediaItemId(row.id),
+      type: row.type,
+      title: row.title,
+    }))
+  }
+
+  async findMedia(id: MediaItemId): Promise<MediaSummaryRecord | null> {
+    const row = await statement(
+      this.#database,
+      `SELECT media_items.id, media_items.type, media_items.title
+       FROM media_items
+       WHERE media_items.id = ?
+         AND EXISTS (SELECT 1 FROM archive_entries WHERE archive_entries.media_item_id = media_items.id)`,
+      [id],
+    ).first<{ id: string; type: MediaItem['type']; title: string | null }>()
+    return row === null ? null : { id: mediaItemId(row.id), type: row.type, title: row.title }
   }
 
   async commit(batch: CanonicalWriteBatch): Promise<void> {
