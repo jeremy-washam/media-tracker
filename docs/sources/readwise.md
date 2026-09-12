@@ -4,7 +4,7 @@
   webhook/raw-source probes pending
 - Last reviewed: 2026-07-18
 - Coverage assessment: strong for current library state and queue mirroring; partial
-  for historical completion timestamps and deletions
+  for historical consumption timestamps and deletions
 
 ## Purpose
 
@@ -205,7 +205,7 @@ original strings and source precision during ingestion.
 | `updated_at`                     | Latest Reader record update                       | Reconciliation signal, not a user activity time                                    |
 | `first_opened_at`                | First time Reader recorded the document as opened | Opening is not completion                                                          |
 | `last_opened_at`                 | Most recent Reader-recorded open                  | Opening is not completion                                                          |
-| `last_moved_at`                  | Latest location movement                          | For a currently archived document, a candidate inferred archive/completion time    |
+| `last_moved_at`                  | Latest location movement                          | Chosen inferred consumption time for eligible archived media                       |
 | Webhook receipt time             | When Media Tracker received an event              | Ingestion time only unless the payload supplies a confirmed event time             |
 | Highlight `highlighted_at`       | When the highlight was taken                      | May be absent according to the Readwise API                                        |
 | Highlight `created_at`           | Readwise highlight creation time                  | Not necessarily the highlight occurrence time                                      |
@@ -213,11 +213,13 @@ original strings and source precision during ingestion.
 
 No list field is documented as the time a document was completed.
 
-## Archive and completion semantics
+## Archive semantics
 
-For this application, the owner has explicitly chosen the rule that everything
-in Reader Archive can be treated as completed. That is a personal workflow rule,
-not a universal claim about Reader data.
+For this application, the owner has explicitly chosen a two-part admission rule:
+the document must be in Reader Archive and represent an article, video, or
+podcast. PDFs, RSS items, and newsletter-style emails count as articles. EPUBs,
+tweets, personal notes, highlight-only documents, and other categories remain
+preserved source evidence without becoming standalone Archive items.
 
 Official Reader workflow documentation generally describes Archive as the
 destination after finishing an item. It also documents moving an already-read
@@ -228,17 +230,17 @@ There are still important limits:
 
 - `location` is current state, not a historical event stream.
 - The API exposes no `finished_at` field.
-- `last_moved_at` may be used as an inferred consumption date for a currently
-  archived item, but its exact behavior must be checked against real records.
+- `last_moved_at` is used as an inferred consumption date for an eligible,
+  currently archived item. Preserve the inference marker because Reader does not
+  identify the particular location transition.
 - `first_opened_at`, `last_opened_at`, and `reading_progress` must not be used to
   exclude archived items or manufacture completion events.
 - `reader.document.finished` and `reader.document.archived` are distinct webhook
   types. For future changes, preserve the exact event type rather than collapsing
   the webhook evidence, even if both project into local Archive.
 
-The initial canonical record therefore needs to support a known-complete item
-whose `consumed_at` is unknown or inferred. It should not require fake progress
-history.
+Archive membership is the canonical consumption state; it does not need a
+separate completion field or fake progress history.
 
 ## Pagination and checkpoints
 
@@ -382,11 +384,13 @@ its count represents highlights rather than top-level result rows in this
 sample. Pagination code must use `nextPageCursor`, not infer completion from the
 count/results relationship.
 
-Under the owner's workflow, Archive location is sufficient completion evidence.
-`last_moved_at` is available as an inferred completion timestamp for all current
-Archive items, but the API still does not prove which location transition that
-timestamp represents. Preserve it as inferred rather than an exact finished-at
-fact.
+Under the owner's workflow, eligible category plus Archive location is
+sufficient admission evidence. Of the 67 observed Archive documents, 64 have an
+eligible category: 43 articles, 10 RSS items, 7 videos, 3 PDFs, and 1 podcast.
+The 3 tweets remain source evidence only. `last_moved_at` is available as an
+inferred consumption timestamp for all current Archive items, but the API still
+does not prove which location transition that timestamp represents. Preserve it
+as inferred rather than an exact finished-at fact.
 
 ## Remaining private probe plan
 
@@ -407,7 +411,8 @@ Later samples, HTML availability, and the v2 highlight join. Remaining work:
 ## Unknowns to resolve
 
 - Whether `last_moved_at` reliably captures the transition into the current
-  Archive location and whether “finish” changes the same timestamp
+  Archive location and whether “finish” changes the same timestamp; this does
+  not block its approved use as an explicitly inferred consumption time
 - Whether `reader.document.finished` carries an event occurrence timestamp in
   real payloads or only the document snapshot
 - Whether `updatedAfter` captures every location, tag, note, content, and progress
@@ -431,7 +436,7 @@ Later samples, HTML availability, and the v2 highlight join. Remaining work:
 ## Recommended next action
 
 Use the verified field shapes to create synthetic Reader v3 and Readwise v2
-fixtures, then implement raw-page persistence and replay-safe normalization for
-the 67 Archive documents. Keep `last_moved_at` explicitly inferred. Validate
-webhook security/delivery and raw-source behavior only after the Worker route and
-private R2 boundary exist.
+fixtures, then implement raw-page persistence for all records and replay-safe
+normalization for the eligible Archive subset. Keep `last_moved_at` explicitly
+inferred. Validate webhook security/delivery and raw-source behavior only after
+the Worker route and private R2 boundary exist.

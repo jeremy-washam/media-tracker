@@ -353,13 +353,13 @@ Available evidence maps as follows:
 
 The evidence strength still matters for dates. The Web API flags are mutable and
 undated, while ESH `ts` is the end of a playback segment rather than necessarily
-a completion time. Preserve both sources and allow an Archive occurrence time to
-be unknown when only the saved-episode snapshot is available; never substitute
-the poll or ingestion time as the consumption time.
+a completion time. Create one Archive occurrence per episode and use the latest
+positive ESH segment timestamp as its consumed time. When only an undated
+saved-episode observation is available, leave consumed time unknown; never
+substitute the poll or ingestion time.
 
-For repeated listens, retain the raw segments. Whether they support distinct
-Archive occurrences depends on whether separate completions can be inferred
-without collapsing normal pause/resume sessions into rewatches.
+Retain every playback segment as source evidence, but do not create separate
+Archive occurrences for sessions or relistens.
 
 ## Pagination, checkpoints, and rate limits
 
@@ -603,7 +603,6 @@ snapshot and reconciliation source.
 The payload evidence is sufficient for the initial schema. Implement a replay-
 safe raw-file importer using member name plus array index, retain every playback
 segment as Spotify-owned evidence, admit each episode URI with positive playback
-to Archive, and reconcile current saved episodes into Queue/Archive/unresolved
-state. Preserve audiobook segments separately pending an explicit admission and
-cross-source matching rule. Defer session grouping and relisten occurrence
-inference.
+to one Archive occurrence using its latest positive play, and reconcile current
+saved episodes into Queue/Archive/unresolved state. Preserve audiobook segments
+separately pending an explicit admission and cross-source matching rule.

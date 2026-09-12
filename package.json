@@ -10,7 +10,7 @@
     "pnpm": ">=11"
   },
   "scripts": {
-    "build": "pnpm --filter @media-tracker/contracts build && pnpm --filter @media-tracker/web build && pnpm --filter @media-tracker/api build && pnpm --filter @media-tracker/cli build",
+    "build": "pnpm --filter @media-tracker/domain build && pnpm --filter @media-tracker/contracts build && pnpm --filter @media-tracker/web build && pnpm --filter @media-tracker/api build && pnpm --filter @media-tracker/cli build",
     "check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test",
     "deploy": "pnpm build && pnpm --filter @media-tracker/api deploy",
     "dev": "concurrently --kill-others --names api,web --prefix-colors magenta,cyan \"pnpm dev:api\" \"pnpm dev:web\"",

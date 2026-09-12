@@ -78,4 +78,7 @@ Postgres and S3-compatible storage without rewriting connectors or clients.
 
 See the accepted decisions in `docs/decisions` and the accompanying
 [threat model](./threat-model.md) and
-[development standards](./development-standards.md).
+[development standards](./development-standards.md). The
+[canonical ledger specification](./canonical-ledger.md) defines the logical
+schema, identity rules, timestamp semantics, and source projections established
+after payload reconnaissance.

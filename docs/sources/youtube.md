@@ -22,8 +22,10 @@ initial private, single-user connector.
 Recommended integration shape:
 
 1. Import each Google Takeout ZIP as a separate source snapshot.
-2. Admit only activity cards whose action is exactly `Watched` to Archive.
-3. Preserve every timestamped watch occurrence; do not collapse by video ID.
+2. Admit only activity cards whose action is exactly `Watched` and which expose
+   a usable video identity to Archive.
+3. Preserve every identified, timestamped watch occurrence; do not collapse by
+   video ID.
 4. Preserve non-watch activity and unavailable rows as source evidence without
    admitting them as watched videos.
 5. Import Watch Later independently as Queue evidence when Queue is implemented.
@@ -102,8 +104,9 @@ The HTML file name is misleading: it includes `Viewed`, `Visited`, and
 the action, not merely the member filename or presence of a YouTube URL.
 
 The Takeouts include no playback duration or completion percentage. For this
-product, a timestamped `Watched` record is sufficient evidence of consumption,
-not proof that the video was completed.
+product, a timestamped `Watched` record with a usable video identity is
+sufficient Archive evidence. A watched card without one remains preserved source
+evidence but does not appear in Archive.
 
 ## HTML watch-history shape
 
@@ -117,8 +120,8 @@ The observed HTML repeats an `outer-cell` activity card containing a
 - final direct text timestamp with a timezone abbreviation.
 
 Unavailable or removed videos may have no video anchor or video ID. Preserve
-their timestamp and raw card in source evidence; do not invent an identity from
-display text.
+their timestamp and raw card as unresolved source evidence, do not invent an
+identity from display text, and do not project them into Archive.
 
 The parser converts recognized `PST`, `PDT`, and `UTC` timestamps to UTC while
 retaining the original string. Timestamp parsing failure must preserve the raw
@@ -130,11 +133,11 @@ The `v` query parameter in a YouTube or YouTube Music watch URL is the primary
 external video identity. Retain the original URL and hostname as source facts.
 Titles and channel names are mutable metadata, not identities.
 
-Every `Watched` card is a distinct source occurrence. Repeated video IDs are
-expected and support rewatches. A safe source occurrence key for one immutable
-Takeout snapshot is the raw-object identity plus HTML card ordinal. A normalized
-video-ID-plus-timestamp key is useful for comparing overlapping exports but must
-not be assumed globally unique without testing later snapshots.
+Every identified `Watched` card is a distinct Archive occurrence. Repeated video
+IDs are expected and support rewatches. A safe source occurrence key for one
+immutable Takeout snapshot is the raw-object identity plus HTML card ordinal. A
+normalized video-ID-plus-timestamp key is useful for comparing overlapping
+exports but must not be assumed globally unique without testing later snapshots.
 
 The two current Takeouts have no exact cross-archive event overlap, so no
 cross-snapshot revision behavior has yet been measured.
@@ -215,5 +218,6 @@ Later shapes. Real Takeouts remain ignored and must never enter Git.
 
 The historical and Queue payload shapes are sufficient for the initial schema.
 Model YouTube video identity separately from timestamped watched occurrences and
-source connections. Defer API credentials until metadata enrichment is
-implemented; it does not block raw Takeout ingestion.
+source connections. Preserve unidentified watched cards as unresolved evidence
+without showing them in Archive. Defer API credentials until metadata enrichment
+is implemented; it does not block raw Takeout ingestion.

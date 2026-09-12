@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { HealthResponseSchema, SyncJobSchema } from './index'
+import { HealthResponseSchema, MediaTypeSchema, SyncJobSchema } from './index'
 
 describe('API contracts', () => {
   it('accepts a valid health response', () => {
@@ -23,5 +23,13 @@ describe('API contracts', () => {
     })
 
     expect(result.success).toBe(false)
+  })
+
+  it('rejects source records that are not standalone Archive media', () => {
+    expect(MediaTypeSchema.safeParse('article').success).toBe(true)
+    expect(MediaTypeSchema.safeParse('document').success).toBe(false)
+    expect(MediaTypeSchema.safeParse('social_post').success).toBe(false)
+    expect(MediaTypeSchema.safeParse('note').success).toBe(false)
+    expect(MediaTypeSchema.safeParse('other').success).toBe(false)
   })
 })

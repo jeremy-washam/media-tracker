@@ -26,6 +26,8 @@
 
 - [Architecture overview](architecture/README.md): system shape, package
   boundaries, ingestion invariants, and portability
+- [Canonical ledger specification](architecture/canonical-ledger.md): media,
+  identity, Archive occurrence, timestamp, and provenance semantics
 - [Development standards](architecture/development-standards.md): engineering and
   quality rules
 - [Threat model](architecture/threat-model.md): assets, trust boundaries, threats,

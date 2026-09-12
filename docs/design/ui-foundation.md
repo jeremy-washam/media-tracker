@@ -130,7 +130,7 @@ Inspired by Letterboxd:
 
 - Artwork-forward cards
 - Consistent geometry within a media-aware grid
-- Important compact signals such as rating or completion
+- Important compact signals such as rating or source
 - Useful for scanning large visual collections
 
 The view mode should be URL-addressable and remembered. Grid and list are two
@@ -143,7 +143,7 @@ include:
 
 - Media type
 - Source service
-- Consumed, saved, or completion date range
+- Consumed or saved date range
 - Known, unknown, or inferred consumption date
 - Rating
 - Creator

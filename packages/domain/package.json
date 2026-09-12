@@ -3,5 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Canonical media types, events, identity, and normalization rules"
+  "description": "Canonical media types, identity, Archive semantics, and normalization rules",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
 }

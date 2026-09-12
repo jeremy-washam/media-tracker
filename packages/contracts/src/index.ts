@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { MEDIA_TYPES } from '@media-tracker/domain'
+
 export const ApiErrorCodeSchema = z.enum([
   'BAD_REQUEST',
   'NOT_FOUND',
@@ -23,19 +25,12 @@ export const HealthResponseSchema = z.object({
   requestId: z.string(),
 })
 
-export const MediaTypeSchema = z.enum([
-  'article',
-  'video',
-  'podcast_episode',
-  'movie',
-  'book',
-  'song',
-])
+export const MediaTypeSchema = z.enum(MEDIA_TYPES)
 
 export const MediaSummarySchema = z.object({
   id: z.string(),
   type: MediaTypeSchema,
-  title: z.string(),
+  title: z.string().nullable(),
 })
 
 export const MediaListResponseSchema = z.object({

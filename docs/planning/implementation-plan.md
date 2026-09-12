@@ -1,6 +1,6 @@
 # Media Tracker Implementation Plan
 
-Last updated: 2026-08-01
+Last updated: 2026-09-12
 
 ## 1. Product and architectural boundaries
 
@@ -175,10 +175,12 @@ connections
 sync_runs
 sync_cursors
 raw_objects
+source_records
 
 media_items
 external_identities
 archive_entries
+archive_entry_evidence
 ```
 
 Add contributor, relation, document, highlight, or typed-extension tables only
@@ -200,18 +202,24 @@ song
 
 Do not force every media type into identical metadata. Common fields belong on
 `media_items`; specialized fields can use typed extension tables or structured
-attributes after their need is demonstrated by payloads.
+attributes after their need is demonstrated by payloads. For this owner's
+workflow, Reader PDFs, RSS items, and newsletter-style emails use the article
+type. Reader EPUBs, tweets, personal notes, highlight-only documents, and other
+ineligible categories remain source evidence without becoming standalone
+Archive media.
 
 ### External identities
 
 Store multiple source identities per item:
 
 ```text
-source
+namespace
 external_type
 external_id
+scope
 canonical_url
-metadata
+first_observed_source_record_id
+last_observed_source_record_id
 ```
 
 Examples include Letterboxd film IDs, TMDB IDs, Spotify episode URIs, YouTube
@@ -222,22 +230,24 @@ constraints should prevent duplicate source identities.
 
 Archive is the canonical history of consumed media. Admission follows a
 documented source-specific rule: completion-like evidence for films, books, and
-archived Reader documents; any positive Spotify podcast playback; and a
-timestamped YouTube `Watched` activity. One media item may have multiple Archive
-entries when the source provides trustworthy evidence of repeated consumption.
+eligible archived Reader media; any positive Spotify podcast playback; and a
+timestamped YouTube `Watched` activity with a usable video identity. One media
+item may have multiple Archive entries when the source provides trustworthy
+evidence of repeated consumption.
 
 ```text
 media_item_id
-source
-source_entry_id
+connection_id
+consumed_identity_id
+source_occurrence_key
+admission_reason
 consumed_at
 consumed_at_precision
+consumed_at_basis
 source_recorded_at
-ingested_at
 source_rating
-review_or_note
-raw_object_id
-parser_version
+review_text
+upstream_state
 ```
 
 `consumed_at` may be null when a source proves Archive admission but provides no
@@ -250,6 +260,13 @@ or other universal engagement events. Preserve relevant upstream values in raw
 evidence and source-owned records. Ratings, reviews, likes, tags, Readwise
 highlights, and Spotify play segments may enrich Archive or future search, but
 they do not require a broad event vocabulary.
+
+Each raw payload is parsed into addressable `source_records`. Link those records
+to Archive occurrences through `archive_entry_evidence`, including an evidence
+role such as admission, occurrence time, rating, review, or removal. This lets a
+later overlapping export or RSS observation support the same occurrence without
+duplicating history or replacing its only provenance link. See the
+[canonical ledger specification](../architecture/canonical-ledger.md).
 
 ### Raw objects
 
@@ -288,10 +305,13 @@ Readwise is the architecture-validation connector.
 
 - Fetch every Reader document using cursor pagination.
 - Save every response page in R2.
-- Normalize archived documents and their trustworthy metadata. Preserve
+- Normalize eligible archived articles (including PDFs, RSS items, and
+  newsletter-style emails), videos, and podcasts and their trustworthy metadata. Preserve
   highlights, notes, tags, source progress, and timestamps for later source-owned
   detail/search support without adding universal progress events.
-- Support articles, PDFs, EPUBs, videos, RSS items, emails, and notes without misclassifying them as all being articles.
+- Preserve EPUBs, tweets, personal notes, highlight-only documents, and other
+  ineligible Reader categories as source evidence without projecting them into
+  standalone Archive items.
 - Track a complete sync run with counts and errors.
 
 ### Incremental reconciliation
@@ -472,11 +492,12 @@ idempotent without collapsing separate views of the same video.
 
 ### Watch-history normalization
 
-Import only timestamped `Watched` activities into Archive. Preserve video IDs or
-URLs, timestamps, channel information, product, and the original activity card.
-Keep non-watch activity out of Archive and do not inspect unrelated Takeout
-history such as searches unless a future feature needs it. A watch entry proves
-historical consumption for this product, not full-video completion.
+Import only timestamped `Watched` activities with a usable video identity into
+Archive. Preserve unidentified watched cards as source evidence but do not show
+them as Archive items. Preserve video IDs or URLs, timestamps, channel
+information, product, and the original activity card. Keep non-watch activity
+out of Archive and do not inspect unrelated Takeout history such as searches
+unless a future feature needs it.
 
 Parse Watch Later separately as future Queue evidence. Queue and Archive are
 independent, so a video may legitimately appear in both.
@@ -679,15 +700,13 @@ The ingestion milestone is complete when:
 
 ## 18. Immediate implementation sequence
 
-After the completed workspace, React/Hono scaffold, and five source probes, the
-next four reviewable changes should be:
+The workspace, React/Hono scaffold, five source probes, and canonical ledger
+specification are complete. The next three reviewable changes should be:
 
-1. Decide and document the smallest canonical Archive schema from the observed
-   Readwise, Hardcover, Letterboxd, Spotify, and YouTube payloads.
-2. Implement D1 repositories plus the R2 raw-object/replay framework.
-3. Build the fixture-backed Readwise vertical slice, including a local backfill
+1. Implement D1 repositories plus the R2 raw-object/replay framework.
+2. Build the fixture-backed Readwise vertical slice, including a local backfill
    and incremental reconciliation.
-4. Reuse those proven boundaries for the other connectors, beginning with the
+3. Reuse those proven boundaries for the other connectors, beginning with the
    already-validated historical export importers.
 
 This sequence tests the data assumptions before migrations make them expensive

@@ -80,7 +80,7 @@ Useful recap material may include:
 
 - Volume and time by media type
 - Creators, subjects, and sources revisited
-- Ratings and completion patterns
+- Ratings and consumption patterns
 - Meaningful notes or highlights
 - Emerging interests and topic clusters
 - Comparisons with prior periods

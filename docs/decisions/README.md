@@ -12,6 +12,7 @@ Accepted decisions:
 7. [Archive ledger and source-specific evidence](./0007-archive-ledger-and-source-evidence.md)
    (completion-only admission rule superseded by ADR 0008)
 8. [Source-specific Archive admission](./0008-source-specific-archive-admission.md)
+9. [Canonical ledger identity and evidence model](./0009-canonical-ledger-identity-and-evidence.md)
 
 ADRs are append-only records of consequential technical choices. If a decision
 changes, add a new ADR that supersedes the old one rather than rewriting history.

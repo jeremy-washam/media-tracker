@@ -6,8 +6,8 @@ initial goal is trustworthy historical backfill and ongoing synchronization.
 Future work includes a centralized queue, evidence-backed LLM search, and
 possibly an iOS client.
 
-The application scaffold and initial source-payload reconnaissance are complete.
-The next phase is the canonical ingestion schema and replay-safe persistence.
+The application scaffold, source-payload reconnaissance, and canonical ledger
+semantics are complete. The next phase is D1/R2 replay-safe persistence.
 
 ## Architecture
 
@@ -83,6 +83,7 @@ committed.
 - [Desktop UI foundation](docs/design/ui-foundation.md)
 - [Implementation plan](docs/planning/implementation-plan.md)
 - [Architecture](docs/architecture/README.md)
+- [Canonical ledger](docs/architecture/canonical-ledger.md)
 - [Architecture decisions](docs/decisions/README.md)
 - [Threat model](docs/architecture/threat-model.md)
 - [Agent instructions](AGENTS.md)
