@@ -708,14 +708,15 @@ ZIP ingestion is also implemented and validated against the owner export. The
 project is intentionally prioritizing a visible working Archive over a general
 ingestion platform. The next three reviewable changes should be:
 
-1. Add conservative Letterboxd RSS polling and reconcile recent feed entries to
-   the imported film and Diary identities.
-2. Reuse the thin vertical slice for Hardcover history and polling, followed by
+1. Reuse the completed Readwise and Letterboxd vertical slices for Hardcover
+   history and polling, followed by
    the already-validated YouTube and Spotify historical exports.
-3. Add Spotify's persistent OAuth synchronization and Readwise incremental
+2. Add Spotify's persistent OAuth synchronization and Readwise incremental
    reconciliation before the larger unified Archive UI iteration, then add
    broader replay and recovery tooling in response to observed operational
    needs.
+3. Add periodic export reminders and broader replay/recovery tooling in response
+   to observed operational needs.
 
 The MVP retains exact raw pages and respects idempotency and cursor safety, but
 defers generalized replay infrastructure, multipart upload orchestration, and

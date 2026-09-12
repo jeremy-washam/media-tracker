@@ -3,10 +3,11 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 
 import { strToU8, zipSync } from 'fflate'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Bindings } from './env'
 import { importLetterboxdExport } from './letterboxd-import'
+import { syncLetterboxdRss } from './letterboxd-rss-sync'
 
 const migration = readFileSync(
   fileURLToPath(
@@ -117,6 +118,53 @@ const archive = zipSync({
   ),
 })
 
+const rss = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:letterboxd="https://letterboxd.com" xmlns:tmdb="https://themoviedb.org">
+  <channel>
+    <item>
+      <link>https://boxd.it/diary-one</link>
+      <guid isPermaLink="false">letterboxd-watch-100</guid>
+      <pubDate>Wed, 2 Jul 2025 12:00:00 +0000</pubDate>
+      <letterboxd:watchedDate>2025-01-02</letterboxd:watchedDate>
+      <letterboxd:filmTitle>Synthetic One</letterboxd:filmTitle>
+      <letterboxd:filmYear>2024</letterboxd:filmYear>
+      <letterboxd:memberRating>4.5</letterboxd:memberRating>
+      <tmdb:movieId>100</tmdb:movieId>
+    </item>
+    <item>
+      <link>https://letterboxd.com/example/film/new-film/</link>
+      <guid isPermaLink="false">letterboxd-watch-200</guid>
+      <pubDate>Thu, 3 Jul 2025 12:00:00 +0000</pubDate>
+      <letterboxd:watchedDate>2025-07-02</letterboxd:watchedDate>
+      <letterboxd:filmTitle>New RSS Film</letterboxd:filmTitle>
+      <letterboxd:filmYear>2025</letterboxd:filmYear>
+      <tmdb:movieId>200</tmdb:movieId>
+    </item>
+    <item>
+      <link>https://letterboxd.com/example/film/new-film/rewatch/</link>
+      <guid isPermaLink="false">letterboxd-watch-201</guid>
+      <pubDate>Fri, 4 Jul 2025 12:00:00 +0000</pubDate>
+      <letterboxd:watchedDate>2025-07-03</letterboxd:watchedDate>
+      <letterboxd:filmTitle>New RSS Film</letterboxd:filmTitle>
+      <letterboxd:filmYear>2025</letterboxd:filmYear>
+      <letterboxd:rewatch>Yes</letterboxd:rewatch>
+      <tmdb:movieId>200</tmdb:movieId>
+    </item>
+    <item>
+      <guid isPermaLink="false">letterboxd-list-300</guid>
+      <pubDate>Thu, 3 Jul 2025 13:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="false">letterboxd-watch-400</guid>
+      <pubDate>Thu, 3 Jul 2025 14:00:00 +0000</pubDate>
+      <letterboxd:watchedDate>2025-99-99</letterboxd:watchedDate>
+      <letterboxd:filmTitle>Malformed Date Film</letterboxd:filmTitle>
+      <letterboxd:filmYear>2025</letterboxd:filmYear>
+      <tmdb:movieId>400</tmdb:movieId>
+    </item>
+  </channel>
+</rss>`
+
 describe('Letterboxd export import', () => {
   let database: D1SqliteDatabase
   let bucket: MemoryBucket
@@ -128,6 +176,7 @@ describe('Letterboxd export import', () => {
 
   afterEach(() => {
     database.database.close()
+    vi.unstubAllGlobals()
   })
 
   it('preserves the ZIP and imports watched-only and repeated Diary viewings idempotently', async () => {
@@ -183,5 +232,49 @@ describe('Letterboxd export import', () => {
         review_text: 'Synthetic review',
       },
     ])
+  })
+
+  it('reconciles RSS entries to an imported Diary and skips unchanged feed processing', async () => {
+    const bindings = {
+      DB: database,
+      RAW_BUCKET: bucket,
+      LETTERBOXD_USERNAME: 'example',
+    } as unknown as Bindings
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Promise.resolve(
+          new Response(rss, {
+            headers: { 'content-type': 'application/rss+xml' },
+          }),
+        ),
+      ),
+    )
+
+    await importLetterboxdExport(bindings, archive)
+    await expect(syncLetterboxdRss(bindings)).resolves.toMatchObject({
+      unchanged: false,
+      feedEntries: 5,
+      archiveEntries: 3,
+      sourceRecords: 5,
+      unresolvedRecords: 1,
+    })
+    await expect(syncLetterboxdRss(bindings)).resolves.toMatchObject({
+      unchanged: true,
+      feedEntries: 5,
+      archiveEntries: 0,
+      sourceRecords: 0,
+    })
+
+    expect(bucket.objects.size).toBe(2)
+    expect(count(database.database, 'raw_objects')).toBe(3)
+    expect(count(database.database, 'media_items')).toBe(3)
+    expect(count(database.database, 'archive_entries')).toBe(5)
+    expect(count(database.database, 'sync_cursors')).toBe(1)
+    expect(
+      database.database
+        .prepare('SELECT count(*) AS count FROM archive_entries WHERE consumed_at_value = ?')
+        .get('2025-01-02'),
+    ).toEqual({ count: 1 })
   })
 })

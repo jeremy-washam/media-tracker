@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { XMLParser } from 'fast-xml-parser'
 
 type XmlValue = string | number | boolean | null | XmlObject | XmlValue[]
@@ -16,11 +14,15 @@ export interface LetterboxdRssEntry {
   rating: number | null
   liked: boolean | null
   tmdbMovieId: string | null
-  filmUrl: string | null
+  filmTitle: string | null
+  filmYear: string | null
+  entryUrl: string | null
   entryHash: string
 }
 
-export interface LetterboxdRssSnapshot {
+export interface RawLetterboxdRssResponse {
+  bytes: Uint8Array
+  contentType: string
   fetchedAt: string
   responseHash: string
   cache: {
@@ -28,6 +30,9 @@ export interface LetterboxdRssSnapshot {
     etag: string | null
     lastModified: string | null
   }
+}
+
+export interface LetterboxdRssSnapshot extends RawLetterboxdRssResponse {
   entries: LetterboxdRssEntry[]
 }
 
@@ -55,8 +60,12 @@ function items(value: XmlValue | undefined): XmlObject[] {
   return values.map(asObject).filter((item): item is XmlObject => item !== undefined)
 }
 
-function hash(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
+async function hash(value: string | Uint8Array): Promise<string> {
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value
+  const input = new Uint8Array(bytes.byteLength)
+  input.set(bytes)
+  const digest = await crypto.subtle.digest('SHA-256', input.buffer)
+  return [...new Uint8Array(digest)].map((part) => part.toString(16).padStart(2, '0')).join('')
 }
 
 function entryKind(guid: string): LetterboxdRssEntry['kind'] {
@@ -72,7 +81,7 @@ function yesNo(value: string | null): boolean | null {
   return null
 }
 
-export function parseLetterboxdRss(xml: string): LetterboxdRssEntry[] {
+export async function parseLetterboxdRss(xml: string): Promise<LetterboxdRssEntry[]> {
   const root = asObject(parser.parse(xml) as XmlValue)
   const rss = asObject(root?.rss)
   const channel = asObject(rss?.channel)
@@ -81,29 +90,33 @@ export function parseLetterboxdRss(xml: string): LetterboxdRssEntry[] {
     throw new Error('Invalid Letterboxd RSS: missing rss.channel')
   }
 
-  return items(channel.item).map((item) => {
-    const guid = text(item.guid)
-    if (guid === null) throw new Error('Invalid Letterboxd RSS item: missing guid')
+  return Promise.all(
+    items(channel.item).map(async (item) => {
+      const guid = text(item.guid)
+      if (guid === null) throw new Error('Invalid Letterboxd RSS item: missing guid')
 
-    const ratingText = text(item['letterboxd:memberRating'])
-    const rating = ratingText === null ? null : Number(ratingText)
+      const ratingText = text(item['letterboxd:memberRating'])
+      const rating = ratingText === null ? null : Number(ratingText)
 
-    return {
-      guid,
-      kind: entryKind(guid),
-      publishedAt: text(item.pubDate),
-      watchedOn: text(item['letterboxd:watchedDate']),
-      rewatch: yesNo(text(item['letterboxd:rewatch'])),
-      rating: rating === null || Number.isNaN(rating) ? null : rating,
-      liked: yesNo(text(item['letterboxd:memberLike'])),
-      tmdbMovieId: text(item['tmdb:movieId']),
-      filmUrl: text(item.link),
-      entryHash: hash(JSON.stringify(item)),
-    }
-  })
+      return {
+        guid,
+        kind: entryKind(guid),
+        publishedAt: text(item.pubDate),
+        watchedOn: text(item['letterboxd:watchedDate']),
+        rewatch: yesNo(text(item['letterboxd:rewatch'])),
+        rating: rating === null || Number.isNaN(rating) ? null : rating,
+        liked: yesNo(text(item['letterboxd:memberLike'])),
+        tmdbMovieId: text(item['tmdb:movieId']),
+        filmTitle: text(item['letterboxd:filmTitle']),
+        filmYear: text(item['letterboxd:filmYear']),
+        entryUrl: text(item.link),
+        entryHash: await hash(JSON.stringify(item)),
+      }
+    }),
+  )
 }
 
-export async function fetchLetterboxdRss(username: string): Promise<LetterboxdRssSnapshot> {
+export async function fetchLetterboxdRss(username: string): Promise<RawLetterboxdRssResponse> {
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
     throw new Error('Letterboxd username contains unsupported characters')
   }
@@ -111,7 +124,7 @@ export async function fetchLetterboxdRss(username: string): Promise<LetterboxdRs
   const response = await fetch(`https://letterboxd.com/${username}/rss/`, {
     headers: {
       Accept: 'application/rss+xml',
-      'User-Agent': 'MediaTracker/0.0.0 (personal-use RSS probe)',
+      'User-Agent': 'MediaTracker/0.0.0 (personal-use RSS sync)',
     },
   })
 
@@ -119,17 +132,25 @@ export async function fetchLetterboxdRss(username: string): Promise<LetterboxdRs
     throw new Error(`Letterboxd RSS returned ${response.status}`)
   }
 
-  const body = await response.text()
+  const bytes = new Uint8Array(await response.arrayBuffer())
   return {
+    bytes,
+    contentType: response.headers.get('content-type') ?? 'application/rss+xml',
     fetchedAt: new Date().toISOString(),
-    responseHash: hash(body),
+    responseHash: await hash(bytes),
     cache: {
       cacheControl: response.headers.get('cache-control'),
       etag: response.headers.get('etag'),
       lastModified: response.headers.get('last-modified'),
     },
-    entries: parseLetterboxdRss(body),
   }
+}
+
+export async function parseLetterboxdRssResponse(
+  response: RawLetterboxdRssResponse,
+): Promise<LetterboxdRssSnapshot> {
+  const body = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(response.bytes)
+  return { ...response, entries: await parseLetterboxdRss(body) }
 }
 
 function range(values: (string | null)[]): { earliest: string | null; latest: string | null } {

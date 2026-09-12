@@ -1,6 +1,7 @@
 import { SyncJobSchema } from '@media-tracker/contracts'
 
 import app from './app'
+import { syncLetterboxdRss } from './letterboxd-rss-sync'
 
 import type { SyncJob } from '@media-tracker/contracts'
 
@@ -8,12 +9,46 @@ import type { Bindings } from './env'
 
 const worker = {
   fetch: app.fetch,
-  scheduled() {
+  scheduled(_controller, env, context) {
     console.info(
       JSON.stringify({
         level: 'info',
         event: 'cron.triggered',
       }),
+    )
+    if (env.LETTERBOXD_USERNAME === undefined) {
+      console.info(
+        JSON.stringify({
+          level: 'info',
+          event: 'letterboxd.rss_skipped',
+          reason: 'not_configured',
+        }),
+      )
+      return
+    }
+    context.waitUntil(
+      syncLetterboxdRss(env)
+        .then((result) => {
+          console.info(
+            JSON.stringify({
+              level: 'info',
+              event: 'letterboxd.rss_completed',
+              syncRunId: result.syncRunId,
+              unchanged: result.unchanged,
+              feedEntries: result.feedEntries,
+              unresolvedRecords: result.unresolvedRecords,
+            }),
+          )
+        })
+        .catch((error: unknown) => {
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              event: 'letterboxd.rss_failed',
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+            }),
+          )
+        }),
     )
   },
   queue(batch) {

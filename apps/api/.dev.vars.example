@@ -1,3 +1,4 @@
-# Copy this file to .dev.vars and replace the placeholder locally.
-# Never commit the real token.
+# Copy this file to .dev.vars and replace the placeholders locally.
+# Never commit the real token or local configuration.
 READWISE_TOKEN=replace-with-your-readwise-token
+LETTERBOXD_USERNAME=replace-with-your-letterboxd-username

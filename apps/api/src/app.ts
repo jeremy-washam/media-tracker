@@ -3,6 +3,7 @@ import {
   ConnectionsResponseSchema,
   HealthResponseSchema,
   LetterboxdImportResponseSchema,
+  LetterboxdRssSyncResponseSchema,
   MediaListResponseSchema,
   MediaSummarySchema,
   ReadwiseSyncResponseSchema,
@@ -16,6 +17,7 @@ import type { ApiError } from '@media-tracker/contracts'
 
 import { createLedgerRepository, type AppEnv } from './env'
 import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-import'
+import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
 import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
 
@@ -78,6 +80,16 @@ const letterboxdImportRoute = createRoute({
   responses: {
     200: jsonContent(LetterboxdImportResponseSchema, 'Completed Letterboxd export import'),
     400: jsonContent(ApiErrorSchema, 'The upload is not a supported Letterboxd export'),
+  },
+})
+
+const letterboxdSyncRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/letterboxd/sync',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(LetterboxdRssSyncResponseSchema, 'Completed Letterboxd RSS poll'),
+    503: jsonContent(ApiErrorSchema, 'Letterboxd RSS is not configured'),
   },
 })
 
@@ -197,6 +209,27 @@ app.openapi(letterboxdImportRoute, async (context) => {
         },
       }),
       400,
+    )
+  }
+})
+
+app.openapi(letterboxdSyncRoute, async (context) => {
+  try {
+    return context.json(
+      LetterboxdRssSyncResponseSchema.parse(await syncLetterboxdRss(context.env)),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof LetterboxdRssConfigurationError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Letterboxd RSS is not configured. Add LETTERBOXD_USERNAME.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
     )
   }
 })

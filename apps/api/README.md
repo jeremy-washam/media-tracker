@@ -29,3 +29,11 @@ With the local app running, open **Connections → Letterboxd → Import ZIP** a
 select the account-export ZIP exactly as downloaded from Letterboxd. The Worker
 stores the ZIP in private R2 and projects watched films and distinct Diary
 viewings into Archive. Reimporting the exact same ZIP is a no-op.
+
+Set `LETTERBOXD_USERNAME` in `.dev.vars` to enable the public RSS connection.
+Use **Sync now** on the Letterboxd connection for a manual poll. The Worker also
+polls once per hour through its Cron Trigger, preserves every exact RSS response,
+and reconciles recent entries to the export using provider identities or exact
+title/year and viewing-date matches. Feed entries that cannot be reconciled are
+retained as unresolved; disappearance from the finite feed never deletes local
+history.

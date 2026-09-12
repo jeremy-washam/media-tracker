@@ -1,6 +1,7 @@
 import {
   compareLetterboxdRss,
   fetchLetterboxdRss,
+  parseLetterboxdRssResponse,
   summarizeLetterboxdRss,
   type LetterboxdRssSnapshot,
 } from './rss.ts'
@@ -22,7 +23,7 @@ if (username === undefined || !Number.isInteger(polls) || polls < 1 || intervalM
   const snapshots: LetterboxdRssSnapshot[] = []
   for (let index = 0; index < polls; index += 1) {
     if (index > 0) await new Promise((resolve) => setTimeout(resolve, intervalMs))
-    snapshots.push(await fetchLetterboxdRss(username))
+    snapshots.push(await parseLetterboxdRssResponse(await fetchLetterboxdRss(username)))
   }
 
   console.log(

@@ -8,6 +8,7 @@ export type {
 export { D1DatabaseClient } from './d1'
 export type {
   ArchiveEntryWrite,
+  ArchiveOccurrenceReference,
   CanonicalLedgerRepository,
   CanonicalWriteBatch,
   ExternalIdentityLookup,

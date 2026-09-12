@@ -16,6 +16,8 @@ const rss = `<?xml version="1.0" encoding="utf-8"?>
       <guid isPermaLink="false">letterboxd-watch-100</guid>
       <pubDate>Wed, 2 Jul 2025 12:00:00 +0000</pubDate>
       <letterboxd:watchedDate>2025-07-01</letterboxd:watchedDate>
+      <letterboxd:filmTitle>Synthetic Film</letterboxd:filmTitle>
+      <letterboxd:filmYear>2025</letterboxd:filmYear>
       <letterboxd:rewatch>No</letterboxd:rewatch>
       <letterboxd:memberRating>4.0</letterboxd:memberRating>
       <letterboxd:memberLike>Yes</letterboxd:memberLike>
@@ -29,18 +31,20 @@ const rss = `<?xml version="1.0" encoding="utf-8"?>
   </channel>
 </rss>`
 
-function snapshot(xml: string): LetterboxdRssSnapshot {
+async function snapshot(xml: string): Promise<LetterboxdRssSnapshot> {
   return {
+    bytes: new TextEncoder().encode(xml),
+    contentType: 'application/rss+xml',
     fetchedAt: '2025-07-02T12:30:00.000Z',
     responseHash: xml,
     cache: { cacheControl: 'no-store', etag: null, lastModified: null },
-    entries: parseLetterboxdRss(xml),
+    entries: await parseLetterboxdRss(xml),
   }
 }
 
 describe('Letterboxd RSS', () => {
-  it('parses structured movie identities separately from lists', () => {
-    const entries = parseLetterboxdRss(rss)
+  it('parses structured movie identities separately from lists', async () => {
+    const entries = await parseLetterboxdRss(rss)
     expect(entries).toHaveLength(2)
     expect(entries[0]).toMatchObject({
       guid: 'letterboxd-watch-100',
@@ -50,13 +54,15 @@ describe('Letterboxd RSS', () => {
       rating: 4,
       liked: true,
       tmdbMovieId: '12345',
+      filmTitle: 'Synthetic Film',
+      filmYear: '2025',
     })
     expect(entries[1]?.kind).toBe('list')
   })
 
-  it('summarizes coverage and detects stable consecutive polls', () => {
-    const first = snapshot(rss)
-    const second = snapshot(rss)
+  it('summarizes coverage and detects stable consecutive polls', async () => {
+    const first = await snapshot(rss)
+    const second = await snapshot(rss)
 
     expect(summarizeLetterboxdRss(first)).toMatchObject({
       entries: 2,

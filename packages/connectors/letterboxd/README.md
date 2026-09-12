@@ -1,8 +1,7 @@
 # Letterboxd connector
 
-Status: official reconnaissance, private account-export probe, and live RSS
-polling probe complete. The application now imports account-export ZIPs into
-the canonical Archive; RSS reconciliation remains to be implemented.
+Status: account-export backfill and hourly public RSS reconciliation are
+implemented and validated against the owner account.
 
 This package will own account-export backfill, best-effort RSS reconciliation,
 and source-specific normalization. See the
@@ -38,5 +37,23 @@ retained as unresolved source records instead of being silently merged. Ratings
 remain on Letterboxd's 0.5–5 scale. Reviews attach to the matching Diary URI.
 
 The current import limit is 25 MB. The export must contain `watched.csv`,
-`diary.csv`, `ratings.csv`, and `reviews.csv`. RSS polling, deletion
-reconciliation, and periodic export reminders remain future work.
+`diary.csv`, `ratings.csv`, and `reviews.csv`. Deletion reconciliation and
+periodic export reminders remain future work.
+
+## RSS reconciliation
+
+Set `LETTERBOXD_USERNAME` in the Worker's local or deployed configuration. The
+hourly Cron Trigger and the manual **Sync now** action use the same poller. Each
+poll stores the exact response in R2 and records an RSS checkpoint only after
+successful processing.
+
+Movie entries match existing data by authoritative TMDB identity, existing
+Letterboxd Diary URI, or an unambiguous exact title/year plus watched-date match.
+This handles the observed case where adding a review changes the feed GUID.
+Ambiguous entries remain unresolved. Lists and other feed entries remain source
+records but do not enter Archive. A response hash avoids reparsing an unchanged
+feed, and an entry aging out is never interpreted as deletion.
+
+RSS review bodies remain available in raw evidence but are not yet projected as
+plain-text reviews. A fresh export remains the authoritative way to reconcile
+old edits, deletions, private activity, and watched-only films.

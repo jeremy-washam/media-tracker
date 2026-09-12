@@ -1,6 +1,6 @@
 # Letterboxd source reconnaissance
 
-Last verified: 2026-07-18
+Last verified: 2026-09-12
 
 ## Status
 
@@ -241,11 +241,11 @@ The local Queue should therefore remain the reliable source of truth.
 
 ## Recommended next action
 
-Implement the replay-safe raw ZIP importer using the verified parser and
-synthetic fixtures. Normalize watched-only films and Diary occurrences
-separately, then merge the recent RSS window using GUID/content-hash overlap and
-TMDB identities where available. Keep the real export and RSS payloads out of
-Git.
+The replay-safe ZIP importer and hourly RSS reconciliation are implemented and
+validated against the owner account. Keep requesting periodic exports to close
+the RSS coverage gaps. The next Letterboxd-specific work should be driven by an
+observed need for deletion reconciliation, review-text projection, or clearer
+coverage reporting rather than additional integration machinery.
 
 ## Official references
 

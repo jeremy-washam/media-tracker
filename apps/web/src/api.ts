@@ -2,6 +2,7 @@ import {
   ConnectionsResponseSchema,
   HealthResponseSchema,
   LetterboxdImportResponseSchema,
+  LetterboxdRssSyncResponseSchema,
   MediaListResponseSchema,
   ReadwiseSyncResponseSchema,
 } from '@media-tracker/contracts'
@@ -10,6 +11,7 @@ import type {
   ConnectionsResponse,
   HealthResponse,
   LetterboxdImportResponse,
+  LetterboxdRssSyncResponse,
   MediaListResponse,
   ReadwiseSyncResponse,
 } from '@media-tracker/contracts'
@@ -62,4 +64,15 @@ export const importLetterboxd = async (
   })
   if (!response.ok) throw new Error(`Letterboxd import failed with status ${response.status}.`)
   return LetterboxdImportResponseSchema.parse(await response.json())
+}
+
+export const syncLetterboxd = async (
+  fetcher: typeof fetch = fetch,
+): Promise<LetterboxdRssSyncResponse> => {
+  const response = await fetcher('/api/connections/letterboxd/sync', {
+    method: 'POST',
+    headers: { accept: 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Letterboxd sync failed with status ${response.status}.`)
+  return LetterboxdRssSyncResponseSchema.parse(await response.json())
 }

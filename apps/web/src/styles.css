@@ -377,6 +377,18 @@ a {
   opacity: 0.58;
 }
 
+.connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-button-secondary {
+  color: #4f5148;
+  border: 1px solid #cbc5b9;
+  background: transparent;
+}
+
 .sync-button-disabled {
   cursor: wait;
   opacity: 0.58;

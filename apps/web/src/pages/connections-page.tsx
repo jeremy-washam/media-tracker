@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchConnections, importLetterboxd, syncReadwise } from '../api'
+import { fetchConnections, importLetterboxd, syncLetterboxd, syncReadwise } from '../api'
 
 const sourceNames = {
   readwise: 'Readwise Reader',
@@ -27,6 +27,15 @@ export function ConnectionsPage() {
   })
   const letterboxdImport = useMutation({
     mutationFn: (archive: File) => importLetterboxd(archive),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
+  })
+  const letterboxdSync = useMutation({
+    mutationFn: () => syncLetterboxd(),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
@@ -73,22 +82,32 @@ export function ConnectionsPage() {
                 {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
               </button>
             ) : connection.source === 'letterboxd' ? (
-              <label
-                className={`sync-button${letterboxdImport.isPending ? ' sync-button-disabled' : ''}`}
-              >
-                {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
-                <input
-                  className="file-input"
-                  type="file"
-                  accept=".zip,application/zip"
-                  disabled={letterboxdImport.isPending}
-                  onChange={(event) => {
-                    const archive = event.currentTarget.files?.[0]
-                    if (archive !== undefined) letterboxdImport.mutate(archive)
-                    event.currentTarget.value = ''
-                  }}
-                />
-              </label>
+              <div className="connection-actions">
+                <button
+                  className="sync-button sync-button-secondary"
+                  type="button"
+                  disabled={letterboxdSync.isPending}
+                  onClick={() => letterboxdSync.mutate()}
+                >
+                  {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
+                </button>
+                <label
+                  className={`sync-button${letterboxdImport.isPending ? ' sync-button-disabled' : ''}`}
+                >
+                  {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
+                  <input
+                    className="file-input"
+                    type="file"
+                    accept=".zip,application/zip"
+                    disabled={letterboxdImport.isPending}
+                    onChange={(event) => {
+                      const archive = event.currentTarget.files?.[0]
+                      if (archive !== undefined) letterboxdImport.mutate(archive)
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                </label>
+              </div>
             ) : (
               <span className="connection-state">{connection.status}</span>
             )}
@@ -123,6 +142,18 @@ export function ConnectionsPage() {
       {letterboxdImport.isError ? (
         <p className="checkpoint-note sync-error" role="alert">
           Letterboxd import failed. Select the ZIP downloaded from Letterboxd’s export page.
+        </p>
+      ) : null}
+      {letterboxdSync.isSuccess ? (
+        <p className="checkpoint-note">
+          {letterboxdSync.data.unchanged
+            ? `Letterboxd RSS is current (${letterboxdSync.data.feedEntries} recent entries checked).`
+            : `Reconciled ${letterboxdSync.data.archiveEntries} recent Letterboxd viewings.`}
+        </p>
+      ) : null}
+      {letterboxdSync.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Letterboxd RSS sync failed. Confirm the configured username and try again.
         </p>
       ) : null}
     </section>

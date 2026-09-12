@@ -21,6 +21,7 @@ import {
   syncRunId,
   utcInstant,
   type ArchiveEntryId,
+  type CalendarDate,
   type ConnectionId,
   type ExternalIdentityId,
   type IdentityNamespace,
@@ -67,6 +68,12 @@ export interface MediaSummaryRecord {
   readonly title: string | null
 }
 
+export interface ArchiveOccurrenceReference {
+  readonly id: ArchiveEntryId
+  readonly sourceOccurrenceKey: string
+  readonly consumedIdentityId: ExternalIdentityId | null
+}
+
 export interface CanonicalLedgerRepository {
   saveConnection(connection: SourceConnection): Promise<void>
   saveSyncRun(syncRun: SyncRun): Promise<void>
@@ -83,6 +90,20 @@ export interface CanonicalLedgerRepository {
     connectionId: ConnectionId,
     sourceOccurrenceKey: string,
   ): Promise<ArchiveEntryId | null>
+  findArchiveEntriesByMediaAndConsumedDay(
+    connectionId: ConnectionId,
+    mediaItemId: MediaItemId,
+    consumedOn: CalendarDate,
+  ): Promise<readonly ArchiveOccurrenceReference[]>
+  findArchiveEntriesByConsumedIdentity(
+    connectionId: ConnectionId,
+    identityId: ExternalIdentityId,
+  ): Promise<readonly ArchiveOccurrenceReference[]>
+  findMediaByExactTitleAndYear(
+    type: MediaItem['type'],
+    title: string,
+    year: string,
+  ): Promise<readonly MediaItemId[]>
   findSyncCursor(connectionId: ConnectionId, name: string): Promise<SyncCursor | null>
   listMedia(limit?: number): Promise<readonly MediaSummaryRecord[]>
   findMedia(id: MediaItemId): Promise<MediaSummaryRecord | null>
@@ -509,6 +530,62 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
       [connectionId, sourceOccurrenceKey],
     ).first<{ id: string }>()
     return row === null ? null : archiveEntryId(row.id)
+  }
+
+  async findArchiveEntriesByMediaAndConsumedDay(
+    connectionId: ConnectionId,
+    itemId: MediaItemId,
+    consumedOn: CalendarDate,
+  ): Promise<readonly ArchiveOccurrenceReference[]> {
+    const result = await statement(
+      this.#database,
+      `SELECT id, source_occurrence_key, consumed_identity_id FROM archive_entries
+       WHERE connection_id = ? AND media_item_id = ?
+         AND consumed_at_value = ? AND consumed_at_precision = 'day'
+       ORDER BY id LIMIT 2`,
+      [connectionId, itemId, consumedOn],
+    ).all<{ id: string; source_occurrence_key: string; consumed_identity_id: string | null }>()
+    return result.results.map((row) => ({
+      id: archiveEntryId(row.id),
+      sourceOccurrenceKey: row.source_occurrence_key,
+      consumedIdentityId:
+        row.consumed_identity_id === null ? null : externalIdentityId(row.consumed_identity_id),
+    }))
+  }
+
+  async findArchiveEntriesByConsumedIdentity(
+    connectionId: ConnectionId,
+    identityId: ExternalIdentityId,
+  ): Promise<readonly ArchiveOccurrenceReference[]> {
+    const result = await statement(
+      this.#database,
+      `SELECT id, source_occurrence_key, consumed_identity_id FROM archive_entries
+       WHERE connection_id = ? AND consumed_identity_id = ?
+       ORDER BY id LIMIT 2`,
+      [connectionId, identityId],
+    ).all<{ id: string; source_occurrence_key: string; consumed_identity_id: string | null }>()
+    return result.results.map((row) => ({
+      id: archiveEntryId(row.id),
+      sourceOccurrenceKey: row.source_occurrence_key,
+      consumedIdentityId:
+        row.consumed_identity_id === null ? null : externalIdentityId(row.consumed_identity_id),
+    }))
+  }
+
+  async findMediaByExactTitleAndYear(
+    type: MediaItem['type'],
+    title: string,
+    year: string,
+  ): Promise<readonly MediaItemId[]> {
+    const result = await statement(
+      this.#database,
+      `SELECT id FROM media_items
+       WHERE type = ? AND title = ? AND published_at_value = ?
+         AND published_at_precision = 'year'
+       ORDER BY id LIMIT 2`,
+      [type, title, year],
+    ).all<{ id: string }>()
+    return result.results.map((row) => mediaItemId(row.id))
   }
 
   async findSyncCursor(connectionId: ConnectionId, name: string): Promise<SyncCursor | null> {

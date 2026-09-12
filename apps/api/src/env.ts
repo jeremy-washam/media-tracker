@@ -8,6 +8,7 @@ import {
 export interface Bindings {
   ASSETS: Fetcher
   DB: D1Database
+  LETTERBOXD_USERNAME?: string
   RAW_BUCKET: R2Bucket
   READWISE_TOKEN?: string
   SYNC_QUEUE: Queue<SyncJob>

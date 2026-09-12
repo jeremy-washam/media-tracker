@@ -54,6 +54,15 @@ export const LetterboxdImportResponseSchema = z.object({
   unresolvedRecords: z.number().int().nonnegative(),
 })
 
+export const LetterboxdRssSyncResponseSchema = z.object({
+  syncRunId: z.string(),
+  unchanged: z.boolean(),
+  feedEntries: z.number().int().nonnegative(),
+  archiveEntries: z.number().int().nonnegative(),
+  sourceRecords: z.number().int().nonnegative(),
+  unresolvedRecords: z.number().int().nonnegative(),
+})
+
 export const ConnectionSummarySchema = z.object({
   source: z.enum(['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube']),
   status: z.enum(['connected', 'disconnected', 'degraded']),
@@ -88,6 +97,7 @@ export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>
 export type ConnectionsResponse = z.infer<typeof ConnectionsResponseSchema>
 export type HealthResponse = z.infer<typeof HealthResponseSchema>
 export type LetterboxdImportResponse = z.infer<typeof LetterboxdImportResponseSchema>
+export type LetterboxdRssSyncResponse = z.infer<typeof LetterboxdRssSyncResponseSchema>
 export type MediaListResponse = z.infer<typeof MediaListResponseSchema>
 export type MediaSummary = z.infer<typeof MediaSummarySchema>
 export type ReadwiseSyncResponse = z.infer<typeof ReadwiseSyncResponseSchema>
