@@ -1,6 +1,7 @@
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { inspectLetterboxdExport } from './export.ts'
+import { inspectLetterboxdExportBytes } from './export.ts'
 
 const archiveArgument = process.argv.slice(2).find((argument) => argument !== '--')
 const archivePath =
@@ -14,6 +15,6 @@ if (archivePath === undefined) {
   )
   process.exitCode = 1
 } else {
-  const summary = await inspectLetterboxdExport(archivePath)
+  const summary = inspectLetterboxdExportBytes(await readFile(archivePath))
   console.log(JSON.stringify(summary, null, 2))
 }

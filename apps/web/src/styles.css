@@ -377,6 +377,22 @@ a {
   opacity: 0.58;
 }
 
+.sync-button-disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .sync-error {
   color: #9b4136;
 }

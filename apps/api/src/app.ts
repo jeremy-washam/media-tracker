@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   ConnectionsResponseSchema,
   HealthResponseSchema,
+  LetterboxdImportResponseSchema,
   MediaListResponseSchema,
   MediaSummarySchema,
   ReadwiseSyncResponseSchema,
@@ -14,6 +15,7 @@ import { mediaItemId } from '@media-tracker/domain'
 import type { ApiError } from '@media-tracker/contracts'
 
 import { createLedgerRepository, type AppEnv } from './env'
+import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-import'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
 import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
 
@@ -66,6 +68,16 @@ const readwiseSyncRoute = createRoute({
   responses: {
     200: jsonContent(ReadwiseSyncResponseSchema, 'Completed Readwise Archive import'),
     503: jsonContent(ApiErrorSchema, 'Readwise is not configured or unavailable'),
+  },
+})
+
+const letterboxdImportRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/letterboxd/import',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(LetterboxdImportResponseSchema, 'Completed Letterboxd export import'),
+    400: jsonContent(ApiErrorSchema, 'The upload is not a supported Letterboxd export'),
   },
 })
 
@@ -146,6 +158,45 @@ app.openapi(readwiseSyncRoute, async (context) => {
         },
       }),
       503,
+    )
+  }
+})
+
+app.openapi(letterboxdImportRoute, async (context) => {
+  const declaredLength = Number(context.req.header('content-length') ?? '0')
+  if (Number.isFinite(declaredLength) && declaredLength > 25 * 1024 * 1024) {
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Letterboxd exports must be 25 MB or smaller.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
+    )
+  }
+
+  try {
+    const archive = new Uint8Array(await context.req.arrayBuffer())
+    if (archive.byteLength > 25 * 1024 * 1024) {
+      throw new LetterboxdImportError('Letterboxd exports must be 25 MB or smaller.')
+    }
+    return context.json(
+      LetterboxdImportResponseSchema.parse(await importLetterboxdExport(context.env, archive)),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof LetterboxdImportError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: error.message,
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
     )
   }
 })

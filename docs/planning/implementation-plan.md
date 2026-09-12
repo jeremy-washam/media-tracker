@@ -701,17 +701,21 @@ The ingestion milestone is complete when:
 ## 18. Immediate implementation sequence
 
 The workspace, React/Hono scaffold, five source probes, canonical ledger
-specification, initial D1 migration, and D1 repository boundary are complete.
-The project is intentionally prioritizing a visible working Archive over a
-general ingestion platform. The next three reviewable changes should be:
+specification, initial D1 migration, D1 repository boundary, and Readwise
+Archive import are complete. The Readwise import has been validated against the
+owner account, including a repeated real-data import. Letterboxd account-export
+ZIP ingestion is also implemented and validated against the owner export. The
+project is intentionally prioritizing a visible working Archive over a general
+ingestion platform. The next three reviewable changes should be:
 
-1. Exercise the implemented fixture-backed Readwise Archive import against the
-   owner account and verify the resulting History UI.
-2. Reuse the thin vertical slice for the other historical sources, beginning
-   with the already-validated export importers.
-3. Add Readwise incremental reconciliation after the full Archive import is
-   correct, then add broader replay and recovery tooling in response to observed
-   operational needs.
+1. Add conservative Letterboxd RSS polling and reconcile recent feed entries to
+   the imported film and Diary identities.
+2. Reuse the thin vertical slice for Hardcover history and polling, followed by
+   the already-validated YouTube and Spotify historical exports.
+3. Add Spotify's persistent OAuth synchronization and Readwise incremental
+   reconciliation before the larger unified Archive UI iteration, then add
+   broader replay and recovery tooling in response to observed operational
+   needs.
 
 The MVP retains exact raw pages and respects idempotency and cursor safety, but
 defers generalized replay infrastructure, multipart upload orchestration, and

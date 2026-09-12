@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchConnections, syncReadwise } from '../api'
+import { fetchConnections, importLetterboxd, syncReadwise } from '../api'
 
 const sourceNames = {
   readwise: 'Readwise Reader',
@@ -18,6 +18,15 @@ export function ConnectionsPage() {
   })
   const readwiseSync = useMutation({
     mutationFn: () => syncReadwise(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
+  })
+  const letterboxdImport = useMutation({
+    mutationFn: (archive: File) => importLetterboxd(archive),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
@@ -63,6 +72,23 @@ export function ConnectionsPage() {
               >
                 {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
               </button>
+            ) : connection.source === 'letterboxd' ? (
+              <label
+                className={`sync-button${letterboxdImport.isPending ? ' sync-button-disabled' : ''}`}
+              >
+                {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
+                <input
+                  className="file-input"
+                  type="file"
+                  accept=".zip,application/zip"
+                  disabled={letterboxdImport.isPending}
+                  onChange={(event) => {
+                    const archive = event.currentTarget.files?.[0]
+                    if (archive !== undefined) letterboxdImport.mutate(archive)
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </label>
             ) : (
               <span className="connection-state">{connection.status}</span>
             )}
@@ -85,6 +111,18 @@ export function ConnectionsPage() {
       {readwiseSync.isError ? (
         <p className="checkpoint-note sync-error" role="alert">
           Readwise sync failed. Confirm the Worker has a valid READWISE_TOKEN secret.
+        </p>
+      ) : null}
+      {letterboxdImport.isSuccess ? (
+        <p className="checkpoint-note">
+          {letterboxdImport.data.alreadyImported
+            ? 'That exact Letterboxd export was already imported.'
+            : `Imported ${letterboxdImport.data.films} films and ${letterboxdImport.data.archiveEntries} viewing records from Letterboxd.`}
+        </p>
+      ) : null}
+      {letterboxdImport.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Letterboxd import failed. Select the ZIP downloaded from Letterboxd’s export page.
         </p>
       ) : null}
     </section>

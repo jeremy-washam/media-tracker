@@ -102,6 +102,7 @@ describe('API', () => {
     expect(document.paths).toHaveProperty('/api/media')
     expect(document.paths).toHaveProperty('/api/connections')
     expect(document.paths).toHaveProperty('/api/connections/readwise/sync')
+    expect(document.paths).toHaveProperty('/api/connections/letterboxd/import')
     expect(document.paths).toHaveProperty('/api/sync-runs')
   })
 })

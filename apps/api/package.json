@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@media-tracker/connector-letterboxd": "workspace:*",
     "@hono/zod-openapi": "1.5.1",
     "@media-tracker/connector-readwise": "workspace:*",
     "@media-tracker/contracts": "workspace:*",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260718.1",
     "@types/node": "26.1.1",
+    "fflate": "0.8.3",
     "typescript": "catalog:",
     "wrangler": "4.112.0"
   }

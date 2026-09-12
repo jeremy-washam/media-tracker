@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises'
-
-import { parse } from 'csv-parse/sync'
 import { unzipSync } from 'fflate'
 
 type CsvRow = Record<string, string>
@@ -57,17 +54,86 @@ interface ParsedExportFile {
   rows: CsvRow[]
 }
 
-const decoder = new TextDecoder('utf-8', { fatal: true })
+export interface LetterboxdRecordReference {
+  recordPath: string
+  sourceRecordKey: string
+  sourceRecordedOn: string | null
+}
 
-function parseCsv(text: string, fromLine = 1): CsvRow[] {
-  return parse(text, {
-    bom: true,
-    columns: true,
-    from_line: fromLine,
-    relax_column_count: true,
-    relax_quotes: true,
-    skip_empty_lines: true,
-  }) as CsvRow[]
+export interface LetterboxdDiaryOccurrence extends LetterboxdRecordReference {
+  diaryUri: string
+  consumedOn: string
+  rating: number | null
+  reviewText: string | null
+  reviewRecord: LetterboxdRecordReference | null
+}
+
+export interface LetterboxdFilm {
+  filmUri: string
+  title: string
+  releaseYear: string
+  watchedRecord: LetterboxdRecordReference
+  currentRating: number | null
+  ratingRecord: LetterboxdRecordReference | null
+  diaryOccurrences: LetterboxdDiaryOccurrence[]
+}
+
+export interface LetterboxdExportProjection {
+  films: LetterboxdFilm[]
+  unresolvedDiaryRecords: LetterboxdRecordReference[]
+}
+
+const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false })
+
+function parseCsvMatrix(text: string): string[][] {
+  const input = text.startsWith('\uFEFF') ? text.slice(1) : text
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let quoted = false
+
+  const finishRow = () => {
+    row.push(field)
+    if (row.some((value) => value.length > 0)) rows.push(row)
+    row = []
+    field = ''
+  }
+
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index]
+    if (character === '"') {
+      if (quoted && input[index + 1] === '"') {
+        field += '"'
+        index += 1
+      } else {
+        quoted = !quoted
+      }
+      continue
+    }
+    if (!quoted && character === ',') {
+      row.push(field)
+      field = ''
+      continue
+    }
+    if (!quoted && (character === '\n' || character === '\r')) {
+      if (character === '\r' && input[index + 1] === '\n') index += 1
+      finishRow()
+      continue
+    }
+    field += character
+  }
+
+  if (quoted) throw new Error('Letterboxd export contains an unterminated quoted CSV field')
+  if (field.length > 0 || row.length > 0) finishRow()
+  return rows
+}
+
+function parseCsv(text: string): CsvRow[] {
+  const [headers, ...rows] = parseCsvMatrix(text)
+  if (headers === undefined) return []
+  return rows.map((values) =>
+    Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])),
+  )
 }
 
 function splitLines(text: string): string[] {
@@ -106,11 +172,7 @@ function parseExportFile(path: string, bytes: Uint8Array): ParsedExportFile {
 
   const rows = parseCsv(text)
   const headerLine = splitLines(text)[0] ?? ''
-  const headers = parse(`${headerLine}\n`, {
-    bom: true,
-    relax_column_count: true,
-    skip_empty_lines: true,
-  }) as string[][]
+  const headers = parseCsvMatrix(`${headerLine}\n`)
 
   return {
     summary: {
@@ -161,6 +223,159 @@ function requireRows(files: Map<string, ParsedExportFile>, path: string): CsvRow
     throw new Error(`Letterboxd export is missing ${path}`)
   }
   return file.rows
+}
+
+function requiredValue(row: CsvRow, field: string, path: string): string {
+  const value = row[field]?.trim()
+  if (value === undefined || value.length === 0) {
+    throw new Error(`Letterboxd export ${path} is missing ${field}`)
+  }
+  return value
+}
+
+function optionalDate(row: CsvRow, field: string, path: string): string | null {
+  const value = row[field]?.trim()
+  if (value === undefined || value.length === 0) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`Letterboxd export ${path} has an invalid ${field}`)
+  }
+  return value
+}
+
+function requiredYear(row: CsvRow, path: string): string {
+  const value = requiredValue(row, 'Year', path)
+  if (!/^\d{4}$/.test(value)) throw new Error(`Letterboxd export ${path} has an invalid Year`)
+  return value
+}
+
+function optionalRating(row: CsvRow, path: string): number | null {
+  const raw = row.Rating?.trim()
+  if (raw === undefined || raw.length === 0) return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0.5 || value > 5 || value * 2 !== Math.round(value * 2)) {
+    throw new Error(`Letterboxd export ${path} has an invalid Rating`)
+  }
+  return value
+}
+
+function recordReference(
+  file: string,
+  index: number,
+  sourceRecordKey: string,
+  sourceRecordedOn: string | null,
+): LetterboxdRecordReference {
+  return {
+    recordPath: `${file}#row=${index + 2}`,
+    sourceRecordKey,
+    sourceRecordedOn,
+  }
+}
+
+export function parseLetterboxdExportBytes(archive: Uint8Array): LetterboxdExportProjection {
+  let entries: ReturnType<typeof unzipSync>
+  try {
+    entries = unzipSync(archive)
+  } catch {
+    throw new Error('The selected file is not a valid Letterboxd ZIP export')
+  }
+
+  const files = new Map<string, ParsedExportFile>()
+  for (const [path, bytes] of Object.entries(entries)) {
+    if (path.endsWith('.csv')) files.set(path, parseExportFile(path, bytes))
+  }
+
+  const watchedRows = requireRows(files, 'watched.csv')
+  const diaryRows = requireRows(files, 'diary.csv')
+  const ratingRows = requireRows(files, 'ratings.csv')
+  const reviewRows = requireRows(files, 'reviews.csv')
+
+  const ratingByFilmUri = new Map<string, { rating: number; record: LetterboxdRecordReference }>()
+  for (const [index, row] of ratingRows.entries()) {
+    const path = `ratings.csv#row=${index + 2}`
+    const filmUri = requiredValue(row, 'Letterboxd URI', path)
+    const rating = optionalRating(row, path)
+    if (rating === null) continue
+    ratingByFilmUri.set(filmUri, {
+      rating,
+      record: recordReference('ratings.csv', index, filmUri, optionalDate(row, 'Date', path)),
+    })
+  }
+
+  const reviewByDiaryUri = new Map<
+    string,
+    { reviewText: string; record: LetterboxdRecordReference }
+  >()
+  for (const [index, row] of reviewRows.entries()) {
+    const path = `reviews.csv#row=${index + 2}`
+    const diaryUri = requiredValue(row, 'Letterboxd URI', path)
+    const reviewText = row.Review?.trim() ?? ''
+    if (reviewText.length === 0) continue
+    if (reviewByDiaryUri.has(diaryUri)) {
+      throw new Error(`Letterboxd export contains multiple reviews for ${diaryUri}`)
+    }
+    reviewByDiaryUri.set(diaryUri, {
+      reviewText,
+      record: recordReference('reviews.csv', index, diaryUri, optionalDate(row, 'Date', path)),
+    })
+  }
+
+  const films: LetterboxdFilm[] = []
+  const filmByKey = new Map<string, LetterboxdFilm>()
+  for (const [index, row] of watchedRows.entries()) {
+    const path = `watched.csv#row=${index + 2}`
+    const title = requiredValue(row, 'Name', path)
+    const releaseYear = requiredYear(row, path)
+    const filmUri = requiredValue(row, 'Letterboxd URI', path)
+    const key = `${title}\u0000${releaseYear}`
+    if (filmByKey.has(key)) {
+      throw new Error(`Letterboxd export has an ambiguous watched-film identity for ${title}`)
+    }
+    const currentRating = ratingByFilmUri.get(filmUri) ?? null
+    const film: LetterboxdFilm = {
+      filmUri,
+      title,
+      releaseYear,
+      watchedRecord: recordReference(
+        'watched.csv',
+        index,
+        filmUri,
+        optionalDate(row, 'Date', path),
+      ),
+      currentRating: currentRating?.rating ?? null,
+      ratingRecord: currentRating?.record ?? null,
+      diaryOccurrences: [],
+    }
+    films.push(film)
+    filmByKey.set(key, film)
+  }
+
+  const unresolvedDiaryRecords: LetterboxdRecordReference[] = []
+  for (const [index, row] of diaryRows.entries()) {
+    const path = `diary.csv#row=${index + 2}`
+    const title = requiredValue(row, 'Name', path)
+    const releaseYear = requiredYear(row, path)
+    const diaryUri = requiredValue(row, 'Letterboxd URI', path)
+    const sourceRecordedOn = optionalDate(row, 'Date', path)
+    const record = recordReference('diary.csv', index, diaryUri, sourceRecordedOn)
+    const film = filmByKey.get(`${title}\u0000${releaseYear}`)
+    if (film === undefined) {
+      unresolvedDiaryRecords.push(record)
+      continue
+    }
+    const consumedOn = optionalDate(row, 'Watched Date', path)
+    if (consumedOn === null) throw new Error(`Letterboxd export ${path} is missing Watched Date`)
+    const review = reviewByDiaryUri.get(diaryUri) ?? null
+    film.diaryOccurrences.push({
+      ...record,
+      diaryUri,
+      consumedOn,
+      rating: optionalRating(row, path),
+      reviewText: review?.reviewText ?? null,
+      reviewRecord: review?.record ?? null,
+    })
+  }
+
+  return { films, unresolvedDiaryRecords }
 }
 
 export function inspectLetterboxdExportBytes(archive: Uint8Array): LetterboxdExportSummary {
@@ -233,10 +448,4 @@ export function inspectLetterboxdExportBytes(archive: Uint8Array): LetterboxdExp
       orphanedRows,
     },
   }
-}
-
-export async function inspectLetterboxdExport(
-  archivePath: string,
-): Promise<LetterboxdExportSummary> {
-  return inspectLetterboxdExportBytes(await readFile(archivePath))
 }

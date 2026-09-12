@@ -22,3 +22,10 @@ current Reader Archive, stores each exact response page in private R2, and adds
 eligible articles, PDFs, RSS items, videos, and podcasts to the local Archive.
 Tweets and other ineligible rows are retained as source records but are not
 shown as media.
+
+## Letterboxd export import
+
+With the local app running, open **Connections → Letterboxd → Import ZIP** and
+select the account-export ZIP exactly as downloaded from Letterboxd. The Worker
+stores the ZIP in private R2 and projects watched films and distinct Diary
+viewings into Archive. Reimporting the exact same ZIP is a no-op.
