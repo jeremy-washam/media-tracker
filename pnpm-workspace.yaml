@@ -9,6 +9,7 @@ allowBuilds:
   workerd: true
 
 catalog:
+  drizzle-orm: ^0.45.2
   typescript: 6.0.3
 
 catalogMode: strict

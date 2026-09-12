@@ -90,9 +90,8 @@ percentage. A normalized display value can be derived later.
 
 ## Logical tables
 
-The next implementation change will translate these definitions into Drizzle
-and forward-only SQL migrations. Names below are logical; storage-specific
-details belong in `packages/db`.
+These definitions are implemented as a Drizzle schema and forward-only SQL
+migrations in `packages/db`. Names below describe their durable semantics.
 
 ### `sources`
 

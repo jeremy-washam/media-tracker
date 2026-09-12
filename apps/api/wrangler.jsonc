@@ -14,6 +14,7 @@
       "binding": "DB",
       "database_name": "media-tracker",
       "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/migrations",
     },
   ],
   "r2_buckets": [

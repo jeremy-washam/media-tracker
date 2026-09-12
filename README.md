@@ -6,8 +6,9 @@ initial goal is trustworthy historical backfill and ongoing synchronization.
 Future work includes a centralized queue, evidence-backed LLM search, and
 possibly an iOS client.
 
-The application scaffold, source-payload reconnaissance, and canonical ledger
-semantics are complete. The next phase is D1/R2 replay-safe persistence.
+The application scaffold, source-payload reconnaissance, canonical ledger
+semantics, and initial D1 persistence layer are complete. The next storage step
+is the R2 raw-object/replay framework.
 
 ## Architecture
 
@@ -44,6 +45,7 @@ Requirements: Node.js 24 or newer and pnpm 11 or newer.
 
 ```sh
 pnpm install
+pnpm db:migrate:local
 pnpm dev
 ```
 

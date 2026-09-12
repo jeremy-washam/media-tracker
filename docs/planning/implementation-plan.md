@@ -700,10 +700,12 @@ The ingestion milestone is complete when:
 
 ## 18. Immediate implementation sequence
 
-The workspace, React/Hono scaffold, five source probes, and canonical ledger
-specification are complete. The next three reviewable changes should be:
+The workspace, React/Hono scaffold, five source probes, canonical ledger
+specification, initial D1 migration, and D1 repository boundary are complete.
+The next three reviewable changes should be:
 
-1. Implement D1 repositories plus the R2 raw-object/replay framework.
+1. Implement the R2 raw-object/replay framework against the completed D1
+   manifests and atomic write boundary.
 2. Build the fixture-backed Readwise vertical slice, including a local backfill
    and incremental reconciliation.
 3. Reuse those proven boundaries for the other connectors, beginning with the

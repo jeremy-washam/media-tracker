@@ -13,6 +13,7 @@
   "dependencies": {
     "@hono/zod-openapi": "1.5.1",
     "@media-tracker/contracts": "workspace:*",
+    "@media-tracker/db": "workspace:*",
     "hono": "4.12.31",
     "zod": "4.4.3"
   },
