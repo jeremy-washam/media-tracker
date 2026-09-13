@@ -11,6 +11,7 @@ export {
 export {
   ReadwiseApiError,
   fetchReaderArchivePage,
+  fetchReaderDocumentPage,
   type FetchReaderPageInput,
   type RawReaderPage,
 } from './client'

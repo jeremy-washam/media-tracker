@@ -12,6 +12,9 @@ export interface Bindings {
   LETTERBOXD_USERNAME?: string
   RAW_BUCKET: R2Bucket
   READWISE_TOKEN?: string
+  SPOTIFY_CLIENT_ID?: string
+  SPOTIFY_CLIENT_SECRET?: string
+  SPOTIFY_REFRESH_TOKEN?: string
   SYNC_QUEUE: Queue<SyncJob>
 }
 

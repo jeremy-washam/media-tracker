@@ -72,6 +72,46 @@ export const LetterboxdRssSyncResponseSchema = z.object({
   unresolvedRecords: z.number().int().nonnegative(),
 })
 
+export const SpotifyImportResponseSchema = z.object({
+  syncRunId: z.string(),
+  importId: z.string(),
+  alreadyImported: z.boolean(),
+  completed: z.boolean(),
+  nextOffset: z.number().int().nonnegative().nullable(),
+  totalPodcastSegments: z.number().int().nonnegative(),
+  totalArchiveEpisodes: z.number().int().nonnegative(),
+  archiveEpisodes: z.number().int().nonnegative(),
+  sourceRecords: z.number().int().nonnegative(),
+  unresolvedPodcastSegments: z.number().int().nonnegative(),
+})
+
+export const SpotifySyncResponseSchema = z.object({
+  syncRunId: z.string(),
+  mode: z.enum(['backfill', 'reconcile']),
+  pages: z.number().int().nonnegative(),
+  sourceRecords: z.number().int().nonnegative(),
+  archiveEpisodes: z.number().int().nonnegative(),
+  queueCandidates: z.number().int().nonnegative(),
+  unresolvedEpisodes: z.number().int().nonnegative(),
+  refreshTokenRotated: z.boolean(),
+})
+
+export const YoutubeImportResponseSchema = z.object({
+  syncRunId: z.string(),
+  importId: z.string(),
+  alreadyImported: z.boolean(),
+  completed: z.boolean(),
+  nextOffset: z.number().int().nonnegative().nullable(),
+  totalRecords: z.number().int().nonnegative(),
+  activityCards: z.number().int().nonnegative(),
+  videos: z.number().int().nonnegative(),
+  archiveEntries: z.number().int().nonnegative(),
+  sourceRecords: z.number().int().nonnegative(),
+  unresolvedRecords: z.number().int().nonnegative(),
+  ignoredRecords: z.number().int().nonnegative(),
+  watchLaterRecords: z.number().int().nonnegative(),
+})
+
 export const ConnectionSummarySchema = z.object({
   source: z.enum(['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube']),
   status: z.enum(['connected', 'disconnected', 'degraded']),
@@ -111,4 +151,7 @@ export type LetterboxdRssSyncResponse = z.infer<typeof LetterboxdRssSyncResponse
 export type MediaListResponse = z.infer<typeof MediaListResponseSchema>
 export type MediaSummary = z.infer<typeof MediaSummarySchema>
 export type ReadwiseSyncResponse = z.infer<typeof ReadwiseSyncResponseSchema>
+export type SpotifyImportResponse = z.infer<typeof SpotifyImportResponseSchema>
+export type SpotifySyncResponse = z.infer<typeof SpotifySyncResponseSchema>
 export type SyncJob = z.infer<typeof SyncJobSchema>
+export type YoutubeImportResponse = z.infer<typeof YoutubeImportResponseSchema>

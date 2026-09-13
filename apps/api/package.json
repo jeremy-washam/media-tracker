@@ -13,6 +13,8 @@
   "dependencies": {
     "@media-tracker/connector-hardcover": "workspace:*",
     "@media-tracker/connector-letterboxd": "workspace:*",
+    "@media-tracker/connector-spotify": "workspace:*",
+    "@media-tracker/connector-youtube": "workspace:*",
     "@hono/zod-openapi": "1.5.1",
     "@media-tracker/connector-readwise": "workspace:*",
     "@media-tracker/contracts": "workspace:*",

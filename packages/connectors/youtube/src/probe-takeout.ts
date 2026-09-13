@@ -1,6 +1,8 @@
+import { readFile } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { resolve } from 'node:path'
 
-import { inspectYoutubeTakeoutFiles } from './takeout.ts'
+import { inspectYoutubeTakeoutBytes, summarizeYoutubeTakeouts } from './takeout.ts'
 
 const paths = process.argv.slice(2).filter((argument) => argument !== '--')
 
@@ -14,7 +16,17 @@ if (paths.length === 0) {
     const invocationDirectory = process.env.INIT_CWD ?? process.cwd()
     console.log(
       JSON.stringify(
-        await inspectYoutubeTakeoutFiles(paths.map((path) => resolve(invocationDirectory, path))),
+        summarizeYoutubeTakeouts(
+          await Promise.all(
+            paths.map(async (path) => {
+              const absolutePath = resolve(invocationDirectory, path)
+              return inspectYoutubeTakeoutBytes(
+                await readFile(absolutePath),
+                basename(absolutePath),
+              )
+            }),
+          ),
+        ),
         null,
         2,
       ),

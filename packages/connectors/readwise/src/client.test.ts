@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { ReadwiseApiError, fetchReaderArchivePage } from './client'
+import { ReadwiseApiError, fetchReaderArchivePage, fetchReaderDocumentPage } from './client'
 
 describe('Reader API client', () => {
   it('requests bounded Archive pages and preserves their response bytes', async () => {
@@ -27,6 +27,24 @@ describe('Reader API client', () => {
     )
     expect(new TextDecoder().decode(response.bytes)).toBe(body)
     expect(response.body).toBe(body)
+  })
+
+  it('can reconcile every updated location without an Archive filter', async () => {
+    const fetchMock = vi.fn(async (...arguments_: Parameters<typeof fetch>) => {
+      expect(arguments_[0]).toBeDefined()
+      return Response.json({ results: [] })
+    })
+    const fetcher = fetchMock as unknown as typeof fetch
+
+    await fetchReaderDocumentPage({
+      token: 'synthetic-token',
+      updatedAfter: '2026-09-12T11:55:00.000Z',
+      fetcher,
+    })
+
+    const url = new URL(String(fetchMock.mock.calls[0]![0]))
+    expect(url.searchParams.has('location')).toBe(false)
+    expect(url.searchParams.get('updatedAfter')).toBe('2026-09-12T11:55:00.000Z')
   })
 
   it('reports status and retry timing without exposing response content', async () => {

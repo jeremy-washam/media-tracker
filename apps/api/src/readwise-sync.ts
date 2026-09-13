@@ -1,5 +1,5 @@
 import {
-  fetchReaderArchivePage,
+  fetchReaderDocumentPage,
   normalizeReaderDocument,
   parseReaderPage,
 } from '@media-tracker/connector-readwise'
@@ -28,7 +28,9 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
 
-const parserVersion = 'readwise-documents@1'
+const parserVersion = 'readwise-documents@2'
+const cursorName = 'reader-archive'
+const overlapMilliseconds = 5 * 60 * 1000
 
 export class ReadwiseTokenMissingError extends Error {
   constructor() {
@@ -43,6 +45,32 @@ function instantNow(): ReturnType<typeof utcInstant> {
 
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError'
+}
+
+function overlappedUpdatedAfter(checkpoint: unknown): string | undefined {
+  if (typeof checkpoint !== 'object' || checkpoint === null) return undefined
+  const updatedAfter = Reflect.get(checkpoint, 'updatedAfter')
+  if (typeof updatedAfter !== 'string') return undefined
+  const milliseconds = Date.parse(updatedAfter)
+  if (!Number.isFinite(milliseconds)) return undefined
+  return new Date(milliseconds - overlapMilliseconds).toISOString()
+}
+
+async function findAdmissionEvidenceSourceRecordId(
+  database: D1Database,
+  archiveId: ReturnType<typeof archiveEntryId>,
+): Promise<ReturnType<typeof sourceRecordId> | null> {
+  const row = await database
+    .prepare(
+      `SELECT source_record_id
+       FROM archive_entry_evidence
+       WHERE archive_entry_id = ? AND role = 'admission'
+       ORDER BY linked_at, id
+       LIMIT 1`,
+    )
+    .bind(archiveId)
+    .first<{ source_record_id: string }>()
+  return row === null ? null : sourceRecordId(row.source_record_id)
 }
 
 async function sha256(bytes: Uint8Array): Promise<{ digest: ArrayBuffer; hex: string }> {
@@ -91,6 +119,8 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
   const repository = createLedgerRepository(bindings.DB)
   const startedAt = instantNow()
   const connection = await connectionForSync(repository, startedAt)
+  const previousCursor = await repository.findSyncCursor(connection.id, cursorName)
+  const updatedAfter = overlappedUpdatedAfter(previousCursor?.checkpoint)
   const runId = syncRunId(ulid())
   let pages = 0
   let rawObjectCount = 0
@@ -100,7 +130,7 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
   const runningRun: SyncRun = {
     id: runId,
     connectionId: connection.id,
-    kind: 'backfill',
+    kind: previousCursor === null ? 'backfill' : 'reconcile',
     status: 'running',
     startedAt,
     finishedAt: null,
@@ -118,8 +148,10 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
 
     do {
       const acquiredAt = instantNow()
-      const response = await fetchReaderArchivePage({
+      const response = await fetchReaderDocumentPage({
         token,
+        ...(previousCursor === null ? { location: 'archive' as const } : {}),
+        ...(updatedAfter === undefined ? {} : { updatedAfter }),
         ...(pageCursor === undefined ? {} : { pageCursor }),
       })
       const stored = await storeRawPage(bindings.RAW_BUCKET, response.bytes, response.contentType)
@@ -152,6 +184,19 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
         for (const [index, readerDocument] of page.results.entries()) {
           const normalized = normalizeReaderDocument(readerDocument)
           const recordId = sourceRecordId(ulid())
+          const identityLookup = {
+            namespace: 'readwise',
+            externalType: 'document_id',
+            externalId: normalized.documentId,
+            connectionId: connection.id,
+          } as const
+          const knownIdentity = await repository.findExternalIdentity(identityLookup)
+          const knownArchiveEntryId = await repository.findArchiveEntryId(
+            connection.id,
+            `reader-document:${normalized.documentId}`,
+          )
+          const removesKnownArchiveEntry =
+            normalized.archive === null && knownIdentity !== null && knownArchiveEntryId !== null
           const record: SourceRecord = {
             id: recordId,
             rawObjectId: rawId,
@@ -163,27 +208,60 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
             observedAt: acquiredAt,
             parserVersion,
             contentSha256: null,
-            disposition: normalized.archive === null ? 'ignored' : 'normalized',
-            upstreamState: 'active',
+            disposition:
+              normalized.archive === null && !removesKnownArchiveEntry ? 'ignored' : 'normalized',
+            upstreamState: removesKnownArchiveEntry ? 'removed' : 'active',
             errorCode: null,
           }
           sourceRecords.push(record)
 
-          if (normalized.archive === null) continue
+          if (normalized.archive === null) {
+            if (knownIdentity === null || knownArchiveEntryId === null) continue
+            const admissionSourceRecordId = await findAdmissionEvidenceSourceRecordId(
+              bindings.DB,
+              knownArchiveEntryId,
+            )
+            if (admissionSourceRecordId === null) {
+              throw new Error('Readwise Archive entry is missing its admission evidence')
+            }
+            archiveEntries.push({
+              entry: {
+                id: knownArchiveEntryId,
+                mediaItemId: knownIdentity.mediaItemId,
+                connectionId: connection.id,
+                consumedIdentityId: knownIdentity.id,
+                sourceOccurrenceKey: `reader-document:${normalized.documentId}`,
+                admissionReason: 'readwise_archive_state',
+                consumedAt: null,
+                sourceRecordedAt: normalized.sourceRecordedAt,
+                sourceRating: null,
+                reviewText: null,
+                upstreamState: 'removed',
+                createdAt: acquiredAt,
+                updatedAt: acquiredAt,
+              },
+              evidence: [
+                {
+                  id: archiveEntryEvidenceId(ulid()),
+                  archiveEntryId: knownArchiveEntryId,
+                  sourceRecordId: admissionSourceRecordId,
+                  role: 'admission',
+                  linkedAt: acquiredAt,
+                },
+                {
+                  id: archiveEntryEvidenceId(ulid()),
+                  archiveEntryId: knownArchiveEntryId,
+                  sourceRecordId: recordId,
+                  role: 'removal',
+                  linkedAt: acquiredAt,
+                },
+              ],
+            })
+            continue
+          }
 
-          const identityLookup = {
-            namespace: 'readwise',
-            externalType: 'document_id',
-            externalId: normalized.documentId,
-            connectionId: connection.id,
-          } as const
-          const knownIdentity = await repository.findExternalIdentity(identityLookup)
           const itemId = knownIdentity?.mediaItemId ?? mediaItemId(ulid())
           const identityId = knownIdentity?.id ?? externalIdentityId(ulid())
-          const knownArchiveEntryId = await repository.findArchiveEntryId(
-            connection.id,
-            normalized.archive.sourceOccurrenceKey,
-          )
           const entryId = knownArchiveEntryId ?? archiveEntryId(ulid())
 
           mediaItems.push({
@@ -294,9 +372,9 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
     await repository.commit({
       syncRun: succeededRun,
       cursor: {
-        id: syncCursorId(ulid()),
+        id: previousCursor?.id ?? syncCursorId(ulid()),
         connectionId: connection.id,
-        name: 'reader-archive',
+        name: cursorName,
         checkpoint: { updatedAfter: startedAt },
         committedAt: finishedAt,
         syncRunId: runId,

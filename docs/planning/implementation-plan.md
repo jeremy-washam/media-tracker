@@ -696,7 +696,7 @@ The ingestion milestone is complete when:
 
 - Readwise and Hardcover histories are fully backfilled and continuously synchronized.
 - Letterboxd history is backfilled and new RSS-visible activity is synchronized.
-- Spotify lifetime history is imported, songs synchronize automatically, and podcast limitations are visible.
+- Spotify lifetime podcast history is imported, saved-episode playback state synchronizes automatically, and its discovery limitations are visible. Songs and audiobooks remain deferred.
 - YouTube watch history is imported from Takeout, later snapshots can be
   reconciled, and the lack of seamless incremental sync is visible.
 - All connectors are idempotent and replayable.
@@ -707,21 +707,24 @@ The ingestion milestone is complete when:
 
 ## 18. Immediate implementation sequence
 
-The workspace, React/Hono scaffold, five source probes, canonical ledger
-specification, initial D1 migration, D1 repository boundary, and Readwise
-Archive import are complete. The Readwise import has been validated against the
-owner account, including a repeated real-data import. Letterboxd account-export
-ZIP ingestion is also implemented and validated against the owner export. The
-project is intentionally prioritizing a visible working Archive over a general
-ingestion platform. The next three reviewable changes should be:
+The workspace, React/Hono scaffold, canonical ledger, and all five initial
+source connectors are implemented and validated locally against the owner data.
+Readwise and Hardcover poll automatically; Letterboxd combines its full export
+with hourly RSS; Spotify combines its full podcast history export with hourly
+saved-episode reconciliation; and YouTube accepts resumable Takeout imports for
+separate account lineages. Large Spotify and YouTube imports are processed in
+bounded, durable chunks rather than one oversized Worker invocation.
 
-1. Implement the already-validated YouTube and Spotify historical exports.
-2. Add Spotify's persistent OAuth synchronization and Readwise incremental
-   reconciliation before the larger unified Archive UI iteration, then add
-   broader replay and recovery tooling in response to observed operational
-   needs.
-3. Add periodic export reminders and broader replay/recovery tooling in response
-   to observed operational needs.
+The next three reviewable changes should be:
+
+1. Replace the temporary 1,000-item History response/rendering path with proper
+   server pagination, media-type queries, counts, and incremental UI loading so
+   the complete Archive remains usable with more than 20,000 videos.
+2. Improve media cards and detail views with the canonical metadata already in
+   the ledger, then expose source coverage and known connector limitations in
+   the Connections UI.
+3. Add periodic export reminders and broader replay/export/recovery tooling in
+   response to observed operational needs.
 
 The MVP retains exact raw pages and respects idempotency and cursor safety, but
 defers generalized replay infrastructure, multipart upload orchestration, and

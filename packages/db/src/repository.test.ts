@@ -602,6 +602,8 @@ describe('canonical ledger migration and repository', () => {
     expect(count(database, 'raw_objects')).toBe(1)
     expect(count(database, 'source_records')).toBe(1)
     expect(count(database, 'archive_entry_evidence')).toBe(1)
+    await expect(repository.listMedia()).resolves.toEqual([])
+    await expect(repository.findMedia(data.mediaItem.id)).resolves.toBeNull()
     expect(() =>
       database.prepare('DELETE FROM raw_objects WHERE id = ?').run(data.rawObject.id),
     ).toThrow()

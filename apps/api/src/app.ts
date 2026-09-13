@@ -8,11 +8,15 @@ import {
   MediaListResponseSchema,
   MediaSummarySchema,
   ReadwiseSyncResponseSchema,
+  SpotifyImportResponseSchema,
+  SpotifySyncResponseSchema,
   SyncRunsResponseSchema,
+  YoutubeImportResponseSchema,
 } from '@media-tracker/contracts'
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi'
 import { HTTPException } from 'hono/http-exception'
 import { mediaItemId } from '@media-tracker/domain'
+import { z } from 'zod'
 
 import type { ApiError } from '@media-tracker/contracts'
 
@@ -22,6 +26,17 @@ import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-impo
 import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
 import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
+import {
+  continueSpotifyExtendedHistoryImport,
+  importSpotifyExtendedHistory,
+  SpotifyImportError,
+} from './spotify-import'
+import { SpotifyCredentialsMissingError, syncSpotifySavedEpisodes } from './spotify-sync'
+import {
+  continueYoutubeTakeoutImport,
+  importYoutubeTakeout,
+  YoutubeTakeoutImportError,
+} from './youtube-import'
 
 const apiVersion = '0.0.0'
 
@@ -102,6 +117,62 @@ const letterboxdSyncRoute = createRoute({
   responses: {
     200: jsonContent(LetterboxdRssSyncResponseSchema, 'Completed Letterboxd RSS poll'),
     503: jsonContent(ApiErrorSchema, 'Letterboxd RSS is not configured'),
+  },
+})
+
+const spotifyImportRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/spotify/import',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(SpotifyImportResponseSchema, 'Completed Spotify history export import'),
+    400: jsonContent(ApiErrorSchema, 'The upload is not a supported Spotify export'),
+  },
+})
+
+const spotifyImportContinueRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/spotify/import/{importId}/continue',
+  tags: ['Connections'],
+  request: {
+    params: z.object({ importId: z.string() }),
+  },
+  responses: {
+    200: jsonContent(SpotifyImportResponseSchema, 'Continued Spotify history export import'),
+    400: jsonContent(ApiErrorSchema, 'The Spotify import cannot be continued'),
+  },
+})
+
+const spotifySyncRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/spotify/sync',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(SpotifySyncResponseSchema, 'Completed Spotify saved-episode sync'),
+    503: jsonContent(ApiErrorSchema, 'Spotify is not configured or unavailable'),
+  },
+})
+
+const youtubeImportRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/youtube/import',
+  tags: ['Connections'],
+  responses: {
+    200: jsonContent(YoutubeImportResponseSchema, 'Completed YouTube Takeout import'),
+    400: jsonContent(ApiErrorSchema, 'The upload is not a supported YouTube Takeout export'),
+  },
+})
+
+const youtubeImportContinueRoute = createRoute({
+  method: 'post',
+  path: '/api/connections/youtube/import/{importId}/continue',
+  tags: ['Connections'],
+  request: {
+    params: z.object({ importId: z.string() }),
+  },
+  responses: {
+    200: jsonContent(YoutubeImportResponseSchema, 'Continued YouTube Takeout import'),
+    400: jsonContent(ApiErrorSchema, 'The YouTube import cannot be continued'),
   },
 })
 
@@ -260,6 +331,166 @@ app.openapi(letterboxdSyncRoute, async (context) => {
         },
       }),
       503,
+    )
+  }
+})
+
+app.openapi(spotifyImportRoute, async (context) => {
+  const declaredLength = Number(context.req.header('content-length') ?? '0')
+  if (Number.isFinite(declaredLength) && declaredLength > 25 * 1024 * 1024) {
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Spotify exports must be 25 MB or smaller.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
+    )
+  }
+
+  try {
+    const archive = new Uint8Array(await context.req.arrayBuffer())
+    if (archive.byteLength > 25 * 1024 * 1024) {
+      throw new SpotifyImportError('Spotify exports must be 25 MB or smaller.')
+    }
+    return context.json(
+      SpotifyImportResponseSchema.parse(await importSpotifyExtendedHistory(context.env, archive)),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof SpotifyImportError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: error.message,
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
+    )
+  }
+})
+
+app.openapi(spotifyImportContinueRoute, async (context) => {
+  try {
+    return context.json(
+      SpotifyImportResponseSchema.parse(
+        await continueSpotifyExtendedHistoryImport(
+          context.env,
+          context.req.valid('param').importId,
+        ),
+      ),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof SpotifyImportError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: error.message,
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
+    )
+  }
+})
+
+app.openapi(spotifySyncRoute, async (context) => {
+  try {
+    return context.json(
+      SpotifySyncResponseSchema.parse(await syncSpotifySavedEpisodes(context.env)),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof SpotifyCredentialsMissingError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Spotify is not configured. Add its client ID and refresh token.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
+  }
+})
+
+app.openapi(youtubeImportRoute, async (context) => {
+  const declaredLength = Number(context.req.header('content-length') ?? '0')
+  if (Number.isFinite(declaredLength) && declaredLength > 25 * 1024 * 1024) {
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'YouTube Takeout exports must be 25 MB or smaller.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
+    )
+  }
+
+  try {
+    const archive = new Uint8Array(await context.req.arrayBuffer())
+    if (archive.byteLength > 25 * 1024 * 1024) {
+      throw new YoutubeTakeoutImportError('YouTube Takeout exports must be 25 MB or smaller.')
+    }
+    const connectionKey = context.req.query('connectionKey')
+    const connectionLabel = context.req.query('connectionLabel')
+    return context.json(
+      YoutubeImportResponseSchema.parse(
+        await importYoutubeTakeout(context.env, archive, {
+          ...(connectionKey === undefined ? {} : { connectionKey }),
+          ...(connectionLabel === undefined ? {} : { connectionLabel }),
+        }),
+      ),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof YoutubeTakeoutImportError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: error.message,
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
+    )
+  }
+})
+
+app.openapi(youtubeImportContinueRoute, async (context) => {
+  try {
+    const connectionKey = context.req.query('connectionKey')
+    const connectionLabel = context.req.query('connectionLabel')
+    return context.json(
+      YoutubeImportResponseSchema.parse(
+        await continueYoutubeTakeoutImport(context.env, context.req.valid('param').importId, {
+          ...(connectionKey === undefined ? {} : { connectionKey }),
+          ...(connectionLabel === undefined ? {} : { connectionLabel }),
+        }),
+      ),
+      200,
+    )
+  } catch (error) {
+    if (!(error instanceof YoutubeTakeoutImportError)) throw error
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'BAD_REQUEST',
+          message: error.message,
+          requestId: context.get('requestId'),
+        },
+      }),
+      400,
     )
   }
 })

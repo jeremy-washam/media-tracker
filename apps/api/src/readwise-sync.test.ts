@@ -108,6 +108,8 @@ describe('Readwise Archive sync', () => {
   let bucket: MemoryBucket
 
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-12T12:00:00.000Z'))
     database = new D1SqliteDatabase()
     bucket = new MemoryBucket()
     vi.stubGlobal(
@@ -122,6 +124,7 @@ describe('Readwise Archive sync', () => {
 
   afterEach(() => {
     database.database.close()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -137,6 +140,7 @@ describe('Readwise Archive sync', () => {
       sourceRecords: 7,
       archiveItems: 5,
     })
+    vi.setSystemTime(new Date('2026-09-12T13:00:00.000Z'))
     await expect(syncReadwiseArchive(bindings)).resolves.toMatchObject({
       pages: 1,
       sourceRecords: 7,
@@ -152,6 +156,14 @@ describe('Readwise Archive sync', () => {
     expect(count(database.database, 'archive_entry_evidence')).toBe(10)
     expect(count(database.database, 'sync_cursors')).toBe(1)
 
+    const fetchMock = vi.mocked(fetch)
+    const initialUrl = new URL(String(fetchMock.mock.calls[0]![0]))
+    const reconciliationUrl = new URL(String(fetchMock.mock.calls[1]![0]))
+    expect(initialUrl.searchParams.get('location')).toBe('archive')
+    expect(initialUrl.searchParams.has('updatedAfter')).toBe(false)
+    expect(reconciliationUrl.searchParams.has('location')).toBe(false)
+    expect(reconciliationUrl.searchParams.get('updatedAfter')).toBe('2026-09-12T11:55:00.000Z')
+
     expect(
       database.database
         .prepare('SELECT count(*) AS count FROM source_records WHERE disposition = ?')
@@ -162,5 +174,90 @@ describe('Readwise Archive sync', () => {
         .prepare('SELECT consumed_at_basis FROM archive_entries GROUP BY consumed_at_basis')
         .all(),
     ).toEqual([{ consumed_at_basis: 'inferred' }])
+  })
+
+  it('marks a known item removed when an incremental page observes it outside Archive', async () => {
+    const archived = {
+      id: 'reader-moved-1',
+      url: 'https://read.readwise.io/read/reader-moved-1',
+      source_url: 'https://example.test/moved',
+      title: 'Moved document',
+      author: 'Example Author',
+      category: 'article',
+      location: 'archive',
+      updated_at: '2026-09-12T11:00:00.000Z',
+      last_moved_at: '2026-09-12T10:00:00.000Z',
+    }
+    const later = {
+      ...archived,
+      location: 'later',
+      updated_at: '2026-09-12T12:30:00.000Z',
+      last_moved_at: '2026-09-12T12:30:00.000Z',
+    }
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(Response.json({ count: 1, nextPageCursor: null, results: [archived] }))
+      .mockResolvedValueOnce(Response.json({ count: 1, nextPageCursor: null, results: [later] }))
+
+    const bindings = {
+      DB: database,
+      RAW_BUCKET: bucket,
+      READWISE_TOKEN: 'synthetic-token',
+    } as unknown as Bindings
+
+    await syncReadwiseArchive(bindings)
+    vi.setSystemTime(new Date('2026-09-12T13:00:00.000Z'))
+    await syncReadwiseArchive(bindings)
+
+    expect(
+      database.database
+        .prepare('SELECT upstream_state FROM archive_entries WHERE source_occurrence_key = ?')
+        .get('reader-document:reader-moved-1'),
+    ).toEqual({ upstream_state: 'removed' })
+    expect(
+      database.database
+        .prepare(
+          `SELECT role, count(*) AS count
+           FROM archive_entry_evidence
+           GROUP BY role
+           ORDER BY role`,
+        )
+        .all(),
+    ).toEqual([
+      { role: 'admission', count: 1 },
+      { role: 'removal', count: 1 },
+    ])
+  })
+
+  it('does not advance the durable watermark when a later page fails', async () => {
+    const bindings = {
+      DB: database,
+      RAW_BUCKET: bucket,
+      READWISE_TOKEN: 'synthetic-token',
+    } as unknown as Bindings
+    await syncReadwiseArchive(bindings)
+    const checkpointBefore = database.database
+      .prepare('SELECT checkpoint_json FROM sync_cursors WHERE name = ?')
+      .get('reader-archive')
+
+    vi.setSystemTime(new Date('2026-09-12T13:00:00.000Z'))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        Response.json({
+          count: 0,
+          nextPageCursor: 'second-page',
+          results: [],
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+
+    await expect(syncReadwiseArchive(bindings)).rejects.toMatchObject({
+      name: 'ReadwiseApiError',
+    })
+
+    expect(
+      database.database
+        .prepare('SELECT checkpoint_json FROM sync_cursors WHERE name = ?')
+        .get('reader-archive'),
+    ).toEqual(checkpointBefore)
   })
 })

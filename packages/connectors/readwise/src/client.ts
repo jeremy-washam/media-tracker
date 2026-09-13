@@ -12,6 +12,7 @@ export class ReadwiseApiError extends Error {
 
 export interface FetchReaderPageInput {
   readonly token: string
+  readonly location?: 'archive'
   readonly pageCursor?: string
   readonly updatedAfter?: string
   readonly fetcher?: typeof fetch
@@ -23,9 +24,9 @@ export interface RawReaderPage {
   readonly contentType: string
 }
 
-export async function fetchReaderArchivePage(input: FetchReaderPageInput): Promise<RawReaderPage> {
+export async function fetchReaderDocumentPage(input: FetchReaderPageInput): Promise<RawReaderPage> {
   const url = new URL('https://readwise.io/api/v3/list/')
-  url.searchParams.set('location', 'archive')
+  if (input.location !== undefined) url.searchParams.set('location', input.location)
   url.searchParams.set('limit', '15')
   if (input.pageCursor !== undefined) url.searchParams.set('pageCursor', input.pageCursor)
   if (input.updatedAfter !== undefined) url.searchParams.set('updatedAfter', input.updatedAfter)
@@ -45,4 +46,8 @@ export async function fetchReaderArchivePage(input: FetchReaderPageInput): Promi
     bytes,
     contentType: response.headers.get('content-type') ?? 'application/json',
   }
+}
+
+export function fetchReaderArchivePage(input: FetchReaderPageInput): Promise<RawReaderPage> {
+  return fetchReaderDocumentPage({ ...input, location: 'archive' })
 }

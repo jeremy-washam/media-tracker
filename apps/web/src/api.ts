@@ -6,6 +6,9 @@ import {
   LetterboxdRssSyncResponseSchema,
   MediaListResponseSchema,
   ReadwiseSyncResponseSchema,
+  SpotifyImportResponseSchema,
+  SpotifySyncResponseSchema,
+  YoutubeImportResponseSchema,
 } from '@media-tracker/contracts'
 
 import type {
@@ -16,6 +19,9 @@ import type {
   LetterboxdRssSyncResponse,
   MediaListResponse,
   ReadwiseSyncResponse,
+  SpotifyImportResponse,
+  SpotifySyncResponse,
+  YoutubeImportResponse,
 } from '@media-tracker/contracts'
 
 const getJson = async (path: string, fetcher: typeof fetch): Promise<unknown> => {
@@ -88,4 +94,95 @@ export const syncLetterboxd = async (
   })
   if (!response.ok) throw new Error(`Letterboxd sync failed with status ${response.status}.`)
   return LetterboxdRssSyncResponseSchema.parse(await response.json())
+}
+
+export const importSpotify = async (
+  archive: File,
+  fetcher: typeof fetch = fetch,
+): Promise<SpotifyImportResponse> => {
+  const response = await fetcher('/api/connections/spotify/import', {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/zip' },
+    body: archive,
+  })
+  if (!response.ok) throw new Error(`Spotify import failed with status ${response.status}.`)
+  let chunk = SpotifyImportResponseSchema.parse(await response.json())
+  const totals = {
+    archiveEpisodes: chunk.archiveEpisodes,
+    sourceRecords: chunk.sourceRecords,
+    unresolvedPodcastSegments: chunk.unresolvedPodcastSegments,
+  }
+
+  while (!chunk.completed) {
+    const previousOffset = chunk.nextOffset
+    const continuation = await fetcher(
+      `/api/connections/spotify/import/${chunk.importId}/continue`,
+      { method: 'POST', headers: { accept: 'application/json' } },
+    )
+    if (!continuation.ok) {
+      throw new Error(`Spotify import failed with status ${continuation.status}.`)
+    }
+    chunk = SpotifyImportResponseSchema.parse(await continuation.json())
+    if (!chunk.completed && (chunk.nextOffset === null || chunk.nextOffset === previousOffset)) {
+      throw new Error('Spotify import did not make progress.')
+    }
+    totals.archiveEpisodes += chunk.archiveEpisodes
+    totals.sourceRecords += chunk.sourceRecords
+    totals.unresolvedPodcastSegments += chunk.unresolvedPodcastSegments
+  }
+
+  return { ...chunk, ...totals }
+}
+
+export const syncSpotify = async (fetcher: typeof fetch = fetch): Promise<SpotifySyncResponse> => {
+  const response = await fetcher('/api/connections/spotify/sync', {
+    method: 'POST',
+    headers: { accept: 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Spotify sync failed with status ${response.status}.`)
+  return SpotifySyncResponseSchema.parse(await response.json())
+}
+
+export const importYoutube = async (
+  archive: File,
+  fetcher: typeof fetch = fetch,
+): Promise<YoutubeImportResponse> => {
+  const response = await fetcher('/api/connections/youtube/import', {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/zip' },
+    body: archive,
+  })
+  if (!response.ok) throw new Error(`YouTube import failed with status ${response.status}.`)
+  let chunk = YoutubeImportResponseSchema.parse(await response.json())
+  const totals = {
+    videos: chunk.videos,
+    archiveEntries: chunk.archiveEntries,
+    sourceRecords: chunk.sourceRecords,
+    unresolvedRecords: chunk.unresolvedRecords,
+    ignoredRecords: chunk.ignoredRecords,
+    watchLaterRecords: chunk.watchLaterRecords,
+  }
+
+  while (!chunk.completed) {
+    const previousOffset = chunk.nextOffset
+    const continuation = await fetcher(
+      `/api/connections/youtube/import/${chunk.importId}/continue`,
+      { method: 'POST', headers: { accept: 'application/json' } },
+    )
+    if (!continuation.ok) {
+      throw new Error(`YouTube import failed with status ${continuation.status}.`)
+    }
+    chunk = YoutubeImportResponseSchema.parse(await continuation.json())
+    if (!chunk.completed && (chunk.nextOffset === null || chunk.nextOffset === previousOffset)) {
+      throw new Error('YouTube import did not make progress.')
+    }
+    totals.videos += chunk.videos
+    totals.archiveEntries += chunk.archiveEntries
+    totals.sourceRecords += chunk.sourceRecords
+    totals.unresolvedRecords += chunk.unresolvedRecords
+    totals.ignoredRecords += chunk.ignoredRecords
+    totals.watchLaterRecords += chunk.watchLaterRecords
+  }
+
+  return { ...chunk, ...totals }
 }

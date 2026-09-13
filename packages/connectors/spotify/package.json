@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "probe:history": "node src/probe-history.ts",
     "probe": "node --env-file-if-exists=../../../.env.local src/probe.ts",

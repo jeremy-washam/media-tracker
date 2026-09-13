@@ -1,12 +1,14 @@
 # Spotify connector
 
-Status: official reconnaissance, private saved-episode API probe, and full
-Extended Streaming History inspection complete.
+Status: Extended Streaming History parsing and saved-episode reconciliation are
+implemented. The private history export and saved-episode API were both probed
+before the ingestion rules were frozen.
 
-This package will own Extended Streaming History import, saved-episode polling,
-podcast/song metadata enrichment, best-effort reconciliation, and
-source-specific normalization. Untouched saved episodes map to Queue; any
-positive playback position or `fully_played` signal maps to Archive. See
+This package owns Extended Streaming History parsing, saved-episode polling,
+token refresh, and source-specific normalization. Untouched saved episodes are
+reported as Queue candidates; any positive playback position or `fully_played`
+signal maps to Archive. Songs and audiobooks remain preserved in the raw export
+but are not admitted to Archive until the owner approves separate rules. See
 the [Spotify source reconnaissance](../../../docs/sources/spotify.md) for the
 current capability assessment, field inventory, limitations, and probe plan.
 
@@ -42,16 +44,19 @@ current OS user. The probe prints titles, show names, saved dates, playback
 positions, and the Queue/Archive classification. It never prints Spotify IDs,
 descriptions, authorization codes, access tokens, or refresh tokens.
 
-This is a schema and behavior probe, not yet durable ingestion: API responses
-are not written to R2 or D1.
+The application ingestion path preserves every fetched API page in R2 before
+normalization and writes a cursor only after a complete saved-episode scan.
+Spotify has no podcast listening-history endpoint or listener webhook, so this
+poll is best-effort: it sees current saved episodes and their mutable playback
+positions, not every newly played episode.
 
 ### Observed private result
 
-The first complete scan authenticated successfully and returned 71 saved rows:
+The latest complete scan authenticated successfully and returned 111 saved rows:
 
-- 13 had a positive resume position and map to Archive;
-- 21 had an explicit zero position and map to Queue;
-- 37 had null title, show, duration, identity, and resume position and remain
+- 32 had a positive playback signal and map to Archive;
+- 41 had an explicit zero position and map to Queue;
+- 38 had null or unavailable playback evidence and remain
   unresolved pending the Extended Streaming History export;
 - none reported `fully_played=true`.
 
@@ -78,3 +83,22 @@ source evidence and are not silently deduplicated.
 The probe reports aggregate counts, date ranges, field types/nullability, and
 reason enums. It does not print titles, show names, track/episode URIs, platform
 strings, countries, or sensitive row content. Tests use synthetic rows only.
+
+The application importer accepts the original ZIP, stores it content-addressed
+in private R2, and retains every podcast playback segment as a source record.
+Any positive segment with a usable Spotify episode URI admits exactly one
+Archive occurrence for that episode, dated to its latest positive segment.
+It creates a compact derived podcast manifest and commits at most 100 segments
+per request, allowing interrupted imports to resume without repeatedly inflating
+the full export. Re-importing completed ZIP bytes is a no-op. The importer
+deliberately keeps same-second and byte-identical rows distinct by member name
+and array index.
+
+## Persistent sync credentials
+
+The Worker refreshes a short-lived access token for each reconciliation. It
+requires `SPOTIFY_CLIENT_ID` and `SPOTIFY_REFRESH_TOKEN`; confidential clients
+may also set `SPOTIFY_CLIENT_SECRET`. These values belong in local/deployment
+secret storage and must never be committed, logged, or stored as raw evidence.
+The existing PKCE probe can create the initial grant. Spotify refresh tokens
+expire after six months, so the connection eventually requires reauthorization.

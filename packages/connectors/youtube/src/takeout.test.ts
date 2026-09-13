@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
 
-import { inspectYoutubeTakeoutBytes, summarizeYoutubeTakeouts } from './takeout.ts'
+import {
+  inspectYoutubeTakeoutBytes,
+  parseYoutubeWatchHistoryHtml,
+  summarizeYoutubeTakeouts,
+} from './takeout.ts'
 
 const html = `<!doctype html>
 <div class="outer-cell"><div class="header-cell">YouTube</div><div class="content-cell">
@@ -64,5 +68,28 @@ describe('YouTube Takeout inspection', () => {
     result.watchHistory.push(...result.watchHistory)
 
     expect(summarizeYoutubeTakeouts([result]).combined.crossTakeoutDuplicateEvents).toBe(0)
+  })
+
+  it('does not accept a video-shaped query parameter from a non-YouTube host', () => {
+    const entries = parseYoutubeWatchHistoryHtml(`
+      <div class="outer-cell"><div class="content-cell">
+      Watched&nbsp;<a href="https://example.com/watch?v=not-youtube">Unsafe Link</a><br>
+      Jan 1, 2026, 12:00:00 PM UTC
+      </div></div>
+    `)
+
+    expect(entries[0]).toMatchObject({ action: 'Watched', product: 'unknown', videoId: null })
+  })
+
+  it('reports an invalid ZIP and a missing history file with safe messages', () => {
+    expect(() => inspectYoutubeTakeoutBytes(strToU8('not a zip'), 'private-name.zip')).toThrow(
+      'not a valid Google Takeout ZIP export',
+    )
+    expect(() =>
+      inspectYoutubeTakeoutBytes(
+        zipSync({ 'Takeout/other.txt': strToU8('x') }),
+        'private-name.zip',
+      ),
+    ).toThrow('has no YouTube watch-history.html')
   })
 })

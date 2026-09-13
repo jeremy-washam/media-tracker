@@ -621,6 +621,7 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
       `SELECT media_items.id, media_items.type, media_items.title
        FROM media_items
        INNER JOIN archive_entries ON archive_entries.media_item_id = media_items.id
+       WHERE archive_entries.upstream_state = 'active'
        GROUP BY media_items.id, media_items.type, media_items.title
        ORDER BY MAX(COALESCE(archive_entries.consumed_at_value, archive_entries.created_at)) DESC,
                 media_items.id DESC
@@ -640,7 +641,12 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
       `SELECT media_items.id, media_items.type, media_items.title
        FROM media_items
        WHERE media_items.id = ?
-         AND EXISTS (SELECT 1 FROM archive_entries WHERE archive_entries.media_item_id = media_items.id)`,
+         AND EXISTS (
+           SELECT 1
+           FROM archive_entries
+           WHERE archive_entries.media_item_id = media_items.id
+             AND archive_entries.upstream_state = 'active'
+         )`,
       [id],
     ).first<{ id: string; type: MediaItem['type']; title: string | null }>()
     return row === null ? null : { id: mediaItemId(row.id), type: row.type, title: row.title }

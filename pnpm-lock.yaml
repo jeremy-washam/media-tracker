@@ -71,6 +71,12 @@ importers:
       '@media-tracker/connector-readwise':
         specifier: workspace:*
         version: link:../../packages/connectors/readwise
+      '@media-tracker/connector-spotify':
+        specifier: workspace:*
+        version: link:../../packages/connectors/spotify
+      '@media-tracker/connector-youtube':
+        specifier: workspace:*
+        version: link:../../packages/connectors/youtube
       '@media-tracker/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

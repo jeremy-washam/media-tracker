@@ -4,9 +4,12 @@ import {
   fetchHealth,
   fetchMedia,
   importLetterboxd,
+  importSpotify,
+  importYoutube,
   syncHardcover,
   syncLetterboxd,
   syncReadwise,
+  syncSpotify,
 } from './api'
 
 const validHealthResponse = {
@@ -102,6 +105,119 @@ describe('API client', () => {
     await expect(syncLetterboxd(fetcher)).resolves.toEqual(response)
     expect(fetcher).toHaveBeenCalledWith(
       '/api/connections/letterboxd/sync',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('uploads a Spotify history ZIP and starts a persistent sync', async () => {
+    const importResponse = {
+      syncRunId: 'run-spotify-import',
+      importId: 'c'.repeat(64),
+      alreadyImported: false,
+      completed: true,
+      nextOffset: null,
+      totalPodcastSegments: 12,
+      totalArchiveEpisodes: 4,
+      archiveEpisodes: 4,
+      sourceRecords: 12,
+      unresolvedPodcastSegments: 0,
+    }
+    const syncResponse = {
+      syncRunId: 'run-spotify-sync',
+      mode: 'reconcile',
+      pages: 2,
+      sourceRecords: 70,
+      archiveEpisodes: 20,
+      queueCandidates: 30,
+      unresolvedEpisodes: 20,
+      refreshTokenRotated: false,
+    }
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(importResponse))
+      .mockResolvedValueOnce(Response.json(syncResponse)) as unknown as typeof fetch
+    const archive = new File(['synthetic'], 'spotify.zip', { type: 'application/zip' })
+
+    await expect(importSpotify(archive, fetcher)).resolves.toEqual(importResponse)
+    await expect(syncSpotify(fetcher)).resolves.toEqual(syncResponse)
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/connections/spotify/import',
+      expect.objectContaining({ method: 'POST', body: archive }),
+    )
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      '/api/connections/spotify/sync',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('uploads a YouTube Takeout ZIP', async () => {
+    const response = {
+      syncRunId: 'run-youtube',
+      importId: 'a'.repeat(64),
+      alreadyImported: false,
+      completed: true,
+      nextOffset: null,
+      totalRecords: 11,
+      activityCards: 10,
+      videos: 8,
+      archiveEntries: 9,
+      sourceRecords: 11,
+      unresolvedRecords: 1,
+      ignoredRecords: 1,
+      watchLaterRecords: 1,
+    }
+    const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
+    const archive = new File(['synthetic'], 'takeout.zip', { type: 'application/zip' })
+
+    await expect(importYoutube(archive, fetcher)).resolves.toEqual(response)
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/connections/youtube/import',
+      expect.objectContaining({ method: 'POST', body: archive }),
+    )
+  })
+
+  it('continues a chunked YouTube import until it completes', async () => {
+    const importId = 'b'.repeat(64)
+    const first = {
+      syncRunId: 'run-youtube-1',
+      importId,
+      alreadyImported: false,
+      completed: false,
+      nextOffset: 100,
+      totalRecords: 101,
+      activityCards: 101,
+      videos: 90,
+      archiveEntries: 100,
+      sourceRecords: 100,
+      unresolvedRecords: 0,
+      ignoredRecords: 0,
+      watchLaterRecords: 0,
+    }
+    const last = {
+      ...first,
+      syncRunId: 'run-youtube-2',
+      completed: true,
+      nextOffset: null,
+      videos: 1,
+      archiveEntries: 1,
+      sourceRecords: 1,
+    }
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(first))
+      .mockResolvedValueOnce(Response.json(last)) as unknown as typeof fetch
+    const archive = new File(['synthetic'], 'takeout.zip', { type: 'application/zip' })
+
+    await expect(importYoutube(archive, fetcher)).resolves.toMatchObject({
+      completed: true,
+      archiveEntries: 101,
+      sourceRecords: 101,
+    })
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      `/api/connections/youtube/import/${importId}/continue`,
       expect.objectContaining({ method: 'POST' }),
     )
   })

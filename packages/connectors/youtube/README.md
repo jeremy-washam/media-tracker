@@ -1,7 +1,7 @@
 # YouTube connector
 
-Status: private Google Takeout watch-history and Watch Later probes complete;
-Data API metadata enrichment pending.
+Status: Google Takeout watch-history import implemented; Data API metadata
+enrichment and automatic history sync are not available.
 
 This package owns Google Takeout parsing, watch-activity normalization, and
 future YouTube Data API metadata enrichment. Google Data Portability remains a
@@ -21,3 +21,22 @@ counts `Viewed`, `Visited`, and `Answered` cards; parses Watch Later; preserves
 repeated watches; and reports overlap across source archives. It never prints
 titles, channels, video IDs, searches, comments, account identifiers, or raw
 HTML. Fixtures and tests are synthetic.
+
+The application import preserves the exact ZIP in private raw storage. It keeps
+every watch-history card and Watch Later row as source evidence, but admits only
+exact `Watched` cards with both a usable YouTube video ID and a parsed source
+timestamp to Archive. Every admitted card remains a distinct occurrence, so
+rewatches are retained. Reimporting the same ZIP into the same connection is
+idempotent. A later snapshot does not imply deletion when an older card is
+absent.
+
+Normalization is resumable in D1-safe chunks of at most 100 source records.
+The raw ZIP is stored once, later chunks read it from private storage, and the
+next offset advances atomically with each committed chunk. Source records,
+video identities, Archive occurrences, and evidence links use deterministic
+IDs, so retrying an interrupted chunk cannot duplicate a watch.
+
+Ordinary YouTube OAuth and the Data API cannot read watch history. Consequently
+this connector has no scheduled reconciliation; additional history requires a
+later Takeout import. A future Data API integration may enrich known video IDs
+with current public metadata, but enrichment is not required for admission.

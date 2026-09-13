@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
-
 import { load } from 'cheerio'
 import { parse } from 'csv-parse/sync'
 import { strFromU8, unzipSync } from 'fflate'
@@ -60,12 +57,21 @@ function videoIdentity(value: string | null): {
   if (value === null) return { product: 'unknown', videoId: null }
   try {
     const url = new URL(value)
+    const hostname = url.hostname.toLowerCase()
+    const youtubeHosts = new Set([
+      'm.youtube.com',
+      'music.youtube.com',
+      'www.youtube.com',
+      'youtu.be',
+      'youtube.com',
+    ])
+    if (!youtubeHosts.has(hostname)) return { product: 'unknown', videoId: null }
     const product = url.hostname === 'music.youtube.com' ? 'youtube_music' : 'youtube'
     const videoId =
-      url.hostname === 'youtu.be'
+      hostname === 'youtu.be'
         ? (url.pathname.split('/').filter(Boolean)[0] ?? null)
         : url.searchParams.get('v')
-    return { product, videoId }
+    return { product, videoId: videoId?.trim() === '' ? null : videoId }
   } catch {
     return { product: 'unknown', videoId: null }
   }
@@ -223,15 +229,22 @@ export function summarizeYoutubeTakeouts(takeouts: YoutubeTakeout[]) {
 }
 
 export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): YoutubeTakeout {
-  const members = unzipSync(bytes, {
-    filter: (file) =>
-      file.name.endsWith('/history/watch-history.html') ||
-      file.name.endsWith('/playlists/Watch later-videos.csv'),
-  })
+  let members: ReturnType<typeof unzipSync>
+  try {
+    members = unzipSync(bytes, {
+      filter: (file) =>
+        file.name.endsWith('/history/watch-history.html') ||
+        file.name.endsWith('/playlists/Watch later-videos.csv'),
+    })
+  } catch {
+    throw new Error('The selected file is not a valid Google Takeout ZIP export')
+  }
   const watchHistoryName = Object.keys(members).find((name) =>
     name.endsWith('/history/watch-history.html'),
   )
-  if (watchHistoryName === undefined) throw new Error(`${label} has no watch-history.html`)
+  if (watchHistoryName === undefined) {
+    throw new Error('The Google Takeout export has no YouTube watch-history.html')
+  }
   const watchLaterName = Object.keys(members).find((name) =>
     name.endsWith('/playlists/Watch later-videos.csv'),
   )
@@ -244,12 +257,4 @@ export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): Yo
         ? []
         : parseYoutubeWatchLaterCsv(strFromU8(members[watchLaterName]!)),
   }
-}
-
-export async function inspectYoutubeTakeoutFiles(paths: string[]) {
-  const takeouts: YoutubeTakeout[] = []
-  for (const path of paths) {
-    takeouts.push(inspectYoutubeTakeoutBytes(await readFile(path), basename(path)))
-  }
-  return summarizeYoutubeTakeouts(takeouts)
 }

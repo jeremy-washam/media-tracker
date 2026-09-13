@@ -3,6 +3,8 @@ import { SyncJobSchema } from '@media-tracker/contracts'
 import app from './app'
 import { syncHardcover } from './hardcover-sync'
 import { syncLetterboxdRss } from './letterboxd-rss-sync'
+import { syncReadwiseArchive } from './readwise-sync'
+import { syncSpotifySavedEpisodes } from './spotify-sync'
 
 import type { SyncJob } from '@media-tracker/contracts'
 
@@ -17,7 +19,7 @@ const worker = {
         event: 'cron.triggered',
       }),
     )
-    const tasks: Promise<unknown>[] = []
+    const tasks: (() => Promise<void>)[] = []
     if (env.LETTERBOXD_USERNAME === undefined) {
       console.info(
         JSON.stringify({
@@ -27,7 +29,7 @@ const worker = {
         }),
       )
     } else {
-      tasks.push(
+      tasks.push(() =>
         syncLetterboxdRss(env)
           .then((result) => {
             console.info(
@@ -61,7 +63,7 @@ const worker = {
         }),
       )
     } else {
-      tasks.push(
+      tasks.push(() =>
         syncHardcover(env)
           .then((result) => {
             console.info(
@@ -86,7 +88,77 @@ const worker = {
           }),
       )
     }
-    if (tasks.length > 0) context.waitUntil(Promise.all(tasks))
+    if (env.READWISE_TOKEN === undefined) {
+      console.info(
+        JSON.stringify({
+          level: 'info',
+          event: 'readwise.sync_skipped',
+          reason: 'not_configured',
+        }),
+      )
+    } else {
+      tasks.push(() =>
+        syncReadwiseArchive(env)
+          .then((result) => {
+            console.info(
+              JSON.stringify({
+                level: 'info',
+                event: 'readwise.sync_completed',
+                syncRunId: result.syncRunId,
+                pages: result.pages,
+                archiveItems: result.archiveItems,
+              }),
+            )
+          })
+          .catch((error: unknown) => {
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                event: 'readwise.sync_failed',
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+              }),
+            )
+          }),
+      )
+    }
+    if (env.SPOTIFY_CLIENT_ID === undefined || env.SPOTIFY_REFRESH_TOKEN === undefined) {
+      console.info(
+        JSON.stringify({
+          level: 'info',
+          event: 'spotify.sync_skipped',
+          reason: 'not_configured',
+        }),
+      )
+    } else {
+      tasks.push(() =>
+        syncSpotifySavedEpisodes(env)
+          .then((result) => {
+            console.info(
+              JSON.stringify({
+                level: 'info',
+                event: 'spotify.sync_completed',
+                syncRunId: result.syncRunId,
+                mode: result.mode,
+                archiveEpisodes: result.archiveEpisodes,
+                refreshTokenRotated: result.refreshTokenRotated,
+              }),
+            )
+          })
+          .catch((error: unknown) => {
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                event: 'spotify.sync_failed',
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+                errorMessage: error instanceof Error ? error.message : 'Unknown failure',
+              }),
+            )
+          }),
+      )
+    }
+    if (tasks.length > 0) {
+      context.waitUntil(tasks.reduce((chain, task) => chain.then(task), Promise.resolve()))
+    }
   },
   queue(batch) {
     for (const message of batch.messages) {

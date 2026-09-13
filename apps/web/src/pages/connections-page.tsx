@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchConnections,
   importLetterboxd,
+  importSpotify,
+  importYoutube,
   syncHardcover,
   syncLetterboxd,
   syncReadwise,
+  syncSpotify,
 } from '../api'
 
 const sourceNames = {
@@ -51,6 +54,33 @@ export function ConnectionsPage() {
   })
   const letterboxdSync = useMutation({
     mutationFn: () => syncLetterboxd(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
+  })
+  const spotifyImport = useMutation({
+    mutationFn: (archive: File) => importSpotify(archive),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
+  })
+  const spotifySync = useMutation({
+    mutationFn: () => syncSpotify(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['media'] }),
+      ])
+    },
+  })
+  const youtubeImport = useMutation({
+    mutationFn: (archive: File) => importYoutube(archive),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
@@ -132,6 +162,50 @@ export function ConnectionsPage() {
                   />
                 </label>
               </div>
+            ) : connection.source === 'spotify' ? (
+              <div className="connection-actions">
+                <button
+                  className="sync-button sync-button-secondary"
+                  type="button"
+                  disabled={spotifySync.isPending}
+                  onClick={() => spotifySync.mutate()}
+                >
+                  {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
+                </button>
+                <label
+                  className={`sync-button${spotifyImport.isPending ? ' sync-button-disabled' : ''}`}
+                >
+                  {spotifyImport.isPending ? 'Importing…' : 'Import ZIP'}
+                  <input
+                    className="file-input"
+                    type="file"
+                    accept=".zip,application/zip"
+                    disabled={spotifyImport.isPending}
+                    onChange={(event) => {
+                      const archive = event.currentTarget.files?.[0]
+                      if (archive !== undefined) spotifyImport.mutate(archive)
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                </label>
+              </div>
+            ) : connection.source === 'youtube' ? (
+              <label
+                className={`sync-button${youtubeImport.isPending ? ' sync-button-disabled' : ''}`}
+              >
+                {youtubeImport.isPending ? 'Importing…' : 'Import Takeout'}
+                <input
+                  className="file-input"
+                  type="file"
+                  accept=".zip,application/zip"
+                  disabled={youtubeImport.isPending}
+                  onChange={(event) => {
+                    const archive = event.currentTarget.files?.[0]
+                    if (archive !== undefined) youtubeImport.mutate(archive)
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </label>
             ) : (
               <span className="connection-state">{connection.status}</span>
             )}
@@ -190,6 +264,41 @@ export function ConnectionsPage() {
       {letterboxdSync.isError ? (
         <p className="checkpoint-note sync-error" role="alert">
           Letterboxd RSS sync failed. Confirm the configured username and try again.
+        </p>
+      ) : null}
+      {spotifyImport.isSuccess ? (
+        <p className="checkpoint-note">
+          {spotifyImport.data.alreadyImported
+            ? 'That exact Spotify export was already imported.'
+            : `Imported ${spotifyImport.data.totalArchiveEpisodes} podcast episodes from ${spotifyImport.data.totalPodcastSegments} playback segments.`}
+        </p>
+      ) : null}
+      {spotifyImport.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Spotify import failed. Select the Extended Streaming History ZIP from Spotify.
+        </p>
+      ) : null}
+      {spotifySync.isSuccess ? (
+        <p className="checkpoint-note">
+          Reconciled {spotifySync.data.archiveEpisodes} played podcast episodes from Spotify’s
+          saved-episode library.
+        </p>
+      ) : null}
+      {spotifySync.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Spotify sync failed. Confirm its client ID and refresh token are configured.
+        </p>
+      ) : null}
+      {youtubeImport.isSuccess ? (
+        <p className="checkpoint-note">
+          {youtubeImport.data.alreadyImported
+            ? 'That exact YouTube Takeout was already imported.'
+            : `Imported ${youtubeImport.data.archiveEntries} YouTube watch occurrences.`}
+        </p>
+      ) : null}
+      {youtubeImport.isError ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          YouTube import failed. Select a Google Takeout ZIP containing YouTube watch history.
         </p>
       ) : null}
     </section>
