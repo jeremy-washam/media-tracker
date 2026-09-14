@@ -385,6 +385,7 @@ async function normalizeChunk(
       retiredAt: null,
     })
     archiveEntries.push({
+      latestConsumedAt: true,
       entry: {
         id: entryId,
         mediaItemId: itemId,

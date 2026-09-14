@@ -1,6 +1,9 @@
 # Media Tracker Implementation Plan
 
-Last updated: 2026-09-12
+Last updated: 2026-09-14
+
+Sections 3–15 include the longer-term roadmap, not a checklist of shipped
+features. Section 18 records the implemented MVP and current next steps.
 
 ## 1. Product and architectural boundaries
 
@@ -320,11 +323,11 @@ Readwise is the architecture-validation connector.
 - Include an overlap window to protect against timestamp boundary issues.
 - Upsert changed documents.
 - Advance the watermark only after successful processing.
-- Run nightly.
+- Run hourly through deployed Cron Triggers; local cron execution is manual.
 
-### Webhooks
+### Webhooks (deferred)
 
-Support document creation, finishing, archiving, moves to Later or Inbox, shortlisting, tag updates, and highlight creation.
+Eventually support document creation, finishing, archiving, moves to Later or Inbox, shortlisting, tag updates, and highlight creation.
 
 Webhook flow:
 
@@ -382,7 +385,7 @@ multiple connectors against an unproven raw-object and Archive schema.
 
 ## 7. Phase 4: Hardcover
 
-Implementation status: complete and validated locally against the owner account.
+Implementation status: initial Read-shelf polling is implemented and validated locally; broader deletion and recovery behavior remains deferred.
 The full Read-shelf connector, raw-page retention, canonical projection, manual
 sync, hourly scheduled sync, and media-type browsing filter are implemented. An
 initial import and repeated reconciliation each returned 127 Read books and 127
@@ -398,8 +401,8 @@ handler also completed successfully.
 - Map finished rereads to separate Archive entries only when Hardcover exposes
   distinct child read rows. Preserve `read_count`, but do not invent dated or
   separate reread events when the import did not retain them.
-- Poll `user_books.updated_at` with overlap and periodically run a full
-  idempotent reconciliation because `user_book_reads` has no update timestamp.
+- Perform a full Read-shelf reconciliation each hour because `user_book_reads`
+  has no update timestamp. Incremental optimization remains future work.
 
 Do not collapse:
 
@@ -416,7 +419,7 @@ events for which Hardcover supplies distinct evidence.
 
 ### Historical import
 
-Build a local CLI importer:
+The current importer uses Connections or the HTTP API. A future CLI may use:
 
 ```text
 pnpm media import letterboxd ./letterboxd-export.zip
@@ -447,15 +450,15 @@ identities without duplicate Archive entries.
 
 ### OAuth
 
-- Add Authorization Code flow.
-- Encrypt refresh tokens in D1.
+- Use the local PKCE probe to obtain the initial grant; hosted OAuth onboarding remains deferred.
+- Persist rotating refresh tokens encrypted with AES-GCM in D1.
 - Refresh access tokens automatically.
-- Surface the six-month reauthorization deadline.
+- Reauthorization deadline tracking remains deferred; failed attempts appear in sync activity.
 - Keep client secrets in Worker secrets.
 
 ### Historical backfill
 
-CLI import:
+The current importer accepts ZIPs through Connections or HTTP. A future CLI may use:
 
 ```text
 pnpm media import spotify ./spotify-extended-history/
@@ -466,13 +469,11 @@ skip/end evidence, offline/private-session fields, and Spotify URIs. Any positiv
 podcast playback admits the episode to Archive; use the real export to reconcile
 missing episodes, dates, and repeated-listen patterns.
 
-### Song synchronization
+### Song synchronization (deferred)
 
-- Poll recently played tracks every few minutes.
-- Use `played_at` plus Spotify track ID as the initial idempotency basis, then
-  validate collisions against real data.
-- Preserve repeated listens as separate source plays.
-- Avoid treating every short play as a completed listen without evidence.
+Song and audiobook records remain in the raw export. They do not enter Archive
+and there is no recently-played song poller in the current MVP. Admission rules
+must be approved before adding either projection.
 
 ### Podcast synchronization
 
@@ -486,7 +487,9 @@ missing episodes, dates, and repeated-listen patterns.
 - Re-import Extended Streaming History periodically to close gaps because the
   recently-played endpoint explicitly excludes podcasts.
 
-Acceptance gate: song playback is reliable; podcast status clearly communicates its confidence and limitations.
+Acceptance gate: podcast export and saved-episode observations reconcile to one
+occurrence per episode, retaining the latest known playback timestamp. The UI
+communicates saved-library discovery limits; songs and audiobooks are deferred.
 
 ## 10. Phase 7: YouTube
 
@@ -709,7 +712,7 @@ The ingestion milestone is complete when:
 
 The workspace, React/Hono scaffold, canonical ledger, and all five initial
 source connectors are implemented and validated locally against the owner data.
-Readwise and Hardcover poll automatically; Letterboxd combines its full export
+On deployment, Readwise and Hardcover poll hourly; Letterboxd combines its full export
 with hourly RSS; Spotify combines its full podcast history export with hourly
 saved-episode reconciliation; and YouTube accepts resumable Takeout imports for
 separate account lineages. Large Spotify and YouTube imports are processed in
@@ -717,14 +720,13 @@ bounded, durable chunks rather than one oversized Worker invocation.
 
 The next three reviewable changes should be:
 
-1. Replace the temporary 1,000-item History response/rendering path with proper
-   server pagination, media-type queries, counts, and incremental UI loading so
-   the complete Archive remains usable with more than 20,000 videos.
-2. Improve media cards and detail views with the canonical metadata already in
-   the ledger, then expose source coverage and known connector limitations in
-   the Connections UI.
-3. Add periodic export reminders and broader replay/export/recovery tooling in
-   response to observed operational needs.
+1. Improve media cards and detail views with the canonical metadata already in
+   the ledger. Complete counts, server-side media-type filters, cursor pagination,
+   account-specific connection status, coverage notes, incomplete-import resume
+   controls, and persisted sync activity are implemented.
+2. Add provenance inspection, richer metadata, and search to the browsing UI.
+3. Add periodic export reminders and broader replay/export/recovery tooling.
+   The CLI and queue consumer remain placeholders, not operational recovery paths.
 
 The MVP retains exact raw pages and respects idempotency and cursor safety, but
 defers generalized replay infrastructure, multipart upload orchestration, and
@@ -733,3 +735,14 @@ advanced recovery automation.
 This sequence tests the data assumptions before migrations make them expensive
 to change, while allowing independent source research and probe preparation to
 proceed in parallel.
+
+## 19. Correctness review fixes
+
+The September 14 review added failed-Letterboxd retry support, bidirectional
+RSS/export matching, stable RSS date edits, YouTube overlapping-snapshot
+reconciliation, monotonic Spotify playback dates, encrypted refresh-token
+rotation, removal of superseded Hardcover fallbacks, read-specific editions,
+explicit rating/review clearing, and preservation of malformed successful API
+responses before parsing. See ADR 0010 for the reconciliation policy and its
+limits. These paths are covered with synthetic regression tests; no new private
+provider probes were run for this change.

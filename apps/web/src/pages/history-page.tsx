@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 
 import type { MediaSummary } from '@media-tracker/contracts'
 
@@ -29,13 +29,29 @@ const mediaTypes = Object.keys(mediaTypeNames) as MediaType[]
 
 export function HistoryPage() {
   const [filter, setFilter] = useState<MediaFilter>('all')
-  const media = useQuery({ queryKey: ['media'], queryFn: () => fetchMedia() })
-  const items = media.data?.data ?? []
-  const typeCount = new Set(items.map((item) => item.type)).size
-  const filteredItems = filter === 'all' ? items : items.filter((item) => item.type === filter)
-  const counts = Object.fromEntries(
-    mediaTypes.map((type) => [type, items.filter((item) => item.type === type).length]),
-  ) as Record<MediaType, number>
+  const media = useInfiniteQuery({
+    queryKey: ['media', filter],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      fetchMedia(fetch, {
+        ...(filter === 'all' ? {} : { type: filter }),
+        ...(pageParam === undefined ? {} : { cursor: pageParam }),
+      }),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+  const items = media.data?.pages.flatMap((page) => page.data) ?? []
+  const counts = media.data?.pages[0]?.counts ?? {
+    article: 0,
+    video: 0,
+    podcast_episode: 0,
+    movie: 0,
+    book: 0,
+    song: 0,
+  }
+  const totalCount = media.data?.pages[0]?.totalCount ?? 0
+  const filteredCount = media.data?.pages[0]?.filteredCount ?? 0
+  const typeCount = Object.values(counts).filter((count) => count > 0).length
+  const filteredItems = items
 
   return (
     <section className="page-stack" aria-labelledby="history-title">
@@ -50,8 +66,8 @@ export function HistoryPage() {
       <div className="summary-grid" aria-label="History summary">
         <article className="summary-card">
           <span>Items imported</span>
-          <strong>{media.isPending ? '—' : items.length}</strong>
-          <small>{items.length === 0 ? 'Waiting for the first import' : 'In your Archive'}</small>
+          <strong>{media.isPending ? '—' : totalCount}</strong>
+          <small>{totalCount === 0 ? 'Waiting for the first import' : 'In your Archive'}</small>
         </article>
         <article className="summary-card">
           <span>Media types</span>
@@ -60,7 +76,7 @@ export function HistoryPage() {
         </article>
         <article className="summary-card">
           <span>Current view</span>
-          <strong>{media.isPending ? '—' : filteredItems.length}</strong>
+          <strong>{media.isPending ? '—' : filteredCount}</strong>
           <small>{filter === 'all' ? 'All media' : mediaTypePluralNames[filter]}</small>
         </article>
       </div>
@@ -71,7 +87,7 @@ export function HistoryPage() {
         </div>
       ) : null}
 
-      {!media.isPending && !media.isError && items.length === 0 ? (
+      {!media.isPending && !media.isError && totalCount === 0 ? (
         <div className="empty-panel">
           <div className="empty-mark" aria-hidden="true">
             <span />
@@ -80,12 +96,12 @@ export function HistoryPage() {
           </div>
           <div>
             <h2>No media yet</h2>
-            <p>Open Connections and run the first Readwise Archive sync.</p>
+            <p>Open Connections to import or sync your media history.</p>
           </div>
         </div>
       ) : null}
 
-      {items.length > 0 ? (
+      {totalCount > 0 ? (
         <>
           <div className="media-filters" aria-label="Filter Archive by media type">
             <button
@@ -94,7 +110,7 @@ export function HistoryPage() {
               aria-pressed={filter === 'all'}
               onClick={() => setFilter('all')}
             >
-              All <span>{items.length}</span>
+              All <span>{totalCount}</span>
             </button>
             {mediaTypes.map((type) => (
               <button
@@ -131,6 +147,19 @@ export function HistoryPage() {
               </div>
             ) : null}
           </div>
+          {media.hasNextPage ? (
+            <button
+              type="button"
+              className="sync-button"
+              disabled={media.isFetchingNextPage}
+              onClick={() => void media.fetchNextPage()}
+            >
+              {media.isFetchingNextPage ? 'Loading…' : 'Load more'}
+            </button>
+          ) : null}
+          <p className="checkpoint-note">
+            Showing {items.length} of {filteredCount} items.
+          </p>
         </>
       ) : null}
     </section>

@@ -97,8 +97,21 @@ and array index.
 ## Persistent sync credentials
 
 The Worker refreshes a short-lived access token for each reconciliation. It
-requires `SPOTIFY_CLIENT_ID` and `SPOTIFY_REFRESH_TOKEN`; confidential clients
+requires `SPOTIFY_CLIENT_ID`, `SPOTIFY_REFRESH_TOKEN`, and `TOKEN_ENCRYPTION_KEY`
+(base64-encoded 32-byte AES key); confidential clients
 may also set `SPOTIFY_CLIENT_SECRET`. These values belong in local/deployment
 secret storage and must never be committed, logged, or stored as raw evidence.
 The existing PKCE probe can create the initial grant. Spotify refresh tokens
 expire after six months, so the connection eventually requires reauthorization.
+
+Migration 0002 stores rotating refresh tokens encrypted in D1, bound to the
+connection with AES-GCM authenticated data. A database lease serializes refreshes;
+the replacement is persisted before fetching saved episodes, including when a
+later page fails. Replacing the bootstrap secret with a new authorization resets
+the stored grant. The encryption key must be backed up privately. Do not change
+it without also obtaining a new bootstrap authorization.
+
+Playback dates are monotonic across export imports: an older snapshot can add
+evidence but cannot replace a later positive playback date. Successful API
+responses are stored before JSON/schema validation, so malformed pages remain
+available as failed raw evidence.

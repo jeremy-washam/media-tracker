@@ -1,5 +1,7 @@
 export {
   fetchHardcoverReadBooksPage,
+  fetchHardcoverReadBooksResponse,
+  parseHardcoverReadBooksPage,
   fetchHardcoverUserId,
   parseHardcoverReadBook,
   type HardcoverPage,

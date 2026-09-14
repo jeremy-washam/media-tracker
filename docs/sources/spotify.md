@@ -606,3 +606,11 @@ segment as Spotify-owned evidence, admit each episode URI with positive playback
 to one Archive occurrence using its latest positive play, and reconcile current
 saved episodes into Queue/Archive/unresolved state. Preserve audiobook segments
 separately pending an explicit admission and cross-source matching rule.
+
+## Implementation update — 2026-09-14
+
+The correctness review and synthetic regression suite introduced the explicit
+reconciliation and recovery policies in [ADR 0010](../decisions/0010-reconciliation-and-recovery.md).
+This implementation update does not represent a new private payload probe or a
+new verification of upstream API capabilities. See the connector README for
+current behavior; earlier reconnaissance questions remain historical evidence.

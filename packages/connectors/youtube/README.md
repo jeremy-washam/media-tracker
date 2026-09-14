@@ -25,8 +25,9 @@ HTML. Fixtures and tests are synthetic.
 The application import preserves the exact ZIP in private raw storage. It keeps
 every watch-history card and Watch Later row as source evidence, but admits only
 exact `Watched` cards with both a usable YouTube video ID and a parsed source
-timestamp to Archive. Every admitted card remains a distinct occurrence, so
-rewatches are retained. Reimporting the same ZIP into the same connection is
+timestamp to Archive. Each snapshot retains its watch multiplicity. Overlapping exports match by
+account, video, UTC timestamp, and occurrence rank at that timestamp; rewatches
+within a snapshot remain distinct. Existing legacy occurrence IDs are reused. Reimporting the same ZIP into the same connection is
 idempotent. A later snapshot does not imply deletion when an older card is
 absent.
 
@@ -40,3 +41,9 @@ Ordinary YouTube OAuth and the Data API cannot read watch history. Consequently
 this connector has no scheduled reconciliation; additional history requires a
 later Takeout import. A future Data API integration may enrich known video IDs
 with current public metadata, but enrichment is not required for admission.
+
+Parser v3 reprocesses a previously imported ZIP when it is uploaded again, adds
+new source evidence, and reuses existing occurrences. This is an explicit
+reconciliation policy, not a claim that Google supplies globally unique activity
+IDs. Changed timestamps remain distinct evidence; never infer deletions from a
+missing card. See ADR 0010 for the ambiguity policy.

@@ -41,7 +41,7 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
 
-const parserVersion = 'letterboxd-rss@1'
+const parserVersion = 'letterboxd-rss@2'
 
 export class LetterboxdRssConfigurationError extends Error {
   constructor() {
@@ -114,6 +114,18 @@ async function findMedia(
   diaryIdentityId: ExternalIdentityId | null
   tmdbIdentityId: ExternalIdentityId | null
 }> {
+  if (entry.entryUrl !== null) {
+    const diary = await repository.findExternalIdentity({
+      namespace: 'letterboxd',
+      externalType: 'diary_uri',
+      externalId: entry.entryUrl,
+      connectionId: connection.id,
+    })
+    if (diary !== null) {
+      return { itemId: diary.mediaItemId, diaryIdentityId: diary.id, tmdbIdentityId: null }
+    }
+  }
+
   if (entry.tmdbMovieId !== null) {
     const pending = pendingTmdb.get(entry.tmdbMovieId)
     if (pending !== undefined) {
@@ -127,18 +139,6 @@ async function findMedia(
     })
     if (tmdb !== null) {
       return { itemId: tmdb.mediaItemId, diaryIdentityId: null, tmdbIdentityId: tmdb.id }
-    }
-  }
-
-  if (entry.entryUrl !== null) {
-    const diary = await repository.findExternalIdentity({
-      namespace: 'letterboxd',
-      externalType: 'diary_uri',
-      externalId: entry.entryUrl,
-      connectionId: connection.id,
-    })
-    if (diary !== null) {
-      return { itemId: diary.mediaItemId, diaryIdentityId: diary.id, tmdbIdentityId: null }
     }
   }
 
@@ -235,7 +235,9 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
     await repository.commit({ rawObjects: [pendingRawObject] })
 
     const previousCursor = await repository.findSyncCursor(connection.id, 'letterboxd-rss')
-    const unchanged = previousCursor?.checkpoint.responseHash === response.responseHash
+    const unchanged =
+      previousCursor?.checkpoint.responseHash === response.responseHash &&
+      previousCursor.checkpoint.parserVersion === parserVersion
     const finishedAt = instantNow()
 
     if (unchanged) {
@@ -265,6 +267,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
           checkpoint: {
             ...previousCursor.checkpoint,
             responseHash: response.responseHash,
+            parserVersion,
             fetchedAt: response.fetchedAt,
           },
           committedAt: finishedAt,
@@ -377,19 +380,47 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
         pendingTmdb.set(entry.tmdbMovieId, { id: tmdbIdentityId, itemId })
       }
 
-      const existingOccurrence = await findOccurrence(
-        repository,
-        connection,
-        itemId,
-        match.diaryIdentityId,
-        entry.watchedOn,
+      const stableOccurrence = await repository.findArchiveOccurrence(
+        connection.id,
+        `rss:${entry.guid}`,
       )
+      const existingOccurrence =
+        stableOccurrence ??
+        (await findOccurrence(
+          repository,
+          connection,
+          itemId,
+          match.diaryIdentityId,
+          entry.watchedOn,
+        ))
       if (existingOccurrence === 'ambiguous') {
         sourceRecords[sourceRecords.length - 1] = { ...sourceRecord, disposition: 'unresolved' }
         unresolvedRecords += 1
         continue
       }
 
+      let diaryIdentityId = match.diaryIdentityId
+      if (entry.entryUrl !== null) {
+        const known = await repository.findExternalIdentity({
+          namespace: 'letterboxd',
+          externalType: 'diary_uri',
+          externalId: entry.entryUrl,
+          connectionId: connection.id,
+        })
+        diaryIdentityId = known?.id ?? externalIdentityId(ulid())
+        externalIdentities.push({
+          id: diaryIdentityId,
+          mediaItemId: itemId,
+          namespace: 'letterboxd',
+          externalType: 'diary_uri',
+          externalId: entry.entryUrl,
+          scope: { kind: 'connection', connectionId: connection.id },
+          canonicalUrl: entry.entryUrl,
+          firstObservedSourceRecordId: recordId,
+          lastObservedSourceRecordId: recordId,
+          retiredAt: null,
+        })
+      }
       const entryId = existingOccurrence?.id ?? archiveEntryId(ulid())
       const evidence: ArchiveEntryEvidence[] = [
         {
@@ -422,7 +453,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
           mediaItemId: itemId,
           connectionId: connection.id,
           consumedIdentityId:
-            existingOccurrence?.consumedIdentityId ?? match.diaryIdentityId ?? tmdbIdentityId,
+            diaryIdentityId ?? existingOccurrence?.consumedIdentityId ?? tmdbIdentityId,
           sourceOccurrenceKey: existingOccurrence?.sourceOccurrenceKey ?? `rss:${entry.guid}`,
           admissionReason: 'letterboxd_diary_entry',
           consumedAt: temporalDay(entry.watchedOn),
@@ -471,6 +502,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
         name: 'letterboxd-rss',
         checkpoint: {
           responseHash: response.responseHash,
+          parserVersion,
           fetchedAt: response.fetchedAt,
           newestPublishedAt: publishedInstants.at(-1) ?? null,
           oldestPublishedAt: publishedInstants[0] ?? null,

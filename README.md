@@ -6,9 +6,13 @@ initial goal is trustworthy historical backfill and ongoing synchronization.
 Future work includes a centralized queue, evidence-backed LLM search, and
 possibly an iOS client.
 
-The application scaffold, source-payload reconnaissance, canonical ledger, and
-initial D1 persistence layer are complete. The first thin vertical slice imports
-the current Readwise Archive and displays it in History.
+All five initial sources have local ingestion paths: Readwise Archive polling,
+Hardcover Read-shelf reconciliation, Letterboxd export/RSS ingestion, Spotify
+podcast export/saved-episode ingestion, and manual YouTube Takeout imports.
+History supports server-side media-type filtering, complete counts, and cursor
+pagination. Connections shows each account, source coverage, incomplete imports,
+resume controls, and recent sync attempts. This is a locally validated MVP, not a
+production deployment or a completed recovery toolset.
 
 ## Architecture
 
@@ -63,9 +67,35 @@ Useful local endpoints:
 
 No Cloudflare account or provider credentials are required for local
 development. Wrangler simulates D1, R2, Queues, Cron, and static asset bindings.
-A Readwise token is required only to run the manual Reader Archive import. The
+Provider credentials are required only for their respective sync actions.
+Deployed Cron Triggers poll Readwise, Hardcover, Letterboxd, and Spotify hourly;
+`wrangler dev --test-scheduled` exposes a manual test endpoint and does not run
+an unattended hourly schedule. YouTube has no automatic history sync. The
 IDs in `apps/api/wrangler.jsonc` are local placeholders and must be replaced
 before remote deployment.
+
+## Upgrading an existing local database
+
+Back up local D1 before applying new migrations, then run `pnpm db:migrate:local`.
+Migration 0002 adds encrypted rotating-token storage without changing ledger
+records. Spotify also requires `TOKEN_ENCRYPTION_KEY`, a base64-encoded random
+32-byte AES key, in `apps/api/.dev.vars` or Worker secrets. Keep this key with
+your private backups. Replacing `SPOTIFY_REFRESH_TOKEN` with a new authorization
+automatically replaces the stored grant on the next sync. Do not rotate the AES
+key alone: reauthorize with a new bootstrap token at the same time so the old
+ciphertext does not need to be decrypted.
+
+Imports are retried by uploading the same ZIP. Spotify and YouTube can also
+resume directly from Connections using their stored raw source. Use the existing
+YouTube account card for later snapshots; a new account label creates a separate
+lineage. No real source data needs to be deleted to retry an import.
+
+## Remaining limitations
+
+Songs and audiobooks, source deletion reconciliation beyond Reader moves,
+generalized replay, app-wide export/recovery commands, webhooks, and production
+Access setup remain deferred. The CLI and queue consumer are placeholders;
+imports currently use HTTP requests and polling uses scheduled handlers.
 
 ## Checks
 

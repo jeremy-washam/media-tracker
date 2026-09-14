@@ -163,11 +163,11 @@ export function parseHardcoverReadBook(value: unknown): HardcoverReadBook {
   }
 }
 
-async function graphql(
+async function fetchGraphql(
   token: string,
   query: string,
   variables: Record<string, unknown>,
-): Promise<{ bytes: Uint8Array; contentType: string; envelope: GraphqlEnvelope }> {
+): Promise<{ bytes: Uint8Array; contentType: string }> {
   const response = await fetch('https://api.hardcover.app/v1/graphql', {
     method: 'POST',
     headers: {
@@ -180,44 +180,51 @@ async function graphql(
   })
   if (!response.ok) throw new Error(`Hardcover GraphQL returned ${response.status}`)
   const bytes = new Uint8Array(await response.arrayBuffer())
+  return { bytes, contentType: response.headers.get('content-type') ?? 'application/json' }
+}
+function parseEnvelope(bytes: Uint8Array): GraphqlEnvelope {
   const envelope = JSON.parse(new TextDecoder().decode(bytes)) as GraphqlEnvelope
-  if (envelope.errors !== undefined && envelope.errors.length > 0) {
-    throw new Error(
-      `Hardcover GraphQL error: ${envelope.errors.map((error) => error.message ?? 'unknown').join('; ')}`,
-    )
-  }
+  if (envelope.errors !== undefined && envelope.errors.length > 0)
+    throw new Error('Hardcover GraphQL returned errors')
   if (envelope.data === undefined) throw new Error('Hardcover GraphQL returned no data')
-  return {
-    bytes,
-    contentType: response.headers.get('content-type') ?? 'application/json',
-    envelope,
-  }
+  return envelope
 }
 
 export async function fetchHardcoverUserId(token: string): Promise<number> {
-  const result = await graphql(token, 'query MediaTrackerMe { me { id } }', {})
-  const data = record(result.envelope.data, 'me response')
+  const result = await fetchGraphql(token, 'query MediaTrackerMe { me { id } }', {})
+  const data = record(parseEnvelope(result.bytes).data, 'me response')
   const values = Array.isArray(data.me) ? data.me : [data.me]
   const me = record(values[0], 'me')
   return integer(me.id, 'user id')
 }
 
-export async function fetchHardcoverReadBooksPage(input: {
+export async function fetchHardcoverReadBooksResponse(input: {
   token: string
   userId: number
   afterId: number
   limit?: number
-}): Promise<HardcoverPage> {
-  const result = await graphql(input.token, readBooksQuery, {
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
+  return fetchGraphql(input.token, readBooksQuery, {
     userId: input.userId,
     afterId: input.afterId,
     limit: input.limit ?? 100,
   })
-  const data = record(result.envelope.data, 'read books response')
+}
+export function parseHardcoverReadBooksPage(result: {
+  bytes: Uint8Array
+  contentType: string
+}): HardcoverPage {
+  const data = record(parseEnvelope(result.bytes).data, 'read books response')
   if (!Array.isArray(data.user_books)) throw new TypeError('Hardcover user_books must be an array')
   return {
     books: data.user_books.map(parseHardcoverReadBook),
     bytes: result.bytes,
     contentType: result.contentType,
   }
+}
+
+export async function fetchHardcoverReadBooksPage(
+  input: Parameters<typeof fetchHardcoverReadBooksResponse>[0],
+): Promise<HardcoverPage> {
+  return parseHardcoverReadBooksPage(await fetchHardcoverReadBooksResponse(input))
 }

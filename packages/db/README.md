@@ -17,3 +17,10 @@ a successful sync run for the same connection.
 Internal IDs and source occurrence keys must be stable across replay. Raw bytes
 remain in R2; this package stores their immutable manifest and every normalized
 lineage link.
+
+Migration 0002 adds encrypted rotating credentials and refresh leases, isolated
+from the ledger in `src/credentials.ts`. Apply it before Spotify syncing. Back up
+D1 and the encryption secret together; ciphertext alone cannot recover a grant.
+History and sync-run queries use keyset pagination. Archive updates explicitly
+distinguish partial observations from rating/review snapshots and latest-play
+evidence. Superseded fallbacks retain admission and removal evidence.

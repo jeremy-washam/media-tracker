@@ -76,11 +76,11 @@ export class SpotifyApiError extends Error {
   }
 }
 
-export async function fetchSpotifySavedEpisodesPage(input: {
+export async function fetchSpotifySavedEpisodesResponse(input: {
   accessToken: string
   offset?: number
   fetch?: typeof fetch
-}): Promise<SpotifySavedEpisodesPage> {
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
   const fetcher = input.fetch ?? fetch
   const url = new URL('https://api.spotify.com/v1/me/episodes')
   url.searchParams.set('limit', '50')
@@ -90,6 +90,13 @@ export async function fetchSpotifySavedEpisodesPage(input: {
     throw new SpotifyApiError(`Spotify saved episodes returned ${response.status}`, response.status)
   }
   const bytes = new Uint8Array(await response.arrayBuffer())
+  return { bytes, contentType: response.headers.get('content-type') ?? 'application/json' }
+}
+export function parseSpotifySavedEpisodesPage(response: {
+  bytes: Uint8Array
+  contentType: string
+}): SpotifySavedEpisodesPage {
+  const { bytes, contentType } = response
   const page = pageSchema.parse(JSON.parse(new TextDecoder().decode(bytes)))
   const consumed = page.offset + page.items.length
   if (page.items.length === 0 && consumed < page.total) {
@@ -97,7 +104,7 @@ export async function fetchSpotifySavedEpisodesPage(input: {
   }
   return {
     bytes,
-    contentType: response.headers.get('content-type') ?? 'application/json',
+    contentType,
     items: page.items.map(({ added_at: addedAt, episode }) => ({
       addedAt,
       canonicalUrl: episode.external_urls?.spotify ?? null,
@@ -119,4 +126,10 @@ export async function fetchSpotifySavedEpisodesPage(input: {
     offset: page.offset,
     total: page.total,
   }
+}
+
+export async function fetchSpotifySavedEpisodesPage(
+  input: Parameters<typeof fetchSpotifySavedEpisodesResponse>[0],
+): Promise<SpotifySavedEpisodesPage> {
+  return parseSpotifySavedEpisodesPage(await fetchSpotifySavedEpisodesResponse(input))
 }

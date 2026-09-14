@@ -1,7 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   fetchConnections,
+  fetchSyncRuns,
+  resumeImport,
   importLetterboxd,
   importSpotify,
   importYoutube,
@@ -19,71 +22,113 @@ const sourceNames = {
   youtube: 'YouTube',
 } as const
 
+const coverageNotes = {
+  readwise:
+    'Reader Archive is polled hourly when the Worker is deployed. Removed documents retain their evidence.',
+  hardcover: 'The current Read shelf is reconciled hourly when deployed.',
+  letterboxd:
+    'RSS covers recent public activity. Import exports periodically for older and private history.',
+  spotify:
+    'Polling sees saved episodes only. Import Extended Streaming History for missing podcast plays. Songs and audiobooks are deferred.',
+  youtube:
+    'Manual Takeout imports only. Automatic watch-history sync is unavailable. Use the same account when importing later snapshots.',
+} as const
 export function ConnectionsPage() {
   const queryClient = useQueryClient()
+  const [youtubeKey, setYoutubeKey] = useState('')
+  const runs = useInfiniteQuery({
+    queryKey: ['sync-runs'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => fetchSyncRuns(pageParam),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    refetchInterval: 5000,
+  })
+  const resumed = useMutation({
+    mutationFn: (input: {
+      source: 'spotify' | 'youtube'
+      importId: string
+      connectionId: string
+    }) => resumeImport(input.source, input.importId, input.connectionId),
+    onSettled: () => queryClient.invalidateQueries(),
+  })
   const connections = useQuery({
     queryKey: ['connections'],
     queryFn: () => fetchConnections(),
+    refetchInterval: 5000,
   })
   const readwiseSync = useMutation({
     mutationFn: () => syncReadwise(),
-    onSuccess: async () => {
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
   const letterboxdImport = useMutation({
     mutationFn: (archive: File) => importLetterboxd(archive),
-    onSuccess: async () => {
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
   const hardcoverSync = useMutation({
     mutationFn: () => syncHardcover(),
-    onSuccess: async () => {
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
   const letterboxdSync = useMutation({
     mutationFn: () => syncLetterboxd(),
-    onSuccess: async () => {
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
   const spotifyImport = useMutation({
     mutationFn: (archive: File) => importSpotify(archive),
-    onSuccess: async () => {
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
   const spotifySync = useMutation({
     mutationFn: () => syncSpotify(),
-    onSuccess: async () => {
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
   const youtubeImport = useMutation({
-    mutationFn: (archive: File) => importYoutube(archive),
-    onSuccess: async () => {
+    mutationFn: (input: { archive: File; connectionId?: string }) =>
+      importYoutube(
+        input.archive,
+        fetch,
+        input.connectionId === undefined
+          ? { connectionKey: youtubeKey.trim(), connectionLabel: youtubeKey.trim() }
+          : { connectionId: input.connectionId },
+      ),
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
@@ -103,14 +148,79 @@ export function ConnectionsPage() {
         </div>
       ) : null}
 
+      <label className="checkpoint-note">
+        New YouTube account or channel label{' '}
+        <input
+          aria-label="YouTube account label"
+          value={youtubeKey}
+          onChange={(event) => setYoutubeKey(event.target.value)}
+          placeholder="e.g. Personal"
+        />
+      </label>
+      {youtubeKey.trim() !== '' ? (
+        <label className="sync-button">
+          Import a new YouTube account
+          <input
+            className="file-input"
+            type="file"
+            accept=".zip,application/zip"
+            disabled={youtubeImport.isPending}
+            onChange={(event) => {
+              const archive = event.currentTarget.files?.[0]
+              if (archive !== undefined) youtubeImport.mutate({ archive })
+              event.currentTarget.value = ''
+            }}
+          />
+        </label>
+      ) : null}
       <div className="connection-list" aria-busy={connections.isPending}>
         {(connections.data?.data ?? []).map((connection) => (
-          <article className="connection-row" key={connection.source}>
+          <article className="connection-row" key={connection.id ?? connection.source}>
             <div className={`source-monogram source-${connection.source}`} aria-hidden="true">
               {sourceNames[connection.source].slice(0, 1)}
             </div>
             <div className="connection-copy">
               <h2>{sourceNames[connection.source]}</h2>
+              {connection.id === null ? null : <p>{connection.label}</p>}
+              <p>
+                {connection.status.replaceAll('_', ' ')} · Coverage:{' '}
+                {connection.coverage?.replaceAll('_', ' ') ?? 'Not imported'}
+              </p>
+              <p>{coverageNotes[connection.source]}</p>
+              {connection.lastAttemptedSyncAt === null ? null : (
+                <p>Last attempt: {new Date(connection.lastAttemptedSyncAt).toLocaleString()}</p>
+              )}
+              {connection.lastExportAt === null ? null : (
+                <p>Last completed export: {new Date(connection.lastExportAt).toLocaleString()}</p>
+              )}
+              {connection.incompleteImports.map((pending) => (
+                <div key={pending.importId}>
+                  <p>
+                    Import {pending.status}: {pending.nextOffset}
+                    {pending.totalRecords === null ? '' : ` / ${pending.totalRecords}`} records
+                    committed.
+                  </p>
+                  {connection.id !== null &&
+                  (connection.source === 'youtube' || connection.source === 'spotify') ? (
+                    <button
+                      className="sync-button"
+                      type="button"
+                      disabled={resumed.isPending}
+                      onClick={() =>
+                        resumed.mutate({
+                          source: connection.source as 'youtube' | 'spotify',
+                          importId: pending.importId,
+                          connectionId: connection.id!,
+                        })
+                      }
+                    >
+                      Resume import
+                    </button>
+                  ) : (
+                    <p>Upload the same ZIP again to retry.</p>
+                  )}
+                </div>
+              ))}
               <p>
                 {connection.lastSuccessfulSyncAt === null
                   ? 'No completed sync yet'
@@ -198,10 +308,16 @@ export function ConnectionsPage() {
                   className="file-input"
                   type="file"
                   accept=".zip,application/zip"
-                  disabled={youtubeImport.isPending}
+                  disabled={
+                    youtubeImport.isPending || (connection.id === null && youtubeKey.trim() === '')
+                  }
                   onChange={(event) => {
                     const archive = event.currentTarget.files?.[0]
-                    if (archive !== undefined) youtubeImport.mutate(archive)
+                    if (archive !== undefined)
+                      youtubeImport.mutate({
+                        archive,
+                        ...(connection.id === null ? {} : { connectionId: connection.id }),
+                      })
                     event.currentTarget.value = ''
                   }}
                 />
@@ -300,6 +416,45 @@ export function ConnectionsPage() {
         <p className="checkpoint-note sync-error" role="alert">
           YouTube import failed. Select a Google Takeout ZIP containing YouTube watch history.
         </p>
+      ) : null}
+      {resumed.isError ? (
+        <p role="alert">
+          Import could not resume. Retry, or upload the original ZIP if parsing did not finish.
+        </p>
+      ) : null}
+      <h2>Recent sync activity</h2>
+      {runs.isError ? <p role="alert">Sync activity could not be loaded.</p> : null}
+      {runs.data?.pages
+        .flatMap((page) => page.data)
+        .map((run) => (
+          <article className="connection-row" key={run.id}>
+            <div>
+              <strong>{run.connectionLabel}</strong>
+              <p>
+                {run.kind} · {run.status.replaceAll('_', ' ')} ·{' '}
+                {new Date(run.startedAt).toLocaleString()}
+              </p>
+              <p>
+                {run.sourceRecords} source records · {run.normalizedRecords} normalized ·{' '}
+                {run.failedRecords} failed
+              </p>
+              {run.errorMessage === null ? null : (
+                <p role="alert">
+                  {run.errorMessage} ({run.errorCode})
+                </p>
+              )}
+            </div>
+          </article>
+        ))}
+      {runs.hasNextPage ? (
+        <button
+          type="button"
+          className="sync-button"
+          disabled={runs.isFetchingNextPage}
+          onClick={() => void runs.fetchNextPage()}
+        >
+          Older activity
+        </button>
       ) : null}
     </section>
   )

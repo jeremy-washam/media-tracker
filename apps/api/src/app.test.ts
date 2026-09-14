@@ -79,7 +79,13 @@ describe('API', () => {
     const response = await app.request('/api/media', undefined, testBindings)
     const payload = MediaListResponseSchema.parse(await response.json())
 
-    expect(payload).toEqual({ data: [], nextCursor: null })
+    expect(payload).toEqual({
+      data: [],
+      nextCursor: null,
+      totalCount: 0,
+      filteredCount: 0,
+      counts: { article: 0, book: 0, movie: 0, podcast_episode: 0, song: 0, video: 0 },
+    })
   })
 
   it('explains when Readwise has not been configured', async () => {

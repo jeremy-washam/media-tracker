@@ -1,6 +1,6 @@
 # CLI
 
-Local commands for large historical imports, replaying raw inputs, exporting personal data, and recovery. It must use the same domain and connector packages as hosted ingestion.
-
-The scaffold currently exposes help only. Import, replay, and export subcommands
-arrive with the ledger and connector phases.
+The CLI currently prints help only. Historical import, generalized replay,
+app-wide export, and recovery commands are not implemented. Use Connections or
+the documented HTTP endpoints for imports and continuation, and Wrangler D1
+export/migration commands for local database administration.

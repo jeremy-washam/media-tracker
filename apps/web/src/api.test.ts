@@ -37,6 +37,9 @@ describe('API client', () => {
     const response = {
       data: [{ id: 'media-1', type: 'article', title: 'A synthetic article' }],
       nextCursor: null,
+      totalCount: 1,
+      filteredCount: 1,
+      counts: { article: 1, book: 0, movie: 0, podcast_episode: 0, song: 0, video: 0 },
     }
     const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
 

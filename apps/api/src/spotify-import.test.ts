@@ -1,3 +1,4 @@
+import { URL as NodeURL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
@@ -14,7 +15,7 @@ import { syncSpotifySavedEpisodes } from './spotify-sync'
 
 const migration = readFileSync(
   fileURLToPath(
-    new URL('../../../packages/db/migrations/0001_canonical_ledger.sql', import.meta.url).href,
+    new NodeURL('../../../packages/db/migrations/0001_canonical_ledger.sql', import.meta.url).href,
   ),
   'utf8',
 )
@@ -66,6 +67,15 @@ class D1SqliteDatabase {
 
   constructor() {
     this.database.exec(migration)
+    this.database.exec(
+      readFileSync(
+        new NodeURL(
+          '../../../packages/db/migrations/0002_rotating_credentials.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    )
   }
 
   prepare(query: string): D1SqliteStatement {
@@ -308,6 +318,7 @@ describe('Spotify Extended Streaming History import', () => {
       RAW_BUCKET: bucket,
       SPOTIFY_CLIENT_ID: 'synthetic-client',
       SPOTIFY_REFRESH_TOKEN: 'synthetic-refresh',
+      TOKEN_ENCRYPTION_KEY: btoa('x'.repeat(32)),
     } as unknown as Parameters<typeof syncSpotifySavedEpisodes>[0]
     await importSpotifyExtendedHistory(bindings, archive)
 

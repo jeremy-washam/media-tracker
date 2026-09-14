@@ -17,3 +17,5 @@ export type {
 } from './repository'
 export { SqlCanonicalLedgerRepository } from './repository'
 export * from './schema'
+
+export { SqlCredentialStore } from './credentials'

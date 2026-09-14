@@ -30,14 +30,15 @@ import {
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
 
-const parserVersion = 'youtube-takeout@2'
-const parserId = 'v2'
+const parserVersion = 'youtube-takeout@3'
+const parserId = 'v3'
 const defaultChunkSize = 100
 const maximumChunkSize = 100
 
 export interface YoutubeTakeoutImportOptions {
   /** Stable, non-secret key identifying the Google account or channel lineage. */
   connectionKey?: string
+  connectionId?: string
   /** Non-secret label displayed for this import lineage. */
   connectionLabel?: string
   /** Intended for tests and controlled callers. D1-safe values are capped at 100. */
@@ -131,11 +132,18 @@ async function connectionForImport(
   now: ReturnType<typeof utcInstant>,
   options: YoutubeTakeoutImportOptions,
 ): Promise<SourceConnection> {
+  if (options.connectionId !== undefined) {
+    const existing = (await repository.listConnections()).find(
+      (c) => c.id === options.connectionId && c.source === 'youtube',
+    )
+    if (existing === undefined) throw new YoutubeTakeoutImportError('Unknown YouTube connection')
+    return { ...existing, status: 'connected', updatedAt: now }
+  }
   const key = normalizedConnectionOption(options.connectionKey, 'default')
   const label = normalizedConnectionOption(options.connectionLabel, 'YouTube Takeout')
   const keyHash = await stableHash(`youtube-connection:${key}`)
   const id = connectionId(`youtube_${keyHash}`)
-  const existing = await repository.findConnectionBySource('youtube')
+  const existing = (await repository.listConnections()).find((connection) => connection.id === id)
   const sameExisting = existing?.id === id ? existing : null
   return {
     id,
@@ -226,7 +234,7 @@ async function importContext(
   const cursor = await repository.findSyncCursor(connection.id, cursorName)
   const checkpoint = checkpointValue(cursor?.checkpoint)
   const runId = syncRunId(
-    `youtube_run_${connectionHash}_${archiveHash.hex}_offset_${checkpoint?.nextOffset ?? 0}`,
+    `youtube_run_${parserId}_${connectionHash}_${archiveHash.hex}_offset_${checkpoint?.nextOffset ?? 0}`,
   )
   const runningRun: SyncRun = {
     id: runId,
@@ -315,6 +323,16 @@ async function normalizeChunk(
   let ignoredRecords = 0
   let watchLaterRecords = 0
 
+  const ordinals = new Map<string, number>()
+  const occurrenceRanks = new Map<number, number>()
+  for (const ordered of records) {
+    if (ordered.kind !== 'watch' || dispositionForWatch(ordered.value).disposition !== 'normalized')
+      continue
+    const key = `${ordered.value.videoId}:${ordered.value.occurredAt}`
+    const rank = ordinals.get(key) ?? 0
+    occurrenceRanks.set(ordered.index, rank)
+    ordinals.set(key, rank + 1)
+  }
   for (const ordered of chunk) {
     if (ordered.kind === 'watch_later') {
       const entry = ordered.value
@@ -410,10 +428,18 @@ async function normalizeChunk(
       retiredAt: null,
     })
 
-    const occurrenceKey = `takeout:${context.archiveChecksum}:watch:${ordered.index + 1}`
-    const entryId = archiveEntryId(
-      `youtube_archive_${context.connectionHash}_${context.archiveChecksum}_watch_${ordered.index + 1}`,
+    const rank = occurrenceRanks.get(ordered.index)!
+    const matches = await context.repository.findOccurrencesAt(
+      context.connection.id,
+      itemId,
+      entry.occurredAt,
     )
+    const known = matches[rank]
+    const occurrenceKey =
+      known?.sourceOccurrenceKey ?? `watch:${entry.videoId}:${entry.occurredAt}:${rank}`
+    const entryId =
+      known?.id ??
+      archiveEntryId(`youtube_archive_${context.connectionHash}_${await stableHash(occurrenceKey)}`)
     archiveEntries.push({
       entry: {
         id: entryId,
@@ -452,7 +478,7 @@ async function normalizeChunk(
     id:
       existingCursor?.id ??
       syncCursorId(
-        `youtube_cursor_${await stableHash(`${context.connection.id}:${context.archiveChecksum}`)}`,
+        `youtube_cursor_${await stableHash(`${parserId}:${context.connection.id}:${context.archiveChecksum}`)}`,
       ),
     connectionId: context.connection.id,
     name: context.cursorName,

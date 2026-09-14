@@ -1,5 +1,6 @@
 import {
-  fetchHardcoverReadBooksPage,
+  fetchHardcoverReadBooksResponse,
+  parseHardcoverReadBooksPage,
   fetchHardcoverUserId,
   type HardcoverReadBook,
 } from '@media-tracker/connector-hardcover'
@@ -39,7 +40,7 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
 
-const parserVersion = 'hardcover-user-books@1'
+const parserVersion = 'hardcover-user-books@2'
 const pageSize = 100
 
 export class HardcoverTokenMissingError extends Error {
@@ -191,6 +192,9 @@ async function normalizeBook(
   mediaItem: MediaItem
   identities: ExternalIdentity[]
   archiveEntries: ArchiveEntryWrite[]
+  retireOccurrences: NonNullable<
+    import('@media-tracker/db').CanonicalWriteBatch['retireOccurrences']
+  >
 }> {
   const recordId = sourceRecordId(ulid())
   const sourceRecord: SourceRecord = {
@@ -240,7 +244,11 @@ async function normalizeBook(
     )
   }
 
-  const editionIds = [book.editionId, book.editionCanonicalId].filter(
+  const editionIds = [
+    book.editionId,
+    book.editionCanonicalId,
+    ...book.reads.map((read) => read.editionId),
+  ].filter(
     (value, position, values): value is number =>
       value !== null && values.indexOf(value) === position,
   )
@@ -355,6 +363,8 @@ async function normalizeBook(
       })
     }
     archiveEntries.push({
+      replaceRating: true,
+      replaceReview: true,
       entry: {
         id: entryId,
         mediaItemId: itemId,
@@ -374,7 +384,29 @@ async function normalizeBook(
     })
   }
 
+  const fallback =
+    finishedReads.length === 0
+      ? null
+      : await repository.findArchiveEntryId(
+          connection.id,
+          `user_book:${book.userBookId}:read_status`,
+        )
   return {
+    retireOccurrences:
+      fallback === null
+        ? []
+        : [
+            {
+              id: fallback,
+              evidence: {
+                id: archiveEntryEvidenceId(ulid()),
+                archiveEntryId: fallback,
+                sourceRecordId: recordId,
+                role: 'removal',
+                linkedAt: observedAt,
+              },
+            },
+          ],
     sourceRecord,
     mediaItem: {
       id: itemId,
@@ -430,12 +462,17 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
     const userId = await fetchHardcoverUserId(token)
     let afterId = 0
     while (true) {
-      const page = await fetchHardcoverReadBooksPage({ token, userId, afterId, limit: pageSize })
+      const response = await fetchHardcoverReadBooksResponse({
+        token,
+        userId,
+        afterId,
+        limit: pageSize,
+      })
       const acquiredAt = instantNow()
-      const checksum = await sha256(page.bytes)
+      const checksum = await sha256(response.bytes)
       const storageKey = `raw/hardcover/sha256/${checksum.slice(0, 2)}/${checksum}.json`
-      await bindings.RAW_BUCKET.put(storageKey, page.bytes, {
-        httpMetadata: { contentType: page.contentType },
+      await bindings.RAW_BUCKET.put(storageKey, response.bytes, {
+        httpMetadata: { contentType: response.contentType },
         customMetadata: { sha256: checksum },
       })
       const rawObject: RawObject = {
@@ -446,8 +483,8 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         acquisitionKey: `hardcover:${runId}:page:${pages + 1}`,
         storageKey,
         sha256: checksum,
-        contentType: page.contentType,
-        byteLength: page.bytes.byteLength,
+        contentType: response.contentType,
+        byteLength: response.bytes.byteLength,
         acquiredAt,
         processingStatus: 'pending',
         lastParserVersion: null,
@@ -456,7 +493,9 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       rawObjects.push(rawObject)
       await repository.commit({ rawObjects: [rawObject] })
 
+      let page: ReturnType<typeof parseHardcoverReadBooksPage>
       try {
+        page = parseHardcoverReadBooksPage(response)
         for (const [index, book] of page.books.entries()) {
           const normalized = await normalizeBook(
             repository,
@@ -472,6 +511,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
             mediaItems: [normalized.mediaItem],
             externalIdentities: normalized.identities,
             archiveEntries: normalized.archiveEntries,
+            retireOccurrences: normalized.retireOccurrences,
           })
           sourceRecords += 1
           books += 1

@@ -1,8 +1,7 @@
 const help = `Media Tracker CLI
 
-Historical import, replay, export, and recovery commands will be added as the
-canonical ledger and source connectors are implemented.
-
-No command is available in the application scaffold yet.`
+Generalized import, replay, export, and recovery commands are not implemented.
+Use Connections or the HTTP API for source imports and resumable processing.
+See apps/api/README.md for current endpoints and README.md for database upgrades.`
 
 console.log(help)

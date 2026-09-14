@@ -23,9 +23,10 @@ External services and exports
   -> React web client
 ```
 
-Cloudflare Access protects the web application and normal API traffic. A small
-number of webhook and OAuth callback routes are public and must authenticate
-their own requests.
+Production deployment must put the web application and normal API traffic
+behind Cloudflare Access. This has not been provisioned by the local scaffold.
+Hosted webhook/OAuth callback routes are deferred and will require their own
+authentication when introduced.
 
 ## Package boundaries
 
@@ -82,3 +83,13 @@ See the accepted decisions in `docs/decisions` and the accompanying
 [canonical ledger specification](./canonical-ledger.md) defines the logical
 schema, identity rules, timestamp semantics, and source projections established
 after payload reconnaissance.
+
+## Current operational implementation
+
+Source imports and resumable chunks run through HTTP; hourly polling runs in the
+deployed scheduled handler. Queues are bound but the consumer remains a
+placeholder. Local cron triggers are invoked manually. Generalized CLI replay,
+export, and recovery remain deferred. Browser APIs provide keyset-paginated
+History and sync runs, complete media counts, and all connection lineages.
+Rotating Spotify tokens use an encrypted D1 credential store and refresh lease,
+separate from raw source evidence. See ADR 0010 for reconciliation details.

@@ -17,8 +17,8 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars
 pnpm dev
 ```
 
-Use **Connections → Readwise Reader → Sync now**. The Worker retrieves only the
-current Reader Archive, stores each exact response page in private R2, and adds
+Use **Connections → Readwise Reader → Sync now**. The initial backfill retrieves the current Reader Archive; later polls retrieve
+changed documents across all locations, stores each exact response page in private R2, and adds
 eligible articles, PDFs, RSS items, videos, and podcasts to the local Archive.
 Tweets and other ineligible rows are retained as source records but are not
 shown as media.
@@ -28,7 +28,8 @@ shown as media.
 With the local app running, open **Connections → Letterboxd → Import ZIP** and
 select the account-export ZIP exactly as downloaded from Letterboxd. The Worker
 stores the ZIP in private R2 and projects watched films and distinct Diary
-viewings into Archive. Reimporting the exact same ZIP is a no-op.
+viewings into Archive. Reimporting a successfully processed ZIP under the same parser is a no-op;
+failed imports retry from preserved raw evidence.
 
 Set `LETTERBOXD_USERNAME` in `.dev.vars` to enable the public RSS connection.
 Use **Sync now** on the Letterboxd connection for a manual poll. The Worker also
@@ -46,3 +47,35 @@ Trigger. It reads the current Read shelf, stores each exact GraphQL response pag
 in private R2, and projects books into the Archive without manufacturing rereads
 from aggregate counts. Repeating the sync reconciles the full Read shelf
 idempotently.
+
+## Spotify and YouTube
+
+Spotify accepts Extended Streaming History ZIPs and polls saved episodes. Set
+`SPOTIFY_CLIENT_ID`, `SPOTIFY_REFRESH_TOKEN`, and `TOKEN_ENCRYPTION_KEY` (base64
+32-byte AES key). Apply migration 0002 before syncing. Rotated tokens are saved
+encrypted before library acquisition; a short database lease serializes refreshes.
+A new bootstrap refresh token replaces the previous stored authorization.
+
+YouTube accepts manual Takeout ZIPs. Pass `connectionId` to import or continue
+into an existing account, or `connectionKey` and `connectionLabel` to establish
+a new account lineage. Omitted options use the legacy default account. The UI
+always supplies an explicit account for continued imports. Overlapping snapshots
+match by account, video, UTC timestamp, and within-snapshot multiplicity. Absence
+from a later snapshot never removes a watch.
+
+## Browsing and operations
+
+- `GET /api/media?limit=100&type=book&cursor=...` returns at most 100 items,
+  a continuation cursor, complete counts by type, and total/filtered counts.
+  Consumption dates sort descending; unknown dates sort last. Pagination is a
+  live view, so refresh from the first page after importing or syncing.
+- `GET /api/connections` returns every account, plus placeholders for unconfigured
+  sources, coverage, last attempt/success/export timestamps, and incomplete imports.
+- `GET /api/sync-runs?limit=20&cursor=...` returns real persisted attempts with
+  counts and redacted failures. Each successful import chunk is a separate run;
+  the connection's incomplete-import list records overall progress until completion.
+- Spotify/YouTube `POST /api/connections/{source}/import/{importId}/continue`
+  resumes a stored import; include the YouTube `connectionId` on every request.
+
+Imports are HTTP-driven and stop when the browser stops requesting chunks. Use
+Resume import after reopening Connections. The queue consumer remains a scaffold.

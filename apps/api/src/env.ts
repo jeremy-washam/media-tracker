@@ -15,6 +15,7 @@ export interface Bindings {
   SPOTIFY_CLIENT_ID?: string
   SPOTIFY_CLIENT_SECRET?: string
   SPOTIFY_REFRESH_TOKEN?: string
+  TOKEN_ENCRYPTION_KEY?: string
   SYNC_QUEUE: Queue<SyncJob>
 }
 

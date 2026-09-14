@@ -6,3 +6,6 @@ LETTERBOXD_USERNAME=replace-with-your-letterboxd-username
 SPOTIFY_CLIENT_ID=replace-with-your-spotify-client-id
 SPOTIFY_REFRESH_TOKEN=replace-with-your-spotify-refresh-token
 # SPOTIFY_CLIENT_SECRET is only needed for a confidential-client Spotify app.
+
+# Base64-encoded random 32-byte AES key; required for encrypted Spotify token rotation.
+TOKEN_ENCRYPTION_KEY=

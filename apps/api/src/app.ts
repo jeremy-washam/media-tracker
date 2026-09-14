@@ -6,6 +6,8 @@ import {
   LetterboxdImportResponseSchema,
   LetterboxdRssSyncResponseSchema,
   MediaListResponseSchema,
+  MediaQuerySchema,
+  PageQuerySchema,
   MediaSummarySchema,
   ReadwiseSyncResponseSchema,
   SpotifyImportResponseSchema,
@@ -62,6 +64,7 @@ const mediaRoute = createRoute({
   method: 'get',
   path: '/api/media',
   tags: ['Media'],
+  request: { query: MediaQuerySchema },
   responses: {
     200: jsonContent(MediaListResponseSchema, 'Media history'),
   },
@@ -189,12 +192,27 @@ const syncRunsRoute = createRoute({
   method: 'get',
   path: '/api/sync-runs',
   tags: ['Sync'],
+  request: { query: PageQuerySchema },
   responses: {
     200: jsonContent(SyncRunsResponseSchema, 'Recent synchronization runs'),
   },
 })
 
-const app = new OpenAPIHono<AppEnv>()
+const app = new OpenAPIHono<AppEnv>({
+  defaultHook: (result, context) => {
+    if (!result.success)
+      return context.json(
+        {
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid request parameters.',
+            requestId: context.get('requestId'),
+          },
+        },
+        400,
+      )
+  },
+})
 
 app.use('*', securityHeaders)
 app.use('*', requestContext)
@@ -214,8 +232,19 @@ app.openapi(healthRoute, (context) => {
 })
 
 app.openapi(mediaRoute, async (context) => {
-  const data = await createLedgerRepository(context.env.DB).listMedia()
-  return context.json(MediaListResponseSchema.parse({ data, nextCursor: null }), 200)
+  const query = context.req.valid('query')
+  try {
+    const page = await createLedgerRepository(context.env.DB).listMediaPage({
+      limit: query.limit,
+      ...(query.type === undefined ? {} : { type: query.type }),
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(MediaListResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
 })
 
 app.openapi(mediaDetailRoute, async (context) => {
@@ -442,11 +471,13 @@ app.openapi(youtubeImportRoute, async (context) => {
       throw new YoutubeTakeoutImportError('YouTube Takeout exports must be 25 MB or smaller.')
     }
     const connectionKey = context.req.query('connectionKey')
+    const connectionId = context.req.query('connectionId')
     const connectionLabel = context.req.query('connectionLabel')
     return context.json(
       YoutubeImportResponseSchema.parse(
         await importYoutubeTakeout(context.env, archive, {
           ...(connectionKey === undefined ? {} : { connectionKey }),
+          ...(connectionId === undefined ? {} : { connectionId }),
           ...(connectionLabel === undefined ? {} : { connectionLabel }),
         }),
       ),
@@ -470,11 +501,13 @@ app.openapi(youtubeImportRoute, async (context) => {
 app.openapi(youtubeImportContinueRoute, async (context) => {
   try {
     const connectionKey = context.req.query('connectionKey')
+    const connectionId = context.req.query('connectionId')
     const connectionLabel = context.req.query('connectionLabel')
     return context.json(
       YoutubeImportResponseSchema.parse(
         await continueYoutubeTakeoutImport(context.env, context.req.valid('param').importId, {
           ...(connectionKey === undefined ? {} : { connectionKey }),
+          ...(connectionId === undefined ? {} : { connectionId }),
           ...(connectionLabel === undefined ? {} : { connectionLabel }),
         }),
       ),
@@ -497,33 +530,50 @@ app.openapi(youtubeImportContinueRoute, async (context) => {
 
 app.openapi(connectionsRoute, async (context) => {
   const repository = createLedgerRepository(context.env.DB)
+  const connections = await repository.listConnections()
   const sources = ['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube'] as const
   const data = []
   for (const source of sources) {
-    const connection = await repository.findConnectionBySource(source)
-    const lastSuccessfulSyncAt =
-      connection === null ? null : await repository.findLastSuccessfulSyncAt(connection.id)
-    data.push({
-      source,
-      status:
-        connection === null
-          ? ('disconnected' as const)
-          : connection.status === 'connected'
-            ? ('connected' as const)
-            : ('degraded' as const),
-      lastSuccessfulSyncAt,
-    })
+    const matches = connections.filter((c) => c.source === source)
+    if (matches.length === 0)
+      data.push({
+        id: null,
+        label: source,
+        source,
+        status: 'disconnected',
+        coverage: null,
+        lastSuccessfulSyncAt: null,
+        lastAttemptedSyncAt: null,
+        lastExportAt: null,
+        incompleteImports: [],
+      })
+    for (const connection of matches) {
+      const activity = await repository.connectionActivity(connection.id)
+      data.push({
+        id: connection.id,
+        label: connection.label,
+        source,
+        status: connection.status,
+        coverage: connection.coverage,
+        ...activity,
+        lastSuccessfulSyncAt: await repository.findLastSuccessfulSyncAt(connection.id),
+        incompleteImports: await repository.listIncompleteImports(connection.id),
+      })
+    }
   }
-  return context.json(
-    ConnectionsResponseSchema.parse({
-      data,
-    }),
-    200,
-  )
+  return context.json(ConnectionsResponseSchema.parse({ data }), 200)
 })
 
-app.openapi(syncRunsRoute, (context) => {
-  return context.json(SyncRunsResponseSchema.parse({ data: [], nextCursor: null }), 200)
+app.openapi(syncRunsRoute, async (context) => {
+  const { limit, cursor } = context.req.valid('query')
+  try {
+    const page = await createLedgerRepository(context.env.DB).listSyncRuns(limit, cursor)
+    return context.json(SyncRunsResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
 })
 
 app.doc('/api/openapi.json', {
@@ -549,7 +599,8 @@ app.notFound((context) => {
 
 app.onError((error, context) => {
   const status = error instanceof HTTPException ? error.status : 500
-  const code: ApiError['error']['code'] = status === 404 ? 'NOT_FOUND' : 'INTERNAL_ERROR'
+  const code: ApiError['error']['code'] =
+    status === 400 ? 'BAD_REQUEST' : status === 404 ? 'NOT_FOUND' : 'INTERNAL_ERROR'
 
   console.error(
     JSON.stringify({
@@ -566,9 +617,11 @@ app.onError((error, context) => {
       error: {
         code,
         message:
-          status === 404
-            ? 'The requested resource was not found.'
-            : 'An unexpected error occurred.',
+          status === 400
+            ? 'Invalid request parameters.'
+            : status === 404
+              ? 'The requested resource was not found.'
+              : 'An unexpected error occurred.',
         requestId: context.get('requestId'),
       },
     }),

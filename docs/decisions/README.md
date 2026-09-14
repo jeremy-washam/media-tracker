@@ -14,5 +14,7 @@ Accepted decisions:
 8. [Source-specific Archive admission](./0008-source-specific-archive-admission.md)
 9. [Canonical ledger identity and evidence model](./0009-canonical-ledger-identity-and-evidence.md)
 
+10. [Snapshot reconciliation and import recovery](./0010-reconciliation-and-recovery.md)
+
 ADRs are append-only records of consequential technical choices. If a decision
 changes, add a new ADR that supersedes the old one rather than rewriting history.

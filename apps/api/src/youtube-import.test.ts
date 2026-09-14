@@ -194,14 +194,14 @@ describe('YouTube Takeout import', () => {
         .all(),
     ).toEqual([
       {
-        source_occurrence_key: expect.stringMatching(/:watch:1$/),
+        source_occurrence_key: 'watch:synthetic-video:2026-01-01T20:00:00.000Z:0',
         consumed_at_value: '2026-01-01T20:00:00.000Z',
         consumed_at_precision: 'instant',
         consumed_at_basis: 'source_asserted',
         admission_reason: 'youtube_watched_activity',
       },
       {
-        source_occurrence_key: expect.stringMatching(/:watch:2$/),
+        source_occurrence_key: 'watch:synthetic-video:2026-01-02T20:00:00.000Z:0',
         consumed_at_value: '2026-01-02T20:00:00.000Z',
         consumed_at_precision: 'instant',
         consumed_at_basis: 'source_asserted',
@@ -335,7 +335,7 @@ Jan 1, 2026, 12:00:00 PM UTC
       database.database
         .prepare('SELECT processing_status, last_parser_version FROM raw_objects')
         .get(),
-    ).toEqual({ processing_status: 'failed', last_parser_version: 'youtube-takeout@2' })
+    ).toEqual({ processing_status: 'failed', last_parser_version: 'youtube-takeout@3' })
     expect(
       database.database.prepare('SELECT status, failed_record_count FROM sync_runs').get(),
     ).toEqual({ status: 'failed', failed_record_count: 1 })

@@ -1,7 +1,7 @@
 import {
   classifySavedEpisode,
-  fetchSpotifySavedEpisodesPage,
-  refreshSpotifyAccessToken,
+  fetchSpotifySavedEpisodesResponse,
+  parseSpotifySavedEpisodesPage,
   type SpotifySavedEpisodeObservation,
   type SpotifySavedEpisodesPage,
 } from '@media-tracker/connector-spotify'
@@ -33,6 +33,7 @@ import { ulid } from 'ulid'
 
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
+import { refreshStoredSpotifyToken } from './spotify-credentials'
 
 const parserVersion = 'spotify-saved-episodes@1'
 
@@ -160,24 +161,18 @@ export async function syncSpotifySavedEpisodes(
   const rawObjects: RawObject[] = []
 
   try {
-    const refreshed = await refreshSpotifyAccessToken({
-      clientId,
-      refreshToken,
-      ...(bindings.SPOTIFY_CLIENT_SECRET === undefined
-        ? {}
-        : { clientSecret: bindings.SPOTIFY_CLIENT_SECRET }),
-    })
+    const refreshed = await refreshStoredSpotifyToken(bindings, connection.id)
     let offset: number | null = 0
     do {
       const acquiredAt = now()
-      const page: SpotifySavedEpisodesPage = await fetchSpotifySavedEpisodesPage({
+      const response = await fetchSpotifySavedEpisodesResponse({
         accessToken: refreshed.accessToken,
         offset,
       })
-      const checksum = await sha256(page.bytes)
+      const checksum = await sha256(response.bytes)
       const storageKey = `raw/spotify/sha256/${checksum.hex.slice(0, 2)}/${checksum.hex}.json`
-      await bindings.RAW_BUCKET.put(storageKey, page.bytes, {
-        httpMetadata: { contentType: page.contentType },
+      await bindings.RAW_BUCKET.put(storageKey, response.bytes, {
+        httpMetadata: { contentType: response.contentType },
         customMetadata: { sha256: checksum.hex },
         sha256: checksum.digest,
       })
@@ -186,11 +181,11 @@ export async function syncSpotifySavedEpisodes(
         connectionId: connection.id,
         syncRunId: runId,
         kind: 'api_page',
-        acquisitionKey: `spotify:${runId}:saved-episodes:${page.offset}`,
+        acquisitionKey: `spotify:${runId}:saved-episodes:${offset}`,
         storageKey,
         sha256: checksum.hex,
-        contentType: page.contentType,
-        byteLength: page.bytes.byteLength,
+        contentType: response.contentType,
+        byteLength: response.bytes.byteLength,
         acquiredAt,
         processingStatus: 'pending',
         lastParserVersion: null,
@@ -199,7 +194,9 @@ export async function syncSpotifySavedEpisodes(
       rawObjects.push(rawObject)
       await repository.commit({ rawObjects: [rawObject] })
 
+      let page: SpotifySavedEpisodesPage
       try {
+        page = parseSpotifySavedEpisodesPage(response)
         for (const [index, episode] of page.items.entries()) {
           const disposition = classifySavedEpisode({
             fullyPlayed: episode.fullyPlayed,

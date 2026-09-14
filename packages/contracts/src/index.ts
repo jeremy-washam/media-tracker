@@ -36,7 +36,16 @@ export const MediaSummarySchema = z.object({
 export const MediaListResponseSchema = z.object({
   data: z.array(MediaSummarySchema),
   nextCursor: z.string().nullable(),
+  totalCount: z.number().int().nonnegative(),
+  filteredCount: z.number().int().nonnegative(),
+  counts: z.record(MediaTypeSchema, z.number().int().nonnegative()),
 })
+export const MediaQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  type: MediaTypeSchema.optional(),
+  cursor: z.string().max(2000).optional(),
+})
+export const PageQuerySchema = MediaQuerySchema.omit({ type: true })
 
 export const ReadwiseSyncResponseSchema = z.object({
   syncRunId: z.string(),
@@ -114,7 +123,20 @@ export const YoutubeImportResponseSchema = z.object({
 
 export const ConnectionSummarySchema = z.object({
   source: z.enum(['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube']),
-  status: z.enum(['connected', 'disconnected', 'degraded']),
+  id: z.string().nullable(),
+  label: z.string(),
+  status: z.enum(['connected', 'disconnected', 'degraded', 'reauthorization_required']),
+  coverage: z.enum(['complete', 'partial', 'best_effort']).nullable(),
+  lastAttemptedSyncAt: z.string().datetime().nullable(),
+  lastExportAt: z.string().datetime().nullable(),
+  incompleteImports: z.array(
+    z.object({
+      importId: z.string(),
+      status: z.enum(['pending', 'processing', 'processed', 'failed']),
+      nextOffset: z.number().int().nonnegative(),
+      totalRecords: z.number().int().nonnegative().nullable(),
+    }),
+  ),
   lastSuccessfulSyncAt: z.string().datetime().nullable(),
 })
 
@@ -125,7 +147,15 @@ export const ConnectionsResponseSchema = z.object({
 export const SyncRunSummarySchema = z.object({
   id: z.string(),
   source: ConnectionSummarySchema.shape.source,
-  status: z.enum(['pending', 'running', 'succeeded', 'failed']),
+  connectionId: z.string(),
+  connectionLabel: z.string(),
+  kind: z.enum(['backfill', 'reconcile', 'import', 'webhook', 'replay']),
+  status: z.enum(['pending', 'running', 'succeeded', 'partially_succeeded', 'failed']),
+  sourceRecords: z.number().int().nonnegative(),
+  normalizedRecords: z.number().int().nonnegative(),
+  failedRecords: z.number().int().nonnegative(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
   startedAt: z.string().datetime(),
   finishedAt: z.string().datetime().nullable(),
 })

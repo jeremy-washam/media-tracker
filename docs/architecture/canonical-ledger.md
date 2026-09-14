@@ -312,3 +312,11 @@ The D1 implementation must test these constraints:
    history.
 9. Every imported Archive entry has at least one admission evidence link.
 10. Ratings remain on their original source scale.
+
+## Reconciliation refinements
+
+See [ADR 0010](../decisions/0010-reconciliation-and-recovery.md) for YouTube
+snapshot multiplicity matching, stable Letterboxd occurrences, superseded
+Hardcover fallbacks, monotonic Spotify dates, and explicit current-field clearing.
+Migration 0002 adds operational encrypted credentials and refresh leases; these
+are separate from the canonical ledger and raw evidence.

@@ -37,6 +37,9 @@ import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './databas
 export interface ArchiveEntryWrite {
   readonly entry: ArchiveEntry
   readonly evidence: readonly ArchiveEntryEvidence[]
+  readonly replaceRating?: boolean
+  readonly replaceReview?: boolean
+  readonly latestConsumedAt?: boolean
 }
 
 export interface CanonicalWriteBatch {
@@ -48,6 +51,7 @@ export interface CanonicalWriteBatch {
   readonly archiveEntries?: readonly ArchiveEntryWrite[]
   /** Written last, in the same atomic batch as every covered D1 write. */
   readonly cursor?: SyncCursor
+  readonly retireOccurrences?: readonly { id: ArchiveEntry['id']; evidence: ArchiveEntryEvidence }[]
 }
 
 export interface ExternalIdentityLookup {
@@ -75,11 +79,39 @@ export interface ArchiveOccurrenceReference {
 }
 
 export interface CanonicalLedgerRepository {
+  connectionActivity(
+    connectionId: ConnectionId,
+  ): Promise<{ lastAttemptedSyncAt: string | null; lastExportAt: string | null }>
+  findRawObject(connectionId: ConnectionId, acquisitionKey: string): Promise<RawObject | null>
+  findArchiveOccurrence(
+    connectionId: ConnectionId,
+    key: string,
+  ): Promise<ArchiveOccurrenceReference | null>
+  findOccurrencesAt(
+    connectionId: ConnectionId,
+    itemId: MediaItemId,
+    instant: string,
+  ): Promise<readonly ArchiveOccurrenceReference[]>
+  listConnections(): Promise<readonly SourceConnection[]>
+  listMediaPage(input: {
+    limit: number
+    type?: MediaItem['type']
+    cursor?: string
+  }): Promise<MediaPage>
+  listSyncRuns(
+    limit: number,
+    cursor?: string,
+  ): Promise<{ data: readonly SyncRunRecord[]; nextCursor: string | null }>
+  listIncompleteImports(connectionId: ConnectionId): Promise<readonly IncompleteImport[]>
   saveConnection(connection: SourceConnection): Promise<void>
   saveSyncRun(syncRun: SyncRun): Promise<void>
   findConnectionBySource(source: MediaSource): Promise<SourceConnection | null>
   findLastSuccessfulSyncAt(connectionId: ConnectionId): Promise<UtcInstant | null>
   findRawObjectId(connectionId: ConnectionId, acquisitionKey: string): Promise<RawObjectId | null>
+  listSourceRecordIds(
+    rawId: RawObjectId,
+    parserVersion: string,
+  ): Promise<ReadonlyMap<string, SourceRecordId>>
   findSourceRecordId(
     rawObjectId: RawObjectId,
     parserVersion: string,
@@ -108,6 +140,57 @@ export interface CanonicalLedgerRepository {
   listMedia(limit?: number): Promise<readonly MediaSummaryRecord[]>
   findMedia(id: MediaItemId): Promise<MediaSummaryRecord | null>
   commit(batch: CanonicalWriteBatch): Promise<void>
+}
+
+export interface MediaPage {
+  data: readonly MediaSummaryRecord[]
+  nextCursor: string | null
+  totalCount: number
+  filteredCount: number
+  counts: Partial<Record<MediaItem['type'], number>>
+}
+export interface SyncRunRecord {
+  id: string
+  connectionId: string
+  connectionLabel: string
+  source: MediaSource
+  kind: SyncRun['kind']
+  status: SyncRun['status']
+  startedAt: string
+  finishedAt: string | null
+  sourceRecords: number
+  normalizedRecords: number
+  failedRecords: number
+  errorCode: string | null
+  errorMessage: string | null
+}
+export interface IncompleteImport {
+  importId: string
+  status: RawObject['processingStatus']
+  nextOffset: number
+  totalRecords: number | null
+}
+function occurrenceReference(row: {
+  id: string
+  source_occurrence_key: string
+  consumed_identity_id: string | null
+}): ArchiveOccurrenceReference {
+  return {
+    id: archiveEntryId(row.id),
+    sourceOccurrenceKey: row.source_occurrence_key,
+    consumedIdentityId:
+      row.consumed_identity_id === null ? null : externalIdentityId(row.consumed_identity_id),
+  }
+}
+function decodeCursor(cursor: string | undefined): { value: string; id: string } | null {
+  if (cursor === undefined) return null
+  try {
+    const parsed = JSON.parse(decodeURIComponent(cursor)) as { value?: unknown; id?: unknown }
+    if (typeof parsed.value !== 'string' || typeof parsed.id !== 'string') throw new Error()
+    return { value: parsed.value, id: parsed.id }
+  } catch {
+    throw new TypeError('Invalid pagination cursor')
+  }
 }
 
 type TemporalColumns = readonly [DatabaseValue, DatabaseValue, DatabaseValue]
@@ -315,7 +398,11 @@ function externalIdentityStatement(
   )
 }
 
-function archiveEntryStatement(database: DatabaseClient, entry: ArchiveEntry): DatabaseStatement {
+function archiveEntryStatement(
+  database: DatabaseClient,
+  write: ArchiveEntryWrite,
+): DatabaseStatement {
+  const { entry } = write
   const consumedAt = temporalColumns(entry.consumedAt)
   const sourceRecordedAt = temporalColumns(entry.sourceRecordedAt)
   const rating = entry.sourceRating
@@ -333,16 +420,16 @@ function archiveEntryStatement(database: DatabaseClient, entry: ArchiveEntry): D
       media_item_id = excluded.media_item_id,
       consumed_identity_id = excluded.consumed_identity_id,
       admission_reason = excluded.admission_reason,
-      consumed_at_value = COALESCE(excluded.consumed_at_value, archive_entries.consumed_at_value),
+      consumed_at_value = ${write.latestConsumedAt ? 'MAX(COALESCE(excluded.consumed_at_value, archive_entries.consumed_at_value), COALESCE(archive_entries.consumed_at_value, excluded.consumed_at_value))' : 'COALESCE(excluded.consumed_at_value, archive_entries.consumed_at_value)'},
       consumed_at_precision = COALESCE(excluded.consumed_at_precision, archive_entries.consumed_at_precision),
       consumed_at_basis = COALESCE(excluded.consumed_at_basis, archive_entries.consumed_at_basis),
       source_recorded_at_value = COALESCE(excluded.source_recorded_at_value, archive_entries.source_recorded_at_value),
       source_recorded_at_precision = COALESCE(excluded.source_recorded_at_precision, archive_entries.source_recorded_at_precision),
       source_recorded_at_basis = COALESCE(excluded.source_recorded_at_basis, archive_entries.source_recorded_at_basis),
-      rating_value = COALESCE(excluded.rating_value, archive_entries.rating_value),
-      rating_scale_minimum = COALESCE(excluded.rating_scale_minimum, archive_entries.rating_scale_minimum),
-      rating_scale_maximum = COALESCE(excluded.rating_scale_maximum, archive_entries.rating_scale_maximum),
-      review_text = COALESCE(excluded.review_text, archive_entries.review_text),
+      rating_value = ${write.replaceRating ? 'excluded.rating_value' : 'COALESCE(excluded.rating_value, archive_entries.rating_value)'},
+      rating_scale_minimum = ${write.replaceRating ? 'excluded.rating_scale_minimum' : 'COALESCE(excluded.rating_scale_minimum, archive_entries.rating_scale_minimum)'},
+      rating_scale_maximum = ${write.replaceRating ? 'excluded.rating_scale_maximum' : 'COALESCE(excluded.rating_scale_maximum, archive_entries.rating_scale_maximum)'},
+      review_text = ${write.replaceReview ? 'excluded.review_text' : 'COALESCE(excluded.review_text, archive_entries.review_text)'},
       upstream_state = excluded.upstream_state,
       updated_at = excluded.updated_at`,
     [
@@ -424,6 +511,204 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
     this.#database = database
   }
 
+  async connectionActivity(
+    connection: ConnectionId,
+  ): Promise<{ lastAttemptedSyncAt: string | null; lastExportAt: string | null }> {
+    const row = await statement(
+      this.#database,
+      `SELECT
+      (SELECT MAX(started_at) FROM sync_runs WHERE connection_id=?) lastAttemptedSyncAt,
+      (SELECT MAX(acquired_at) FROM raw_objects WHERE connection_id=? AND kind='export' AND processing_status='processed') lastExportAt`,
+      [connection, connection],
+    ).first<{ lastAttemptedSyncAt: string | null; lastExportAt: string | null }>()
+    return row ?? { lastAttemptedSyncAt: null, lastExportAt: null }
+  }
+  async findRawObject(connection: ConnectionId, acquisitionKey: string): Promise<RawObject | null> {
+    const row = await statement(
+      this.#database,
+      'SELECT * FROM raw_objects WHERE connection_id = ? AND acquisition_key = ?',
+      [connection, acquisitionKey],
+    ).first<{
+      id: string
+      sync_run_id: string
+      kind: RawObject['kind']
+      storage_key: string
+      sha256: string
+      content_type: string
+      byte_length: number
+      acquired_at: string
+      processing_status: RawObject['processingStatus']
+      last_parser_version: string | null
+      processing_error: string | null
+    }>()
+    return row === null
+      ? null
+      : {
+          id: rawObjectId(row.id),
+          connectionId: connection,
+          syncRunId: syncRunId(row.sync_run_id),
+          kind: row.kind,
+          acquisitionKey,
+          storageKey: row.storage_key,
+          sha256: row.sha256,
+          contentType: row.content_type,
+          byteLength: row.byte_length,
+          acquiredAt: utcInstant(row.acquired_at),
+          processingStatus: row.processing_status,
+          lastParserVersion: row.last_parser_version,
+          processingError: row.processing_error,
+        }
+  }
+  async findArchiveOccurrence(
+    connection: ConnectionId,
+    key: string,
+  ): Promise<ArchiveOccurrenceReference | null> {
+    const row = await statement(
+      this.#database,
+      'SELECT id, source_occurrence_key, consumed_identity_id FROM archive_entries WHERE connection_id = ? AND source_occurrence_key = ?',
+      [connection, key],
+    ).first<{ id: string; source_occurrence_key: string; consumed_identity_id: string | null }>()
+    return row === null ? null : occurrenceReference(row)
+  }
+  async findOccurrencesAt(
+    connection: ConnectionId,
+    itemId: MediaItemId,
+    instant: string,
+  ): Promise<readonly ArchiveOccurrenceReference[]> {
+    const rows = await statement(
+      this.#database,
+      "SELECT id, source_occurrence_key, consumed_identity_id FROM archive_entries WHERE connection_id = ? AND media_item_id = ? AND consumed_at_value = ? AND consumed_at_precision = 'instant' AND upstream_state = 'active' ORDER BY created_at, id",
+      [connection, itemId, instant],
+    ).all<{ id: string; source_occurrence_key: string; consumed_identity_id: string | null }>()
+    return rows.results.map(occurrenceReference)
+  }
+  async listConnections(): Promise<readonly SourceConnection[]> {
+    const rows = await this.#database
+      .prepare('SELECT * FROM connections ORDER BY created_at, id')
+      .all<{
+        id: string
+        source: MediaSource
+        label: string
+        status: SourceConnection['status']
+        coverage: SourceConnection['coverage']
+        created_at: string
+        updated_at: string
+      }>()
+    return rows.results.map((r) => ({
+      id: connectionId(r.id),
+      source: r.source,
+      label: r.label,
+      status: r.status,
+      coverage: r.coverage,
+      createdAt: utcInstant(r.created_at),
+      updatedAt: utcInstant(r.updated_at),
+    }))
+  }
+  async listIncompleteImports(connection: ConnectionId): Promise<readonly IncompleteImport[]> {
+    const rows = await statement(
+      this.#database,
+      `SELECT r.sha256, r.processing_status,
+      (SELECT checkpoint_json FROM sync_cursors c WHERE c.connection_id=r.connection_id AND json_extract(c.checkpoint_json, '$.archiveSha256')=r.sha256 AND (r.last_parser_version IS NULL OR c.name LIKE '%:' || r.last_parser_version) ORDER BY committed_at DESC LIMIT 1) checkpoint
+      FROM raw_objects r WHERE r.connection_id=? AND r.kind='export' AND r.processing_status != 'processed' ORDER BY r.acquired_at DESC`,
+      [connection],
+    ).all<{
+      sha256: string
+      processing_status: RawObject['processingStatus']
+      checkpoint: string | null
+    }>()
+    return rows.results.map((r) => {
+      const c =
+        r.checkpoint === null
+          ? null
+          : (JSON.parse(r.checkpoint) as { nextOffset?: number; totalRecords?: number })
+      return {
+        importId: r.sha256,
+        status: r.processing_status,
+        nextOffset: c?.nextOffset ?? 0,
+        totalRecords: c?.totalRecords ?? null,
+      }
+    })
+  }
+  async listMediaPage(input: {
+    limit: number
+    type?: MediaItem['type']
+    cursor?: string
+  }): Promise<MediaPage> {
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100)
+      throw new RangeError('Invalid media limit')
+    const cursor = decodeCursor(input.cursor)
+    const rows = await statement(
+      this.#database,
+      `WITH history AS (
+      SELECT m.id, m.type, m.title, COALESCE(MAX(a.consumed_at_value),'') sort_value
+      FROM media_items m JOIN archive_entries a ON a.media_item_id=m.id WHERE a.upstream_state='active'
+      GROUP BY m.id, m.type, m.title)
+      SELECT * FROM history WHERE (? IS NULL OR type=?) AND (? IS NULL OR sort_value < ? OR (sort_value = ? AND id < ?))
+      ORDER BY sort_value DESC,id DESC LIMIT ?`,
+      [
+        input.type ?? null,
+        input.type ?? null,
+        cursor?.value ?? null,
+        cursor?.value ?? null,
+        cursor?.value ?? null,
+        cursor?.id ?? null,
+        input.limit + 1,
+      ],
+    ).all<{ id: string; type: MediaItem['type']; title: string | null; sort_value: string }>()
+    const totals = await this.#database
+      .prepare(
+        `SELECT m.type, COUNT(DISTINCT m.id) count FROM media_items m JOIN archive_entries a ON a.media_item_id=m.id WHERE a.upstream_state='active' GROUP BY m.type`,
+      )
+      .all<{ type: MediaItem['type']; count: number }>()
+    const counts: MediaPage['counts'] = {
+      article: 0,
+      video: 0,
+      podcast_episode: 0,
+      movie: 0,
+      book: 0,
+      song: 0,
+      ...Object.fromEntries(totals.results.map((r) => [r.type, r.count])),
+    }
+    const totalCount = totals.results.reduce((sum, r) => sum + r.count, 0)
+    const page = rows.results.slice(0, input.limit)
+    const last = page.at(-1)
+    return {
+      data: page.map((r) => ({ id: mediaItemId(r.id), type: r.type, title: r.title })),
+      counts,
+      totalCount,
+      filteredCount: input.type === undefined ? totalCount : (counts[input.type] ?? 0),
+      nextCursor:
+        rows.results.length > input.limit && last !== undefined
+          ? encodeURIComponent(JSON.stringify({ value: last.sort_value, id: last.id }))
+          : null,
+    }
+  }
+  async listSyncRuns(
+    limit: number,
+    encodedCursor?: string,
+  ): Promise<{ data: readonly SyncRunRecord[]; nextCursor: string | null }> {
+    const cursor = decodeCursor(encodedCursor)
+    const rows = await statement(
+      this.#database,
+      `SELECT s.id, s.connection_id connectionId, c.label connectionLabel, c.source, s.kind, s.status, s.started_at startedAt, s.finished_at finishedAt, s.source_record_count sourceRecords, s.normalized_record_count normalizedRecords, s.failed_record_count failedRecords, s.error_code errorCode, s.error_message errorMessage FROM sync_runs s JOIN connections c ON c.id=s.connection_id WHERE (? IS NULL OR s.started_at < ? OR (s.started_at = ? AND s.id < ?)) ORDER BY s.started_at DESC,s.id DESC LIMIT ?`,
+      [
+        cursor?.value ?? null,
+        cursor?.value ?? null,
+        cursor?.value ?? null,
+        cursor?.id ?? null,
+        limit + 1,
+      ],
+    ).all<SyncRunRecord>()
+    const data = rows.results.slice(0, limit)
+    const last = data.at(-1)
+    return {
+      data,
+      nextCursor:
+        rows.results.length > limit && last !== undefined
+          ? encodeURIComponent(JSON.stringify({ value: last.startedAt, id: last.id }))
+          : null,
+    }
+  }
   async saveConnection(connection: SourceConnection): Promise<void> {
     await this.#run([connectionStatement(this.#database, connection)])
   }
@@ -482,6 +767,17 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
     return row === null ? null : rawObjectId(row.id)
   }
 
+  async listSourceRecordIds(
+    rawId: RawObjectId,
+    parserVersion: string,
+  ): Promise<ReadonlyMap<string, SourceRecordId>> {
+    const rows = await statement(
+      this.#database,
+      'SELECT record_path, id FROM source_records WHERE raw_object_id = ? AND parser_version = ?',
+      [rawId, parserVersion],
+    ).all<{ record_path: string; id: string }>()
+    return new Map(rows.results.map((row) => [row.record_path, sourceRecordId(row.id)]))
+  }
   async findSourceRecordId(
     rawId: RawObjectId,
     parserVersion: string,
@@ -672,9 +968,22 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
     for (const identity of batch.externalIdentities ?? []) {
       statements.push(externalIdentityStatement(this.#database, identity))
     }
-    for (const { entry, evidence } of archiveEntries) {
-      statements.push(archiveEntryStatement(this.#database, entry))
+    for (const write of archiveEntries) {
+      const { evidence } = write
+      statements.push(archiveEntryStatement(this.#database, write))
       for (const link of evidence) statements.push(evidenceStatement(this.#database, link))
+    }
+    for (const retired of batch.retireOccurrences ?? []) {
+      if (retired.evidence.archiveEntryId !== retired.id || retired.evidence.role !== 'removal')
+        throw new TypeError('Retirement requires matching removal evidence')
+      statements.push(
+        statement(
+          this.#database,
+          "UPDATE archive_entries SET upstream_state = 'removed', updated_at = ? WHERE id = ?",
+          [retired.evidence.linkedAt, retired.id],
+        ),
+      )
+      statements.push(evidenceStatement(this.#database, retired.evidence))
     }
     if (batch.cursor !== undefined) statements.push(cursorStatement(this.#database, batch.cursor))
 

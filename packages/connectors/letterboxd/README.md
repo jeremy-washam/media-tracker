@@ -30,7 +30,7 @@ Letterboxd. Upload the ZIP exactly as downloaded from Letterboxd. The Worker:
 - creates a dated Archive occurrence for every Diary row;
 - creates one undated occurrence for a watched film with no Diary row;
 - retains Letterboxd film and Diary-entry URIs as separate identities; and
-- skips reprocessing an identical export checksum.
+- skips only successfully processed exports under the current parser; failures retry.
 
 Diary rows that cannot be joined to a watched film by exact title and year are
 retained as unresolved source records instead of being silently merged. Ratings
@@ -55,5 +55,13 @@ records but do not enter Archive. A response hash avoids reparsing an unchanged
 feed, and an entry aging out is never interpreted as deletion.
 
 RSS review bodies remain available in raw evidence but are not yet projected as
-plain-text reviews. A fresh export remains the authoritative way to reconcile
-old edits, deletions, private activity, and watched-only films.
+plain-text reviews. A fresh export supplies old edits, private activity, and watched-only films.
+Deletion reconciliation is still deferred; importing a later ZIP does not
+currently apply deletion tombstones.
+
+Export and RSS parser v2 reconcile in both acquisition orders. RSS observations
+retain Diary URLs and consult stable occurrence keys before date matching, so
+watched-date edits update the existing occurrence. Export matching prefers known
+film/Diary identities; an unambiguous exact title/year plus RSS viewing date is
+an explicit fallback. Ambiguous matches are not merged. Rating/review nulls in
+full exports clear current canonical fields while earlier raw evidence remains.

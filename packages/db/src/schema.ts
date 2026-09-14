@@ -395,3 +395,21 @@ export const schema = {
   syncCursors,
   syncRuns,
 }
+
+// Operational secret storage; never part of raw source evidence or browser responses.
+export const connectionCredentials = sqliteTable('connection_credentials', {
+  connectionId: text('connection_id')
+    .primaryKey()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  bootstrapSha256: text('bootstrap_sha256').notNull(),
+  ciphertext: text('ciphertext').notNull(),
+  iv: text('iv').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+export const connectionRefreshLeases = sqliteTable('connection_refresh_leases', {
+  connectionId: text('connection_id')
+    .primaryKey()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  owner: text('owner').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+})

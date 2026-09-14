@@ -8,6 +8,7 @@ import {
   archiveEntryEvidenceId,
   archiveEntryId,
   connectionId,
+  calendarDate,
   externalIdentityId,
   mediaItemId,
   rawObjectId,
@@ -32,7 +33,7 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
 
-const parserVersion = 'letterboxd-export@1'
+const parserVersion = 'letterboxd-export@2'
 
 export class LetterboxdImportError extends Error {
   constructor(message: string) {
@@ -104,8 +105,11 @@ export async function importLetterboxdExport(
   await repository.saveConnection(connection)
   await repository.saveSyncRun(runningRun)
 
-  const previouslyImported = await repository.findRawObjectId(connection.id, acquisitionKey)
-  if (previouslyImported !== null) {
+  const previouslyImported = await repository.findRawObject(connection.id, acquisitionKey)
+  if (
+    previouslyImported?.processingStatus === 'processed' &&
+    previouslyImported.lastParserVersion === parserVersion
+  ) {
     const finishedAt = instantNow()
     await repository.saveSyncRun({ ...runningRun, status: 'succeeded', finishedAt })
     await repository.saveConnection({ ...connection, updatedAt: finishedAt })
@@ -119,7 +123,7 @@ export async function importLetterboxdExport(
     }
   }
 
-  const rawId = rawObjectId(ulid())
+  const rawId = previouslyImported?.id ?? rawObjectId(ulid())
   const storageKey = `raw/letterboxd/sha256/${archiveChecksum.hex.slice(0, 2)}/${archiveChecksum.hex}.zip`
   const pendingRawObject: RawObject = {
     id: rawId,
@@ -135,6 +139,9 @@ export async function importLetterboxdExport(
     processingStatus: 'pending',
     lastParserVersion: null,
     processingError: null,
+    ...(previouslyImported === null
+      ? {}
+      : { syncRunId: previouslyImported.syncRunId, acquiredAt: previouslyImported.acquiredAt }),
   }
 
   await bindings.RAW_BUCKET.put(storageKey, archive, {
@@ -146,6 +153,10 @@ export async function importLetterboxdExport(
 
   try {
     const projection = parseLetterboxdExportBytes(archive)
+    const existingRecords = await repository.listSourceRecordIds(rawId, parserVersion)
+    const retireOccurrences: NonNullable<
+      import('@media-tracker/db').CanonicalWriteBatch['retireOccurrences']
+    >[number][] = []
     const sourceRecords: SourceRecord[] = []
     const sourceRecordByPath = new Map<string, SourceRecord>()
     const mediaItems: MediaItem[] = []
@@ -160,7 +171,7 @@ export async function importLetterboxdExport(
       const existing = sourceRecordByPath.get(reference.recordPath)
       if (existing !== undefined) return existing
       const record: SourceRecord = {
-        id: sourceRecordId(ulid()),
+        id: existingRecords.get(reference.recordPath) ?? sourceRecordId(ulid()),
         rawObjectId: rawId,
         connectionId: connection.id,
         recordType,
@@ -187,7 +198,42 @@ export async function importLetterboxdExport(
         externalId: film.filmUri,
         connectionId: null,
       })
-      const itemId = knownFilmIdentity?.mediaItemId ?? mediaItemId(ulid())
+      let matchingItemId = knownFilmIdentity?.mediaItemId
+      if (matchingItemId === undefined) {
+        for (const occurrence of film.diaryOccurrences) {
+          const diary = await repository.findExternalIdentity({
+            namespace: 'letterboxd',
+            externalType: 'diary_uri',
+            externalId: occurrence.diaryUri,
+            connectionId: connection.id,
+          })
+          if (diary !== null) {
+            matchingItemId = diary.mediaItemId
+            break
+          }
+        }
+      }
+      if (matchingItemId === undefined) {
+        const candidates = await repository.findMediaByExactTitleAndYear(
+          'movie',
+          film.title,
+          film.releaseYear,
+        )
+        if (candidates.length === 1) {
+          for (const occurrence of film.diaryOccurrences) {
+            const matches = await repository.findArchiveEntriesByMediaAndConsumedDay(
+              connection.id,
+              candidates[0]!,
+              calendarDate(occurrence.consumedOn),
+            )
+            if (matches.length === 1 && matches[0]!.sourceOccurrenceKey.startsWith('rss:')) {
+              matchingItemId = candidates[0]!
+              break
+            }
+          }
+        }
+      }
+      const itemId = matchingItemId ?? mediaItemId(ulid())
       const filmIdentityId = knownFilmIdentity?.id ?? externalIdentityId(ulid())
 
       mediaItems.push({
@@ -241,6 +287,8 @@ export async function importLetterboxdExport(
           })
         }
         archiveEntries.push({
+          replaceRating: true,
+          replaceReview: true,
           entry: {
             id: entryId,
             mediaItemId: itemId,
@@ -262,6 +310,21 @@ export async function importLetterboxdExport(
         continue
       }
 
+      const watchedFallback = await repository.findArchiveEntryId(
+        connection.id,
+        `watched:${film.filmUri}`,
+      )
+      if (watchedFallback !== null)
+        retireOccurrences.push({
+          id: watchedFallback,
+          evidence: {
+            id: archiveEntryEvidenceId(ulid()),
+            archiveEntryId: watchedFallback,
+            sourceRecordId: watchedRecord.id,
+            role: 'removal',
+            linkedAt: startedAt,
+          },
+        })
       if (film.ratingRecord !== null) {
         addSourceRecord(film.ratingRecord, 'film_rating', 'ignored')
       }
@@ -288,8 +351,27 @@ export async function importLetterboxdExport(
         })
 
         const occurrenceKey = `diary:${occurrence.diaryUri}`
-        const knownEntryId = await repository.findArchiveEntryId(connection.id, occurrenceKey)
-        const entryId = knownEntryId ?? archiveEntryId(ulid())
+        const knownOccurrence = await repository.findArchiveOccurrence(connection.id, occurrenceKey)
+        const identityMatches =
+          knownDiaryIdentity === null
+            ? []
+            : await repository.findArchiveEntriesByConsumedIdentity(
+                connection.id,
+                knownDiaryIdentity.id,
+              )
+        const dayMatches = await repository.findArchiveEntriesByMediaAndConsumedDay(
+          connection.id,
+          itemId,
+          calendarDate(occurrence.consumedOn),
+        )
+        const rssMatches = dayMatches.filter((match) =>
+          match.sourceOccurrenceKey.startsWith('rss:'),
+        )
+        const reconciled =
+          knownOccurrence ??
+          (identityMatches.length === 1 ? identityMatches[0] : undefined) ??
+          (rssMatches.length === 1 ? rssMatches[0] : undefined)
+        const entryId = reconciled?.id ?? archiveEntryId(ulid())
         const evidenceRoles: ArchiveEvidenceRole[] = ['admission', 'occurrence_time']
         if (occurrence.rating !== null) evidenceRoles.push('rating')
         const evidence = evidenceRoles.map((role) => ({
@@ -310,12 +392,14 @@ export async function importLetterboxdExport(
           })
         }
         archiveEntries.push({
+          replaceRating: true,
+          replaceReview: true,
           entry: {
             id: entryId,
             mediaItemId: itemId,
             connectionId: connection.id,
             consumedIdentityId: diaryIdentityId,
-            sourceOccurrenceKey: occurrenceKey,
+            sourceOccurrenceKey: reconciled?.sourceOccurrenceKey ?? occurrenceKey,
             admissionReason: 'letterboxd_diary_entry',
             consumedAt: temporalDay(occurrence.consumedOn),
             sourceRecordedAt: sourceRecordedAt(occurrence),
@@ -357,6 +441,7 @@ export async function importLetterboxdExport(
         },
       ],
       sourceRecords,
+      retireOccurrences,
       mediaItems,
       externalIdentities,
       archiveEntries,

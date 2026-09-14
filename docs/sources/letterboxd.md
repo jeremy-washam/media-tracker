@@ -255,3 +255,11 @@ coverage reporting rather than additional integration machinery.
 - [Importing data and CSV format](https://letterboxd.com/about/importing-data/)
 - [Terms of use](https://letterboxd.com/legal/terms-of-use/)
 - [Letterboxd API documentation](https://api-docs.letterboxd.com/)
+
+## Implementation update — 2026-09-14
+
+The correctness review and synthetic regression suite introduced the explicit
+reconciliation and recovery policies in [ADR 0010](../decisions/0010-reconciliation-and-recovery.md).
+This implementation update does not represent a new private payload probe or a
+new verification of upstream API capabilities. See the connector README for
+current behavior; earlier reconnaissance questions remain historical evidence.

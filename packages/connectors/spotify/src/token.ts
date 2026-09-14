@@ -39,6 +39,7 @@ export async function refreshSpotifyAccessToken(input: {
 
   const response = await fetcher('https://accounts.spotify.com/api/token', {
     method: 'POST',
+    signal: AbortSignal.timeout(30_000),
     headers,
     body,
   })

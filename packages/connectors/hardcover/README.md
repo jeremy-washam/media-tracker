@@ -40,3 +40,10 @@ The 2026-09-12 live validation imported 127 Read books in two pages. Repeating
 the reconciliation retained exactly 127 work-level book items and 127 supported
 Archive occurrences. The observed API can encode `finished_at_precision` as a
 number or string; both remain accepted and preserved in the raw page.
+
+Parser v2 registers each finished read's edition ID independently, even when it
+differs from the user-book's current edition. A newly supplied finished read
+retires the undated fallback from the active projection while retaining its
+original admission and linking the superseding observation. Full snapshots can
+clear ratings and reviews explicitly. Raw response bytes are stored before
+JSON/schema validation, including malformed pages.

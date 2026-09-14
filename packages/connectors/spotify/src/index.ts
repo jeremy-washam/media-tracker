@@ -7,6 +7,8 @@ export {
 } from './ingest'
 export {
   fetchSpotifySavedEpisodesPage,
+  fetchSpotifySavedEpisodesResponse,
+  parseSpotifySavedEpisodesPage,
   SpotifyApiError,
   type SpotifySavedEpisodeObservation,
   type SpotifySavedEpisodesPage,
