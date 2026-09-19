@@ -1,189 +1,210 @@
 # Desktop UI Foundation
 
-- Status: Directional
-- Last updated: 2026-07-18
+- Status: Index selected as the base; detailed surface design remains open
+- Last updated: 2026-09-19
 
-## Purpose
+## Purpose and scope
 
-This document records the intended desktop information architecture and visual
-direction. It is a foundation for future interface work, not a detailed design
-system or a commitment to every future navigation item.
+The next interface has three primary surfaces: **Chat, Library, and Recaps**.
+Recaps is a placeholder name; its workspace must accommodate broader analytics
+later. Connections and Settings are secondary. This design scope goes beyond
+the implemented ingestion milestone; prototypes do not imply working LLM,
+Queue, catalog, or analytics services.
 
-The application scaffold created in Phase 1 is functional infrastructure. Its
-visual styling is disposable and should not be treated as approved direction.
+Readwise Reader is the primary reference for compact browsing, hierarchy, and
+contextual inspection. Letterboxd informs artwork-led browsing and media details.
+The existing production scaffold is not approved visual direction.
 
-## Reference products
+Desktop and dark theme are the current focus. Aim for a calm, dense personal
+library with expressive artwork, readable typography, restrained controls, and
+clear selection state. Media metadata should serve the user's relationship to
+an item. Future Lists, Feed, and Explorations stay out of initial navigation.
 
-### Readwise Reader
+## Selected foundation: Index
 
-Readwise Reader is the primary reference for polish, density, hierarchy, and the
-general library workflow:
+The owner selected **Index** as the base after reviewing seven structural
+approaches. Preserve its global sidebar, central workspace, and optional compact
+right-hand inspector. This selects an overall structure, not every prototype
+component, spacing value, artwork treatment, or typography choice.
 
-- Dark, restrained, utility-oriented interface
-- Persistent global navigation
-- Dense central content collection
-- Compact rows that still expose useful metadata
-- Context retained while inspecting one item
-- Right-hand panel for item details and contextual actions
-- Clear workspace-level tabs and controls
+Make the left sidebar collapsible across all three surfaces. Collapsing it
+reclaims width without changing the navigation model, current media type,
+Archive/Queue state, filters, sorting, selection, or scroll position. Keep an
+obvious way to reopen it. Whether collapse leaves an icon rail or hides the
+sidebar completely, and whether that state persists across sessions, remain
+implementation/design details to settle.
 
-The goal is not to clone Reader or inherit its product model. Media Tracker has a
-broader archive, stronger cross-media filtering, a canonical Archive ledger, and
-future generated experiences that Reader does not define.
+Top navigation was an alternative shell, not a component to embed inside Index.
+Its width advantage alone is not a reason to adopt it: a collapsible Index
+sidebar provides the desired space. Do not add horizontal global navigation or
+workspace tabs merely because another study includes them.
 
-### Letterboxd
+Each surface can have its own composition and local controls within the shared
+shell. A consistent app does not require Library, Chat, and Recaps to use the
+same arrangement of content.
 
-Letterboxd is a secondary reference for browsing large collections:
+The inspector must preserve collection filters, position, and conversation
+context. Start with **one compact inspector containing full details**. Do not
+pre-build a second detail level or a separate full-page item view. Evaluate the
+fit during detailed design. Interactive visualizations can expand within the
+main workspace; that does not imply a second media-inspection level.
 
-- Media-forward grid presentation
-- Useful facets and sorting above a collection
-- Ratings and other compact signals visible at a glance
-- The ability to scan the totality of a personal history
+## Visual and writing principles
 
-Media Tracker should offer stronger filtering than either reference while
-matching Reader's level of finish.
+Use Readwise Reader for polish, density, hierarchy, and contextual browsing, and
+Letterboxd for media-forward collections and rich item information. Avoid Ryot's
+competing card toolbars, badges, weak hierarchy, and administrative presentation
+of consumption history. Imported timestamps and provenance remain available,
+but should not compete with when the user experienced an item.
 
-## Current design constraints
+Visual quality is an explicit criterion, alongside usability. Favor restrained
+dark surfaces, readable typography, deliberate spacing, and artwork as the main
+source of color. Dense collections must remain legible. Avoid adding a control,
+heading, or badge merely because the data exists.
 
-- Desktop only for now
-- Dark theme only for now
-- No responsive or mobile adaptation in this phase
-- Mobile will be designed separately if it becomes valuable
-- Dense and calm rather than spacious, decorative, or marketing-oriented
-- Content and metadata should dominate; ornamental styling should not
-- Chat remains hidden until a useful LLM experience exists
+Use direct labels and factual copy. No motivational slogans, decorative
+subheadings, or sentimental commentary about the user's history. Specifically
+rejected examples include “Your Personal World,” “September, in good company,”
+and “A little distance. A different perspective.” A recap can simply be titled
+“September 2026.” This preference applies throughout the app, not only Recaps.
 
-## Application shell
+## Library
 
-Use three durable regions:
+Organize first by media type, then by Archive or Queue. Priority order:
+Books, Movies, Articles, Podcasts, YouTube videos, Songs. This is the owner's
+rough priority order, not a commitment to identical behavior across types.
 
-```text
-Global sidebar | Main workspace | Contextual inspector
-```
+The initial Library is for browsing and viewing imported details. Adding items,
+editing ratings/status, and other writes are future work. Leave room for those
+capabilities without displaying disabled or speculative editing controls. Reading, watching,
+and listening in the app are not in scope and may never be.
 
-### Global sidebar
+Use shared search, filtering, sorting, and selection patterns while allowing
+media-specific layouts. Books and Movies favor covers/posters; Articles can
+use image thumbnails alongside compact text rows, without AI summary subtext.
+Podcasts and Songs need their own metadata/density treatment. Detailed decisions
+must be grounded in each source's available data during implementation.
+Books and Songs in particular may need substantially different experiences.
+Letterboxd and Hardcover supply personal ratings; do not assume every source
+supports them. The detailed source-by-source field and behavior review is
+explicitly deferred until implementation; establish the cross-surface layout
+first. Ratings appear only when available and must distinguish personal from community
+ratings. Missing artwork and unknown dates need deliberate presentation.
 
-The sidebar owns primary product destinations. Initially:
+Show each item once, with all supported consumption occurrences inside its
+inspector. Date filters match **any** occurrence. Within a selected period,
+display and sort by the latest matching consumption date; otherwise use the
+latest overall. Preserve the complete history in the inspector, distinguishing
+matching occurrences. Where useful, distinguish unique-item and occurrence
+counts (for example, 12 films and 15 watches). A movie watched in both 2022 and
+2025 appears once in either year's filtered Library, with both occurrences
+retained in its history. Never substitute ingestion or
+source-recorded dates for unknown consumption dates.
 
-- Archive
-- Queue
+The inspector includes available metadata, source links, ratings, notes,
+highlights, and history. Source provenance can be disclosed there without
+competing with primary content. Library query/view state should eventually be
+URL-addressable and remembered.
 
-Secondary administration such as Connections and Settings belongs lower in the
-sidebar or behind a secondary menu.
+## Chat
 
-Future destinations may include Calendar, Topics, Feed, Explore, and Chat. Do
-not show empty navigation for speculative features merely to reserve space. The
-sidebar should expand when those experiences become useful.
+Support new conversations, ordinary AI chat interaction affordances, and chat
+history. Save individual outputs as named artifacts with previews and a link
+back to the originating conversation. A bookmarked/renamed conversation is an
+acceptable fallback MVP, but separate saved outputs are the design direction.
 
-### Main workspace
+Artifacts may include interactive visualizations or generated lists. For example, “the 10 best LA movies” can be saved as a generated list artifact.
+A future Lists surface would add deliberate collection management; it is not
+required now. Linking Artifacts to Lists is a possible later relationship, not
+initial scope. Visualizations work inline and can expand for more room.
 
-The workspace is optimized for viewing the totality of the owner's collection.
-It contains:
+Responses can reference media through clickable cards opening the shared
+inspector. This should eventually include catalog items outside the Library,
+without adding them to Library merely by inspection. Catalog integration and identity resolution are needed to support reliable
+references beyond imported items. The separate [catalog reconnaissance](../sources/catalogs.md)
+covers options across all six media types, including TMDB for films. Its provider
+recommendations are research, not a decision that any integration is implemented.
 
-- Current destination and scope
-- Search
-- Filters and active-filter indicators
-- Sorting
-- View controls
-- The collection itself
+## Recaps
 
-Archive is the history of consumed media. Queue is the collection of things the
-owner intends to consume. They share browsing patterns but remain semantically
-distinct.
+The required experiences are a monthly rollup, with navigation between months
+and a summary of all consumed media, and a yearly rollup inspired by Spotify
+Wrapped across all media. “Recaps” is a placeholder name, not a restriction on
+future analytics. A shared
+period-based workspace can serve both; the yearly view should have a more
+editorial presentation inspired by Wrapped, without requiring a linear slideshow. They do not need separate standalone
+implementations; a shared visualization/report system is acceptable. The final
+mechanism remains open.
 
-### Contextual inspector
+Show consumed items, media-specific counts, and interactive visualizations
+that reveal supporting items. Keep unlike units distinct. Shared visualization
+components should serve Recaps and Chat artifacts. A general-purpose builder is
+not necessary for the initial design. Broader analytics controls can grow inside
+this surface without changing the global shell.
 
-Selecting an item opens a persistent right-hand panel without removing the user
-from the collection. The inspector can eventually contain:
+## Future surfaces and unresolved choices
 
-- Full metadata and source links
-- Archive occurrences and source timestamps
-- Rating, notes, and source details
-- Highlights or authorized text
-- Sync provenance and coverage confidence
-- Related media
-- Contextual LLM actions
+Future possibilities, excluded from the initial navigation:
 
-Closing the inspector returns focus to the same collection position, filters,
-sort, and selection context.
+- **Lists:** arbitrary collections of media items.
+- **Feed:** ambient recommendations and other content related to past consumption.
+- **Explorations:** broad topics to learn about; may live within Chat rather than
+  becoming a separate destination. This relates to the exploratory Topics model.
 
-## Archive browsing
+Ideas suggested during critique, but **not adopted as requirements**:
 
-Archive is the primary workflow and the canonical interface over consumed
-history. It supports two initial presentation modes.
+- A Library reference pane beside Chat, borrowed from Research.
+- Journal-style chronology inside Recaps.
+- A document-like presentation for saved artifacts.
 
-### List view
+These can inform later iterations within Index. The owner has approved Index
+and sidebar collapse, not this entire combination of suggestions. Other open
+questions include Chat's default landing state and precise exploration scope,
+artifact persistence/refinement behavior, detailed Recaps composition, final
+visual tokens, and the per-media-type data and interaction specification.
 
-Inspired by Reader:
+## Design and implementation process
 
-- Compact thumbnail or cover
-- Title and creator
-- Short description when useful
-- Source and media type
-- Consumption date or most relevant event date
-- Duration, length, or rating when available
-- Fast scanning across mixed media
+Explore layouts in browser-viewable HTML/CSS/React with representative content
+before integrating the full interface. Compare the same content across designs;
+changing only color and typography is a theme comparison, not a structural
+alternative. The seven studies were created for element-level feedback.
 
-### Grid view
+With Index selected, refine its shell and individual surfaces using realistic
+artwork, larger collections, long titles, missing images, absent ratings,
+unknown consumption dates, repeat consumption, and notes/highlights. Check both
+expanded and collapsed navigation and open/closed inspector states. Detailed
+media behavior must refer to the relevant source reports, not generic mock data.
+Extract reusable visual rules from the refined screens rather than treating the
+first scaffold or sample covers as approved production design.
 
-Inspired by Letterboxd:
+## Interactive design studies
 
-- Artwork-forward cards
-- Consistent geometry within a media-aware grid
-- Important compact signals such as rating or source
-- Useful for scanning large visual collections
+The [saved mockups reference](mockups.md) lists the durable source files and
+links for all seven layouts. Run `pnpm dev:web` and open `/design.html`. The top switch preserves the current
+surface and selection when comparing seven structural directions:
 
-The view mode should be URL-addressable and remembered. Grid and list are two
-lenses over the same query rather than separate data or navigation states.
+- **Index:** the selected base; sidebar collapse is agreed but not yet implemented
+  in the study.
+- **Top nav:** global horizontal navigation; media tabs span the Library; Chat and Recaps own local sidebars.
+- **Two-pane:** compact selection list and persistent details; conversation and period lists select content in the main pane.
+- **Journal:** date-grouped Library rows, timeline recaps, and chronological conversations.
+- **Gallery:** compact global rail, horizontal media shelves, and an overlay inspector; recaps prioritize artwork.
+- **Research:** closable workspace tabs preserve each surface's state; a reference pane allows Library browsing beside Chat or Recaps.
+- **Documents:** a page tree, document title/properties, flowing content, and a section outline.
 
-### Filtering and sorting
+The former Folio and Gallery theme variations were removed. Gallery above is a
+new shelf layout. Keep the palette similar during this round to compare structure.
 
-The filtering model should comfortably exceed Letterboxd's. Planned facets
-include:
+All seven include Chat, Library and monthly/yearly Recaps. The working prototype
+supports media/category navigation, Archive/Queue, search, date filtering, sort,
+list/grid, one inspector, sample conversations, artifacts, expandable charts,
+and chart interaction. State is ephemeral. Chat replies, rollup numbers, media
+history and artwork are explicitly illustrative, not the owner's actual data.
+Concept cover designs are composed in CSS; web fonts load from Google Fonts with
+local fallbacks. The exploratory name “Margin” is not a naming decision.
 
-- Media type
-- Source service
-- Consumed or saved date range
-- Known, unknown, or inferred consumption date
-- Rating
-- Creator
-- Tags
-- Duration or length
-- Reread or rewatch state
-- Availability of notes, highlights, or full text
-
-Sorting may include consumption date, publication date, title, creator, rating,
-duration, and recently updated. Filter and sort state should be encoded in the
-URL so a view is reloadable, shareable across the owner's devices, and suitable
-for saved views later.
-
-## Queue browsing
-
-Queue initially reuses Archive's list/grid and filtering foundations. It may add
-queue-specific controls such as priority, desired date, time budget, and upstream
-sync status. The local queue is authoritative even when an upstream watchlist or
-save-for-later service can be mirrored.
-
-## Interaction principles
-
-- Preserve collection context when inspecting an item.
-- Prefer direct, reversible actions and visible state.
-- Make filters legible; never hide the active query from the user.
-- Keep generated and inferred information visually distinguishable from imported
-  source facts.
-- Explain incomplete source coverage rather than implying false completeness.
-- Optimize for keyboard and pointer use on desktop.
-- Avoid engagement mechanics, promotional surfaces, and opaque ranking.
-
-## Deferred design work
-
-- Mobile and native iOS interface
-- Final visual tokens, typography, iconography, and component library
-- Chat and saved-chat navigation
-- Calendar and recap presentation
-- Topic management
-- Feed and Explore ranking controls
-- Empty, loading, error, and large-library behavior using representative data
-
-These should be designed when the corresponding domain behavior and realistic
-fixtures exist.
+The preview has a separate Vite HTML entry and does not replace the operational
+application. Index is now selected. Production integration, sidebar collapse, and detailed
+source-specific interface design remain subsequent work. Keep the other studies
+available as references unless the owner requests their removal.

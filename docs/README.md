@@ -4,13 +4,16 @@
 
 - [Product context](product/context.md): purpose, scope, priorities, and future
   direction
-- [Long-term vision](product/long-term-vision.md): exploratory Topics, Feed,
-  Explore, recap, and LLM concepts
+- [Long-term vision](product/long-term-vision.md): initial surface scope and exploratory Lists, Topics/Explorations,
+  Feed, and recommendation concepts
 
 ## Design
 
-- [Desktop UI foundation](design/ui-foundation.md): information architecture,
-  visual references, collection views, and interaction principles
+- [Desktop UI foundation](design/ui-foundation.md): selected Index shell, sidebar collapse,
+  Chat/Library/Recaps requirements, writing preferences, and open design questions
+
+- [Saved interface mockups](design/mockups.md): source files, all seven layout
+  links, and instructions to reopen the preview
 
 ## Planning
 

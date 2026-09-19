@@ -1,7 +1,7 @@
 # Long-Term Product Vision
 
-- Status: Exploratory
-- Last updated: 2026-07-18
+- Status: Initial surface scope agreed; longer-term concepts exploratory
+- Last updated: 2026-09-19
 
 ## Purpose
 
@@ -9,8 +9,11 @@ Media Tracker begins as a trustworthy, private record of personal media
 consumption. Over time, that record may support reflection, intentional learning,
 discovery, and explainable recommendations.
 
-The ideas in this document are deliberately exploratory. They guide extensible
-foundations but are not commitments to build every described feature.
+The next product interface is scoped to Chat, Library (Archive + Queue), and
+Recaps. Index with a collapsible sidebar is the selected shell. See the
+[desktop UI foundation](../design/ui-foundation.md) for the agreed details.
+The longer-term discovery and recommendation ideas below remain exploratory;
+they are not commitments to build every described feature.
 
 ## Durable product primitives
 
@@ -29,9 +32,19 @@ Queue represents explicit intent to consume something in the future. The local
 queue is authoritative. Upstream watchlists and save-for-later services may be
 mirrored when dependable integrations exist.
 
-### Topics
+### Lists and artifacts
 
-Topics are explicit intellectual intentions that do not need to originate from a
+Lists may eventually provide arbitrary, deliberately managed collections.
+Chat initially needs a way to save and revisit generated outputs such as named
+interactive visualizations and lists. Separate artifacts linked to their source
+conversation are preferred; bookmarking/renaming a chat is an acceptable MVP
+fallback. A future relationship between Artifacts and Lists remains open.
+
+### Topics / Explorations
+
+Explorations is the current tentative surface name for broad learning topics.
+It may be integrated into Chat rather than separate navigation. The underlying
+Topics concept remains exploratory. Topics are explicit intellectual intentions that do not need to originate from a
 saved media item. Examples include:
 
 - "How does IMAX 70mm work?"
@@ -72,6 +85,10 @@ flowchart LR
 
 ### Calendar and recaps
 
+Monthly and yearly cross-media rollups are required in the next interface.
+They may share a visualization system rather than be separate products.
+Broader analytics can grow within the same Recaps workspace.
+
 A calendar provides another lens over Archive entries rather than another
 history system. Recaps may summarize a week, month, year, topic, or period in a
 more editorial form, similar in spirit to Spotify Wrapped.
@@ -89,7 +106,8 @@ Recaps should favor useful reflection over gamification.
 
 ### Feed
 
-A feed may combine saved topics, recent history, queue state, source updates, and
+A future Feed may surface ambient recommendations and other content related to
+past consumption. It may combine saved topics, recent history, queue state, source updates, and
 other future signals. An LLM can help expand topics, assess candidates, diversify
 formats and perspectives, and compose a coherent sequence. It is an editor over
 retrieved candidates, not the source of truth or the sole discovery mechanism.
@@ -119,9 +137,12 @@ Natural-language search should answer arbitrary questions over the owner's saved
 history, metadata, Archive entries, notes, highlights, and authorized text. Answers must
 cite stored evidence and distinguish facts from inference.
 
-Chat may eventually be a global destination with saved conversations, while the
-item inspector can offer contextual questions about one selected record. Chat
-should remain hidden until it provides genuine value.
+Chat is now a primary destination in the agreed initial interface, with new
+conversations, history, and saved artifacts. Interactive visualizations can
+appear inline and expand. Clickable references should open the shared compact
+inspector, including catalog items outside the Library. Inspecting an external
+item does not itself add it to Library. The exact balance of personal-history
+questions and broader exploration remains to be designed.
 
 ## Recommendation flow
 
@@ -168,9 +189,13 @@ where practical, and safe to regenerate as models or ranking logic change.
 - Prefer a small number of excellent recommendations over undifferentiated volume.
 - Keep speculative features out of the primary interface until they earn a place.
 
-## Near-term boundary
+## Delivery boundary
 
-The current milestone remains ingestion-first. Build the canonical ledger,
-provenance, synchronization, and useful Archive browsing before adding Topics,
-Feed, Explore, recap generation, or global Chat. The ledger should make these
-features possible without forcing their premature design.
+The implemented ingestion milestone and the next product interface are distinct.
+The ledger, provenance, and synchronization remain foundations. The current
+browser studies cover Chat, Library, and Recaps with illustrative content; they
+do not implement live LLM services, artifact storage, Queue persistence, catalog
+integration, or recap generation. Next interface work follows the selected Index
+foundation and the source-specific design review described in the
+[implementation plan](../planning/implementation-plan.md#20-next-interface-design-and-delivery).
+Lists, Feed, and Explorations remain future scope.

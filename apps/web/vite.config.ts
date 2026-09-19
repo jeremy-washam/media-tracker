@@ -4,6 +4,14 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      input: {
+        app: 'index.html',
+        design: 'design.html',
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,

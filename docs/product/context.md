@@ -10,7 +10,32 @@ The application is intentionally single-user. Do not add multi-tenant product ar
 
 It should turn a fragmented media life into an intentional, adaptive way to learn and explore. The goal is not a generic recommendation feed or a conventional read-it-later app.
 
-## Core concept
+## Initial product interface
+
+The agreed initial interface beyond ingestion has three primary surfaces:
+
+- **Chat:** new and ongoing AI conversations, conversation history, saved
+  artifacts (including interactive visualizations and generated lists), and
+  clickable media references with details for both Library and catalog items.
+- **Library:** browse imported items and full details, first by media type and
+  then by Archive or Queue. Priority order: Books, Movies, Articles, Podcasts,
+  YouTube videos, Songs. Show one item with all supported consumption history;
+  date filters match any occurrence. Initial Library is read-only. Reading,
+  watching, and listening inside the app are not in scope and may never be.
+- **Recaps:** browsable monthly and yearly rollups across media. The name is
+  provisional; the workspace can later support general-purpose analytics.
+
+Index is the selected desktop design foundation, with a collapsible left sidebar
+and one compact contextual inspector. Connections and Settings are secondary.
+Lists, Feed, and Explorations are future possibilities; Explorations may be part
+of Chat. See the [desktop UI foundation](../design/ui-foundation.md) for accepted
+behavior, writing preferences, open questions, and the seven layout studies.
+
+These are product/design decisions, not claims that Chat, artifacts, Queue,
+catalog integrations, or Recaps are implemented. The ingestion ledger remains
+the trustworthy data foundation.
+
+## Longer-term learning concept
 
 The user can add a one-sentence learning intention at any time, for example:
 
@@ -22,13 +47,13 @@ The main feed should draw high-quality, relevant material from active intentions
 - generate/refine a set of links to explore; or
 - use AI chat to investigate the topic directly.
 
-The system should track and retain media consumed within the app, and make past media history easy to browse. The initial source systems are Readwise Reader, YouTube, Spotify, Letterboxd, and Hardcover. Media includes articles, videos, podcasts, movies, and books; songs are secondary.
+The system should import and retain media consumption history from existing services and make it easy to browse. The initial source systems are Readwise Reader, YouTube, Spotify, Letterboxd, and Hardcover. Songs are secondary. In-app media consumption is not a dependency.
 
 Feeds may be generated from active intentions, a particular historical period, a selected topic, or the whole personal history.
 
 ## Product distinction
 
-Readwise Reader is a useful reference point and an existing user tool, but it is not the desired product. Reader is principally an archive/reading surface for saved or subscribed content. This project should be an adaptive and highly controllable feed shaped by explicit learning intentions and personal history.
+Readwise Reader is a useful reference point and an existing user tool, but it is not the desired product. Reader is principally an archive/reading surface for saved or subscribed content. This project combines a cross-media personal Library, Chat, and Recaps. A future adaptive feed may draw on explicit learning intentions and personal history.
 
 The feed should be intentional rather than opaque. Example modes include:
 
@@ -54,7 +79,7 @@ Candidate content needs to come from source systems:
 - Official APIs, webhooks, RSS, and user data exports for Letterboxd, Hardcover,
   Spotify, YouTube, and other services where direct history APIs are incomplete.
 
-For public YouTube discovery, use the YouTube Data API rather than treating transcript extraction as foundational. Videos can be embedded/linked and app-level viewing actions tracked. Public Substack material can come from RSS or public pages; paid material should only be accessed through an authorized source such as an email/newsletter connection or a user-save flow.
+For public YouTube discovery, use the YouTube Data API rather than treating transcript extraction as foundational. Link to the source for playback; embedded viewing and app-level playback tracking are outside the initial scope. Public Substack material can come from RSS or public pages; paid material should only be accessed through an authorized source such as an email/newsletter connection or a user-save flow.
 
 ## First implementation milestone
 
@@ -84,7 +109,7 @@ The first implementation phase is an ingestion-first personal media ledger. It s
 
 Use official APIs, webhooks, RSS feeds, and user data exports as appropriate. Preserve raw imports and sync provenance, and be explicit where an upstream service cannot provide complete or real-time history.
 
-## Future enhancements
+## Capabilities beyond the ingestion milestone
 
 - A centralized queue of content to consume later. The local application should be the reliable source of truth. Mirror queue changes to upstream services such as Letterboxd's watchlist when an official, dependable integration permits it, but upstream bidirectional sync is not critical.
 - LLM-assisted search over the owner's saved media, history, metadata, notes, highlights, and authorized full text. Arbitrary natural-language queries should return traceable answers grounded in stored records and source provenance rather than opaque unsupported responses.

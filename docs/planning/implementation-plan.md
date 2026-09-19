@@ -1,9 +1,10 @@
 # Media Tracker Implementation Plan
 
-Last updated: 2026-09-14
+Last updated: 2026-09-19
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
-features. Section 18 records the implemented MVP and current next steps.
+features. Section 18 records the ingestion MVP and its September 14 follow-ups.
+Section 20 records the subsequent interface decisions and next design work.
 
 ## 1. Product and architectural boundaries
 
@@ -718,7 +719,7 @@ saved-episode reconciliation; and YouTube accepts resumable Takeout imports for
 separate account lineages. Large Spotify and YouTube imports are processed in
 bounded, durable chunks rather than one oversized Worker invocation.
 
-The next three reviewable changes should be:
+The ingestion follow-ups identified on September 14 were:
 
 1. Improve media cards and detail views with the canonical metadata already in
    the ledger. Complete counts, server-side media-type filters, cursor pagination,
@@ -746,3 +747,37 @@ explicit rating/review clearing, and preservation of malformed successful API
 responses before parsing. See ADR 0010 for the reconciliation policy and its
 limits. These paths are covered with synthetic regression tests; no new private
 provider probes were run for this change.
+
+## 20. Next interface design and delivery
+
+The owner selected **Index** after reviewing seven browser-based layout studies.
+The initial product interface includes Chat, Library, and Recaps. Its scope is
+broader than the first ingestion milestone; earlier deferrals of LLM/Queue UI
+apply to that milestone, not a prohibition on this next interface.
+
+The [desktop UI foundation](../design/ui-foundation.md) owns the detailed agreed
+behavior and remaining questions. Next design work should:
+
+1. Refine Index with a collapsible global sidebar and a single compact inspector,
+   preserving context when either opens or closes. Surface interiors may differ.
+2. Review realistic artwork and larger, varied collections in the shared shell,
+   including all three surfaces. Keep labels factual and remove decorative copy.
+3. Specify Library behavior for each media type using available source data,
+   in priority order: Books, Movies, Articles, Podcasts, YouTube videos, Songs.
+   Preserve one item with multiple occurrences and occurrence-aware date filters.
+4. Specify Chat history/artifact flows and interactive visualization behavior;
+   consult the separate catalog reconnaissance for references outside Library.
+5. Specify browsable monthly/yearly Recaps and their relationship to shared
+   visualizations. A generic visualization builder is not a prerequisite.
+
+Do not infer approval for global workspace tabs, a permanent two-pane Library,
+or a Chat reference pane from the existence of a prototype. Optional borrowing
+from the studies requires further design discussion. No production rollout or
+new schema/provider choice is approved merely by selecting Index.
+
+The `/design.html` studies are separate from the operational client and use
+synthetic history, concept artwork, ephemeral state, and illustrative responses.
+Sidebar collapse is agreed next work, not an existing prototype capability.
+Implementation sequencing of the new services remains to be detailed after the
+layout and per-source design work; this section does not mark those services as
+shipped. Lists, Feed, and Explorations remain outside the initial interface.
