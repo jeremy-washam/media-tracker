@@ -11,6 +11,7 @@ export default defineConfig({
       input: {
         app: 'index.html',
         design: 'design.html',
+        specimen: 'specimen.html',
       },
     },
   },

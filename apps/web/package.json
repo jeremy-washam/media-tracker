@@ -19,6 +19,7 @@
     "clsx": "catalog:",
     "lucide-react": "catalog:",
     "react": "19.2.7",
+    "react-day-picker": "catalog:",
     "react-dom": "19.2.7",
     "tailwind-merge": "catalog:",
     "tw-animate-css": "catalog:"

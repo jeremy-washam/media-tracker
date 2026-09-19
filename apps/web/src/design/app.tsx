@@ -84,7 +84,10 @@ export default function App() {
   const [direction, setDirection] = useState<Direction>(
     directions.find((d) => d.id === initial)?.id || 'index',
   )
-  const [surface, setSurface] = useState<Surface>('Library')
+  const initialSurface = new URLSearchParams(location.search).get('surface')
+  const [surface, setSurface] = useState<Surface>(
+    initialSurface === 'chat' ? 'Chat' : initialSurface === 'recaps' ? 'Recaps' : 'Library',
+  )
   const [type, setType] = useState<MediaType>('Books')
   const [state, setState] = useState('Archive')
   const [view, setView] = useState('grid')

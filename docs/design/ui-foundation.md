@@ -15,7 +15,7 @@ Readwise Reader is the primary reference for compact browsing, hierarchy, and
 contextual inspection. Letterboxd informs artwork-led browsing and media details.
 The existing production scaffold is not approved visual direction.
 
-Desktop and dark theme are the current focus. Aim for a calm, dense personal
+Desktop is the current focus; both light and dark modes are required. Aim for a calm, dense personal
 library with expressive artwork, readable typography, restrained controls, and
 clear selection state. Media metadata should serve the user's relationship to
 an item. Future Lists, Feed, and Explorations stay out of initial navigation.
@@ -187,6 +187,27 @@ The separate theme specimen can explore alternatives without coupling production
 components to its files. See the [web README](../../apps/web/README.md#shared-components)
 for imports, adding components, and theme integration. The initial setup supplies
 Button, Input, and Textarea; add other primitives when features need them.
+
+## Provisional theme: Graphite
+
+On 2026-09-19, the owner selected **tweakcn's Graphite** as the working theme,
+with both light and dark modes. This is intentionally revisitable. Use the
+restrained application in the saved specimen: neutral navigation and item
+selections, neutral ratings, and stronger accents limited to small controls,
+focus states, and actions. Avoid large saturated selection backgrounds.
+
+The choice refers to the published tweakcn preset, not the earlier custom
+palette with the same name. Production theme integration remains separate work;
+the neutral component initialization above does not yet apply this selection.
+
+Keep the eight-theme comparison available at
+`/specimen.html?theme=graphite&mode=dark` (or `mode=light`). Its source, bundled
+theme tokens, provenance, application rules, and visual review are preserved in
+the [component specimen](../../apps/web/src/specimen/README.md). Graphite, Clean
+Slate, and Mono were the owner's favorites. The other retained alternatives are
+Vercel, Modern Minimal, Claude, Caffeine, and Amber Minimal. All 16 light/dark
+combinations were visually inspected in the Library, inspector, composer, and
+control-state examples. Retain these alternatives for future comparison.
 
 ## Interactive design studies
 
