@@ -178,6 +178,16 @@ media behavior must refer to the relevant source reports, not generic mock data.
 Extract reusable visual rules from the refined screens rather than treating the
 first scaffold or sample covers as approved production design.
 
+## Component foundation
+
+Use **shadcn/ui with Base UI** for new production interface components. Shared
+source lives in `apps/web/src/components/ui`; `base-nova` with neutral semantic
+CSS variables is the provisional initialization, not an approved final theme.
+The separate theme specimen can explore alternatives without coupling production
+components to its files. See the [web README](../../apps/web/README.md#shared-components)
+for imports, adding components, and theme integration. The initial setup supplies
+Button, Input, and Textarea; add other primitives when features need them.
+
 ## Interactive design studies
 
 The [saved mockups reference](mockups.md) lists the durable source files and

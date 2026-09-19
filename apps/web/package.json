@@ -11,11 +11,17 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@media-tracker/contracts": "workspace:*",
     "@tanstack/react-query": "5.101.2",
     "@tanstack/react-router": "1.170.18",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "lucide-react": "catalog:",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "tailwind-merge": "catalog:",
+    "tw-animate-css": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
