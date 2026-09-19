@@ -53,6 +53,8 @@ the owner explicitly starts the private probe.
 
 ## Current reports
 
+- [Catalog coverage across all six media types](catalogs.md) — search, identity
+  matching, metadata/artwork, and API constraints; separate from history ingestion
 - [Readwise Reader](readwise.md)
 - [Spotify](spotify.md)
 - [Hardcover](hardcover.md)
