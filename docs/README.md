@@ -19,6 +19,8 @@
 
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
+- [Media inspector proposal](planning/media-inspector.md): initial research on
+  click-through details, existing integration coverage, and catalog dependencies
 
 ## Sources
 
