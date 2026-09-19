@@ -5,6 +5,8 @@ Last updated: 2026-09-19
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
 Section 20 records the subsequent interface decisions and next design work.
+The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
+layer, model-access options, and delivery sequence; it is not shipped behavior.
 
 ## 1. Product and architectural boundaries
 

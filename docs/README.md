@@ -21,6 +21,8 @@
   and connector sequencing
 - [Media inspector proposal](planning/media-inspector.md): initial research on
   click-through details, existing integration coverage, and catalog dependencies
+- [AI Chat proposal](planning/ai-chat-plan.md): multi-model integration, subscription
+  access research, evidence-backed queries, and proposed delivery sequence
 
 ## Sources
 
