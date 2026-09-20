@@ -171,6 +171,9 @@ export const MoviesResponseSchema = z.object({
 })
 
 export const MovieDetailSchema = MovieCollectionItemSchema.extend({
+  personal: MovieCollectionItemSchema.shape.personal.extend({
+    reviewedOccurrenceCount: z.number().int().nonnegative(),
+  }),
   overview: z.string().nullable(),
   originalTitle: z.string().nullable(),
   originalLanguage: z.string().nullable(),

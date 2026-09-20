@@ -4,6 +4,7 @@ import {
   BooksQuerySchema,
   HealthResponseSchema,
   MediaTypeSchema,
+  MovieDetailSchema,
   MoviesQuerySchema,
   SyncJobSchema,
 } from './index'
@@ -64,5 +65,23 @@ describe('API contracts', () => {
     expect(MoviesQuerySchema.safeParse({ collection: 'queue', rating: 'range' }).success).toBe(
       false,
     )
+  })
+
+  it('requires an occurrence count for reviewed movie details', () => {
+    expect(
+      MovieDetailSchema.shape.personal.safeParse({
+        currentRating: 4,
+        liked: false,
+        reviewed: true,
+        reviewedOccurrenceCount: 2,
+      }).success,
+    ).toBe(true)
+    expect(
+      MovieDetailSchema.shape.personal.safeParse({
+        currentRating: 4,
+        liked: false,
+        reviewed: true,
+      }).success,
+    ).toBe(false)
   })
 })

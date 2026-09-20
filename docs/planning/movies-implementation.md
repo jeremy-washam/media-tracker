@@ -224,8 +224,14 @@ encoded as collection predicates.
   presentation-independent page caching, responsive inspection, and explicit
   Letterboxd-only fallbacks.
 - Nested RSS entities are normalized, and replay reconciliation merges an
-  exact unambiguous legacy title/year duplicate while preserving evidence and
-  collapsing a single same-day RSS/export occurrence.
+  exact unambiguous legacy title/year duplicate only when one proven
+  RSS-created occurrence and one active same-day occurrence evidenced by a
+  Diary row in the current complete export and the same connection form the
+  repair witness. Evidence remains append-only; removed,
+  cross-connection, and multiple-occurrence cases are not auto-merged.
+- Changed RSS feeds rebuild Movies viewing and browse/search projections before
+  cursor advancement, so RSS-only additions, watch counts, corrected latest
+  dates, and History links appear without waiting for another export.
 - Focused repository, connector, API, route-state, and browser regressions cover
   these behaviors. Real-data visual QA covered both collections, both layouts,
   and the Details/History inspector.

@@ -121,6 +121,9 @@ describe('SqlMoviesRepository', () => {
         created_at,updated_at) VALUES
         ('archive-1','movie-1','letterboxd-1','diary:1','letterboxd_diary_entry','2024-01-01','day','source_asserted',3.5,0.5,5,NULL,'active','${now}','${now}'),
         ('archive-2','movie-1','letterboxd-1','diary:2','letterboxd_diary_entry','2025-01-01','day','source_asserted',4,0.5,5,'Excellent.','active','${now}','${now}');
+      INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at) VALUES
+        ('archive-1-admission','archive-1','diary-1','admission','${now}'),
+        ('archive-2-admission','archive-2','diary-2','admission','${now}');
     `)
     repository = new SqlMoviesRepository(new SqliteClient(database))
   })
@@ -195,6 +198,9 @@ describe('SqlMoviesRepository', () => {
     expect(await repository.findMovie('movie-2')).toMatchObject({
       id: 'movie-2',
       archive: { active: false },
+    })
+    expect(await repository.findMovie('movie-1')).toMatchObject({
+      personal: { reviewed: true, reviewedOccurrenceCount: 1 },
     })
   })
 
@@ -274,22 +280,32 @@ describe('SqlMoviesRepository', () => {
 
   it('repairs RSS movies created from nested HTML entities when the export identifies them', async () => {
     database.exec(`
+      INSERT INTO raw_objects(id, connection_id, sync_run_id, kind, acquisition_key, storage_key,
+        sha256, content_type, byte_length, acquired_at, processing_status, last_parser_version)
+      VALUES ('raw-rss','letterboxd-1','run-1','rss','rss-1','raw/rss.xml',
+        '${'b'.repeat(64)}','application/rss+xml',100,'${now}','processed','letterboxd-rss@3');
+      INSERT INTO source_records(id, raw_object_id, connection_id, record_type, record_path,
+        source_record_key, source_recorded_at_value, source_recorded_at_precision,
+        source_recorded_at_basis, observed_at, parser_version, disposition, upstream_state)
+      VALUES ('rss-escaped','raw-rss','letterboxd-1','rss_movie_entry','$.rss.channel.item[0]',
+        'letterboxd-watch-escaped','${now}','instant','source_asserted','${now}',
+        'letterboxd-rss@3','normalized','active');
       INSERT INTO media_items(id,type,title,canonical_url,published_at_value,published_at_precision,
         published_at_basis,created_at,updated_at) VALUES
         ('movie-escaped','movie','First Movie &amp; More',NULL,'2001','year','source_asserted','${now}','${now}');
       INSERT INTO external_identities(id,media_item_id,namespace,external_type,external_id,scope,
         connection_id,canonical_url,first_observed_source_record_id,last_observed_source_record_id)
-      VALUES ('tmdb-escaped','movie-escaped','tmdb','movie_id','123','global',NULL,NULL,'diary-1','diary-1');
+      VALUES ('tmdb-escaped','movie-escaped','tmdb','movie_id','123','global',NULL,NULL,'rss-escaped','rss-escaped');
       INSERT INTO archive_entries(id,media_item_id,connection_id,consumed_identity_id,
         source_occurrence_key,admission_reason,consumed_at_value,consumed_at_precision,
         consumed_at_basis,upstream_state,created_at,updated_at)
       VALUES ('archive-escaped','movie-escaped','letterboxd-1','tmdb-escaped','rss:escaped',
         'letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}');
       INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at)
-      VALUES ('escaped-evidence','archive-escaped','diary-1','admission','${now}');
+      VALUES ('escaped-evidence','archive-escaped','rss-escaped','admission','${now}');
       INSERT INTO letterboxd_movie_viewings(archive_entry_id,connection_id,media_item_id,diary_uri,
         rewatch,log_url,source_record_id,projection_version,updated_at)
-      VALUES ('archive-escaped','letterboxd-1','movie-escaped',NULL,0,NULL,'diary-1',1,'${now}');
+      VALUES ('archive-escaped','letterboxd-1','movie-escaped',NULL,0,NULL,'rss-escaped',1,'${now}');
     `)
 
     await applyFullSnapshot([
@@ -326,7 +342,7 @@ describe('SqlMoviesRepository', () => {
     expect(
       database
         .prepare(
-          "SELECT count(*) count FROM archive_entry_evidence WHERE archive_entry_id='archive-2' AND source_record_id='diary-1' AND role='admission'",
+          "SELECT count(*) count FROM archive_entry_evidence WHERE archive_entry_id='archive-2' AND source_record_id='rss-escaped' AND role='admission'",
         )
         .get(),
     ).toEqual({ count: 1 })
@@ -355,7 +371,9 @@ describe('SqlMoviesRepository', () => {
         admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,
         upstream_state,created_at,updated_at)
       VALUES ('archive-collision','movie-collision','letterboxd-1','rss:collision',
-        'letterboxd_diary_entry','2026-01-01','day','source_asserted','active','${now}','${now}');
+        'letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}');
+      INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at)
+      VALUES ('collision-evidence','archive-collision','diary-1','admission','${now}');
     `)
 
     await applyFullSnapshot()
@@ -372,5 +390,172 @@ describe('SqlMoviesRepository', () => {
         )
         .get(),
     ).toEqual({ count: 1 })
+  })
+
+  it('does not repair cross-connection, removed, or multiply supported legacy items', async () => {
+    database.exec(`
+      INSERT INTO connections(id, source, label, status, coverage, created_at, updated_at)
+      VALUES ('letterboxd-2','letterboxd','Other Letterboxd','connected','partial','${now}','${now}');
+      INSERT INTO sync_runs(id, connection_id, kind, status, started_at, finished_at)
+      VALUES ('run-2','letterboxd-2','reconcile','succeeded','${now}','${now}');
+      INSERT INTO raw_objects(id, connection_id, sync_run_id, kind, acquisition_key, storage_key,
+        sha256, content_type, byte_length, acquired_at, processing_status, last_parser_version)
+      VALUES
+        ('raw-rss','letterboxd-1','run-1','rss','rss-1','raw/rss.xml',
+          '${'b'.repeat(64)}','application/rss+xml',100,'${now}','processed','letterboxd-rss@3'),
+        ('raw-rss-2','letterboxd-2','run-2','rss','rss-2','raw/rss-2.xml',
+          '${'c'.repeat(64)}','application/rss+xml',100,'${now}','processed','letterboxd-rss@3');
+      INSERT INTO source_records(id, raw_object_id, connection_id, record_type, record_path,
+        source_record_key, observed_at, parser_version, disposition, upstream_state)
+      VALUES
+        ('rss-cross','raw-rss-2','letterboxd-2','rss_movie_entry','$.rss.channel.item[0]','cross','${now}','letterboxd-rss@3','normalized','active'),
+        ('rss-multiple','raw-rss','letterboxd-1','rss_movie_entry','$.rss.channel.item[1]','multiple','${now}','letterboxd-rss@3','normalized','active'),
+        ('rss-removed','raw-rss','letterboxd-1','rss_movie_entry','$.rss.channel.item[2]','removed','${now}','letterboxd-rss@3','normalized','active');
+      INSERT INTO media_items(id,type,title,published_at_value,published_at_precision,
+        published_at_basis,created_at,updated_at) VALUES
+        ('movie-cross','movie','First Movie','2001','year','source_asserted','${now}','${now}'),
+        ('movie-multiple','movie','First Movie','2001','year','source_asserted','${now}','${now}'),
+        ('movie-removed','movie','First Movie','2001','year','source_asserted','${now}','${now}');
+      INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,
+        admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,
+        upstream_state,created_at,updated_at) VALUES
+        ('archive-cross','movie-cross','letterboxd-2','rss:cross','letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}'),
+        ('archive-multiple-a','movie-multiple','letterboxd-1','rss:multiple-a','letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}'),
+        ('archive-multiple-b','movie-multiple','letterboxd-1','rss:multiple-b','letterboxd_diary_entry','2025-02-01','day','source_asserted','active','${now}','${now}'),
+        ('archive-removed','movie-removed','letterboxd-1','rss:removed','letterboxd_diary_entry','2025-01-01','day','source_asserted','removed','${now}','${now}');
+      INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at) VALUES
+        ('e-cross','archive-cross','rss-cross','admission','${now}'),
+        ('e-multiple-a','archive-multiple-a','rss-multiple','admission','${now}'),
+        ('e-multiple-b','archive-multiple-b','rss-multiple','admission','${now}'),
+        ('e-removed','archive-removed','rss-removed','admission','${now}');
+    `)
+
+    await applyFullSnapshot()
+
+    for (const id of [
+      'archive-cross',
+      'archive-multiple-a',
+      'archive-multiple-b',
+      'archive-removed',
+    ]) {
+      expect(
+        database.prepare('SELECT upstream_state FROM archive_entries WHERE id=?').get(id),
+      ).toEqual({
+        upstream_state: id === 'archive-removed' ? 'removed' : 'active',
+      })
+    }
+  })
+
+  it('does not repair when the target has multiple active same-day occurrences', async () => {
+    database.exec(`
+      INSERT INTO raw_objects(id, connection_id, sync_run_id, kind, acquisition_key, storage_key,
+        sha256, content_type, byte_length, acquired_at, processing_status, last_parser_version)
+      VALUES ('raw-rss','letterboxd-1','run-1','rss','rss-1','raw/rss.xml',
+        '${'b'.repeat(64)}','application/rss+xml',100,'${now}','processed','letterboxd-rss@3');
+      INSERT INTO source_records(id, raw_object_id, connection_id, record_type, record_path,
+        source_record_key, observed_at, parser_version, disposition, upstream_state)
+      VALUES ('rss-duplicate','raw-rss','letterboxd-1','rss_movie_entry','$.rss.channel.item[0]',
+        'duplicate','${now}','letterboxd-rss@3','normalized','active');
+      INSERT INTO media_items(id,type,title,published_at_value,published_at_precision,
+        published_at_basis,created_at,updated_at)
+      VALUES ('movie-duplicate','movie','First Movie','2001','year','source_asserted','${now}','${now}');
+      INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,
+        admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,
+        upstream_state,created_at,updated_at) VALUES
+        ('archive-duplicate','movie-duplicate','letterboxd-1','rss:duplicate','letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}'),
+        ('archive-target-extra','movie-1','letterboxd-1','diary:extra','letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}');
+      INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at)
+      VALUES ('e-duplicate','archive-duplicate','rss-duplicate','admission','${now}');
+    `)
+
+    await applyFullSnapshot()
+    expect(
+      database
+        .prepare("SELECT upstream_state FROM archive_entries WHERE id='archive-duplicate'")
+        .get(),
+    ).toEqual({ upstream_state: 'active' })
+  })
+
+  it('does not repair two RSS-only occurrences without a Diary row in the current export', async () => {
+    database.exec(`
+      INSERT INTO raw_objects(id, connection_id, sync_run_id, kind, acquisition_key, storage_key,
+        sha256, content_type, byte_length, acquired_at, processing_status, last_parser_version)
+      VALUES ('raw-rss','letterboxd-1','run-1','rss','rss-1','raw/rss.xml',
+        '${'b'.repeat(64)}','application/rss+xml',100,'${now}','processed','letterboxd-rss@3');
+      INSERT INTO source_records(id, raw_object_id, connection_id, record_type, record_path,
+        source_record_key, observed_at, parser_version, disposition, upstream_state)
+      VALUES
+        ('rss-source','raw-rss','letterboxd-1','rss_movie_entry','$.rss.channel.item[0]',
+          'source','${now}','letterboxd-rss@3','normalized','active'),
+        ('rss-target','raw-rss','letterboxd-1','rss_movie_entry','$.rss.channel.item[1]',
+          'target','${now}','letterboxd-rss@3','normalized','active');
+      INSERT INTO media_items(id,type,title,published_at_value,published_at_precision,
+        published_at_basis,created_at,updated_at) VALUES
+        ('movie-rss-source','movie','RSS Twins','2001','year','source_asserted','${now}','${now}'),
+        ('movie-rss-target','movie','RSS Twins','2001','year','source_asserted','${now}','${now}');
+      INSERT INTO external_identities(id,media_item_id,namespace,external_type,external_id,scope,
+        connection_id,first_observed_source_record_id,last_observed_source_record_id)
+      VALUES ('tmdb-rss-source','movie-rss-source','tmdb','movie_id','456','global',NULL,
+        'rss-source','rss-source');
+      INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,
+        admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,
+        upstream_state,created_at,updated_at) VALUES
+        ('archive-rss-source','movie-rss-source','letterboxd-1','rss:source',
+          'letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}'),
+        ('archive-rss-target','movie-rss-target','letterboxd-1','rss:target',
+          'letterboxd_diary_entry','2025-01-01','day','source_asserted','active','${now}','${now}');
+      INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at) VALUES
+        ('e-rss-source','archive-rss-source','rss-source','admission','${now}'),
+        ('e-rss-target','archive-rss-target','rss-target','admission','${now}');
+    `)
+
+    await applyFullSnapshot([
+      {
+        mediaItemId: 'movie-rss-target',
+        filmUri: 'https://boxd.it/rss-twins',
+        title: 'RSS Twins',
+        releaseYear: '2001',
+        currentRating: null,
+        ratingSourceRecordId: null,
+        likedSourceRecordId: null,
+        watchlistSourceRecordId: 'queue-1',
+        watchlistAddedOn: '2023-01-03',
+      },
+    ])
+
+    expect(
+      database
+        .prepare("SELECT upstream_state FROM archive_entries WHERE id='archive-rss-source'")
+        .get(),
+    ).toEqual({ upstream_state: 'active' })
+    expect(
+      database
+        .prepare("SELECT media_item_id FROM external_identities WHERE id='tmdb-rss-source'")
+        .get(),
+    ).toEqual({ media_item_id: 'movie-rss-source' })
+    expect(
+      database
+        .prepare(
+          "SELECT count(*) count FROM archive_entry_evidence WHERE archive_entry_id='archive-rss-source' AND role='removal'",
+        )
+        .get(),
+    ).toEqual({ count: 0 })
+  })
+
+  it('treats SQL LIKE metacharacters literally in one-character searches', async () => {
+    await applyFullSnapshot()
+    for (const [title, query] of [
+      ['percent %', '%'],
+      ['underscore _', '_'],
+      ['slash \\', '\\'],
+    ] as const) {
+      database
+        .prepare(
+          "UPDATE movie_library_projection SET normalized_title=? WHERE media_item_id='movie-2'",
+        )
+        .run(title)
+      const page = await repository.listMovies(listInput({ collection: 'queue', q: query }))
+      expect(page.data.map((item) => item.id)).toEqual(['movie-2'])
+    }
   })
 })

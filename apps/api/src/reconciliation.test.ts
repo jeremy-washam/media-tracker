@@ -20,7 +20,10 @@ class D1SqliteStatement {
   readonly #statement: StatementSync
   #values: readonly SqlValue[] = []
 
-  constructor(statement: StatementSync) {
+  constructor(
+    statement: StatementSync,
+    readonly query: string,
+  ) {
     this.#statement = statement
   }
 
@@ -57,6 +60,7 @@ class D1SqliteDatabase {
   readonly database = new DatabaseSync(':memory:')
   batchCalls = 0
   failOnBatchCall: number | null = null
+  failBatchContaining: string | null = null
   largestBatch = 0
 
   constructor() {
@@ -109,13 +113,20 @@ class D1SqliteDatabase {
   }
 
   prepare(query: string): D1SqliteStatement {
-    return new D1SqliteStatement(this.database.prepare(query))
+    return new D1SqliteStatement(this.database.prepare(query), query)
   }
 
   async batch(statements: readonly D1SqliteStatement[]): Promise<readonly { success: true }[]> {
     this.batchCalls += 1
     this.largestBatch = Math.max(this.largestBatch, statements.length)
-    if (this.batchCalls === this.failOnBatchCall) throw new Error('Synthetic D1 failure')
+    const failBatchContaining = this.failBatchContaining
+    if (
+      this.batchCalls === this.failOnBatchCall ||
+      (failBatchContaining !== null &&
+        statements.some((statement) => statement.query.includes(failBatchContaining)))
+    ) {
+      throw new Error('Synthetic D1 failure')
+    }
     this.database.exec('BEGIN IMMEDIATE')
     try {
       for (const statement of statements) statement.execute()
@@ -284,7 +295,9 @@ it('updates an RSS-created viewing when its watched date changes', async () => {
     'fetch',
     async () =>
       new Response(
-        rss.replace('2025-07-02</letterboxd:watchedDate>', '2025-07-01</letterboxd:watchedDate>'),
+        rss
+          .replace('2025-07-02</letterboxd:watchedDate>', '2025-07-01</letterboxd:watchedDate>')
+          .replace('2025-07-03</letterboxd:watchedDate>', '2025-06-30</letterboxd:watchedDate>'),
       ),
   )
   await expect(syncLetterboxdRss(bindings)).resolves.toMatchObject({ unresolvedRecords: 1 })
@@ -295,6 +308,149 @@ it('updates an RSS-created viewing when its watched date changes', async () => {
       )
       .get(),
   ).toEqual({ consumed_at_value: '2025-07-01' })
+  expect(
+    database.database
+      .prepare(
+        `SELECT latest_known_watched_on FROM movie_library_projection
+         WHERE media_item_id=(SELECT media_item_id FROM archive_entries
+           WHERE source_occurrence_key='rss:letterboxd-watch-200')`,
+      )
+      .get(),
+  ).toEqual({ latest_known_watched_on: '2025-07-01' })
+})
+it('does not advance the RSS cursor when the Movies projection refresh fails', async () => {
+  vi.stubGlobal('fetch', async () => new Response(rss))
+  await syncLetterboxdRss(bindings)
+  const originalCheckpoint = database.database
+    .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='letterboxd-rss'")
+    .get() as { checkpoint_json: string }
+  const changedRss = rss
+    .replace('2025-07-03</letterboxd:watchedDate>', '2025-07-04</letterboxd:watchedDate>')
+    .replaceAll('New RSS Film', 'Renamed RSS Film')
+  const originalViewing = database.database
+    .prepare(
+      `SELECT v.source_record_id FROM letterboxd_movie_viewings v
+       JOIN archive_entries a ON a.id=v.archive_entry_id
+       WHERE a.source_occurrence_key='rss:letterboxd-watch-201'`,
+    )
+    .get()
+  const originalSearch = database.database
+    .prepare(
+      `SELECT title FROM movie_search WHERE media_item_id=(
+        SELECT media_item_id FROM archive_entries
+        WHERE source_occurrence_key='rss:letterboxd-watch-201'
+      )`,
+    )
+    .get()
+  vi.stubGlobal('fetch', async () => new Response(changedRss))
+  database.failBatchContaining = 'INSERT INTO letterboxd_movie_viewings'
+
+  await expect(syncLetterboxdRss(bindings)).rejects.toThrow('Synthetic D1 failure')
+  expect(
+    database.database
+      .prepare(
+        "SELECT consumed_at_value FROM archive_entries WHERE source_occurrence_key='rss:letterboxd-watch-201'",
+      )
+      .get(),
+  ).toEqual({ consumed_at_value: '2025-07-04' })
+  expect(
+    database.database
+      .prepare(
+        `SELECT title FROM media_items WHERE id=(
+          SELECT media_item_id FROM archive_entries
+          WHERE source_occurrence_key='rss:letterboxd-watch-201'
+        )`,
+      )
+      .get(),
+  ).toEqual({ title: 'Renamed RSS Film' })
+  expect(
+    database.database
+      .prepare(
+        `SELECT display_title, latest_known_watched_on FROM movie_library_projection
+         WHERE display_title='New RSS Film'`,
+      )
+      .get(),
+  ).toEqual({ display_title: 'New RSS Film', latest_known_watched_on: '2025-07-03' })
+  expect(
+    database.database
+      .prepare(
+        `SELECT title FROM movie_search WHERE media_item_id=(
+          SELECT media_item_id FROM archive_entries
+          WHERE source_occurrence_key='rss:letterboxd-watch-201'
+        )`,
+      )
+      .get(),
+  ).toEqual(originalSearch)
+  expect(
+    database.database
+      .prepare(
+        `SELECT v.source_record_id FROM letterboxd_movie_viewings v
+         JOIN archive_entries a ON a.id=v.archive_entry_id
+         WHERE a.source_occurrence_key='rss:letterboxd-watch-201'`,
+      )
+      .get(),
+  ).toEqual(originalViewing)
+  expect(
+    database.database
+      .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='letterboxd-rss'")
+      .get(),
+  ).toEqual(originalCheckpoint)
+
+  database.failBatchContaining = null
+  await expect(syncLetterboxdRss(bindings)).resolves.toMatchObject({ unchanged: false })
+  expect(
+    database.database
+      .prepare(
+        `SELECT display_title, latest_known_watched_on FROM movie_library_projection
+         WHERE display_title='Renamed RSS Film'`,
+      )
+      .get(),
+  ).toEqual({ display_title: 'Renamed RSS Film', latest_known_watched_on: '2025-07-04' })
+  expect(
+    database.database
+      .prepare(
+        `SELECT title FROM movie_search WHERE media_item_id=(
+          SELECT media_item_id FROM archive_entries
+          WHERE source_occurrence_key='rss:letterboxd-watch-201'
+        )`,
+      )
+      .get(),
+  ).toEqual({ title: 'Renamed RSS Film Renamed RSS Film 2025' })
+  expect(
+    database.database
+      .prepare(
+        `SELECT v.source_record_id FROM letterboxd_movie_viewings v
+         JOIN archive_entries a ON a.id=v.archive_entry_id
+         WHERE a.source_occurrence_key='rss:letterboxd-watch-201'`,
+      )
+      .get(),
+  ).not.toEqual(originalViewing)
+  expect(
+    database.database
+      .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='letterboxd-rss'")
+      .get(),
+  ).not.toEqual(originalCheckpoint)
+})
+it('reprocesses an identical RSS response when the cursor has an older parser version', async () => {
+  vi.stubGlobal('fetch', async () => new Response(rss))
+  await syncLetterboxdRss(bindings)
+  const row = database.database
+    .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='letterboxd-rss'")
+    .get() as { checkpoint_json: string }
+  const oldCheckpoint = { ...JSON.parse(row.checkpoint_json), parserVersion: 'letterboxd-rss@3' }
+  database.database
+    .prepare("UPDATE sync_cursors SET checkpoint_json=? WHERE name='letterboxd-rss'")
+    .run(JSON.stringify(oldCheckpoint))
+
+  await expect(syncLetterboxdRss(bindings)).resolves.toMatchObject({
+    unchanged: false,
+    feedEntries: 5,
+    sourceRecords: 5,
+  })
+  const refreshed = database.database
+    .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='letterboxd-rss'")
+    .get() as { checkpoint_json: string }
+  expect(JSON.parse(refreshed.checkpoint_json)).toMatchObject({ parserVersion: 'letterboxd-rss@4' })
 })
 it('keeps the latest Spotify listen when an older snapshot is imported', async () => {
   const archive = (ts: string) =>

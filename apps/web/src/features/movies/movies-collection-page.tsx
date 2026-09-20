@@ -144,8 +144,6 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
     () => ({
       collection,
       ...movieCollectionQuerySearch(search),
-      watched: search.watched,
-      added: search.added,
       limit: 48,
     }),
     [collection, search],
@@ -273,7 +271,11 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             disabled={selectedSort === 'relevance'}
             aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
             onClick={() =>
-              updateSearch({ direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
+              updateSearch({
+                sort: selectedSort,
+                direction: direction === 'asc' ? 'desc' : 'asc',
+                item: undefined,
+              })
             }
           >
             {direction === 'asc' ? (
@@ -763,10 +765,11 @@ function MovieInspector({
     queryKey: ['movie', mediaItemId],
     queryFn: ({ signal }) => fetchMovie(mediaItemId, signal),
   })
+  const collectionQuery = movieCollectionQuerySearch(search)
   const watchedFilters = {
-    watched: search.watched,
-    watchedFrom: search.watchedFrom,
-    watchedTo: search.watchedTo,
+    watched: collectionQuery.watched,
+    watchedFrom: collectionQuery.watchedFrom,
+    watchedTo: collectionQuery.watchedTo,
   }
   const history = useInfiniteQuery({
     queryKey: ['movie-history', mediaItemId, watchedFilters],
@@ -940,8 +943,8 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           ) : null}
           {movie.personal.reviewed ? (
             <>
-              <dt>Reviewed</dt>
-              <dd>Review available in History</dd>
+              <dt>Reviewed occurrences</dt>
+              <dd>{movie.personal.reviewedOccurrenceCount.toLocaleString()}</dd>
             </>
           ) : null}
         </dl>

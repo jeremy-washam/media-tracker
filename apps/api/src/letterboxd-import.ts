@@ -248,26 +248,6 @@ export async function importLetterboxdExport(
           }
         }
       }
-      if (matchingItemId === undefined) {
-        const candidates = await repository.findMediaByExactTitleAndYear(
-          'movie',
-          film.title,
-          film.releaseYear,
-        )
-        if (candidates.length === 1) {
-          for (const occurrence of film.diaryOccurrences) {
-            const matches = await repository.findArchiveEntriesByMediaAndConsumedDay(
-              connection.id,
-              candidates[0]!,
-              calendarDate(occurrence.consumedOn),
-            )
-            if (matches.length === 1 && matches[0]!.sourceOccurrenceKey.startsWith('rss:')) {
-              matchingItemId = candidates[0]!
-              break
-            }
-          }
-        }
-      }
       const itemId = matchingItemId ?? mediaItemId(ulid())
       const filmIdentityId = knownFilmIdentity?.id ?? externalIdentityId(ulid())
 
@@ -348,7 +328,7 @@ export async function importLetterboxdExport(
           mediaItemId: itemId,
           diaryUri: null,
           rewatch: false,
-          logUrl: film.filmUri,
+          logUrl: null,
           sourceRecordId: watchedRecord.id,
         })
         continue

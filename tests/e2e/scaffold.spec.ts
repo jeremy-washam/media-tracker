@@ -259,6 +259,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
     route.fulfill({
       json: {
         ...movie,
+        personal: { ...movie.personal, reviewedOccurrenceCount: 1 },
         overview: null,
         originalTitle: null,
         originalLanguage: null,
@@ -303,6 +304,22 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
             matchesFilter: true,
             connection: { id: 'letterboxd-one', label: 'Letterboxd' },
           },
+          {
+            archiveEntryId: 'watch-two',
+            watchedAt: null,
+            sourceRecordedAt: {
+              value: '2026-09-01',
+              precision: 'day',
+              basis: 'source_asserted',
+            },
+            rating: null,
+            reviewText: null,
+            sourceRewatch: false,
+            letterboxdLogUrl: null,
+            letterboxdFilmUrl: 'https://letterboxd.com/film/a-distant-movie/',
+            matchesFilter: true,
+            connection: { id: 'letterboxd-one', label: 'Letterboxd' },
+          },
         ],
         nextCursor: null,
       },
@@ -323,14 +340,66 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await page.getByRole('button', { name: /A Distant Movie/ }).click()
   await expect(page).toHaveURL(/item=movie-one/)
   await expect(page.getByText('TMDB not configured.')).toBeVisible()
+  await expect(
+    page.getByText('Reviewed occurrences').locator('xpath=following-sibling::dd[1]'),
+  ).toHaveText('1')
   await page.getByRole('tab', { name: 'History (2)' }).click()
   await expect(page.getByText('A personal review.')).toBeVisible()
+  await expect(page.getByRole('link', { name: /Open film on Letterboxd/ })).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).last().click()
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
   expect(requested).toHaveLength(requestsAfterPaging)
   expect(requested.every((value) => !value.includes('view=') && !value.includes('item='))).toBe(
     true,
   )
+})
+
+test('keeps incomplete Movie filter drafts out of API requests', async ({ page }) => {
+  const requested: URL[] = []
+  await page.route('**/api/library/movies?*', async (route) => {
+    requested.push(new URL(route.request().url()))
+    await route.fulfill({ json: moviesResponse() })
+  })
+
+  await page.goto('/library/movies/archive')
+  await expect(page.getByRole('heading', { name: 'Movies' })).toBeVisible()
+  await page.getByRole('button', { name: /Filters/ }).click()
+
+  await page
+    .getByRole('group', { name: 'Watched date' })
+    .getByRole('combobox')
+    .selectOption('range')
+  await page.getByRole('group', { name: 'Release year' }).getByLabel('Release year from').fill('20')
+  await page
+    .getByRole('group', { name: 'Your rating' })
+    .getByRole('combobox')
+    .first()
+    .selectOption('range')
+
+  await expect(page).toHaveURL(/watched=range/)
+  await expect(page).toHaveURL(/releaseYearFrom=/)
+  expect(
+    requested.every(
+      (url) =>
+        url.searchParams.get('watched') !== 'range' &&
+        url.searchParams.get('rating') !== 'range' &&
+        url.searchParams.get('releaseYearFrom') !== '20',
+    ),
+  ).toBe(true)
+
+  await page.getByLabel('Watched date from').fill('2020-01-01')
+  await page.getByLabel('Release year from').fill('2020')
+  await page.getByLabel('Minimum rating').selectOption('4')
+  await expect
+    .poll(() =>
+      requested.some(
+        (url) =>
+          url.searchParams.get('watchedFrom') === '2020-01-01' &&
+          url.searchParams.get('releaseYearFrom') === '2020' &&
+          url.searchParams.get('ratingMin') === '4',
+      ),
+    )
+    .toBe(true)
 })
 
 test('shows separate account progress and resumes the selected account', async ({ page }) => {

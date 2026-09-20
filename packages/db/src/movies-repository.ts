@@ -17,7 +17,7 @@ export interface LetterboxdMovieSnapshotViewing {
   mediaItemId: string
   diaryUri: string | null
   rewatch: boolean
-  logUrl: string
+  logUrl: string | null
   sourceRecordId: string
 }
 
@@ -105,6 +105,7 @@ export interface MoviesPageRecord {
 }
 
 export interface MovieDetailRecord extends MovieCollectionRecord {
+  personal: MovieCollectionRecord['personal'] & { reviewedOccurrenceCount: number }
   overview: null
   originalTitle: null
   originalLanguage: null
@@ -170,6 +171,10 @@ function statement(
 
 function normalizedText(value: string): string {
   return value.trim().toLocaleLowerCase('en-US')
+}
+
+function escapedLikePattern(value: string): string {
+  return `%${normalizedText(value).replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -364,11 +369,77 @@ function filterSql(input: MoviesListInput): { sql: string; values: DatabaseValue
   } else if (input.runtimeUnknown) clauses.push('b.runtime_minutes IS NULL')
   if (input.q !== undefined && input.q.trim() !== '') {
     if (input.q.trim().length < 2) {
-      clauses.push('b.normalized_title LIKE ?')
-      values.push(`%${normalizedText(input.q)}%`)
+      clauses.push("b.normalized_title LIKE ? ESCAPE '\\'")
+      values.push(escapedLikePattern(input.q))
     } else clauses.push('b.search_rank IS NOT NULL')
   }
   return { sql: clauses.join(' AND '), values }
+}
+
+function movieProjectionStatements(database: DatabaseClient): DatabaseStatement[] {
+  return [
+    statement(database, 'DELETE FROM movie_search'),
+    statement(database, 'DELETE FROM movie_library_projection'),
+    statement(
+      database,
+      `INSERT INTO movie_library_projection(
+        media_item_id, connection_id, film_uri, imported_title, display_title,
+        normalized_title, release_year, poster_url, director_names, runtime_minutes,
+        current_rating_value, liked, reviewed, in_archive, in_queue, queue_added_on,
+        latest_known_watched_on, active_watch_count, has_unknown_watched_date,
+        source_refreshed_at, projection_version
+      )
+      SELECT m.id,
+        COALESCE(s.connection_id,
+          (SELECT a.connection_id FROM archive_entries a WHERE a.media_item_id=m.id LIMIT 1),
+          (SELECT q.connection_id FROM queue_entries q WHERE q.media_item_id=m.id LIMIT 1)),
+        COALESCE(s.film_uri, (SELECT e.external_id FROM external_identities e
+          WHERE e.media_item_id=m.id AND e.namespace='letterboxd'
+            AND e.retired_at IS NULL
+          ORDER BY CASE e.external_type WHEN 'film_uri' THEN 0 ELSE 1 END LIMIT 1),
+          m.canonical_url),
+        COALESCE(s.imported_title, m.title, 'Untitled movie'),
+        COALESCE(s.imported_title, m.title, 'Untitled movie'),
+        lower(COALESCE(s.imported_title, m.title, 'Untitled movie')),
+        COALESCE(s.release_year, substr(m.published_at_value, 1, 4)),
+        NULL, NULL, NULL, s.current_rating_value, COALESCE(s.liked, 0),
+        CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
+          WHERE a.media_item_id=m.id AND a.upstream_state='active'
+            AND a.review_text IS NOT NULL AND trim(a.review_text)<>'') THEN 1 ELSE 0 END,
+        CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
+          WHERE a.media_item_id=m.id AND a.upstream_state='active') THEN 1 ELSE 0 END,
+        CASE WHEN EXISTS (SELECT 1 FROM queue_entries q
+          WHERE q.media_item_id=m.id AND q.upstream_state='active') THEN 1 ELSE 0 END,
+        (SELECT MAX(q.added_at_value) FROM queue_entries q
+          WHERE q.media_item_id=m.id AND q.upstream_state='active'),
+        (SELECT MAX(a.consumed_at_value) FROM archive_entries a
+          WHERE a.media_item_id=m.id AND a.upstream_state='active'),
+        (SELECT COUNT(*) FROM archive_entries a
+          WHERE a.media_item_id=m.id AND a.upstream_state='active'),
+        CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
+          WHERE a.media_item_id=m.id AND a.upstream_state='active'
+            AND a.consumed_at_value IS NULL) THEN 1 ELSE 0 END,
+        COALESCE(s.last_observed_at, m.updated_at), 1
+      FROM media_items m
+      LEFT JOIN letterboxd_movie_state s ON s.media_item_id=m.id
+      WHERE m.type='movie' AND (
+        s.media_item_id IS NOT NULL
+        OR EXISTS (SELECT 1 FROM archive_entries a
+          WHERE a.media_item_id=m.id AND a.upstream_state='active')
+        OR EXISTS (SELECT 1 FROM queue_entries q
+          WHERE q.media_item_id=m.id AND q.upstream_state='active')
+      )`,
+    ),
+    statement(
+      database,
+      `INSERT INTO movie_search(media_item_id, title, reviews)
+       SELECT p.media_item_id, p.display_title || ' ' || p.imported_title || ' ' || COALESCE(p.release_year,''),
+         COALESCE((SELECT group_concat(a.review_text, ' ') FROM archive_entries a
+           WHERE a.media_item_id=p.media_item_id AND a.upstream_state='active'
+             AND a.review_text IS NOT NULL), '')
+       FROM movie_library_projection p`,
+    ),
+  ]
 }
 
 export class SqlMoviesRepository {
@@ -392,25 +463,72 @@ export class SqlMoviesRepository {
          FROM media_items m WHERE m.type='movie';`,
       )
       .all<{ id: string; title: string; release_year: string | null; has_state: number }>()
-    const repairs: { source: string; target: string }[] = []
+    const repairs: {
+      source: string
+      target: string
+      sourceEntry: string
+      targetEntry: string
+    }[] = []
     for (const candidate of legacyCandidates.results) {
       if (candidate.has_state === 1 || candidate.release_year === null) continue
       const target = imported.get(
         `${normalizedText(decodeHtmlEntities(candidate.title))}\u0000${candidate.release_year}`,
       )
       if (target === undefined || target === null || target === candidate.id) continue
-      const sameDay = await this.#database
+      const witnesses = await this.#database
         .prepare(
-          `SELECT COUNT(*) count FROM archive_entries source
-           WHERE source.media_item_id=? AND source.consumed_at_precision='day'
-             AND (SELECT COUNT(*) FROM archive_entries match
-               WHERE match.media_item_id=? AND match.connection_id=source.connection_id
-                 AND match.consumed_at_value=source.consumed_at_value
-                 AND match.consumed_at_precision='day')=1`,
+          `SELECT source.id source_entry, target.id target_entry
+           FROM archive_entries source
+           JOIN archive_entry_evidence evidence
+             ON evidence.archive_entry_id=source.id AND evidence.role='admission'
+           JOIN source_records record ON record.id=evidence.source_record_id
+           JOIN archive_entries target
+             ON target.media_item_id=? AND target.connection_id=?
+            AND target.upstream_state='active'
+            AND target.consumed_at_value=source.consumed_at_value
+            AND target.consumed_at_precision='day'
+           WHERE source.media_item_id=? AND source.connection_id=?
+             AND source.upstream_state='active'
+             AND source.source_occurrence_key LIKE 'rss:%'
+             AND source.consumed_at_precision='day'
+             AND record.connection_id=? AND record.record_type='rss_movie_entry'
+             AND record.parser_version LIKE 'letterboxd-rss@%'
+             AND EXISTS (
+               SELECT 1 FROM archive_entry_evidence target_evidence
+               JOIN source_records target_record
+                 ON target_record.id=target_evidence.source_record_id
+               WHERE target_evidence.archive_entry_id=target.id
+                 AND target_record.raw_object_id=?
+                 AND target_record.record_type='diary_entry'
+             )
+             AND (SELECT COUNT(*) FROM archive_entries source_count
+               WHERE source_count.media_item_id=source.media_item_id)=1
+             AND (SELECT COUNT(*) FROM archive_entries target_count
+               WHERE target_count.media_item_id=target.media_item_id
+                 AND target_count.connection_id=target.connection_id
+                 AND target_count.upstream_state='active'
+                 AND target_count.consumed_at_value=target.consumed_at_value
+                 AND target_count.consumed_at_precision='day')=1
+           GROUP BY source.id, target.id
+           LIMIT 2`,
         )
-        .bind(candidate.id, target)
-        .first<{ count: number }>()
-      if ((sameDay?.count ?? 0) > 0) repairs.push({ source: candidate.id, target })
+        .bind(
+          target,
+          input.connectionId,
+          candidate.id,
+          input.connectionId,
+          input.connectionId,
+          input.rawObjectId,
+        )
+        .all<{ source_entry: string; target_entry: string }>()
+      if (witnesses.results.length === 1) {
+        repairs.push({
+          source: candidate.id,
+          target,
+          sourceEntry: witnesses.results[0]!.source_entry,
+          targetEntry: witnesses.results[0]!.target_entry,
+        })
+      }
     }
     const statements: DatabaseStatement[] = []
     statements.push(
@@ -584,151 +702,80 @@ export class SqlMoviesRepository {
           `INSERT OR IGNORE INTO archive_entry_evidence(
             id, archive_entry_id, source_record_id, role, linked_at
           )
-          SELECT 'movie-reconcile:' || target.id || ':' || evidence.source_record_id || ':' || evidence.role,
-            target.id, evidence.source_record_id, evidence.role, evidence.linked_at
-          FROM archive_entries source
-          JOIN archive_entry_evidence evidence ON evidence.archive_entry_id=source.id
-          JOIN archive_entries target ON target.media_item_id=?
-            AND target.connection_id=source.connection_id
-            AND target.consumed_at_value=source.consumed_at_value
-            AND target.consumed_at_precision='day'
-          WHERE source.media_item_id=? AND source.consumed_at_precision='day'
-            AND (SELECT COUNT(*) FROM archive_entries match
-              WHERE match.media_item_id=? AND match.connection_id=source.connection_id
-                AND match.consumed_at_value=source.consumed_at_value
-                AND match.consumed_at_precision='day')=1`,
-          [repair.target, repair.source, repair.target],
+          SELECT 'movie-reconcile:' || ? || ':' || evidence.source_record_id || ':' || evidence.role,
+            ?, evidence.source_record_id, evidence.role, evidence.linked_at
+          FROM archive_entry_evidence evidence WHERE evidence.archive_entry_id=?`,
+          [repair.targetEntry, repair.targetEntry, repair.sourceEntry],
         ),
         statement(
           this.#database,
           `INSERT OR IGNORE INTO archive_entry_evidence(
             id, archive_entry_id, source_record_id, role, linked_at
           )
-          SELECT 'movie-reconcile-removal:' || source.id || ':' || ?, source.id, ?, 'removal', ?
-          FROM archive_entries source
-          WHERE source.media_item_id=? AND source.consumed_at_precision='day'
-            AND (SELECT COUNT(*) FROM archive_entries match
-              WHERE match.media_item_id=? AND match.connection_id=source.connection_id
-                AND match.consumed_at_value=source.consumed_at_value
-                AND match.consumed_at_precision='day')=1`,
+          SELECT 'movie-reconcile-removal:' || ? || ':' || ?, ?, ?, 'removal', ?`,
           [
+            repair.sourceEntry,
             input.snapshotSourceRecordId,
+            repair.sourceEntry,
             input.snapshotSourceRecordId,
             input.observedAt,
-            repair.source,
-            repair.target,
           ],
         ),
         statement(
           this.#database,
-          `UPDATE archive_entries SET upstream_state='removed', updated_at=? WHERE id IN (
-            SELECT source.id FROM archive_entries source
-            WHERE source.media_item_id=? AND source.consumed_at_precision='day'
-              AND (SELECT COUNT(*) FROM archive_entries match
-                WHERE match.media_item_id=? AND match.connection_id=source.connection_id
-                  AND match.consumed_at_value=source.consumed_at_value
-                  AND match.consumed_at_precision='day')=1
-          )`,
-          [input.observedAt, repair.source, repair.target],
-        ),
-        statement(
-          this.#database,
-          'UPDATE archive_entries SET consumed_identity_id=NULL WHERE media_item_id=?',
-          [repair.source],
+          `UPDATE archive_entries SET consumed_identity_id=NULL, upstream_state='removed',
+            updated_at=? WHERE id=?`,
+          [input.observedAt, repair.sourceEntry],
         ),
         statement(
           this.#database,
           'UPDATE external_identities SET media_item_id=? WHERE media_item_id=?',
           [repair.target, repair.source],
         ),
-        statement(
-          this.#database,
-          "UPDATE archive_entries SET media_item_id=? WHERE media_item_id=? AND upstream_state='active'",
-          [repair.target, repair.source],
-        ),
-        statement(
-          this.#database,
-          'UPDATE queue_entries SET media_item_id=? WHERE media_item_id=?',
-          [repair.target, repair.source],
-        ),
-        statement(
-          this.#database,
-          `UPDATE letterboxd_movie_viewings SET media_item_id=?
-           WHERE media_item_id=? AND EXISTS (
-             SELECT 1 FROM archive_entries a
-             WHERE a.id=letterboxd_movie_viewings.archive_entry_id
-               AND a.upstream_state='active'
-           )`,
-          [repair.target, repair.source],
-        ),
       )
     }
-    statements.push(
-      statement(this.#database, 'DELETE FROM movie_search'),
-      statement(this.#database, 'DELETE FROM movie_library_projection'),
-      statement(
-        this.#database,
-        `INSERT INTO movie_library_projection(
-          media_item_id, connection_id, film_uri, imported_title, display_title,
-          normalized_title, release_year, poster_url, director_names, runtime_minutes,
-          current_rating_value, liked, reviewed, in_archive, in_queue, queue_added_on,
-          latest_known_watched_on, active_watch_count, has_unknown_watched_date,
-          source_refreshed_at, projection_version
-        )
-        SELECT m.id,
-          COALESCE(s.connection_id,
-            (SELECT a.connection_id FROM archive_entries a WHERE a.media_item_id=m.id LIMIT 1),
-            (SELECT q.connection_id FROM queue_entries q WHERE q.media_item_id=m.id LIMIT 1)),
-          COALESCE(s.film_uri, (SELECT e.external_id FROM external_identities e
-            WHERE e.media_item_id=m.id AND e.namespace='letterboxd'
-              AND e.retired_at IS NULL
-            ORDER BY CASE e.external_type WHEN 'film_uri' THEN 0 ELSE 1 END LIMIT 1),
-            m.canonical_url),
-          COALESCE(s.imported_title, m.title, 'Untitled movie'),
-          COALESCE(s.imported_title, m.title, 'Untitled movie'),
-          lower(COALESCE(s.imported_title, m.title, 'Untitled movie')),
-          COALESCE(s.release_year, substr(m.published_at_value, 1, 4)),
-          NULL, NULL, NULL, s.current_rating_value, COALESCE(s.liked, 0),
-          CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
-            WHERE a.media_item_id=m.id AND a.upstream_state='active'
-              AND a.review_text IS NOT NULL AND trim(a.review_text)<>'') THEN 1 ELSE 0 END,
-          CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
-            WHERE a.media_item_id=m.id AND a.upstream_state='active') THEN 1 ELSE 0 END,
-          CASE WHEN EXISTS (SELECT 1 FROM queue_entries q
-            WHERE q.media_item_id=m.id AND q.upstream_state='active') THEN 1 ELSE 0 END,
-          (SELECT MAX(q.added_at_value) FROM queue_entries q
-            WHERE q.media_item_id=m.id AND q.upstream_state='active'),
-          (SELECT MAX(a.consumed_at_value) FROM archive_entries a
-            WHERE a.media_item_id=m.id AND a.upstream_state='active'),
-          (SELECT COUNT(*) FROM archive_entries a
-            WHERE a.media_item_id=m.id AND a.upstream_state='active'),
-          CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
-            WHERE a.media_item_id=m.id AND a.upstream_state='active'
-              AND a.consumed_at_value IS NULL) THEN 1 ELSE 0 END,
-          COALESCE(s.last_observed_at, m.updated_at), 1
-        FROM media_items m
-        LEFT JOIN letterboxd_movie_state s ON s.media_item_id=m.id
-        WHERE m.type='movie' AND (
-          s.media_item_id IS NOT NULL
-          OR EXISTS (SELECT 1 FROM archive_entries a
-            WHERE a.media_item_id=m.id AND a.upstream_state='active')
-          OR EXISTS (SELECT 1 FROM queue_entries q
-            WHERE q.media_item_id=m.id AND q.upstream_state='active')
-        )`,
-      ),
-      statement(
-        this.#database,
-        `INSERT INTO movie_search(media_item_id, title, reviews)
-         SELECT p.media_item_id, p.display_title || ' ' || p.imported_title || ' ' || COALESCE(p.release_year,''),
-           COALESCE((SELECT group_concat(a.review_text, ' ') FROM archive_entries a
-             WHERE a.media_item_id=p.media_item_id AND a.upstream_state='active'
-               AND a.review_text IS NOT NULL), '')
-         FROM movie_library_projection p`,
-      ),
-    )
+    statements.push(...movieProjectionStatements(this.#database))
     const results = await this.#database.batch(statements)
     if (results.length !== statements.length || results.some((result) => !result.success)) {
       throw new Error('Letterboxd movie snapshot projection did not complete successfully')
+    }
+  }
+
+  async refreshLetterboxdActivityProjection(input: {
+    connectionId: string
+    observedAt: string
+    viewings: readonly LetterboxdMovieSnapshotViewing[]
+  }): Promise<void> {
+    const statements = input.viewings.map((viewing) =>
+      statement(
+        this.#database,
+        `INSERT INTO letterboxd_movie_viewings(
+          archive_entry_id, connection_id, media_item_id, diary_uri, rewatch,
+          log_url, source_record_id, projection_version, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+        ON CONFLICT(archive_entry_id) DO UPDATE SET
+          media_item_id=excluded.media_item_id,
+          diary_uri=COALESCE(excluded.diary_uri, letterboxd_movie_viewings.diary_uri),
+          rewatch=excluded.rewatch,
+          log_url=COALESCE(excluded.log_url, letterboxd_movie_viewings.log_url),
+          source_record_id=excluded.source_record_id,
+          projection_version=excluded.projection_version, updated_at=excluded.updated_at`,
+        [
+          viewing.archiveEntryId,
+          input.connectionId,
+          viewing.mediaItemId,
+          viewing.diaryUri,
+          viewing.rewatch ? 1 : 0,
+          viewing.logUrl,
+          viewing.sourceRecordId,
+          input.observedAt,
+        ],
+      ),
+    )
+    statements.push(...movieProjectionStatements(this.#database))
+    const results = await this.#database.batch(statements)
+    if (results.length !== statements.length || results.some((result) => !result.success)) {
+      throw new Error('Letterboxd activity projection did not complete successfully')
     }
   }
 
@@ -889,6 +936,9 @@ export class SqlMoviesRepository {
       `SELECT p.*, p.latest_known_watched_on reference_watched_on,
         p.active_watch_count matching_watch_count, 0 sort_null_rank, NULL sort_value,
         c.label connection_label, c.coverage,
+        (SELECT COUNT(*) FROM archive_entries a
+          WHERE a.media_item_id=p.media_item_id AND a.upstream_state='active'
+            AND a.review_text IS NOT NULL AND trim(a.review_text)<>'') reviewed_count,
         (SELECT MAX(CASE WHEN r.kind='export' AND r.processing_status='processed' THEN r.acquired_at END)
           FROM raw_objects r WHERE r.connection_id=p.connection_id) export_at,
         (SELECT MAX(CASE WHEN r.kind='rss' AND r.processing_status='processed' THEN r.acquired_at END)
@@ -902,11 +952,16 @@ export class SqlMoviesRepository {
         coverage: 'complete' | 'partial' | 'best_effort'
         export_at: string | null
         rss_at: string | null
+        reviewed_count: number
       }
     >()
     if (row === null) return null
     return {
       ...movieRow(row),
+      personal: {
+        ...movieRow(row).personal,
+        reviewedOccurrenceCount: row.reviewed_count,
+      },
       overview: null,
       originalTitle: null,
       originalLanguage: null,
@@ -998,7 +1053,9 @@ export class SqlMoviesRepository {
           ]
     const rows = await statement(
       this.#database,
-      `SELECT a.*, v.rewatch, v.log_url, p.film_uri, c.label,
+      `SELECT a.*, v.rewatch,
+        CASE WHEN v.diary_uri IS NOT NULL THEN v.log_url END log_url,
+        p.film_uri, c.label,
         CASE WHEN ${match.sql} THEN 1 ELSE 0 END matches_filter,
         CASE WHEN a.consumed_at_value IS NULL THEN 1 ELSE 0 END null_rank
        FROM archive_entries a

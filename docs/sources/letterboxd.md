@@ -273,9 +273,19 @@ Export parser v6 now builds the movie universe from watched, ratings, likes, and
 watchlist files. It projects current film rating and liked state separately from
 Diary occurrence ratings/reviews, preserves rewatch metadata, admits queue-only
 movies, and reconciles watchlist removals only after a successful complete
-snapshot. RSS parser v3 decodes nested title entities before matching. The
+snapshot. RSS parser v4 decodes nested title entities before matching and
+refreshes the Movies read models. The
 Movies Library exposes Archive and Queue through movie-specific collection,
 detail, and History APIs and remains useful without TMDB configured.
+
+Each changed RSS response now refreshes the Movies viewing and browse/search
+projections before its cursor advances, so RSS-only additions and corrected
+watch dates are visible immediately. Export repair of the narrow pre-v6 RSS
+duplicate shape requires one proven RSS-created occurrence and one unique active
+same-day occurrence evidenced by a Diary row in the current complete export and
+the same Letterboxd connection. Removed,
+cross-connection, multiply occurring, or unproven title/year collisions remain
+separate for explicit reconciliation.
 
 The retained export still contains 670 unique film URIs across the four
 film-level files and 309 watchlist memberships. An isolated parser-v6 replay

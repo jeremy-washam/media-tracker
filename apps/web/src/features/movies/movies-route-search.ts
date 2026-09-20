@@ -37,7 +37,7 @@ function date(value: unknown): string | undefined {
 
 function year(value: unknown): string | undefined {
   const parsed = stringValue(value)
-  return parsed && /^\d{4}$/.test(parsed) ? parsed : undefined
+  return parsed && /^\d{1,4}$/.test(parsed) ? parsed : undefined
 }
 
 function flag(value: unknown): boolean | undefined {
@@ -142,6 +142,7 @@ export function normalizedForMovieCollection(
     delete next.sort
     delete next.direction
   }
+  if (next.sort === undefined) delete next.direction
   return next
 }
 
@@ -149,5 +150,33 @@ export function movieCollectionQuerySearch(search: MoviesRouteSearch): MoviesRou
   const query = { ...search }
   delete query.item
   delete query.view
+  if (
+    query.watched === 'range' &&
+    query.watchedFrom === undefined &&
+    query.watchedTo === undefined
+  ) {
+    delete query.watched
+  }
+  if (query.added === 'range' && query.addedFrom === undefined && query.addedTo === undefined) {
+    delete query.added
+  }
+  if (query.rating === 'range' && query.ratingMin === undefined && query.ratingMax === undefined) {
+    delete query.rating
+  }
+  if (
+    query.ratingMin !== undefined &&
+    query.ratingMax !== undefined &&
+    query.ratingMin > query.ratingMax
+  ) {
+    delete query.rating
+    delete query.ratingMin
+    delete query.ratingMax
+  }
+  if (query.releaseYearFrom !== undefined && !/^\d{4}$/.test(query.releaseYearFrom)) {
+    delete query.releaseYearFrom
+  }
+  if (query.releaseYearTo !== undefined && !/^\d{4}$/.test(query.releaseYearTo)) {
+    delete query.releaseYearTo
+  }
   return query
 }

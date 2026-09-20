@@ -247,6 +247,17 @@ describe('Letterboxd export import', () => {
         review_text: 'Synthetic review',
       },
     ])
+    expect(
+      database.database
+        .prepare(
+          `SELECT v.log_url, p.film_uri
+           FROM letterboxd_movie_viewings v
+           JOIN movie_library_projection p ON p.media_item_id=v.media_item_id
+           JOIN archive_entries a ON a.id=v.archive_entry_id
+           WHERE a.admission_reason='letterboxd_watched_state'`,
+        )
+        .get(),
+    ).toEqual({ log_url: null, film_uri: 'https://boxd.it/film-two' })
   })
 
   it('reconciles RSS entries to an imported Diary and skips unchanged feed processing', async () => {
@@ -291,5 +302,26 @@ describe('Letterboxd export import', () => {
         .prepare('SELECT count(*) AS count FROM archive_entries WHERE consumed_at_value = ?')
         .get('2025-01-02'),
     ).toEqual({ count: 1 })
+    expect(
+      database.database
+        .prepare(
+          `SELECT active_watch_count, latest_known_watched_on
+           FROM movie_library_projection WHERE display_title='New RSS Film'`,
+        )
+        .get(),
+    ).toEqual({ active_watch_count: 2, latest_known_watched_on: '2025-07-03' })
+    expect(
+      database.database
+        .prepare(
+          `SELECT v.rewatch, v.log_url
+           FROM letterboxd_movie_viewings v
+           JOIN archive_entries a ON a.id=v.archive_entry_id
+           WHERE a.source_occurrence_key='rss:letterboxd-watch-201'`,
+        )
+        .get(),
+    ).toEqual({
+      rewatch: 1,
+      log_url: 'https://letterboxd.com/example/film/new-film/rewatch/',
+    })
   })
 })

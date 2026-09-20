@@ -26,6 +26,37 @@ describe('Movies route search', () => {
         'archive',
       ),
     ).toEqual({})
+    expect(normalizedForMovieCollection({ direction: 'asc' }, 'queue')).toEqual({})
+    expect(normalizedForMovieCollection({ sort: 'title', direction: 'desc' }, 'queue')).toEqual({
+      sort: 'title',
+      direction: 'desc',
+    })
+  })
+
+  it('keeps filter drafts in route state but omits incomplete API predicates', () => {
+    const draft = parseMoviesRouteSearch({
+      watched: 'range',
+      rating: 'range',
+      releaseYearFrom: '20',
+    })
+    expect(draft).toEqual({ watched: 'range', rating: 'range', releaseYearFrom: '20' })
+    expect(movieCollectionQuerySearch(draft)).toEqual({})
+
+    expect(
+      movieCollectionQuerySearch({
+        watched: 'range',
+        watchedFrom: '2020-01-01',
+        rating: 'range',
+        ratingMin: 4,
+        releaseYearFrom: '2020',
+      }),
+    ).toEqual({
+      watched: 'range',
+      watchedFrom: '2020-01-01',
+      rating: 'range',
+      ratingMin: 4,
+      releaseYearFrom: '2020',
+    })
   })
 
   it('validates supported URL values', () => {

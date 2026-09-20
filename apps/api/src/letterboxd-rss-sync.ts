@@ -8,6 +8,7 @@ import type {
   ArchiveEntryWrite,
   ArchiveOccurrenceReference,
   CanonicalLedgerRepository,
+  LetterboxdMovieSnapshotViewing,
 } from '@media-tracker/db'
 import {
   archiveEntryEvidenceId,
@@ -39,9 +40,9 @@ import {
 import { ulid } from 'ulid'
 
 import type { Bindings } from './env'
-import { createLedgerRepository } from './env'
+import { createLedgerRepository, createMoviesRepository } from './env'
 
-const parserVersion = 'letterboxd-rss@3'
+const parserVersion = 'letterboxd-rss@4'
 
 export class LetterboxdRssConfigurationError extends Error {
   constructor() {
@@ -191,6 +192,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
   }
 
   const repository = createLedgerRepository(bindings.DB)
+  const moviesRepository = createMoviesRepository(bindings.DB)
   const startedAt = instantNow()
   const connection = await connectionForSync(repository, startedAt)
   const runId = syncRunId(ulid())
@@ -292,6 +294,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
     const externalIdentities: ExternalIdentity[] = []
     const pendingTmdb = new Map<string, { id: ExternalIdentityId; itemId: MediaItemId }>()
     const archiveEntries: ArchiveEntryWrite[] = []
+    const movieViewings: LetterboxdMovieSnapshotViewing[] = []
     let unresolvedRecords = 0
 
     for (const [index, entry] of snapshot.entries.entries()) {
@@ -466,6 +469,14 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
         },
         evidence,
       })
+      movieViewings.push({
+        archiveEntryId: entryId,
+        mediaItemId: itemId,
+        diaryUri: entry.entryUrl,
+        rewatch: entry.rewatch === true,
+        logUrl: entry.entryUrl,
+        sourceRecordId: sourceRecord.id,
+      })
     }
 
     const succeededRun: SyncRun = {
@@ -484,6 +495,17 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
       .filter((value): value is ReturnType<typeof utcInstant> => value !== null)
       .sort()
     await repository.commit({
+      sourceRecords,
+      mediaItems,
+      externalIdentities,
+      archiveEntries,
+    })
+    await moviesRepository.refreshLetterboxdActivityProjection({
+      connectionId: connection.id,
+      observedAt: finishedAt,
+      viewings: movieViewings,
+    })
+    await repository.commit({
       syncRun: succeededRun,
       rawObjects: [
         {
@@ -492,10 +514,6 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
           lastParserVersion: parserVersion,
         },
       ],
-      sourceRecords,
-      mediaItems,
-      externalIdentities,
-      archiveEntries,
       cursor: {
         id: previousCursor?.id ?? syncCursorId(ulid()),
         connectionId: connection.id,

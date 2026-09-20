@@ -65,11 +65,15 @@ plain-text reviews. A fresh export supplies old edits, private activity, and wat
 Deletion reconciliation is still deferred; importing a later ZIP does not
 currently apply deletion tombstones.
 
-Export parser v6 and RSS parser v3 reconcile in both acquisition orders. RSS observations
-retain Diary URLs and consult stable occurrence keys before date matching, so
-watched-date edits update the existing occurrence. Export matching prefers known
-film/Diary identities; an unambiguous exact title/year plus RSS viewing date is
-an explicit fallback. Nested RSS title entities are decoded before matching;
-replay can repair an exact unambiguous legacy title/year duplicate while
-preserving its evidence. Ambiguous matches are not merged. Rating/review nulls
-in full exports clear current canonical fields while earlier raw evidence remains.
+Export parser v6 and RSS parser v4 reconcile in both acquisition orders. RSS
+observations retain Diary URLs, consult stable occurrence keys before date
+matching, and refresh the Movies browse/search projection before cursor
+advancement, so additions and watched-date edits are visible immediately.
+Export matching prefers known film and Diary identities. Nested RSS title
+entities are decoded before matching; replay repairs the narrow legacy
+title/year duplicate only when one proven RSS occurrence and one unique active
+same-day occurrence evidenced by a Diary row in the current complete export and
+the same connection provide the witness. Removed,
+cross-connection, multiple-occurrence, and otherwise ambiguous candidates are
+not merged. Rating/review nulls in full exports clear current canonical fields
+while earlier raw evidence remains.
