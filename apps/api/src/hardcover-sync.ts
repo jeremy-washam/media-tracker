@@ -1,11 +1,18 @@
 import {
+  fetchHardcoverEditionsResponse,
   fetchHardcoverReadBooksResponse,
+  parseHardcoverEditionsPage,
   parseHardcoverReadBooksPage,
   fetchHardcoverUserId,
+  type HardcoverEdition,
   type HardcoverReadBook,
 } from '@media-tracker/connector-hardcover'
 import type { HardcoverSyncResponse } from '@media-tracker/contracts'
-import type { ArchiveEntryWrite, CanonicalLedgerRepository } from '@media-tracker/db'
+import type {
+  ArchiveEntryWrite,
+  CanonicalLedgerRepository,
+  HardcoverBookProjection,
+} from '@media-tracker/db'
 import {
   archiveEntryEvidenceId,
   archiveEntryId,
@@ -38,10 +45,12 @@ import {
 import { ulid } from 'ulid'
 
 import type { Bindings } from './env'
-import { createLedgerRepository } from './env'
+import { createBooksRepository, createLedgerRepository } from './env'
 
-const parserVersion = 'hardcover-user-books@2'
-const pageSize = 100
+const parserVersion = 'hardcover-user-books@3'
+const editionParserVersion = 'hardcover-editions@1'
+const pageSize = 50
+const editionBatchSize = 50
 
 export class HardcoverTokenMissingError extends Error {
   constructor() {
@@ -56,6 +65,10 @@ function instantNow(): ReturnType<typeof utcInstant> {
 
 function safeErrorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError'
+}
+
+function safeErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message.slice(0, 500) : 'Unknown Hardcover sync failure'
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {
@@ -307,14 +320,16 @@ async function normalizeBook(
             defaultConsumedIdentity,
           admissionReason: 'hardcover_finished_read' as const,
         }))
-      : [
-          {
-            key: `user_book:${book.userBookId}:read_status`,
-            consumedAt: null,
-            identityId: defaultConsumedIdentity,
-            admissionReason: 'hardcover_read_status' as const,
-          },
-        ]
+      : book.statusId === 3
+        ? [
+            {
+              key: `user_book:${book.userBookId}:read_status`,
+              consumedAt: null,
+              identityId: defaultConsumedIdentity,
+              admissionReason: 'hardcover_read_status' as const,
+            },
+          ]
+        : []
   const archiveEntries: ArchiveEntryWrite[] = []
   for (const occurrence of occurrences) {
     const existingId = await repository.findArchiveEntryId(connection.id, occurrence.key)
@@ -413,10 +428,14 @@ async function normalizeBook(
       type: 'book',
       title: book.title,
       subtitle: book.subtitle,
-      primaryCreatorName: null,
-      description: null,
-      canonicalUrl: null,
-      imageUrl: null,
+      primaryCreatorName:
+        book.contributors.find(
+          (contributor) =>
+            contributor.primary || contributor.roleName.toLocaleLowerCase() === 'author',
+        )?.name ?? null,
+      description: book.description,
+      canonicalUrl: book.slug === null ? null : `https://hardcover.app/books/${book.slug}`,
+      imageUrl: book.cover.url,
       publishedAt: publishedAt(book),
       durationMs: book.audioSeconds === null ? null : book.audioSeconds * 1000,
       createdAt: observedAt,
@@ -427,14 +446,151 @@ async function normalizeBook(
   }
 }
 
+function editionProjection(
+  edition: HardcoverEdition,
+  sourceRecordIdOverride?: SourceRecordId,
+): HardcoverBookProjection['editions'][number] {
+  return {
+    id: edition.id,
+    canonicalId: edition.canonicalId,
+    title: edition.title,
+    subtitle: edition.subtitle,
+    information: edition.information,
+    readingFormatId: edition.readingFormatId,
+    readingFormat: edition.readingFormat,
+    rawFormat: edition.rawFormat,
+    pages: edition.pages,
+    audioSeconds: edition.audioSeconds,
+    releaseDate: edition.releaseDate,
+    publisher: edition.publisher,
+    language: edition.language,
+    isbn10: edition.isbn10,
+    isbn13: edition.isbn13,
+    asin: edition.asin,
+    coverUrl: edition.image.url,
+    coverColor: edition.image.color,
+    ...(sourceRecordIdOverride === undefined ? {} : { sourceRecordId: sourceRecordIdOverride }),
+    contributors: edition.contributors.map((contributor, position) => ({
+      ...contributor,
+      position,
+    })),
+  }
+}
+
+function bookProjection(input: {
+  book: HardcoverReadBook
+  connection: SourceConnection
+  runId: SyncRun['id']
+  sourceRecord: SourceRecord
+  mediaItem: MediaItem
+  archiveEntries: readonly ArchiveEntryWrite[]
+  observedAt: ReturnType<typeof utcInstant>
+  enrichedEditions: ReadonlyMap<
+    number,
+    { edition: HardcoverEdition; sourceRecordId: SourceRecordId }
+  >
+}): HardcoverBookProjection {
+  const editions = new Map<number, HardcoverBookProjection['editions'][number]>()
+  for (const edition of [input.book.currentEdition, input.book.defaultCoverEdition]) {
+    if (edition !== null) editions.set(edition.id, editionProjection(edition))
+  }
+  for (const read of input.book.reads) {
+    if (read.editionId === null) continue
+    const enriched = input.enrichedEditions.get(read.editionId)
+    if (enriched !== undefined) {
+      editions.set(
+        enriched.edition.id,
+        editionProjection(enriched.edition, enriched.sourceRecordId),
+      )
+    }
+  }
+  const archiveIds = new Map(
+    input.archiveEntries.map((write) => [write.entry.sourceOccurrenceKey, write.entry.id]),
+  )
+  let releaseDate: string | null = null
+  let releasePrecision: HardcoverBookProjection['releasePrecision'] = null
+  if (input.book.releaseDate !== null) {
+    try {
+      calendarDate(input.book.releaseDate)
+      releaseDate = input.book.releaseDate
+      releasePrecision = 'day'
+    } catch {
+      // Use the less precise release year below.
+    }
+  }
+  if (releaseDate === null && input.book.releaseYear !== null) {
+    try {
+      calendarYear(String(input.book.releaseYear))
+      releaseDate = String(input.book.releaseYear)
+      releasePrecision = 'year'
+    } catch {
+      // Preserve an unknown publication date.
+    }
+  }
+  return {
+    connectionId: input.connection.id,
+    syncRunId: input.runId,
+    sourceRecordId: input.sourceRecord.id,
+    observedAt: input.observedAt,
+    sourceUpdatedAt: input.book.updatedAt,
+    mediaItemId: input.mediaItem.id,
+    userBookId: input.book.userBookId,
+    workId: input.book.bookId,
+    canonicalWorkId: input.book.workCanonicalId,
+    currentEditionId: input.book.editionId,
+    statusId: input.book.statusId,
+    statusLabel: input.book.statusLabel,
+    dateAdded: input.book.dateAdded,
+    readCount: input.book.readCount,
+    personalRating: input.book.rating,
+    reviewText: input.book.review,
+    reviewHasSpoilers: input.book.reviewHasSpoilers,
+    title: input.book.title ?? 'Untitled book',
+    subtitle: input.book.subtitle,
+    description: input.book.description,
+    slug: input.book.slug,
+    pages: input.book.pages,
+    audioSeconds: input.book.audioSeconds,
+    releaseDate,
+    releasePrecision,
+    coverUrl: input.book.cover.url,
+    coverColor: input.book.cover.color,
+    communityRating: input.book.communityRating,
+    communityRatingsCount: input.book.communityRatingsCount,
+    usersReadCount: input.book.usersReadCount,
+    defaultCoverEditionId: input.book.defaultCoverEditionId,
+    editions: [...editions.values()],
+    contributors: input.book.contributors.map((contributor, position) => ({
+      ...contributor,
+      position,
+    })),
+    series: input.book.series,
+    taxonomy: input.book.taxonomy,
+    reads: input.book.reads.map((read) => ({
+      id: read.id,
+      archiveEntryId: archiveIds.get(`read:${read.id}`) ?? null,
+      editionId: read.editionId,
+      startedAt: read.startedAt,
+      pausedAt: read.pausedAt,
+      finishedAt: validFinishedDate(read.finishedAt) ? read.finishedAt : null,
+      finishedAtPrecisionRaw:
+        read.finishedAtPrecision === null ? null : String(read.finishedAtPrecision),
+      progress: read.progress,
+      progressPages: read.progressPages,
+      progressSeconds: read.progressSeconds,
+    })),
+  }
+}
+
 export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncResponse> {
   const token = bindings.HARDCOVER_TOKEN?.trim()
   if (token === undefined || token.length === 0) throw new HardcoverTokenMissingError()
 
   const repository = createLedgerRepository(bindings.DB)
+  const booksRepository = createBooksRepository(bindings.DB)
   const startedAt = instantNow()
   const connection = await connectionForSync(repository, startedAt)
-  const previousCursor = await repository.findSyncCursor(connection.id, 'read-books')
+  const previousCursor = await repository.findSyncCursor(connection.id, 'library-books')
   const runId = syncRunId(ulid())
   const mode = previousCursor === null ? ('backfill' as const) : ('reconcile' as const)
   const runningRun: SyncRun = {
@@ -454,6 +610,9 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
   let sourceRecords = 0
   let books = 0
   let archiveEntries = 0
+  let queueBooks = 0
+  let works = 0
+  const projectedEditionIds = new Set<number>()
 
   await repository.saveConnection(connection)
   await repository.saveSyncRun(runningRun)
@@ -496,6 +655,101 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       let page: ReturnType<typeof parseHardcoverReadBooksPage>
       try {
         page = parseHardcoverReadBooksPage(response)
+        const embeddedEditionIds = new Set(
+          page.books.flatMap((book) =>
+            [book.currentEdition?.id, book.defaultCoverEdition?.id].filter(
+              (value): value is number => value !== undefined && value !== null,
+            ),
+          ),
+        )
+        const consumedEditionIds = [
+          ...new Set(
+            page.books.flatMap((book) =>
+              book.reads.flatMap((read) =>
+                read.editionId === null || embeddedEditionIds.has(read.editionId)
+                  ? []
+                  : [read.editionId],
+              ),
+            ),
+          ),
+        ]
+        const enrichedEditions = new Map<
+          number,
+          { edition: HardcoverEdition; sourceRecordId: SourceRecordId }
+        >()
+        for (let start = 0; start < consumedEditionIds.length; start += editionBatchSize) {
+          const ids = consumedEditionIds.slice(start, start + editionBatchSize)
+          const editionResponse = await fetchHardcoverEditionsResponse({ token, ids })
+          const editionAcquiredAt = instantNow()
+          const editionChecksum = await sha256(editionResponse.bytes)
+          const editionStorageKey = `raw/hardcover/sha256/${editionChecksum.slice(0, 2)}/${editionChecksum}.json`
+          await bindings.RAW_BUCKET.put(editionStorageKey, editionResponse.bytes, {
+            httpMetadata: { contentType: editionResponse.contentType },
+            customMetadata: { sha256: editionChecksum },
+          })
+          const editionRawObject: RawObject = {
+            id: rawObjectId(ulid()),
+            connectionId: connection.id,
+            syncRunId: runId,
+            kind: 'api_page',
+            acquisitionKey: `hardcover:${runId}:page:${pages + 1}:editions:${start / editionBatchSize + 1}`,
+            storageKey: editionStorageKey,
+            sha256: editionChecksum,
+            contentType: editionResponse.contentType,
+            byteLength: editionResponse.bytes.byteLength,
+            acquiredAt: editionAcquiredAt,
+            processingStatus: 'pending',
+            lastParserVersion: null,
+            processingError: null,
+          }
+          rawObjects.push(editionRawObject)
+          await repository.commit({ rawObjects: [editionRawObject] })
+          try {
+            const editionPage = parseHardcoverEditionsPage(editionResponse)
+            const editionRecords = editionPage.editions.map((edition, index) => {
+              const record: SourceRecord = {
+                id: sourceRecordId(ulid()),
+                rawObjectId: editionRawObject.id,
+                connectionId: connection.id,
+                recordType: 'edition',
+                recordPath: `$.data.editions[${index}]`,
+                sourceRecordKey: `edition:${edition.id}`,
+                sourceRecordedAt: null,
+                observedAt: editionAcquiredAt,
+                parserVersion: editionParserVersion,
+                contentSha256: null,
+                disposition: 'normalized',
+                upstreamState: 'active',
+                errorCode: null,
+              }
+              enrichedEditions.set(edition.id, { edition, sourceRecordId: record.id })
+              return record
+            })
+            await repository.commit({
+              sourceRecords: editionRecords,
+              rawObjects: [
+                {
+                  ...editionRawObject,
+                  processingStatus: 'processed',
+                  lastParserVersion: editionParserVersion,
+                },
+              ],
+            })
+            sourceRecords += editionRecords.length
+          } catch (error) {
+            await repository.commit({
+              rawObjects: [
+                {
+                  ...editionRawObject,
+                  processingStatus: 'failed',
+                  lastParserVersion: editionParserVersion,
+                  processingError: safeErrorName(error),
+                },
+              ],
+            })
+            throw error
+          }
+        }
         for (const [index, book] of page.books.entries()) {
           const normalized = await normalizeBook(
             repository,
@@ -513,8 +767,22 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
             archiveEntries: normalized.archiveEntries,
             retireOccurrences: normalized.retireOccurrences,
           })
+          const projection = bookProjection({
+            book,
+            connection,
+            runId,
+            sourceRecord: normalized.sourceRecord,
+            mediaItem: normalized.mediaItem,
+            archiveEntries: normalized.archiveEntries,
+            observedAt: acquiredAt,
+            enrichedEditions,
+          })
+          await booksRepository.upsertHardcoverBooks([projection])
+          projection.editions.forEach((edition) => projectedEditionIds.add(edition.id))
           sourceRecords += 1
           books += 1
+          works += 1
+          if (book.statusId === 1 || book.statusId === 2) queueBooks += 1
           archiveEntries += normalized.archiveEntries.length
         }
         await repository.commit({
@@ -546,6 +814,11 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
     }
 
     const finishedAt = instantNow()
+    await booksRepository.finalizeHardcoverSnapshot({
+      connectionId: connection.id,
+      syncRunId: runId,
+      refreshedAt: finishedAt,
+    })
     const succeededRun: SyncRun = {
       ...runningRun,
       status: 'succeeded',
@@ -562,16 +835,42 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       cursor: {
         id: previousCursor?.id ?? syncCursorId(ulid()),
         connectionId: connection.id,
-        name: 'read-books',
-        checkpoint: { lastFullSyncAt: finishedAt, books, archiveEntries },
+        name: 'library-books',
+        checkpoint: {
+          lastFullSyncAt: finishedAt,
+          books,
+          queueBooks,
+          archiveEntries,
+          editions: projectedEditionIds.size,
+          parserVersion,
+        },
         committedAt: finishedAt,
         syncRunId: runId,
       },
     })
     await repository.saveConnection({ ...connection, updatedAt: finishedAt })
-    return { syncRunId: runId, mode, pages, sourceRecords, books, archiveEntries }
+    return {
+      syncRunId: runId,
+      mode,
+      pages,
+      sourceRecords,
+      books,
+      archiveEntries,
+      queueBooks,
+      works,
+      editions: projectedEditionIds.size,
+    }
   } catch (error) {
     const finishedAt = instantNow()
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        event: 'hardcover.sync.failed',
+        syncRunId: runId,
+        errorName: safeErrorName(error),
+        errorMessage: safeErrorMessage(error),
+      }),
+    )
     await repository.saveSyncRun({
       ...runningRun,
       status: 'failed',
@@ -583,7 +882,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         failedRecords: 1,
       },
       errorCode: safeErrorName(error),
-      errorMessage: 'Hardcover sync failed',
+      errorMessage: safeErrorMessage(error),
     })
     await repository.saveConnection({ ...connection, status: 'degraded', updatedAt: finishedAt })
     throw error

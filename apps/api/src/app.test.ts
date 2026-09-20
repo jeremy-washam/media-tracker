@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ApiErrorSchema,
+  BooksResponseSchema,
   ConnectionsResponseSchema,
   HealthResponseSchema,
   MediaListResponseSchema,
@@ -88,6 +89,23 @@ describe('API', () => {
     })
   })
 
+  it('returns an empty Books collection through its media-specific contract', async () => {
+    const response = await app.request(
+      '/api/library/books?collection=archive',
+      undefined,
+      testBindings,
+    )
+    const payload = BooksResponseSchema.parse(await response.json())
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      data: [],
+      nextCursor: null,
+      counts: { archive: 0, queue: 0, filteredBooks: 0, supportedReads: 0 },
+      facets: { formats: [], series: [], genres: [] },
+    })
+  })
+
   it('explains when Readwise has not been configured', async () => {
     const response = await app.request(
       '/api/connections/readwise/sync',
@@ -130,6 +148,9 @@ describe('API', () => {
 
     expect(document.paths).toHaveProperty('/api/health')
     expect(document.paths).toHaveProperty('/api/media')
+    expect(document.paths).toHaveProperty('/api/library/books')
+    expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}')
+    expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}/history')
     expect(document.paths).toHaveProperty('/api/connections')
     expect(document.paths).toHaveProperty('/api/connections/readwise/sync')
     expect(document.paths).toHaveProperty('/api/connections/hardcover/sync')

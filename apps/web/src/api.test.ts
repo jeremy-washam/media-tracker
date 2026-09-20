@@ -84,6 +84,9 @@ describe('API client', () => {
       sourceRecords: 125,
       books: 125,
       archiveEntries: 125,
+      queueBooks: 0,
+      works: 125,
+      editions: 125,
     }
     const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
 

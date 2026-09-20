@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { HealthResponseSchema, MediaTypeSchema, SyncJobSchema } from './index'
+import { BooksQuerySchema, HealthResponseSchema, MediaTypeSchema, SyncJobSchema } from './index'
 
 describe('API contracts', () => {
   it('accepts a valid health response', () => {
@@ -31,5 +31,17 @@ describe('API contracts', () => {
     expect(MediaTypeSchema.safeParse('social_post').success).toBe(false)
     expect(MediaTypeSchema.safeParse('note').success).toBe(false)
     expect(MediaTypeSchema.safeParse('other').success).toBe(false)
+  })
+
+  it('validates collection-specific Books sorts and rating requirements', () => {
+    expect(BooksQuerySchema.safeParse({ collection: 'archive', sort: 'recent_read' }).success).toBe(
+      true,
+    )
+    expect(BooksQuerySchema.safeParse({ collection: 'queue', sort: 'recent_read' }).success).toBe(
+      false,
+    )
+    expect(
+      BooksQuerySchema.safeParse({ collection: 'archive', ratingMode: 'minimum' }).success,
+    ).toBe(false)
   })
 })

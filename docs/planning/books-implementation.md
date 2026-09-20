@@ -1,6 +1,6 @@
 # Books end-to-end implementation plan
 
-Status: Approved for implementation
+Status: Implemented and validated locally
 Last updated: 2026-09-20
 
 ## Purpose
@@ -128,7 +128,7 @@ implementation unless validation exposes a genuine contradiction.
   validated query parameters.
 - A reload or shared URL reproduces the same collection state and selection.
 
-## Current-state assessment
+## Pre-implementation assessment (retained for context)
 
 ### Web application
 
@@ -992,28 +992,28 @@ input for this implementation.
 
 ## End-to-end acceptance checklist
 
-- [ ] `/` resolves to the approved primary destination.
-- [ ] The new shell works in light/dark and wide/narrow layouts.
-- [ ] Sidebar collapse, theme, and URL-backed Books state survive reload.
-- [ ] Connections still works inside the new shell.
-- [ ] Books exposes only Archive and Queue.
-- [ ] Queue includes source statuses Want to Read and Currently Reading.
-- [ ] Archive and Queue can overlap.
-- [ ] Grid and list use the accepted information density.
-- [ ] Search finds titles, authors, series, ISBNs, and ASINs.
-- [ ] Every approved filter and sort is implemented server-side.
-- [ ] Publication-date filters exist in Archive and Queue.
-- [ ] Collection occurrence semantics use the latest supported read.
-- [ ] Details contains bibliographic/source facts.
-- [ ] History contains all personal activity and every read occurrence.
-- [ ] Deep-linked inspector selection works outside the loaded first page.
-- [ ] No browse request calls Hardcover or parses R2.
-- [ ] A failed partial snapshot retires nothing and advances no cursor.
-- [ ] Repeated sync and replay are idempotent.
-- [ ] Read model and FTS can be rebuilt.
-- [ ] Real-account counts reconcile with the successful source snapshot.
-- [ ] No real account data or credentials are committed as fixtures.
-- [ ] Final migrations, builds, end-to-end tests, and `pnpm check` pass after the
+- [x] `/` resolves to the approved primary destination.
+- [x] The new shell works in light/dark and wide/narrow layouts.
+- [x] Sidebar collapse, theme, and URL-backed Books state survive reload.
+- [x] Connections still works inside the new shell.
+- [x] Books exposes only Archive and Queue.
+- [x] Queue includes source statuses Want to Read and Currently Reading.
+- [x] Archive and Queue can overlap.
+- [x] Grid and list use the accepted information density.
+- [x] Search finds titles, authors, series, ISBNs, and ASINs.
+- [x] Every approved filter and sort is implemented server-side.
+- [x] Publication-date filters exist in Archive and Queue.
+- [x] Collection occurrence semantics use the latest supported read.
+- [x] Details contains bibliographic/source facts.
+- [x] History contains all personal activity and every read occurrence.
+- [x] Deep-linked inspector selection works outside the loaded first page.
+- [x] No browse request calls Hardcover or parses R2.
+- [x] A failed partial snapshot retires nothing and advances no cursor.
+- [x] Repeated sync and replay are idempotent.
+- [x] Read model and FTS can be rebuilt.
+- [x] Real-account counts reconcile with the successful source snapshot.
+- [x] No real account data or credentials are committed as fixtures.
+- [x] Final migrations, builds, end-to-end tests, and `pnpm check` pass after the
       last edit.
 
 ## Ready-to-copy implementation brief

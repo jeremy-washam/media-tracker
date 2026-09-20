@@ -17,9 +17,9 @@ External services and exports
   -> connector packages
   -> API, cron, or CLI ingestion entry point
   -> raw payload in private R2
-  -> idempotent normalization
-  -> canonical media items and Archive entries in D1
-  -> REST API
+  -> idempotent source projections and canonical normalization in D1
+  -> rebuildable browse read models and search indexes in D1
+  -> media-specific REST APIs
   -> React web client
 ```
 
@@ -93,3 +93,12 @@ export, and recovery remain deferred. Browser APIs provide keyset-paginated
 History and sync runs, complete media counts, and all connection lineages.
 Rotating Spotify tokens use an encrypted D1 credential store and refresh lease,
 separate from raw source evidence. See ADR 0010 for reconciliation details.
+
+Books is the first complete Library vertical slice. Hardcover owns source-shaped
+work, edition, contributor, series, taxonomy, user-book, and read projections.
+The canonical ledger continues to own cross-source identity and Archive
+occurrences. `book_library_projection`, `book_identifiers`, and `book_search`
+are rebuildable query models, not new sources of truth. Books Queue membership
+is derived from active Hardcover statuses 1 and 2; it is not a generic editable
+queue. Media-specific repositories keep these browse semantics out of route
+handlers and the pure domain package.

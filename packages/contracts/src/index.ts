@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 import { MEDIA_TYPES } from '@media-tracker/domain'
 
+export * from './books'
+
 export const ApiErrorCodeSchema = z.enum([
   'BAD_REQUEST',
   'NOT_FOUND',
@@ -61,6 +63,9 @@ export const HardcoverSyncResponseSchema = z.object({
   sourceRecords: z.number().int().nonnegative(),
   books: z.number().int().nonnegative(),
   archiveEntries: z.number().int().nonnegative(),
+  queueBooks: z.number().int().nonnegative().default(0),
+  works: z.number().int().nonnegative().default(0),
+  editions: z.number().int().nonnegative().default(0),
 })
 
 export const LetterboxdImportResponseSchema = z.object({

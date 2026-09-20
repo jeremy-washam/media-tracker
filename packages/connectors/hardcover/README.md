@@ -1,7 +1,6 @@
 # Hardcover connector
 
-Status: official reconnaissance and full private-library probe complete after
-Goodreads and StoryGraph import.
+Status: production full-library sync implemented and verified with the real API.
 
 This package owns book-history backfill, scheduled full reconciliation, edition
 and reread identity, and source-specific parsing. See the
@@ -19,29 +18,27 @@ The probe validates auth and prints only field/type summaries plus status and
 read-through aggregates. It does not print book titles, notes, reviews, IDs, or
 the token.
 
-The complete private scan returned 1,115 books: 988 Want to Read, 2 Currently
-Reading, and 125 Read. It observed 110 ratings, 5 reviews, 120 declared read
-occurrences, and 112 finished child read rows. Thirteen Read-status books have no
-finished child row, and four `read_count = 2` books do not expose multiple child
-rows. Status is therefore the reliable Archive admission signal; child read rows
-and `read_count` are optional source evidence rather than a complete occurrence
-ledger.
+The current production query fetches Want to Read, Currently Reading, and Read
+relationships. A 2026-09-20 verification returned 1,114 relationships: 986
+Queue books and 128 Archive books, with 1,556 projected editions. Counts can
+change with the account and are not committed as fixtures.
 
-The production connector fetches only Read-status user books in stable ID order.
-The API Worker retains every exact GraphQL page, projects one work-level media
-item per Hardcover book, keeps work, edition, ISBN, and ASIN identities distinct,
-and creates separate Archive occurrences only for finished child read rows. A
-Read book without such a row receives one undated fallback occurrence. Manual
-and hourly scheduled syncs currently perform a complete idempotent reconciliation
-because this small private library fits comfortably within Hardcover's published
-rate limit and nested read rows do not expose a reliable change timestamp.
+The API Worker retains every exact GraphQL library and edition response,
+projects one work-level media item per Hardcover book, keeps work, edition,
+ISBN, and ASIN identities distinct, and creates separate Archive occurrences
+only for finished child read rows. A Read book without such a row receives one
+undated fallback occurrence. Queue is derived from active status 1 or 2 and is
+independent from Archive. Full reconciliation retires missing source rows only
+after a complete snapshot and advances the cursor only after projections and
+the Books read model are durable.
 
-The 2026-09-12 live validation imported 127 Read books in two pages. Repeating
-the reconciliation retained exactly 127 work-level book items and 127 supported
-Archive occurrences. The observed API can encode `finished_at_precision` as a
-number or string; both remain accepted and preserved in the raw page.
+The connector pages with a conservative size of 50, fetches exact consumed
+editions missing from the embedded relationship payload, and retries bounded
+rate-limit/server failures while honoring `Retry-After`. The observed API can
+encode `finished_at_precision` as a number or string; both remain accepted and
+preserved in raw evidence.
 
-Parser v2 registers each finished read's edition ID independently, even when it
+Parser v3 registers each finished read's edition ID independently, even when it
 differs from the user-book's current edition. A newly supplied finished read
 retires the undated fallback from the active projection while retaining its
 original admission and linking the superseding observation. Full snapshots can

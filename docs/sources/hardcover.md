@@ -1,33 +1,33 @@
 # Hardcover source reconnaissance
 
-- Status: Authentication and complete imported-library payload probe complete
-- Priority: Historical books first; optional Queue mirroring later
-- Last verified: 2026-09-12
+- Status: Full Books Library ingestion and projection implemented
+- Priority: Production Books Archive and source-derived Queue
+- Last verified: 2026-09-20
 - Upstream status: The official GraphQL API is explicitly beta and may change
 
 ## Implemented MVP behavior
 
-The first production path is implemented in the Hardcover connector and API
-Worker. Manual and hourly scheduled syncs fetch the complete Read shelf in stable
-user-book ID order. A full reconciliation is intentionally used for every poll:
-the observed Read shelf needs only two pages, this remains well inside the
-60-request-per-minute limit, and it catches nested read-through changes that an
-`updated_at`-only poll can miss.
+The production path is implemented in the Hardcover connector and API Worker.
+Manual and hourly scheduled syncs fetch Want to Read, Currently Reading, and
+Read relationships in stable user-book ID order. A full reconciliation is used
+for every poll because nested read-through rows do not expose a reliable update
+cursor. Requests retry bounded `429` and `5xx` responses and honor
+`Retry-After`.
 
-Each exact GraphQL response page is stored content-addressed in R2 before its
-records are projected. Hardcover book, edition, canonical target, ISBN-10,
-ISBN-13, and ASIN identities stay distinct while the visible media item remains
-work-level. Finished child read rows create dated occurrences; Read-status books
-without one receive a single undated fallback occurrence. `read_count` and all
-other richer fields remain in raw evidence and never generate synthetic rereads.
+Each exact library and edition-enrichment response is stored content-addressed
+in R2 before its records are projected. Hardcover work, edition, contributor,
+series, taxonomy, relationship, read, ISBN-10, ISBN-13, and ASIN facts remain
+source-shaped and traceable while the visible item stays work-level. Finished
+child read rows create dated occurrences; Read-status books without one receive
+a single undated fallback occurrence. `read_count` never generates synthetic
+rereads.
 
-Live validation on 2026-09-12 returned 127 Read books across two pages. The
-initial import and an immediate full reconciliation both projected 127 books and
-127 supported Archive occurrences without creating canonical duplicates. The
-local scheduled handler then completed Hardcover and Letterboxd reconciliation
-together. One newly observed payload variant has a numeric
-`finished_at_precision`; the parser accepts both numeric and string values while
-the exact representation remains preserved in raw evidence.
+Live end-to-end validation on 2026-09-20 returned 1,114 relationships across 23
+pages: 986 active Queue books (Want to Read plus Currently Reading), 128 Archive
+books, 128 supported Archive occurrences, and 1,556 distinct projected
+editions. The Books collection, detail, and History APIs were then exercised
+against that local snapshot. These counts are a point-in-time sanity check, not
+a fixture or durable product expectation.
 
 ## Recommendation
 
@@ -108,7 +108,7 @@ The official `user_books` reference defines these stable numeric values:
 | `status_id` | Hardcover status  | Initial local treatment           |
 | ----------- | ----------------- | --------------------------------- |
 | 1           | Want to Read      | Queue candidate, not Archive      |
-| 2           | Currently Reading | Ignore for initial Archive import |
+| 2           | Currently Reading | Queue, not Archive                |
 | 3           | Read              | Archive                           |
 | 4           | Paused            | Ignore for initial Archive import |
 | 5           | Did Not Finish    | Ignore for initial Archive import |
@@ -148,11 +148,10 @@ This is the best available surface for distinct reading occurrences:
   decoded from a real response before date semantics are finalized.
 - `progress`, `progress_pages`, `progress_seconds`: progress values.
 
-For this application's first milestone, only a finished read contributes an
-Archive occurrence. Progress fields are retained in raw evidence but need not be
-normalized. A `Read` user-book can still be archived when no dated read-through
-exists; that occurrence should have an unknown completion date, not a fabricated
-one.
+Only a finished read contributes a dated Archive occurrence. Progress fields are
+projected into personal History but never imply completion. A `Read` user-book
+can still be archived when no dated read-through exists; that occurrence has an
+unknown completion date, not a fabricated one.
 
 Do not assume `read_count` always equals the number of `user_book_reads` rows.
 Imports and older records may only preserve aggregate first/last dates. The

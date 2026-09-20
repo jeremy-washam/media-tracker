@@ -1,10 +1,18 @@
 export {
+  fetchHardcoverEditionsResponse,
   fetchHardcoverReadBooksPage,
   fetchHardcoverReadBooksResponse,
+  parseHardcoverEditionsPage,
   parseHardcoverReadBooksPage,
   fetchHardcoverUserId,
   parseHardcoverReadBook,
+  type HardcoverContributor,
+  type HardcoverEdition,
+  type HardcoverEditionsPage,
+  type HardcoverImage,
   type HardcoverPage,
   type HardcoverReadBook,
   type HardcoverReadThrough,
+  type HardcoverSeries,
+  type HardcoverTaxonomyTerm,
 } from './client'

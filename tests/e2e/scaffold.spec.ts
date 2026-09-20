@@ -1,11 +1,47 @@
 import { expect, test } from '@playwright/test'
 
-test('shows the connected application shell and source placeholders', async ({ page }) => {
+const book = {
+  id: 'book-one',
+  title: 'A Distant Book',
+  subtitle: null,
+  authors: [{ id: 'author-one', name: 'Ada Author' }],
+  coverUrl: null,
+  coverColor: '#667788',
+  publicationDate: '2020',
+  publicationPrecision: 'year' as const,
+  primarySeries: 'A Series',
+  memberships: { archive: true, queue: false, currentlyReading: false },
+  latestReadDate: '2026-09-12',
+  latestReadPrecision: 'day' as const,
+  latestReadFormat: 'Paperback',
+  personalRating: 4.5,
+  addedToHardcoverDate: '2026-01-01',
+  supportedReadCount: 1,
+}
+
+const booksResponse = (data = [book], nextCursor: string | null = null) => ({
+  data,
+  nextCursor,
+  counts: { archive: 128, queue: 986, filteredBooks: data.length, supportedReads: data.length },
+  facets: {
+    formats: [{ value: 'paperback', label: 'Paperback', count: 1 }],
+    series: [{ value: 'series-one', label: 'A Series', count: 1 }],
+    genres: [{ value: 'fiction', label: 'Fiction', count: 1 }],
+  },
+  freshness: { lastSuccessfulSyncAt: '2026-09-20T10:00:00.000Z', degraded: false },
+})
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
+})
+
+test('shows the production Books shell and preserves Connections', async ({ page }) => {
   await page.goto('/')
 
-  await expect(
-    page.getByRole('heading', { name: 'Your media history, in one place.' }),
-  ).toBeVisible()
+  await expect(page).toHaveURL(/\/library\/books\/archive/)
+  await expect(page.getByRole('heading', { name: 'Books' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Archive 128' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Queue 986' })).toBeVisible()
   await expect(page.getByText('Local API connected')).toBeVisible()
 
   await page.getByRole('link', { name: 'Connections' }).click()
@@ -15,38 +51,104 @@ test('shows the connected application shell and source placeholders', async ({ p
   await expect(page.getByRole('heading', { name: 'YouTube', exact: true }).first()).toBeVisible()
 })
 
-test('filters the full Archive and loads subsequent pages', async ({ page }) => {
+test('keeps Books collection controls in the URL and loads subsequent pages', async ({ page }) => {
   const requested: string[] = []
-  await page.route('**/api/media*', async (route) => {
+  await page.unroute('**/api/library/books?*')
+  await page.route('**/api/library/books?*', async (route) => {
     const url = new URL(route.request().url())
     requested.push(url.search)
-    const book = url.searchParams.get('type') === 'book'
     const second = url.searchParams.has('cursor')
+    const searched = url.searchParams.get('q') === 'Ada'
     await route.fulfill({
+      json: booksResponse(
+        [
+          {
+            ...book,
+            id: second ? 'book-two' : 'book-one',
+            title: second ? 'Second Book' : 'A Distant Book',
+          },
+        ],
+        searched || second ? null : 'next-page',
+      ),
+    })
+  })
+  await page.goto('/library/books/archive')
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Load more' }).click()
+  await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Search books' }).fill('Ada')
+  await page.getByRole('textbox', { name: 'Search books' }).press('Enter')
+  await expect(page).toHaveURL(/q=Ada/)
+  await page.getByRole('button', { name: 'List view' }).click()
+  await expect(page).toHaveURL(/layout=list/)
+  await page.getByRole('button', { name: 'Sort ascending' }).click()
+  await expect(page).toHaveURL(/direction=asc/)
+  expect(requested.some((value) => value.includes('cursor=next-page'))).toBe(true)
+  expect(requested.some((value) => value.includes('q=Ada'))).toBe(true)
+})
+
+test('opens a selected Book and loads personal activity in History', async ({ page }) => {
+  await page.route('**/api/library/books/book-one', (route) =>
+    route.fulfill({
+      json: {
+        id: book.id,
+        title: book.title,
+        subtitle: null,
+        description: 'A concise overview.',
+        coverUrl: null,
+        coverColor: '#667788',
+        publicationDate: '2020',
+        publicationPrecision: 'year',
+        pageCount: 320,
+        audioSeconds: null,
+        memberships: book.memberships,
+        personalRating: 4.5,
+        series: [],
+        contributors: [{ role: 'Author', contributors: book.authors }],
+        selectedEdition: null,
+        community: {
+          rating: 4.1,
+          ratingsCount: 10,
+          genres: ['Fiction'],
+          moods: [],
+          pace: [],
+          contentWarnings: [],
+        },
+        source: {
+          label: 'Hardcover',
+          url: null,
+          refreshedAt: '2026-09-20T10:00:00.000Z',
+          coverage: 'complete',
+        },
+      },
+    }),
+  )
+  await page.route('**/api/library/books/book-one/history*', (route) =>
+    route.fulfill({
       json: {
         data: [
           {
-            id: book ? 'book-one' : second ? 'video-two' : 'video-one',
-            type: book ? 'book' : 'video',
-            title: book ? 'A distant book' : second ? 'Second video' : 'First video',
+            id: 'read-one',
+            kind: 'read',
+            label: 'Read',
+            date: '2026-09-12',
+            datePrecision: 'day',
+            detail: null,
+            edition: { id: 'edition-one', format: 'Paperback', title: book.title },
           },
         ],
-        nextCursor: book || second ? null : 'next-page',
-        totalCount: 1006,
-        filteredCount: book ? 1 : 1006,
-        counts: { article: 0, video: 1005, book: 1, movie: 0, song: 0, podcast_episode: 0 },
+        nextCursor: null,
       },
-    })
-  })
-  await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'First video' })).toBeVisible()
-  await page.getByRole('button', { name: 'Load more' }).click()
-  await expect(page.getByRole('heading', { name: 'Second video' })).toBeVisible()
-  await page.getByRole('button', { name: 'Books 1', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'A distant book' })).toBeVisible()
-  await expect(page.getByText('Showing 1 of 1 items.')).toBeVisible()
-  expect(requested.some((value) => value.includes('cursor=next-page'))).toBe(true)
-  expect(requested.some((value) => value.includes('type=book'))).toBe(true)
+    }),
+  )
+  await page.goto('/library/books/archive')
+  await page.getByRole('button', { name: /A Distant Book/ }).click()
+  await expect(page).toHaveURL(/item=book-one/)
+  await expect(page.getByText('A concise overview.')).toBeVisible()
+  await page.getByRole('tab', { name: 'History' }).click()
+  await expect(page.getByText('Paperback')).toBeVisible()
+  await page.getByRole('button', { name: 'Close inspector' }).last().click()
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeFocused()
 })
 
 test('shows separate account progress and resumes the selected account', async ({ page }) => {

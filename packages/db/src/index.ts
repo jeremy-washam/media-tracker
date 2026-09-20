@@ -16,6 +16,21 @@ export type {
   MediaSummaryRecord,
 } from './repository'
 export { SqlCanonicalLedgerRepository } from './repository'
+export type {
+  BookCollectionRecord,
+  BookDetailRecord,
+  BookFacetRecord,
+  BookHistoryRecord,
+  BooksListInput,
+  BooksPageRecord,
+  HardcoverBookProjection,
+  HardcoverContributorProjection,
+  HardcoverEditionProjection,
+  HardcoverReadProjection,
+  HardcoverSeriesProjection,
+  HardcoverTaxonomyProjection,
+} from './books-repository'
+export { SqlBooksRepository } from './books-repository'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'

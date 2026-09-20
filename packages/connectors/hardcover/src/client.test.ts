@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { parseHardcoverReadBook } from './client'
+import { fetchHardcoverUserId, parseHardcoverReadBook } from './client'
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('Hardcover read-book parser', () => {
   it('keeps work, edition, rating, review, and finished-read facts distinct', () => {
@@ -48,12 +50,28 @@ describe('Hardcover read-book parser', () => {
       title: 'A Synthetic Book',
       isbn13: '9781234567890',
     })
-    expect(book.reads).toEqual([
+    expect(book.reads).toMatchObject([
       { id: 901, editionId: 801, finishedAt: '2024-02-03', finishedAtPrecision: 3 },
     ])
   })
 
   it('rejects malformed source rows instead of manufacturing an item', () => {
     expect(() => parseHardcoverReadBook({ id: 'not-an-id' })).toThrow()
+  })
+
+  it('retries a rate-limited GraphQL request using Retry-After', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'Retry-After': '0' } }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { me: [{ id: 42 }] } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchHardcoverUserId('synthetic-token')).resolves.toBe(42)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

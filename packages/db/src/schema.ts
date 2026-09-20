@@ -12,6 +12,7 @@ import {
   foreignKey,
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -383,11 +384,361 @@ export const archiveEntryEvidence = sqliteTable(
   ],
 )
 
+export const hardcoverBookWorks = sqliteTable(
+  'hardcover_book_works',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    workId: integer('work_id').notNull(),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id),
+    canonicalWorkId: integer('canonical_work_id'),
+    title: text('title').notNull(),
+    subtitle: text('subtitle'),
+    description: text('description'),
+    slug: text('slug'),
+    pages: integer('pages'),
+    audioSeconds: integer('audio_seconds'),
+    releaseDate: text('release_date'),
+    releasePrecision: text('release_precision', { enum: ['year', 'month', 'day'] }),
+    coverUrl: text('cover_url'),
+    coverColor: text('cover_color'),
+    communityRating: real('community_rating'),
+    communityRatingsCount: integer('community_ratings_count').notNull(),
+    usersReadCount: integer('users_read_count').notNull(),
+    defaultCoverEditionId: integer('default_cover_edition_id'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    sourceUpdatedAt: text('source_updated_at'),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredAt: text('retired_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.workId] }),
+    uniqueIndex('hardcover_book_works_connection_media_unique').on(
+      table.connectionId,
+      table.mediaItemId,
+    ),
+  ],
+)
+
+export const hardcoverUserBooks = sqliteTable(
+  'hardcover_user_books',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    userBookId: integer('user_book_id').notNull(),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id),
+    workId: integer('work_id').notNull(),
+    currentEditionId: integer('current_edition_id'),
+    statusId: integer('status_id').notNull(),
+    statusLabel: text('status_label'),
+    dateAdded: text('date_added'),
+    readCount: integer('read_count').notNull(),
+    personalRating: real('personal_rating'),
+    reviewText: text('review_text'),
+    reviewHasSpoilers: integer('review_has_spoilers', { mode: 'boolean' }).notNull(),
+    sourceUpdatedAt: text('source_updated_at'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredAt: text('retired_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.userBookId] }),
+    uniqueIndex('hardcover_user_books_connection_work_unique').on(table.connectionId, table.workId),
+  ],
+)
+
+export const hardcoverBookEditions = sqliteTable(
+  'hardcover_book_editions',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    editionId: integer('edition_id').notNull(),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id),
+    workId: integer('work_id').notNull(),
+    canonicalEditionId: integer('canonical_edition_id'),
+    title: text('title'),
+    subtitle: text('subtitle'),
+    editionInformation: text('edition_information'),
+    readingFormatId: integer('reading_format_id'),
+    readingFormat: text('reading_format'),
+    rawFormat: text('raw_format'),
+    pages: integer('pages'),
+    audioSeconds: integer('audio_seconds'),
+    releaseDate: text('release_date'),
+    publisher: text('publisher'),
+    language: text('language'),
+    isbn10: text('isbn_10'),
+    isbn13: text('isbn_13'),
+    asin: text('asin'),
+    coverUrl: text('cover_url'),
+    coverColor: text('cover_color'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredAt: text('retired_at'),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.editionId] })],
+)
+
+export const hardcoverContributors = sqliteTable(
+  'hardcover_contributors',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    contributorId: integer('contributor_id').notNull(),
+    name: text('name').notNull(),
+    slug: text('slug'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredAt: text('retired_at'),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.contributorId] })],
+)
+
+const contributorLinkColumns = () => ({
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id),
+  contributorId: integer('contributor_id').notNull(),
+  roleId: integer('role_id'),
+  roleName: text('role_name').notNull(),
+  contribution: text('contribution'),
+  isPrimary: integer('is_primary', { mode: 'boolean' }).notNull(),
+  position: integer('position').notNull(),
+  sourceRecordId: text('source_record_id')
+    .notNull()
+    .references(() => sourceRecords.id),
+  lastSeenRunId: text('last_seen_run_id')
+    .notNull()
+    .references(() => syncRuns.id),
+  upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+})
+
+export const hardcoverWorkContributors = sqliteTable(
+  'hardcover_work_contributors',
+  { ...contributorLinkColumns(), workId: integer('work_id').notNull() },
+  (table) => [
+    primaryKey({
+      columns: [table.connectionId, table.workId, table.contributorId, table.roleName],
+    }),
+  ],
+)
+
+export const hardcoverEditionContributors = sqliteTable(
+  'hardcover_edition_contributors',
+  { ...contributorLinkColumns(), editionId: integer('edition_id').notNull() },
+  (table) => [
+    primaryKey({
+      columns: [table.connectionId, table.editionId, table.contributorId, table.roleName],
+    }),
+  ],
+)
+
+export const hardcoverSeries = sqliteTable(
+  'hardcover_series',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    seriesId: integer('series_id').notNull(),
+    name: text('name').notNull(),
+    slug: text('slug'),
+    booksCount: integer('books_count'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredAt: text('retired_at'),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.seriesId] })],
+)
+
+export const hardcoverWorkSeries = sqliteTable(
+  'hardcover_work_series',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    workId: integer('work_id').notNull(),
+    seriesId: integer('series_id').notNull(),
+    position: real('position'),
+    compilation: integer('compilation', { mode: 'boolean' }).notNull(),
+    featured: integer('featured', { mode: 'boolean' }).notNull(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.workId, table.seriesId] })],
+)
+
+export const hardcoverWorkTaxonomy = sqliteTable(
+  'hardcover_work_taxonomy',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    workId: integer('work_id').notNull(),
+    category: text('category').notNull(),
+    value: text('value').notNull(),
+    slug: text('slug').notNull(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.workId, table.category, table.slug] }),
+  ],
+)
+
+export const hardcoverUserBookReads = sqliteTable(
+  'hardcover_user_book_reads',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    readId: integer('read_id').notNull(),
+    userBookId: integer('user_book_id').notNull(),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id),
+    archiveEntryId: text('archive_entry_id').references(() => archiveEntries.id),
+    editionId: integer('edition_id'),
+    startedAt: text('started_at'),
+    pausedAt: text('paused_at'),
+    finishedAt: text('finished_at'),
+    finishedAtPrecisionRaw: text('finished_at_precision_raw'),
+    progress: real('progress'),
+    progressPages: integer('progress_pages'),
+    progressSeconds: integer('progress_seconds'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastSeenRunId: text('last_seen_run_id')
+      .notNull()
+      .references(() => syncRuns.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredAt: text('retired_at'),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.readId] })],
+)
+
+export const bookLibraryProjection = sqliteTable('book_library_projection', {
+  mediaItemId: text('media_item_id')
+    .primaryKey()
+    .references(() => mediaItems.id),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id),
+  userBookId: integer('user_book_id').notNull(),
+  workId: integer('work_id').notNull(),
+  title: text('title').notNull(),
+  normalizedTitle: text('normalized_title').notNull(),
+  subtitle: text('subtitle'),
+  primaryAuthorName: text('primary_author_name'),
+  normalizedPrimaryAuthor: text('normalized_primary_author'),
+  coverUrl: text('cover_url'),
+  coverColor: text('cover_color'),
+  publicationDate: text('publication_date'),
+  publicationPrecision: text('publication_precision', { enum: ['year', 'month', 'day'] }),
+  primarySeriesName: text('primary_series_name'),
+  currentStatusId: integer('current_status_id').notNull(),
+  queueAddedAt: text('queue_added_at'),
+  inQueue: integer('in_queue', { mode: 'boolean' }).notNull(),
+  inArchive: integer('in_archive', { mode: 'boolean' }).notNull(),
+  currentlyReading: integer('currently_reading', { mode: 'boolean' }).notNull(),
+  personalRating: real('personal_rating'),
+  latestReadId: integer('latest_read_id'),
+  latestReadDate: text('latest_read_date'),
+  latestReadPrecision: text('latest_read_precision', { enum: ['year', 'month', 'day'] }),
+  latestReadFormat: text('latest_read_format'),
+  currentEditionFormat: text('current_edition_format'),
+  supportedReadCount: integer('supported_read_count').notNull(),
+  sourceRefreshedAt: text('source_refreshed_at').notNull(),
+  projectionVersion: integer('projection_version').notNull(),
+})
+
+export const bookIdentifiers = sqliteTable(
+  'book_identifiers',
+  {
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id),
+    type: text('type', { enum: ['isbn_10', 'isbn_13', 'asin'] }).notNull(),
+    normalizedValue: text('normalized_value').notNull(),
+    displayValue: text('display_value').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.mediaItemId, table.type, table.normalizedValue] })],
+)
+
 export const schema = {
   archiveEntries,
   archiveEntryEvidence,
+  bookIdentifiers,
+  bookLibraryProjection,
   connections,
   externalIdentities,
+  hardcoverBookEditions,
+  hardcoverBookWorks,
+  hardcoverContributors,
+  hardcoverEditionContributors,
+  hardcoverSeries,
+  hardcoverUserBookReads,
+  hardcoverUserBooks,
+  hardcoverWorkContributors,
+  hardcoverWorkSeries,
+  hardcoverWorkTaxonomy,
   mediaItems,
   rawObjects,
   sourceRecords,

@@ -1,8 +1,9 @@
-import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
+import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router'
 
 import { AppShell, NotFoundPage, RouteError } from './components/app-shell'
+import { BooksCollectionPage } from './features/books/books-collection-page'
+import { parseBooksRouteSearch } from './features/books/books-route-search'
 import { ConnectionsPage } from './pages/connections-page'
-import { HistoryPage } from './pages/history-page'
 
 const rootRoute = createRootRoute({
   component: AppShell,
@@ -10,10 +11,26 @@ const rootRoute = createRootRoute({
   notFoundComponent: NotFoundPage,
 })
 
-const historyRoute = createRoute({
+const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HistoryPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/library/books/archive' })
+  },
+})
+
+const booksArchiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/books/archive',
+  validateSearch: parseBooksRouteSearch,
+  component: () => <BooksCollectionPage collection="archive" />,
+})
+
+const booksQueueRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/books/queue',
+  validateSearch: parseBooksRouteSearch,
+  component: () => <BooksCollectionPage collection="queue" />,
 })
 
 const connectionsRoute = createRoute({
@@ -22,7 +39,12 @@ const connectionsRoute = createRoute({
   component: ConnectionsPage,
 })
 
-const routeTree = rootRoute.addChildren([historyRoute, connectionsRoute])
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  booksArchiveRoute,
+  booksQueueRoute,
+  connectionsRoute,
+])
 
 export const router = createRouter({ routeTree })
 

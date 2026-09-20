@@ -107,14 +107,12 @@ from community ratings. Missing artwork and unknown dates need deliberate
 presentation.
 
 Show each item once, with all supported consumption occurrences inside its
-inspector. Date filters match **any** occurrence. Within a selected period,
-display and sort by the latest matching consumption date; otherwise use the
-latest overall. Preserve the complete history in the inspector, distinguishing
-matching occurrences. Where useful, distinguish unique-item and occurrence
-counts (for example, 12 films and 15 watches). A movie watched in both 2022 and
-2025 appears once in either year's filtered Library, with both occurrences
-retained in its history. Never substitute ingestion or
-source-recorded dates for unknown consumption dates.
+inspector. For Books, collection filters, display, and sorting use the latest
+supported read occurrence only; older reads remain in History and do not satisfy
+collection predicates. Other media types must follow their accepted
+media-specific surface contract. Where useful, distinguish unique-item and
+occurrence counts. Never substitute ingestion or source-recorded dates for
+unknown consumption dates.
 
 The inspector includes available metadata, source links, ratings, notes,
 highlights, and history. Source provenance can be disclosed there without
@@ -212,8 +210,8 @@ selections, neutral ratings, and stronger accents limited to small controls,
 focus states, and actions. Avoid large saturated selection backgrounds.
 
 The choice refers to the published tweakcn preset, not the earlier custom
-palette with the same name. Production theme integration remains separate work;
-the neutral component initialization above does not yet apply this selection.
+palette with the same name. Its semantic tokens now drive the production shell
+and Books surfaces in light and dark modes, while the choice remains revisitable.
 
 Keep the eight-theme comparison available at
 `/specimen.html?theme=graphite&mode=dark` (or `mode=light`). Its source, bundled
@@ -230,8 +228,8 @@ The [saved mockups reference](mockups.md) lists the durable source files and
 links for all seven layouts. Run `pnpm dev:web` and open `/design.html`. The top switch preserves the current
 surface and selection when comparing seven structural directions:
 
-- **Index:** the selected base; sidebar collapse is agreed but not yet implemented
-  in the study.
+- **Index:** the selected base; the study remains static, while its accepted
+  sidebar collapse is implemented in production.
 - **Top nav:** global horizontal navigation; media tabs span the Library; Chat and Recaps own local sidebars.
 - **Two-pane:** compact selection list and persistent details; conversation and period lists select content in the main pane.
 - **Journal:** date-grouped Library rows, timeline recaps, and chronological conversations.
@@ -251,6 +249,6 @@ Concept cover designs are composed in CSS; web fonts load from Google Fonts with
 local fallbacks. The exploratory name “Margin” is not a naming decision.
 
 The preview has a separate Vite HTML entry and does not replace the operational
-application. Index is now selected. Production integration, sidebar collapse, and detailed
-source-specific interface design remain subsequent work. Keep the other studies
-available as references unless the owner requests their removal.
+application. Index is selected and its shell, sidebar collapse, Graphite tokens,
+and Books-specific interface are now integrated in production. Keep the other
+studies available as references unless the owner requests their removal.

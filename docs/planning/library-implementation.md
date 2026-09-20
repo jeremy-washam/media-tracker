@@ -1,7 +1,7 @@
 # Library implementation handoff
 
 - Date: 2026-09-19
-- Status: Implementation plan; functionality described below is not yet shipped
+- Status: In progress; Step 1 and the Books vertical slice are implemented
 - Intended implementer: Sol agent
 - Scope: Production Library, including Archive, source-derived Queue, and item inspection
 
@@ -53,8 +53,8 @@ and not all illustrative metadata in the specimen is currently available.
 
 | Area        | Current state                                                                   | Work needed                                                                                                         |
 | ----------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Library API | List/detail return ID, type, and title; list supports type and pagination       | Rich list/detail contracts, search, filters, sorts, history, and Queue queries                                      |
-| Books       | Hardcover Read import retains identities, ratings/reviews, and supported reads  | Request/project authors, covers, descriptions, page counts, consumed-edition details, and Want to Read membership   |
+| Library API | Books has rich list/detail/History contracts; other media remain generic        | Repeat the media-specific API pattern for the remaining types                                                       |
+| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped  | Iterate on production feedback without weakening source/provenance semantics                                        |
 | Movies      | Letterboxd consumption and personal data imported                               | Project retained useful RSS fields; import watchlist membership; obtain missing artwork/metadata where possible     |
 | Articles    | Reader supplies basic author, summary, image, publication date, and source link | Inbox/Later projection; expose useful retained fields; acquire/project notes and highlights needed by the inspector |
 | Podcasts    | Export supplies playback history; saved-episode sync enriches a subset          | Saved-library Queue projection, reconciliation against all known playback, and metadata for export-only episodes    |
@@ -189,6 +189,12 @@ source-level and occurrence-level values differ.
 
 **Exit criterion:** Books is usable with real data in both themes, including
 repeated reads, missing covers/dates/ratings, Queue-only books, and long content.
+
+**Implemented 2026-09-20:** The production Index shell, Graphite light/dark
+tokens, responsive inspector, Books Archive and Queue, URL-backed collection
+state, real-data Hardcover snapshot, source projections, FTS search, filters,
+sorts, keyset pagination, detail, and History are in place. Real validation
+reconciled 1,114 relationships into 128 Archive books and 986 Queue books.
 
 ## Step 3: Extend across the remaining media types
 

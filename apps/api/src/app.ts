@@ -1,5 +1,10 @@
 import {
   ApiErrorSchema,
+  BookDetailSchema,
+  BookHistoryQuerySchema,
+  BookHistoryResponseSchema,
+  BooksQuerySchema,
+  BooksResponseSchema,
   ConnectionsResponseSchema,
   HardcoverSyncResponseSchema,
   HealthResponseSchema,
@@ -22,7 +27,7 @@ import { z } from 'zod'
 
 import type { ApiError } from '@media-tracker/contracts'
 
-import { createLedgerRepository, type AppEnv } from './env'
+import { createBooksRepository, createLedgerRepository, type AppEnv } from './env'
 import { HardcoverTokenMissingError, syncHardcover } from './hardcover-sync'
 import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-import'
 import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
@@ -80,6 +85,42 @@ const mediaDetailRoute = createRoute({
   responses: {
     200: jsonContent(MediaSummarySchema, 'Media item'),
     404: jsonContent(ApiErrorSchema, 'Media item not found'),
+  },
+})
+
+const booksRoute = createRoute({
+  method: 'get',
+  path: '/api/library/books',
+  tags: ['Library', 'Books'],
+  request: { query: BooksQuerySchema },
+  responses: {
+    200: jsonContent(BooksResponseSchema, 'Books collection'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Books query'),
+  },
+})
+
+const bookDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/books/{mediaItemId}',
+  tags: ['Library', 'Books'],
+  request: { params: z.object({ mediaItemId: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(BookDetailSchema, 'Book details'),
+    404: jsonContent(ApiErrorSchema, 'Book not found'),
+  },
+})
+
+const bookHistoryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/books/{mediaItemId}/history',
+  tags: ['Library', 'Books'],
+  request: {
+    params: z.object({ mediaItemId: z.string().min(1) }),
+    query: BookHistoryQuerySchema,
+  },
+  responses: {
+    200: jsonContent(BookHistoryResponseSchema, 'Book activity history'),
+    400: jsonContent(ApiErrorSchema, 'Invalid history cursor'),
   },
 })
 
@@ -263,6 +304,73 @@ app.openapi(mediaDetailRoute, async (context) => {
     }),
     404,
   )
+})
+
+app.openapi(booksRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createBooksRepository(context.env.DB).listBooks({
+      collection: query.collection,
+      ...(query.q === undefined ? {} : { q: query.q }),
+      formats: query.format,
+      series: query.series,
+      genres: query.genre,
+      finishedMode: query.finishedMode,
+      ...(query.finishedFrom === undefined ? {} : { finishedFrom: query.finishedFrom }),
+      ...(query.finishedTo === undefined ? {} : { finishedTo: query.finishedTo }),
+      publishedMode: query.publishedMode,
+      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+      addedMode: query.addedMode,
+      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+      ratingMode: query.ratingMode,
+      ...(query.minRating === undefined ? {} : { minRating: query.minRating }),
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.direction === undefined ? {} : { direction: query.direction }),
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(BooksResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Books pagination cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
+app.openapi(bookDetailRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const book = await createBooksRepository(context.env.DB).findBook(id)
+  if (book !== null) return context.json(BookDetailSchema.parse(book), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No book exists with media item ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(bookHistoryRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const query = context.req.valid('query')
+  try {
+    const history = await createBooksRepository(context.env.DB).listBookHistory(id, {
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(BookHistoryResponseSchema.parse(history), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Book history cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
 })
 
 app.openapi(readwiseSyncRoute, async (context) => {
@@ -609,6 +717,7 @@ app.onError((error, context) => {
       requestId: context.get('requestId'),
       status,
       errorName: error.name,
+      errorMessage: error.message.slice(0, 500),
     }),
   )
 

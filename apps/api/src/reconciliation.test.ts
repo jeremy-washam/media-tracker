@@ -70,6 +70,12 @@ class D1SqliteDatabase {
         'utf8',
       ),
     )
+    this.database.exec(
+      readFileSync(
+        new NodeURL('../../../packages/db/migrations/0003_books_library.sql', import.meta.url),
+        'utf8',
+      ),
+    )
   }
 
   prepare(query: string): D1SqliteStatement {
@@ -297,13 +303,14 @@ const book = {
   }[],
 }
 function stubBook(value: unknown) {
-  vi.stubGlobal('fetch', async (_input: string | URL | Request, init?: RequestInit) =>
-    Response.json(
-      (JSON.parse(String(init?.body)) as { query: string }).query.includes('MediaTrackerMe')
-        ? { data: { me: [{ id: 1 }] } }
-        : { data: { user_books: [value] } },
-    ),
-  )
+  vi.stubGlobal('fetch', async (_input: string | URL | Request, init?: RequestInit) => {
+    const query = (JSON.parse(String(init?.body)) as { query: string }).query
+    if (query.includes('MediaTrackerMe')) return Response.json({ data: { me: [{ id: 1 }] } })
+    if (query.includes('LibraryEditions')) {
+      return Response.json({ data: { editions: [{ id: 999, book_id: 701 }] } })
+    }
+    return Response.json({ data: { user_books: [value] } })
+  })
 }
 it('retires the undated fallback when Hardcover supplies a finished read', async () => {
   stubBook(book)
