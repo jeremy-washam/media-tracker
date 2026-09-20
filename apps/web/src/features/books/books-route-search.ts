@@ -87,6 +87,15 @@ export function normalizedForCollection(
     delete archive.addedMode
     delete archive.addedFrom
     delete archive.addedTo
+    if (
+      archive.sort !== undefined &&
+      !['recent_read', 'earliest_read', 'title', 'author', 'personal_rating', 'published'].includes(
+        archive.sort,
+      )
+    ) {
+      delete archive.sort
+      delete archive.direction
+    }
     return archive
   }
   const queue = { ...search }
@@ -95,5 +104,16 @@ export function normalizedForCollection(
   delete queue.finishedTo
   delete queue.ratingMode
   delete queue.minRating
+  if (queue.sort !== undefined && !['added', 'title', 'author', 'published'].includes(queue.sort)) {
+    delete queue.sort
+    delete queue.direction
+  }
   return queue
+}
+
+export function collectionQuerySearch(search: BooksRouteSearch): BooksRouteSearch {
+  const query = { ...search }
+  delete query.layout
+  delete query.item
+  return query
 }

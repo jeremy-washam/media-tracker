@@ -14,6 +14,7 @@ describe('Hardcover read-book parser', () => {
       read_count: 2,
       rating: 4.5,
       review: 'A synthetic review.',
+      reviewed_at: '2026-09-10T12:00:00Z',
       updated_at: '2026-09-11T18:30:00Z',
       book: {
         id: 701,
@@ -47,6 +48,7 @@ describe('Hardcover read-book parser', () => {
       editionId: 801,
       readCount: 2,
       rating: 4.5,
+      reviewedAt: '2026-09-10T12:00:00Z',
       title: 'A Synthetic Book',
       isbn13: '9781234567890',
     })

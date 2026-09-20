@@ -449,6 +449,7 @@ export const hardcoverUserBooks = sqliteTable(
     personalRating: real('personal_rating'),
     reviewText: text('review_text'),
     reviewHasSpoilers: integer('review_has_spoilers', { mode: 'boolean' }).notNull(),
+    reviewedAt: text('reviewed_at'),
     sourceUpdatedAt: text('source_updated_at'),
     sourceRecordId: text('source_record_id')
       .notNull()

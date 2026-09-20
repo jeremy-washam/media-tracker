@@ -74,6 +74,7 @@ export interface HardcoverReadBook {
   rating: number | null
   review: string | null
   reviewHasSpoilers: boolean
+  reviewedAt: string | null
   updatedAt: string | null
   title: string | null
   subtitle: string | null
@@ -134,6 +135,7 @@ const libraryBooksQuery = `
       rating
       review
       review_has_spoilers
+      reviewed_at
       updated_at
       user_book_status { status }
       book {
@@ -428,6 +430,7 @@ export function parseHardcoverReadBook(value: unknown): HardcoverReadBook {
     rating: nullableNumber(row.rating, 'rating'),
     review: nullableString(row.review, 'review'),
     reviewHasSpoilers: booleanOr(row.review_has_spoilers),
+    reviewedAt: nullableString(row.reviewed_at, 'reviewed timestamp'),
     updatedAt: nullableString(row.updated_at, 'updated timestamp'),
     title: nullableString(book.title, 'title'),
     subtitle: nullableString(book.subtitle, 'subtitle'),

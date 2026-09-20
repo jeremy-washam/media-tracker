@@ -81,6 +81,7 @@ export interface HardcoverBookProjection {
   personalRating: number | null
   reviewText: string | null
   reviewHasSpoilers: boolean
+  reviewedAt: string | null
   title: string
   subtitle: string | null
   description: string | null
@@ -260,6 +261,52 @@ function placeholders(values: readonly unknown[]): string {
   return values.map(() => '?').join(', ')
 }
 
+function normalizedFormatSql(alias: string): string {
+  return `CASE ${alias}.reading_format_id
+    WHEN 1 THEN 'Physical'
+    WHEN 2 THEN 'Audiobook'
+    WHEN 4 THEN 'Ebook'
+    ELSE CASE lower(trim(${alias}.reading_format))
+      WHEN 'physical book' THEN 'Physical'
+      WHEN 'physical' THEN 'Physical'
+      WHEN 'audio book' THEN 'Audiobook'
+      WHEN 'audiobook' THEN 'Audiobook'
+      WHEN 'ebook' THEN 'Ebook'
+      WHEN 'e-book' THEN 'Ebook'
+    END
+  END`
+}
+
+function publicationStartSql(column: string, precisionColumn: string): string {
+  return `CASE ${precisionColumn}
+    WHEN 'year' THEN ${column} || '-01-01'
+    WHEN 'month' THEN ${column} || '-01'
+    ELSE substr(${column}, 1, 10)
+  END`
+}
+
+function publicationEndSql(column: string, precisionColumn: string): string {
+  return `CASE ${precisionColumn}
+    WHEN 'year' THEN ${column} || '-12-31'
+    WHEN 'month' THEN date(${column} || '-01', '+1 month', '-1 day')
+    ELSE substr(${column}, 1, 10)
+  END`
+}
+
+function boundaryStart(value: string): string {
+  if (/^\d{4}$/.test(value)) return `${value}-01-01`
+  if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01`
+  return value
+}
+
+function boundaryEnd(value: string): string {
+  if (/^\d{4}$/.test(value)) return `${value}-12-31`
+  const month = /^(\d{4})-(\d{2})$/.exec(value)
+  if (month === null) return value
+  const end = new Date(Date.UTC(Number(month[1]), Number(month[2]), 0))
+  return end.toISOString().slice(0, 10)
+}
+
 function decodeCursor(cursor: string | undefined, fingerprint: string): CursorPayload | null {
   if (cursor === undefined) return null
   try {
@@ -342,7 +389,7 @@ function filterSql(
       options.push(`lower(${column}) IN (${placeholders(known)})`)
       values.push(...known.map(normalizedText))
     }
-    if (input.formats.includes('unknown')) options.push(`${column} IS NULL`)
+    if (input.formats.includes('unknown')) options.push(`(${column} IS NULL OR ${column}='')`)
     clauses.push(`(${options.join(' OR ')})`)
   }
 
@@ -352,16 +399,21 @@ function filterSql(
     if (known.length > 0) {
       options.push(
         `EXISTS (SELECT 1 FROM hardcover_work_series ws
+          JOIN hardcover_book_works w ON w.connection_id=ws.connection_id AND w.work_id=ws.work_id
           WHERE ws.connection_id = p.connection_id AND ws.work_id = p.work_id
-            AND ws.upstream_state = 'active' AND CAST(ws.series_id AS TEXT) IN (${placeholders(known)}))`,
+            AND ((w.upstream_state='active' AND ws.upstream_state='active')
+              OR (w.upstream_state='removed' AND ws.last_seen_run_id=w.last_seen_run_id))
+            AND CAST(ws.series_id AS TEXT) IN (${placeholders(known)}))`,
       )
       values.push(...known)
     }
     if (input.series.includes('none')) {
       options.push(
         `NOT EXISTS (SELECT 1 FROM hardcover_work_series ws
+          JOIN hardcover_book_works w ON w.connection_id=ws.connection_id AND w.work_id=ws.work_id
           WHERE ws.connection_id = p.connection_id AND ws.work_id = p.work_id
-            AND ws.upstream_state = 'active')`,
+            AND ((w.upstream_state='active' AND ws.upstream_state='active')
+              OR (w.upstream_state='removed' AND ws.last_seen_run_id=w.last_seen_run_id)))`,
       )
     }
     clauses.push(`(${options.join(' OR ')})`)
@@ -373,8 +425,11 @@ function filterSql(
     if (known.length > 0) {
       options.push(
         `EXISTS (SELECT 1 FROM hardcover_work_taxonomy wt
+          JOIN hardcover_book_works w ON w.connection_id=wt.connection_id AND w.work_id=wt.work_id
           WHERE wt.connection_id = p.connection_id AND wt.work_id = p.work_id
-            AND wt.upstream_state = 'active' AND wt.category = 'Genre'
+            AND ((w.upstream_state='active' AND wt.upstream_state='active')
+              OR (w.upstream_state='removed' AND wt.last_seen_run_id=w.last_seen_run_id))
+            AND wt.category = 'Genre'
             AND wt.slug IN (${placeholders(known)}))`,
       )
       values.push(...known)
@@ -382,8 +437,11 @@ function filterSql(
     if (input.genres.includes('none')) {
       options.push(
         `NOT EXISTS (SELECT 1 FROM hardcover_work_taxonomy wt
+          JOIN hardcover_book_works w ON w.connection_id=wt.connection_id AND w.work_id=wt.work_id
           WHERE wt.connection_id = p.connection_id AND wt.work_id = p.work_id
-            AND wt.upstream_state = 'active' AND wt.category = 'Genre')`,
+            AND ((w.upstream_state='active' AND wt.upstream_state='active')
+              OR (w.upstream_state='removed' AND wt.last_seen_run_id=w.last_seen_run_id))
+            AND wt.category = 'Genre')`,
       )
     }
     clauses.push(`(${options.join(' OR ')})`)
@@ -408,6 +466,19 @@ function filterSql(
       }
     }
   }
+  const addPublicationDateFilter = () => {
+    if (input.publishedMode === 'unavailable') clauses.push('p.publication_date IS NULL')
+    if (input.publishedMode !== 'range') return
+    clauses.push('p.publication_date IS NOT NULL')
+    if (input.publishedFrom !== undefined) {
+      clauses.push(`${publicationEndSql('p.publication_date', 'p.publication_precision')} >= ?`)
+      values.push(boundaryStart(input.publishedFrom))
+    }
+    if (input.publishedTo !== undefined) {
+      clauses.push(`${publicationStartSql('p.publication_date', 'p.publication_precision')} <= ?`)
+      values.push(boundaryEnd(input.publishedTo))
+    }
+  }
   if (input.collection === 'archive') {
     addDateFilter('p.latest_read_date', input.finishedMode, input.finishedFrom, input.finishedTo)
     if (input.ratingMode === 'rated') clauses.push('p.personal_rating IS NOT NULL')
@@ -419,7 +490,7 @@ function filterSql(
   } else {
     addDateFilter('p.queue_added_at', input.addedMode, input.addedFrom, input.addedTo)
   }
-  addDateFilter('p.publication_date', input.publishedMode, input.publishedFrom, input.publishedTo)
+  addPublicationDateFilter()
   return { sql: clauses.join(' AND '), values }
 }
 
@@ -513,9 +584,9 @@ export class SqlBooksRepository {
           `INSERT INTO hardcover_user_books (
             connection_id, user_book_id, media_item_id, work_id, current_edition_id,
             status_id, status_label, date_added, read_count, personal_rating, review_text,
-            review_has_spoilers, source_updated_at, source_record_id, last_seen_run_id,
+            review_has_spoilers, reviewed_at, source_updated_at, source_record_id, last_seen_run_id,
             upstream_state, first_observed_at, last_observed_at, retired_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, NULL)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, NULL)
           ON CONFLICT(connection_id, user_book_id) DO UPDATE SET
             media_item_id=excluded.media_item_id,
             work_id=excluded.work_id,
@@ -527,6 +598,7 @@ export class SqlBooksRepository {
             personal_rating=excluded.personal_rating,
             review_text=excluded.review_text,
             review_has_spoilers=excluded.review_has_spoilers,
+            reviewed_at=excluded.reviewed_at,
             source_updated_at=excluded.source_updated_at,
             source_record_id=excluded.source_record_id,
             last_seen_run_id=excluded.last_seen_run_id,
@@ -546,6 +618,7 @@ export class SqlBooksRepository {
             book.personalRating,
             book.reviewText,
             book.reviewHasSpoilers ? 1 : 0,
+            book.reviewedAt,
             book.sourceUpdatedAt,
             ...common,
           ],
@@ -887,62 +960,81 @@ export class SqlBooksRepository {
             JOIN hardcover_contributors c ON c.connection_id=wc.connection_id
               AND c.contributor_id=wc.contributor_id
             WHERE wc.connection_id=w.connection_id AND wc.work_id=w.work_id
-              AND wc.upstream_state='active' AND c.upstream_state='active'
+              AND ((w.upstream_state='active' AND wc.upstream_state='active'
+                    AND c.upstream_state='active')
+                OR (w.upstream_state='removed' AND wc.last_seen_run_id=w.last_seen_run_id
+                    AND c.last_seen_run_id=w.last_seen_run_id))
               AND (lower(wc.role_name)='author' OR wc.is_primary=1)
             ORDER BY wc.is_primary DESC, wc.position, c.name LIMIT 1),
           lower(COALESCE((SELECT c.name FROM hardcover_work_contributors wc
             JOIN hardcover_contributors c ON c.connection_id=wc.connection_id
               AND c.contributor_id=wc.contributor_id
             WHERE wc.connection_id=w.connection_id AND wc.work_id=w.work_id
-              AND wc.upstream_state='active' AND c.upstream_state='active'
+              AND ((w.upstream_state='active' AND wc.upstream_state='active'
+                    AND c.upstream_state='active')
+                OR (w.upstream_state='removed' AND wc.last_seen_run_id=w.last_seen_run_id
+                    AND c.last_seen_run_id=w.last_seen_run_id))
               AND (lower(wc.role_name)='author' OR wc.is_primary=1)
             ORDER BY wc.is_primary DESC, wc.position, c.name LIMIT 1), '')),
           w.cover_url, w.cover_color, w.release_date, w.release_precision,
           (SELECT s.name FROM hardcover_work_series ws
             JOIN hardcover_series s ON s.connection_id=ws.connection_id AND s.series_id=ws.series_id
             WHERE ws.connection_id=w.connection_id AND ws.work_id=w.work_id
-              AND ws.upstream_state='active' AND s.upstream_state='active'
+              AND ((w.upstream_state='active' AND ws.upstream_state='active'
+                    AND s.upstream_state='active')
+                OR (w.upstream_state='removed' AND ws.last_seen_run_id=w.last_seen_run_id
+                    AND s.last_seen_run_id=w.last_seen_run_id))
             ORDER BY ws.featured DESC, ws.position, s.name LIMIT 1),
           ub.status_id, ub.date_added,
-          CASE WHEN ub.status_id IN (1,2) THEN 1 ELSE 0 END,
+          CASE WHEN w.upstream_state='active' AND ub.upstream_state='active'
+            AND ub.status_id IN (1,2) THEN 1 ELSE 0 END,
           CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
-            WHERE a.media_item_id=w.media_item_id AND a.upstream_state='active') THEN 1 ELSE 0 END,
-          CASE WHEN ub.status_id=2 THEN 1 ELSE 0 END,
+            WHERE a.media_item_id=w.media_item_id AND a.connection_id=w.connection_id
+              AND a.upstream_state='active') THEN 1 ELSE 0 END,
+          CASE WHEN w.upstream_state='active' AND ub.upstream_state='active'
+            AND ub.status_id=2 THEN 1 ELSE 0 END,
           ub.personal_rating,
-          (SELECT r.read_id FROM hardcover_user_book_reads r
-            WHERE r.connection_id=w.connection_id AND r.media_item_id=w.media_item_id
-              AND r.upstream_state='active' AND r.finished_at IS NOT NULL
-            ORDER BY r.finished_at DESC, r.read_id DESC LIMIT 1),
-          (SELECT r.finished_at FROM hardcover_user_book_reads r
-            WHERE r.connection_id=w.connection_id AND r.media_item_id=w.media_item_id
-              AND r.upstream_state='active' AND r.finished_at IS NOT NULL
-            ORDER BY r.finished_at DESC, r.read_id DESC LIMIT 1),
-          CASE WHEN EXISTS (SELECT 1 FROM hardcover_user_book_reads r
-            WHERE r.connection_id=w.connection_id AND r.media_item_id=w.media_item_id
-              AND r.upstream_state='active' AND r.finished_at IS NOT NULL) THEN 'day' END,
-          (SELECT COALESCE(
-              NULLIF(trim(e.raw_format), ''),
-              CASE WHEN e.reading_format<>'Read' THEN e.reading_format END
-            )
-            FROM hardcover_user_book_reads r
+          (SELECT r.read_id FROM archive_entries a
+            LEFT JOIN hardcover_user_book_reads r ON r.archive_entry_id=a.id
+            WHERE a.connection_id=w.connection_id AND a.media_item_id=w.media_item_id
+              AND a.upstream_state='active'
+            ORDER BY CASE WHEN a.consumed_at_value IS NULL THEN 1 ELSE 0 END,
+              a.consumed_at_value DESC, a.id DESC LIMIT 1),
+          (SELECT a.consumed_at_value FROM archive_entries a
+            WHERE a.connection_id=w.connection_id AND a.media_item_id=w.media_item_id
+              AND a.upstream_state='active'
+            ORDER BY CASE WHEN a.consumed_at_value IS NULL THEN 1 ELSE 0 END,
+              a.consumed_at_value DESC, a.id DESC LIMIT 1),
+          (SELECT a.consumed_at_precision FROM archive_entries a
+            WHERE a.connection_id=w.connection_id AND a.media_item_id=w.media_item_id
+              AND a.upstream_state='active'
+            ORDER BY CASE WHEN a.consumed_at_value IS NULL THEN 1 ELSE 0 END,
+              a.consumed_at_value DESC, a.id DESC LIMIT 1),
+          (SELECT ${normalizedFormatSql('e')}
+            FROM archive_entries a
+            LEFT JOIN hardcover_user_book_reads r ON r.archive_entry_id=a.id
             LEFT JOIN hardcover_book_editions e ON e.connection_id=r.connection_id
-              AND e.edition_id=r.edition_id AND e.upstream_state='active'
-            WHERE r.connection_id=w.connection_id AND r.media_item_id=w.media_item_id
-              AND r.upstream_state='active' AND r.finished_at IS NOT NULL
-            ORDER BY r.finished_at DESC, r.read_id DESC LIMIT 1),
-          (SELECT COALESCE(
-              NULLIF(trim(e.raw_format), ''),
-              CASE WHEN e.reading_format<>'Read' THEN e.reading_format END
-            )
+              AND e.edition_id=r.edition_id
+            WHERE a.connection_id=w.connection_id AND a.media_item_id=w.media_item_id
+              AND a.upstream_state='active'
+            ORDER BY CASE WHEN a.consumed_at_value IS NULL THEN 1 ELSE 0 END,
+              a.consumed_at_value DESC, a.id DESC LIMIT 1),
+          (SELECT ${normalizedFormatSql('e')}
             FROM hardcover_book_editions e
             WHERE e.connection_id=ub.connection_id AND e.edition_id=ub.current_edition_id
-              AND e.upstream_state='active' LIMIT 1),
+            LIMIT 1),
           (SELECT COUNT(*) FROM archive_entries a
-            WHERE a.media_item_id=w.media_item_id AND a.upstream_state='active'),
-          ?, 1
+            WHERE a.media_item_id=w.media_item_id AND a.connection_id=w.connection_id
+              AND a.upstream_state='active'),
+          ?, 2
         FROM hardcover_book_works w
         JOIN hardcover_user_books ub ON ub.connection_id=w.connection_id AND ub.work_id=w.work_id
-        WHERE w.connection_id=? AND w.upstream_state='active' AND ub.upstream_state='active'`,
+        WHERE w.connection_id=? AND (
+          (w.upstream_state='active' AND ub.upstream_state='active')
+          OR EXISTS (SELECT 1 FROM archive_entries a
+            WHERE a.media_item_id=w.media_item_id AND a.connection_id=w.connection_id
+              AND a.upstream_state='active')
+        )`,
         [input.refreshedAt, input.connectionId],
       ),
       statement(
@@ -956,13 +1048,16 @@ export class SqlBooksRepository {
         `INSERT OR IGNORE INTO book_identifiers(media_item_id, type, normalized_value, display_value)
          SELECT media_item_id, kind, value, value FROM (
            SELECT media_item_id, 'isbn_10' kind, isbn_10 value FROM hardcover_book_editions
-             WHERE connection_id=? AND upstream_state='active' AND isbn_10 IS NOT NULL
+             WHERE connection_id=? AND isbn_10 IS NOT NULL
+               AND media_item_id IN (SELECT media_item_id FROM book_library_projection)
            UNION ALL
            SELECT media_item_id, 'isbn_13', isbn_13 FROM hardcover_book_editions
-             WHERE connection_id=? AND upstream_state='active' AND isbn_13 IS NOT NULL
+             WHERE connection_id=? AND isbn_13 IS NOT NULL
+               AND media_item_id IN (SELECT media_item_id FROM book_library_projection)
            UNION ALL
            SELECT media_item_id, 'asin', asin FROM hardcover_book_editions
-             WHERE connection_id=? AND upstream_state='active' AND asin IS NOT NULL
+             WHERE connection_id=? AND asin IS NOT NULL
+               AND media_item_id IN (SELECT media_item_id FROM book_library_projection)
          )`,
         [input.connectionId, input.connectionId, input.connectionId],
       ),
@@ -980,20 +1075,30 @@ export class SqlBooksRepository {
              SELECT c.name FROM hardcover_work_contributors wc
              JOIN hardcover_contributors c ON c.connection_id=wc.connection_id
                AND c.contributor_id=wc.contributor_id
+             JOIN hardcover_book_works w ON w.connection_id=wc.connection_id
+               AND w.work_id=wc.work_id
              WHERE wc.connection_id=p.connection_id AND wc.work_id=p.work_id
-               AND wc.upstream_state='active' AND c.upstream_state='active'
+               AND ((w.upstream_state='active' AND wc.upstream_state='active'
+                     AND c.upstream_state='active')
+                 OR (w.upstream_state='removed' AND wc.last_seen_run_id=w.last_seen_run_id
+                     AND c.last_seen_run_id=w.last_seen_run_id))
              UNION
              SELECT c.name FROM hardcover_book_editions e
              JOIN hardcover_edition_contributors ec ON ec.connection_id=e.connection_id
-               AND ec.edition_id=e.edition_id AND ec.upstream_state='active'
+               AND ec.edition_id=e.edition_id
              JOIN hardcover_contributors c ON c.connection_id=ec.connection_id
-               AND c.contributor_id=ec.contributor_id AND c.upstream_state='active'
-             WHERE e.media_item_id=p.media_item_id AND e.upstream_state='active'
+               AND c.contributor_id=ec.contributor_id
+             WHERE e.media_item_id=p.media_item_id
            )), ''),
            COALESCE((SELECT group_concat(s.name, ' ') FROM hardcover_work_series ws
              JOIN hardcover_series s ON s.connection_id=ws.connection_id AND s.series_id=ws.series_id
+             JOIN hardcover_book_works w ON w.connection_id=ws.connection_id
+               AND w.work_id=ws.work_id
              WHERE ws.connection_id=p.connection_id AND ws.work_id=p.work_id
-               AND ws.upstream_state='active' AND s.upstream_state='active'), ''),
+               AND ((w.upstream_state='active' AND ws.upstream_state='active'
+                     AND s.upstream_state='active')
+                 OR (w.upstream_state='removed' AND ws.last_seen_run_id=w.last_seen_run_id
+                     AND s.last_seen_run_id=w.last_seen_run_id))), ''),
            COALESCE((SELECT group_concat(i.normalized_value, ' ') FROM book_identifiers i
              WHERE i.media_item_id=p.media_item_id), '')
          FROM book_library_projection p WHERE p.connection_id=?`,
@@ -1074,8 +1179,13 @@ export class SqlBooksRepository {
             SELECT c.contributor_id, c.name FROM hardcover_work_contributors wc
             JOIN hardcover_contributors c ON c.connection_id=wc.connection_id
               AND c.contributor_id=wc.contributor_id
+            JOIN hardcover_book_works w ON w.connection_id=wc.connection_id
+              AND w.work_id=wc.work_id
             WHERE wc.connection_id=p.connection_id AND wc.work_id=p.work_id
-              AND wc.upstream_state='active' AND c.upstream_state='active'
+              AND ((w.upstream_state='active' AND wc.upstream_state='active'
+                    AND c.upstream_state='active')
+                OR (w.upstream_state='removed' AND wc.last_seen_run_id=w.last_seen_run_id
+                    AND c.last_seen_run_id=w.last_seen_run_id))
               AND (lower(wc.role_name)='author' OR wc.is_primary=1)
             ORDER BY wc.is_primary DESC, wc.position, c.name
           )), '[]') authors_json
@@ -1189,7 +1299,7 @@ export class SqlBooksRepository {
        FROM book_library_projection p
        JOIN hardcover_book_works w ON w.connection_id=p.connection_id AND w.work_id=p.work_id
        JOIN connections c ON c.id=p.connection_id
-       WHERE p.media_item_id=? AND w.upstream_state='active'`,
+       WHERE p.media_item_id=?`,
       [id],
     ).first<{
       media_item_id: string
@@ -1221,8 +1331,12 @@ export class SqlBooksRepository {
       `SELECT s.series_id, s.name, ws.position, s.books_count, ws.compilation
        FROM hardcover_work_series ws JOIN hardcover_series s
          ON s.connection_id=ws.connection_id AND s.series_id=ws.series_id
-       WHERE ws.connection_id=? AND ws.work_id=? AND ws.upstream_state='active'
-         AND s.upstream_state='active'
+       JOIN hardcover_book_works w ON w.connection_id=ws.connection_id AND w.work_id=ws.work_id
+       WHERE ws.connection_id=? AND ws.work_id=?
+         AND ((w.upstream_state='active' AND ws.upstream_state='active'
+               AND s.upstream_state='active')
+           OR (w.upstream_state='removed' AND ws.last_seen_run_id=w.last_seen_run_id
+               AND s.last_seen_run_id=w.last_seen_run_id))
        ORDER BY ws.featured DESC, ws.position, s.name`,
       [row.connection_id, row.work_id],
     ).all<{
@@ -1237,36 +1351,48 @@ export class SqlBooksRepository {
       `SELECT wc.role_name, c.contributor_id, c.name
        FROM hardcover_work_contributors wc JOIN hardcover_contributors c
          ON c.connection_id=wc.connection_id AND c.contributor_id=wc.contributor_id
+       JOIN hardcover_book_works w ON w.connection_id=wc.connection_id AND w.work_id=wc.work_id
        WHERE wc.connection_id=? AND wc.work_id=? AND wc.upstream_state='active'
-         AND c.upstream_state='active'
+         AND c.upstream_state='active' AND w.upstream_state='active'
+       UNION ALL
+       SELECT wc.role_name, c.contributor_id, c.name
+       FROM hardcover_work_contributors wc JOIN hardcover_contributors c
+         ON c.connection_id=wc.connection_id AND c.contributor_id=wc.contributor_id
+       JOIN hardcover_book_works w ON w.connection_id=wc.connection_id AND w.work_id=wc.work_id
+       WHERE wc.connection_id=? AND wc.work_id=? AND w.upstream_state='removed'
+         AND wc.last_seen_run_id=w.last_seen_run_id AND c.last_seen_run_id=w.last_seen_run_id
        UNION ALL
        SELECT ec.role_name || ' (selected edition)', c.contributor_id, c.name
        FROM hardcover_user_books ub
        JOIN hardcover_edition_contributors ec ON ec.connection_id=ub.connection_id
-         AND ec.edition_id=ub.current_edition_id AND ec.upstream_state='active'
+         AND ec.edition_id=ub.current_edition_id
        JOIN hardcover_contributors c ON c.connection_id=ec.connection_id
-         AND c.contributor_id=ec.contributor_id AND c.upstream_state='active'
-       WHERE ub.connection_id=? AND ub.media_item_id=? AND ub.upstream_state='active'
+         AND c.contributor_id=ec.contributor_id
+       WHERE ub.connection_id=? AND ub.media_item_id=?
+         AND ((ub.upstream_state='active' AND ec.upstream_state='active'
+               AND c.upstream_state='active')
+           OR (ub.upstream_state='removed' AND ec.last_seen_run_id=ub.last_seen_run_id
+               AND c.last_seen_run_id=ub.last_seen_run_id))
          AND NOT EXISTS (
            SELECT 1 FROM hardcover_work_contributors wc
            WHERE wc.connection_id=ub.connection_id AND wc.work_id=ub.work_id
              AND wc.contributor_id=ec.contributor_id AND wc.role_name=ec.role_name
-             AND wc.upstream_state='active'
          )
        ORDER BY role_name, name`,
-      [row.connection_id, row.work_id, row.connection_id, id],
+      [row.connection_id, row.work_id, row.connection_id, row.work_id, row.connection_id, id],
     ).all<{ role_name: string; contributor_id: number; name: string }>()
     const edition = await statement(
       this.#database,
-      `SELECT e.* FROM hardcover_user_books ub LEFT JOIN hardcover_book_editions e
+      `SELECT e.*, ${normalizedFormatSql('e')} normalized_format
+       FROM hardcover_user_books ub LEFT JOIN hardcover_book_editions e
          ON e.connection_id=ub.connection_id AND e.edition_id=ub.current_edition_id
-       WHERE ub.connection_id=? AND ub.media_item_id=? AND ub.upstream_state='active'
-         AND (e.upstream_state='active' OR e.upstream_state IS NULL)`,
+       WHERE ub.connection_id=? AND ub.media_item_id=?`,
       [row.connection_id, id],
     ).first<{
-      edition_id: number
+      edition_id: number | null
       reading_format: string | null
       raw_format: string | null
+      normalized_format: string | null
       edition_information: string | null
       pages: number | null
       audio_seconds: number | null
@@ -1280,8 +1406,11 @@ export class SqlBooksRepository {
     }>()
     const taxonomy = await statement(
       this.#database,
-      `SELECT category, value FROM hardcover_work_taxonomy
-       WHERE connection_id=? AND work_id=? AND upstream_state='active'
+      `SELECT wt.category, wt.value FROM hardcover_work_taxonomy wt
+       JOIN hardcover_book_works w ON w.connection_id=wt.connection_id AND w.work_id=wt.work_id
+       WHERE wt.connection_id=? AND wt.work_id=?
+         AND ((w.upstream_state='active' AND wt.upstream_state='active')
+           OR (w.upstream_state='removed' AND wt.last_seen_run_id=w.last_seen_run_id))
        ORDER BY category, value`,
       [row.connection_id, row.work_id],
     ).all<{ category: string; value: string }>()
@@ -1323,13 +1452,11 @@ export class SqlBooksRepository {
       })),
       contributors: [...grouped].map(([role, contributors]) => ({ role, contributors })),
       selectedEdition:
-        edition === null
+        edition === null || edition.edition_id === null
           ? null
           : {
               id: String(edition.edition_id),
-              format:
-                edition.raw_format?.trim() ||
-                (edition.reading_format === 'Read' ? null : edition.reading_format),
+              format: edition.normalized_format,
               information: edition.edition_information,
               pages: edition.pages,
               audioSeconds: edition.audio_seconds,
@@ -1379,16 +1506,18 @@ export class SqlBooksRepository {
     const [userBooks, reads, fallbackReads] = await Promise.all([
       statement(
         this.#database,
-        `SELECT user_book_id, status_id, status_label, date_added, source_updated_at,
+        `SELECT user_book_id, status_id, status_label, date_added, reviewed_at,
+          upstream_state,
           personal_rating, review_text
-         FROM hardcover_user_books WHERE media_item_id=? AND upstream_state='active'`,
+         FROM hardcover_user_books WHERE media_item_id=?`,
         [id],
       ).all<{
         user_book_id: number
         status_id: number
         status_label: string | null
         date_added: string | null
-        source_updated_at: string | null
+        reviewed_at: string | null
+        upstream_state: 'active' | 'removed' | 'unknown'
         personal_rating: number | null
         review_text: string | null
       }>(),
@@ -1396,15 +1525,12 @@ export class SqlBooksRepository {
         this.#database,
         `SELECT r.read_id, r.started_at, r.finished_at, r.progress, r.progress_pages,
           r.progress_seconds, e.edition_id,
-          COALESCE(
-            NULLIF(trim(e.raw_format), ''),
-            CASE WHEN e.reading_format<>'Read' THEN e.reading_format END
-          ) edition_format,
+          ${normalizedFormatSql('e')} edition_format,
           e.title edition_title
          FROM hardcover_user_book_reads r
          LEFT JOIN hardcover_book_editions e ON e.connection_id=r.connection_id
-           AND e.edition_id=r.edition_id AND e.upstream_state='active'
-         WHERE r.media_item_id=? AND r.upstream_state='active'`,
+           AND e.edition_id=r.edition_id
+         WHERE r.media_item_id=?`,
         [id],
       ).all<{
         read_id: number
@@ -1424,7 +1550,7 @@ export class SqlBooksRepository {
          WHERE a.media_item_id=? AND a.upstream_state='active'
            AND NOT EXISTS (
              SELECT 1 FROM hardcover_user_book_reads r
-             WHERE r.archive_entry_id=a.id AND r.upstream_state='active'
+             WHERE r.archive_entry_id=a.id
            )`,
         [id],
       ).all<{
@@ -1450,15 +1576,16 @@ export class SqlBooksRepository {
       events.push({
         id: `status:${key}`,
         kind: 'status',
-        label:
+        label: `${row.upstream_state === 'active' ? '' : 'Last observed status: '}${
           row.status_label ??
           (row.status_id === 1
             ? 'Want to Read'
             : row.status_id === 2
               ? 'Currently Reading'
-              : 'Read'),
-        date: row.source_updated_at,
-        datePrecision: row.source_updated_at === null ? null : 'instant',
+              : 'Read')
+        }`,
+        date: null,
+        datePrecision: null,
         detail: null,
         edition: null,
       })
@@ -1467,8 +1594,8 @@ export class SqlBooksRepository {
           id: `rating:${key}`,
           kind: 'rating',
           label: 'Rated',
-          date: row.source_updated_at,
-          datePrecision: row.source_updated_at === null ? null : 'instant',
+          date: null,
+          datePrecision: null,
           detail: `${row.personal_rating}/5`,
           edition: null,
         })
@@ -1478,8 +1605,8 @@ export class SqlBooksRepository {
           id: `review:${key}`,
           kind: 'review',
           label: 'Reviewed',
-          date: row.source_updated_at,
-          datePrecision: row.source_updated_at === null ? null : 'instant',
+          date: row.reviewed_at,
+          datePrecision: row.reviewed_at === null ? null : 'instant',
           detail: row.review_text,
           edition: null,
         })
@@ -1510,8 +1637,8 @@ export class SqlBooksRepository {
           id: `progress:${row.read_id}`,
           kind: 'progress',
           label: 'Reading progress',
-          date: row.finished_at ?? row.started_at,
-          datePrecision: row.finished_at === null && row.started_at === null ? null : 'day',
+          date: null,
+          datePrecision: null,
           detail:
             row.progress_pages !== null
               ? `${row.progress_pages} pages`
@@ -1579,10 +1706,14 @@ export class SqlBooksRepository {
       `SELECT CAST(s.series_id AS TEXT) value, s.name label, COUNT(DISTINCT p.media_item_id) count
        FROM book_library_projection p
        JOIN hardcover_work_series ws ON ws.connection_id=p.connection_id AND ws.work_id=p.work_id
-         AND ws.upstream_state='active'
+       JOIN hardcover_book_works w ON w.connection_id=ws.connection_id AND w.work_id=ws.work_id
        JOIN hardcover_series s ON s.connection_id=ws.connection_id AND s.series_id=ws.series_id
-         AND s.upstream_state='active'
-       WHERE ${seriesFilter.sql} GROUP BY s.series_id, s.name ORDER BY s.name`,
+       WHERE ${seriesFilter.sql}
+         AND ((w.upstream_state='active' AND ws.upstream_state='active'
+               AND s.upstream_state='active')
+           OR (w.upstream_state='removed' AND ws.last_seen_run_id=w.last_seen_run_id
+               AND s.last_seen_run_id=w.last_seen_run_id))
+       GROUP BY s.series_id, s.name ORDER BY s.name`,
       seriesFilter.values,
     ).all<BookFacetRecord>()
     const genreFilter = filterSql(input, 'genre')
@@ -1591,8 +1722,12 @@ export class SqlBooksRepository {
       `SELECT wt.slug value, MIN(wt.value) label, COUNT(DISTINCT p.media_item_id) count
        FROM book_library_projection p
        JOIN hardcover_work_taxonomy wt ON wt.connection_id=p.connection_id
-         AND wt.work_id=p.work_id AND wt.upstream_state='active' AND wt.category='Genre'
-       WHERE ${genreFilter.sql} GROUP BY wt.slug ORDER BY label`,
+         AND wt.work_id=p.work_id AND wt.category='Genre'
+       JOIN hardcover_book_works w ON w.connection_id=wt.connection_id AND w.work_id=wt.work_id
+       WHERE ${genreFilter.sql}
+         AND ((w.upstream_state='active' AND wt.upstream_state='active')
+           OR (w.upstream_state='removed' AND wt.last_seen_run_id=w.last_seen_run_id))
+       GROUP BY wt.slug ORDER BY label`,
       genreFilter.values,
     ).all<BookFacetRecord>()
     return {

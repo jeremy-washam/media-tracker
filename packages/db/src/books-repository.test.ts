@@ -12,13 +12,17 @@ import type {
 } from './database'
 import { SqlBooksRepository, type HardcoverBookProjection } from './books-repository'
 
-const migrations = [
+const migrationNames = [
   '0001_canonical_ledger.sql',
   '0002_rotating_credentials.sql',
   '0003_books_library.sql',
+  '0004_books_review_facts.sql',
+  '0005_books_format_projection.sql',
 ]
-  .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
-  .join('\n')
+const migrationSql = migrationNames.map((name) =>
+  readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'),
+)
+const migrations = migrationSql.join('\n')
 
 class SqliteStatement implements DatabaseStatement {
   readonly #statement: StatementSync
@@ -135,6 +139,7 @@ function projection(): HardcoverBookProjection {
     personalRating: 4.5,
     reviewText: 'Synthetic review.',
     reviewHasSpoilers: false,
+    reviewedAt: '2026-09-18T12:00:00.000Z',
     title: 'The Left Hand of Darkness',
     subtitle: null,
     description: 'A synthetic description.',
@@ -201,12 +206,12 @@ function projection(): HardcoverBookProjection {
         id: 10,
         archiveEntryId: 'archive-1',
         editionId: 3,
-        startedAt: null,
+        startedAt: '2025-02-01',
         pausedAt: null,
         finishedAt: '2025-03-04',
         finishedAtPrecisionRaw: null,
         progress: null,
-        progressPages: null,
+        progressPages: 150,
         progressSeconds: null,
       },
     ],
@@ -238,6 +243,29 @@ describe('Books projection and repository', () => {
 
   afterEach(() => database.close())
 
+  it('upgrades the prior Books schema without replacing existing data', () => {
+    const upgrade = new DatabaseSync(':memory:')
+    upgrade.exec(migrationSql.slice(0, 3).join('\n'))
+    upgrade.exec(`
+      INSERT INTO connections(id, source, label, status, coverage, created_at, updated_at)
+      VALUES ('upgrade-check', 'hardcover', 'Hardcover', 'connected', 'complete',
+        '2026-09-20T10:00:00.000Z', '2026-09-20T10:00:00.000Z')
+    `)
+    upgrade.exec(migrationSql.slice(3).join('\n'))
+
+    expect(
+      upgrade
+        .prepare(
+          "SELECT name FROM pragma_table_info('hardcover_user_books') WHERE name='reviewed_at'",
+        )
+        .get(),
+    ).toEqual({ name: 'reviewed_at' })
+    expect(upgrade.prepare("SELECT id FROM connections WHERE id='upgrade-check'").get()).toEqual({
+      id: 'upgrade-check',
+    })
+    upgrade.close()
+  })
+
   it('builds overlapping Archive and Queue views with searchable source metadata', async () => {
     await repository.upsertHardcoverBooks([projection()])
     await repository.finalizeHardcoverSnapshot({
@@ -257,7 +285,7 @@ describe('Books projection and repository', () => {
       title: 'The Left Hand of Darkness',
       memberships: { archive: true, queue: true, currentlyReading: true },
       latestReadDate: '2025-03-04',
-      latestReadFormat: 'Paperback',
+      latestReadFormat: 'Physical',
     })
     expect(archive.facets.genres).toEqual([
       { value: 'science-fiction', label: 'Science Fiction', count: 1 },
@@ -266,7 +294,7 @@ describe('Books projection and repository', () => {
     const queue = await repository.listBooks({
       ...baseQuery,
       collection: 'queue',
-      formats: ['paperback'],
+      formats: ['physical'],
     })
     expect(queue.data).toHaveLength(1)
     expect(queue.counts.supportedReads).toBe(0)
@@ -283,13 +311,106 @@ describe('Books projection and repository', () => {
     await expect(repository.findBook('book-1')).resolves.toMatchObject({
       title: 'The Left Hand of Darkness',
       personalRating: 4.5,
-      selectedEdition: { format: 'Paperback', publisher: 'Synthetic Press' },
+      selectedEdition: { format: 'Physical', publisher: 'Synthetic Press' },
       community: { genres: ['Science Fiction'] },
     })
     const history = await repository.listBookHistory('book-1', { limit: 20 })
     expect(history.data.map((event) => event.kind)).toEqual(
       expect.arrayContaining(['read', 'status', 'added', 'rating', 'review']),
     )
+    expect(history.data.find((event) => event.kind === 'status')).toMatchObject({
+      date: null,
+      datePrecision: null,
+    })
+    expect(history.data.find((event) => event.kind === 'rating')).toMatchObject({
+      date: null,
+      datePrecision: null,
+    })
+    expect(history.data.find((event) => event.kind === 'review')).toMatchObject({
+      date: '2026-09-18T12:00:00.000Z',
+      datePrecision: 'instant',
+    })
+    expect(history.data.find((event) => event.kind === 'progress')).toMatchObject({
+      date: null,
+      datePrecision: null,
+      detail: '150 pages',
+    })
+    expect(history.data.find((event) => event.kind === 'read')?.edition?.format).toBe('Physical')
+  })
+
+  it('preserves Archive browsing, detail, search, and History after upstream removal', async () => {
+    await repository.upsertHardcoverBooks([projection()])
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00.000Z',
+    })
+    database.exec(`
+      INSERT INTO sync_runs(id, connection_id, kind, status, started_at, finished_at)
+      VALUES ('run-2', 'connection-hardcover', 'reconcile', 'succeeded',
+        '2026-09-21T10:00:00.000Z', '2026-09-21T10:01:00.000Z');
+    `)
+
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-2',
+      refreshedAt: '2026-09-21T10:01:00.000Z',
+    })
+
+    const archive = await repository.listBooks({ ...baseQuery, q: 'Ursula', formats: ['physical'] })
+    expect(archive.counts).toMatchObject({ archive: 1, queue: 0, filteredBooks: 1 })
+    expect(archive.data[0]).toMatchObject({
+      title: 'The Left Hand of Darkness',
+      authors: [{ name: 'Ursula K. Le Guin' }],
+      memberships: { archive: true, queue: false, currentlyReading: false },
+      latestReadFormat: 'Physical',
+    })
+    await expect(repository.findBook('book-1')).resolves.toMatchObject({
+      title: 'The Left Hand of Darkness',
+      memberships: { archive: true, queue: false },
+      selectedEdition: { format: 'Physical' },
+      community: { genres: ['Science Fiction'] },
+    })
+    await expect(repository.listBookHistory('book-1', { limit: 20 })).resolves.toMatchObject({
+      data: expect.arrayContaining([
+        expect.objectContaining({ kind: 'read', date: '2025-03-04' }),
+        expect.objectContaining({ kind: 'rating', date: null }),
+      ]),
+    })
+  })
+
+  it('matches publication ranges against the full interval implied by date precision', async () => {
+    await repository.upsertHardcoverBooks([projection()])
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00.000Z',
+    })
+
+    const year = await repository.listBooks({
+      ...baseQuery,
+      publishedMode: 'range',
+      publishedFrom: '1969-01-01',
+      publishedTo: '1969-12-31',
+    })
+    expect(year.data).toHaveLength(1)
+
+    database.exec(
+      "UPDATE book_library_projection SET publication_date='1969-02', publication_precision='month' WHERE media_item_id='book-1'",
+    )
+    const endOfMonth = await repository.listBooks({
+      ...baseQuery,
+      publishedMode: 'range',
+      publishedFrom: '1969-02-28',
+      publishedTo: '1969-02-28',
+    })
+    expect(endOfMonth.data).toHaveLength(1)
+    const nextMonth = await repository.listBooks({
+      ...baseQuery,
+      publishedMode: 'range',
+      publishedFrom: '1969-03-01',
+    })
+    expect(nextMonth.data).toHaveLength(0)
   })
 
   it('paginates deterministically through consecutive unknown sort values', async () => {

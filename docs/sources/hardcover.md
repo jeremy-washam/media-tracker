@@ -22,6 +22,15 @@ child read rows create dated occurrences; Read-status books without one receive
 a single undated fallback occurrence. `read_count` never generates synthetic
 rereads.
 
+A later complete snapshot may mark a missing Hardcover relationship and its
+source-shaped metadata as removed. That retirement clears Queue membership but
+does not retire canonical Archive occurrences: archived books remain browsable,
+searchable, inspectable, and retain History using the last observed source
+projection. Format facets and display use the verified coarse mapping
+`reading_format_id` 1 = Physical, 2 = Audiobook, and 4 = Ebook (with the
+corresponding `reading_format` names as fallback); raw `edition_format` labels
+remain preserved but do not classify items.
+
 Live end-to-end validation on 2026-09-20 returned 1,114 relationships across 23
 pages: 986 active Queue books (Want to Read plus Currently Reading), 128 Archive
 books, 128 supported Archive occurrences, and 1,556 distinct projected
@@ -198,7 +207,10 @@ upstream identity even if the local Archive presents them as one book.
 
 The current review and rating live on `user_books`; the public schema does not
 expose a revision history for them. `reviewed_at` is the review timestamp, not a
-book completion date.
+book completion date. `updated_at` is a generic relationship update and must not
+be presented as the event date for a status, rating, review, or progress fact.
+When no event-specific timestamp exists, the current fact is retained without a
+date.
 
 `reading_journals` exposes `id`, `book_id`, `edition_id`, `event`, `action_at`,
 `created_at`, `updated_at`, `entry`, `metadata`, tags, privacy, and user. The

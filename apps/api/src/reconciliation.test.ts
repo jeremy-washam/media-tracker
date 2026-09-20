@@ -76,6 +76,21 @@ class D1SqliteDatabase {
         'utf8',
       ),
     )
+    this.database.exec(
+      readFileSync(
+        new NodeURL('../../../packages/db/migrations/0004_books_review_facts.sql', import.meta.url),
+        'utf8',
+      ),
+    )
+    this.database.exec(
+      readFileSync(
+        new NodeURL(
+          '../../../packages/db/migrations/0005_books_format_projection.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    )
   }
 
   prepare(query: string): D1SqliteStatement {

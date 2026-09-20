@@ -27,7 +27,11 @@ import {
 import type { BookCollectionItem, BookDetail, BookHistoryEntry } from '@media-tracker/contracts'
 
 import { fetchBook, fetchBookHistory, fetchBooks, type BooksRequest } from './books-api'
-import { normalizedForCollection, type BooksRouteSearch } from './books-route-search'
+import {
+  collectionQuerySearch,
+  normalizedForCollection,
+  type BooksRouteSearch,
+} from './books-route-search'
 
 function formatDate(value: string | null, precision: string | null): string | null {
   if (value === null) return null
@@ -148,7 +152,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
   const request = useMemo<BooksRequest>(
     () => ({
       collection,
-      ...search,
+      ...collectionQuerySearch(search),
       finishedMode: search.finishedMode ?? 'any',
       publishedMode: search.publishedMode ?? 'any',
       addedMode: search.addedMode ?? 'any',
@@ -998,7 +1002,12 @@ function BookHistory({
             </span>
             <div>
               <strong>{entry.label}</strong>
-              <time>{formatDate(entry.date, entry.datePrecision) ?? 'Date unavailable'}</time>
+              <time>
+                {formatDate(entry.date, entry.datePrecision) ??
+                  (entry.kind === 'read'
+                    ? 'Date unavailable'
+                    : 'Source does not provide an event date')}
+              </time>
               {entry.detail ? <p>{entry.detail}</p> : null}
               {entry.edition?.format ? <small>{entry.edition.format}</small> : null}
             </div>

@@ -72,15 +72,55 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
       ),
     })
   })
+  await page.route('**/api/library/books/book-one', (route) =>
+    route.fulfill({
+      json: {
+        id: book.id,
+        title: book.title,
+        subtitle: null,
+        description: 'A concise overview.',
+        coverUrl: null,
+        coverColor: '#667788',
+        publicationDate: '2020',
+        publicationPrecision: 'year',
+        pageCount: 320,
+        audioSeconds: null,
+        memberships: book.memberships,
+        personalRating: 4.5,
+        series: [],
+        contributors: [{ role: 'Author', contributors: book.authors }],
+        selectedEdition: null,
+        community: {
+          rating: null,
+          ratingsCount: 0,
+          genres: [],
+          moods: [],
+          pace: [],
+          contentWarnings: [],
+        },
+        source: { label: 'Hardcover', url: null, refreshedAt: null, coverage: 'complete' },
+      },
+    }),
+  )
   await page.goto('/library/books/archive')
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
   await page.getByRole('button', { name: 'Load more' }).click()
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
+  const requestsAfterPaging = requested.length
+  await page.getByRole('button', { name: 'List view' }).click()
+  await expect(page).toHaveURL(/layout=list/)
+  await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
+  await page.getByRole('button', { name: /A Distant Book/ }).click()
+  await expect(page).toHaveURL(/item=book-one/)
+  await page.getByRole('button', { name: 'Close inspector' }).last().click()
+  await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
+  expect(requested).toHaveLength(requestsAfterPaging)
+  expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
+    true,
+  )
   await page.getByRole('textbox', { name: 'Search books' }).fill('Ada')
   await page.getByRole('textbox', { name: 'Search books' }).press('Enter')
   await expect(page).toHaveURL(/q=Ada/)
-  await page.getByRole('button', { name: 'List view' }).click()
-  await expect(page).toHaveURL(/layout=list/)
   await page.getByRole('button', { name: 'Sort ascending' }).click()
   await expect(page).toHaveURL(/direction=asc/)
   expect(requested.some((value) => value.includes('cursor=next-page'))).toBe(true)

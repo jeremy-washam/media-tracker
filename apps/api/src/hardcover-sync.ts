@@ -545,6 +545,7 @@ function bookProjection(input: {
     personalRating: input.book.rating,
     reviewText: input.book.review,
     reviewHasSpoilers: input.book.reviewHasSpoilers,
+    reviewedAt: input.book.reviewedAt,
     title: input.book.title ?? 'Untitled book',
     subtitle: input.book.subtitle,
     description: input.book.description,
