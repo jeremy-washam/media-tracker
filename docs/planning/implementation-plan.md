@@ -5,6 +5,8 @@ Last updated: 2026-09-19
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
 Section 20 records the subsequent interface decisions and next design work.
+The [Library implementation handoff](library-implementation.md) specifies the
+next production UI delivery, including source-derived Queue and Songs.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
@@ -757,16 +759,20 @@ The initial product interface includes Chat, Library, and Recaps. Its scope is
 broader than the first ingestion milestone; earlier deferrals of LLM/Queue UI
 apply to that milestone, not a prohibition on this next interface.
 
-The [desktop UI foundation](../design/ui-foundation.md) owns the detailed agreed
-behavior and remaining questions. Next design work should:
+The [desktop UI foundation](../design/ui-foundation.md) owns the shared shell.
+The owner-approved
+[Library Phase 2 surface specification](library-phase-2-surfaces.md) and its
+linked per-media contracts now own Library fields, layouts, filters, sorts, and
+inspector behavior. Production delivery should:
 
 1. Refine Index with a collapsible global sidebar and a single compact inspector,
    preserving context when either opens or closes. Surface interiors may differ.
-2. Review realistic artwork and larger, varied collections in the shared shell,
-   including all three surfaces. Keep labels factual and remove decorative copy.
-3. Specify Library behavior for each media type using available source data,
-   in priority order: Books, Movies, Articles, Podcasts, YouTube videos, Songs.
-   Preserve one item with multiple occurrences and occurrence-aware date filters.
+2. Use the saved `/library-review.html` artifact and local ignored real-data
+   sample as the initial visual reference, then tune density against production
+   data without silently changing the approved field contract.
+3. Implement Library behavior in priority order: Books, Movies, Articles,
+   Podcasts, YouTube videos, Songs. Preserve one item with multiple occurrences
+   and the per-media occurrence semantics in the approved contracts.
 4. Specify Chat history/artifact flows and interactive visualization behavior;
    consult the separate catalog reconnaissance for references outside Library.
 5. Specify browsable monthly/yearly Recaps and their relationship to shared
@@ -777,9 +783,9 @@ or a Chat reference pane from the existence of a prototype. Optional borrowing
 from the studies requires further design discussion. No production rollout or
 new schema/provider choice is approved merely by selecting Index.
 
-The `/design.html` studies are separate from the operational client and use
-synthetic history, concept artwork, ephemeral state, and illustrative responses.
-Sidebar collapse is agreed next work, not an existing prototype capability.
-Implementation sequencing of the new services remains to be detailed after the
-layout and per-source design work; this section does not mark those services as
-shipped. Lists, Feed, and Explorations remain outside the initial interface.
+The `/design.html` studies and `/library-review.html` artifact are separate from
+the operational client. The former uses synthetic illustrative data; the latter
+loads a bounded owner-data sample from an ignored local file and has a safe
+missing-fixture state. Neither artifact marks production services as shipped.
+Lists, the future cross-media Feed, and Explorations remain outside the initial
+interface; the Reader-specific Articles Feed is explicitly in scope.

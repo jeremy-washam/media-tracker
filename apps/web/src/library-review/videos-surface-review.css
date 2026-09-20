@@ -1,0 +1,1340 @@
+.videos-review {
+  --vr-bg: var(--background, oklch(0.2178 0 0));
+  --vr-fg: var(--foreground, oklch(0.8853 0 0));
+  --vr-card: var(--card, oklch(0.2435 0 0));
+  --vr-muted: var(--muted, oklch(0.285 0 0));
+  --vr-muted-fg: var(--muted-foreground, oklch(0.5999 0 0));
+  --vr-border: var(--border, oklch(0.329 0 0));
+  --vr-ring: var(--ring, oklch(0.7058 0 0));
+  --vr-hover: color-mix(in srgb, var(--vr-bg), var(--vr-fg) 4%);
+  --vr-selection: color-mix(in srgb, var(--vr-bg), var(--vr-fg) 8%);
+  --vr-selection-edge: color-mix(in srgb, var(--vr-bg), var(--vr-fg) 52%);
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--vr-bg);
+  color: var(--vr-fg);
+  font-family: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.videos-review *,
+.videos-review *::before,
+.videos-review *::after {
+  box-sizing: border-box;
+}
+
+.videos-review button,
+.videos-review input,
+.videos-review select {
+  color: inherit;
+  font: inherit;
+}
+
+.videos-review button {
+  cursor: pointer;
+}
+
+.videos-review button:focus-visible,
+.videos-review input:focus-visible,
+.videos-review select:focus-visible,
+.videos-review a:focus-visible {
+  outline: 2px solid var(--vr-ring);
+  outline-offset: 2px;
+}
+
+.videos-review .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.videos-review-header {
+  min-height: 78px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 24px 14px;
+  border-bottom: 1px solid var(--vr-border);
+}
+
+.videos-review-header p,
+.videos-review-header h1 {
+  margin: 0;
+}
+
+.videos-review-header p {
+  margin-bottom: 3px;
+  color: var(--vr-muted-fg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.videos-review-header h1 {
+  font-size: 25px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+
+.videos-review-header > span {
+  max-width: 440px;
+  padding-bottom: 3px;
+  color: var(--vr-muted-fg);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.videos-review-mode-tabs,
+.videos-review-inspector-tabs {
+  min-height: 45px;
+  display: flex;
+  align-items: flex-end;
+  gap: 25px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--vr-border);
+}
+
+.videos-review-mode-tabs button,
+.videos-review-inspector-tabs button {
+  position: relative;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vr-muted-fg);
+  font-size: 12px;
+}
+
+.videos-review-mode-tabs button::after,
+.videos-review-inspector-tabs button::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  content: '';
+}
+
+.videos-review-mode-tabs button.is-active,
+.videos-review-inspector-tabs button.is-active {
+  color: var(--vr-fg);
+}
+
+.videos-review-mode-tabs button.is-active::after,
+.videos-review-inspector-tabs button.is-active::after {
+  background: var(--vr-fg);
+}
+
+.videos-review-mode-tabs button > span,
+.videos-review-inspector-tabs button > span {
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.videos-review-inspector-tabs button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.videos-review-body {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+}
+
+.videos-review-collection {
+  min-width: 430px;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.videos-review-toolbar {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 74%, transparent);
+}
+
+.videos-review-search {
+  min-width: 150px;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  padding: 0 5px;
+}
+
+.videos-review-search > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-search input {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.videos-review-search input::placeholder {
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-search button,
+.videos-review-icon-button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-search button:hover,
+.videos-review-icon-button:hover,
+.videos-review-icon-button[aria-pressed='true'] {
+  background: var(--vr-muted);
+  color: var(--vr-fg);
+}
+
+.videos-review-search button svg,
+.videos-review-icon-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.videos-review-filter-button,
+.videos-review-sort {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--vr-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vr-muted-fg);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.videos-review-filter-button:hover,
+.videos-review-filter-button.is-active,
+.videos-review-sort:hover {
+  border-color: var(--vr-selection-edge);
+  color: var(--vr-fg);
+}
+
+.videos-review-filter-button svg,
+.videos-review-sort svg {
+  width: 13px;
+  height: 13px;
+}
+
+.videos-review-filter-button span {
+  min-width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--vr-fg);
+  color: var(--vr-bg);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.videos-review-sort select {
+  max-width: 132px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+}
+
+.videos-review-layout {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--vr-border);
+  border-radius: 6px;
+}
+
+.videos-review-layout .videos-review-icon-button {
+  width: 27px;
+  height: 27px;
+}
+
+.videos-review-filter-tray {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--vr-border);
+  background: color-mix(in srgb, var(--vr-card) 55%, var(--vr-bg));
+}
+
+.videos-review-filter-tray > span {
+  padding: 5px 8px;
+  border: 1px solid var(--vr-border);
+  border-radius: 999px;
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+}
+
+.videos-review-filter-tray label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.videos-review-filter-tray select {
+  height: 30px;
+  padding: 0 24px 0 8px;
+  border: 1px solid var(--vr-border);
+  border-radius: 5px;
+  background: var(--vr-bg);
+  color: var(--vr-fg);
+  font-size: 11px;
+}
+
+.videos-review-results-meta {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 70%, transparent);
+}
+
+.videos-review-results-meta strong {
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.videos-review-results-meta span {
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+}
+
+.videos-review-scroll,
+.videos-review-inspector-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-color: var(--vr-border) transparent;
+  scrollbar-width: thin;
+}
+
+.videos-review-list-head,
+.videos-review-list-row {
+  display: grid;
+  grid-template-columns:
+    minmax(260px, 2.3fr) minmax(112px, 1fr) minmax(64px, 0.55fr) minmax(78px, 0.7fr)
+    minmax(126px, 1.1fr) minmax(66px, 0.6fr) minmax(56px, 0.5fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.videos-review-list-head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  min-height: 31px;
+  padding: 0 17px;
+  border-bottom: 1px solid var(--vr-border);
+  background: color-mix(in srgb, var(--vr-bg) 96%, transparent);
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.videos-review-list-row {
+  position: relative;
+  width: 100%;
+  min-height: 97px;
+  padding: 8px 17px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 63%, transparent);
+  background: transparent;
+  text-align: left;
+}
+
+.videos-review-list-row:hover,
+.videos-review-following-row:hover,
+.videos-review-grid-card:hover {
+  background: var(--vr-hover);
+}
+
+.videos-review-list-row.is-selected,
+.videos-review-following-row.is-selected,
+.videos-review-grid-card.is-selected {
+  background: var(--vr-selection);
+  box-shadow: inset 2px 0 var(--vr-selection-edge);
+}
+
+.videos-review-video-cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.videos-review-video-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.videos-review-video-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.videos-review-video-copy em,
+.videos-review-channel-cell em {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.videos-review-video-copy em svg {
+  width: 10px;
+  height: 10px;
+}
+
+.videos-review-mobile-channel,
+.videos-review-mobile-metadata {
+  display: none;
+}
+
+.videos-review-cell-muted,
+.videos-review-relationship-date,
+.videos-review-cell-count,
+.videos-review-overlap {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.videos-review-relationship-date,
+.videos-review-cell-count {
+  color: var(--vr-fg);
+}
+
+.videos-review-overlap {
+  font-weight: 550;
+}
+
+.videos-review-thumbnail {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--vr-border) 72%, transparent);
+  border-radius: 5px;
+  background: var(--vr-muted);
+  aspect-ratio: 16 / 9;
+}
+
+.videos-review-thumbnail--row {
+  width: 144px;
+}
+
+.videos-review-thumbnail--card,
+.videos-review-thumbnail--inspector {
+  width: 100%;
+}
+
+.videos-review-thumbnail--mini {
+  width: 68px;
+  border-radius: 4px;
+}
+
+.videos-review-thumbnail img,
+.videos-review-channel-art img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.videos-review-thumbnail-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--vr-muted-fg), transparent 22%);
+  background:
+    linear-gradient(
+      135deg,
+      transparent 49.5%,
+      color-mix(in srgb, var(--vr-border) 46%, transparent) 50%,
+      transparent 50.5%
+    ),
+    var(--vr-muted);
+}
+
+.videos-review-thumbnail-fallback svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 1.35;
+}
+
+.videos-review-duration-overlay,
+.videos-review-format-overlay {
+  position: absolute;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgb(16 16 16 / 82%);
+  color: #f4f4f4;
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.videos-review-duration-overlay {
+  right: 5px;
+  bottom: 5px;
+}
+
+.videos-review-format-overlay {
+  top: 5px;
+  left: 5px;
+}
+
+.videos-review-artwork-credit {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgb(16 16 16 / 70%);
+  color: #f4f4f4;
+  font-size: 8px;
+}
+
+.videos-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 300px));
+  justify-content: start;
+  gap: 16px;
+  padding: 17px 20px 28px;
+}
+
+.videos-review-grid-card {
+  min-width: 0;
+  padding: 0 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--vr-border);
+  border-radius: 7px;
+  background: var(--vr-card);
+  text-align: left;
+}
+
+.videos-review-grid-card.is-selected {
+  box-shadow: inset 0 0 0 1px var(--vr-selection-edge);
+}
+
+.videos-review-grid-card .videos-review-thumbnail {
+  border: 0;
+  border-bottom: 1px solid var(--vr-border);
+  border-radius: 0;
+}
+
+.videos-review-grid-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 11px 12px 0;
+}
+
+.videos-review-grid-copy strong {
+  display: -webkit-box;
+  min-height: 36px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.videos-review-grid-copy > span,
+.videos-review-grid-copy small,
+.videos-review-grid-copy em {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.videos-review-grid-copy small {
+  margin-top: 2px;
+  color: var(--vr-fg);
+}
+
+.videos-review-grid-copy em {
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+.videos-review-following-head,
+.videos-review-following-row {
+  display: grid;
+  grid-template-columns:
+    minmax(250px, 2fr) minmax(120px, 1fr) minmax(94px, 0.8fr) minmax(98px, 0.8fr)
+    minmax(68px, 0.55fr);
+  align-items: center;
+  column-gap: 14px;
+}
+
+.videos-review-following-head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  min-height: 31px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--vr-border);
+  background: color-mix(in srgb, var(--vr-bg) 96%, transparent);
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.videos-review-following-row {
+  width: 100%;
+  min-height: 81px;
+  padding: 8px 18px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 63%, transparent);
+  background: transparent;
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+  text-align: left;
+}
+
+.videos-review-following-row > span {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+.videos-review-following-row > span > small {
+  display: block;
+  margin-top: 2px;
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-channel-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.videos-review-channel-cell > span:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.videos-review-channel-cell strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--vr-fg);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.videos-review-channel-art {
+  display: block;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--vr-border);
+  border-radius: 50%;
+  background: var(--vr-muted);
+}
+
+.videos-review-channel-art--row {
+  width: 64px;
+  height: 64px;
+}
+
+.videos-review-channel-art--inspector {
+  width: 74px;
+  height: 74px;
+}
+
+.videos-review-channel-art > span {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-channel-art svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 1.35;
+}
+
+.videos-review-empty {
+  min-height: 330px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.videos-review-empty > svg {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 14px;
+  color: var(--vr-muted-fg);
+  stroke-width: 1.35;
+}
+
+.videos-review-empty strong {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.videos-review-empty p,
+.videos-review-empty-small {
+  margin: 0;
+  color: var(--vr-muted-fg);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.videos-review-inspector {
+  width: 400px;
+  min-width: 350px;
+  min-height: 0;
+  display: flex;
+  flex: 0 0 400px;
+  flex-direction: column;
+  border-left: 1px solid var(--vr-border);
+  background: color-mix(in srgb, var(--vr-card) 54%, var(--vr-bg));
+}
+
+.videos-review-inspector-topbar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px 0 18px;
+  border-bottom: 1px solid var(--vr-border);
+}
+
+.videos-review-inspector-topbar > span {
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.videos-review-video-header {
+  padding: 16px 18px 15px;
+  border-bottom: 1px solid var(--vr-border);
+}
+
+.videos-review-video-header .videos-review-thumbnail {
+  margin-bottom: 13px;
+}
+
+.videos-review-video-header h2,
+.videos-review-channel-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+}
+
+.videos-review-video-header > p,
+.videos-review-channel-header p {
+  margin: 5px 0 0;
+  color: var(--vr-muted-fg);
+  font-size: 11px;
+}
+
+.videos-review-header-meta,
+.videos-review-memberships {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 9px;
+}
+
+.videos-review-header-meta span {
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+}
+
+.videos-review-memberships span,
+.videos-review-channel-header > div > span {
+  padding: 3px 6px;
+  border: 1px solid var(--vr-border);
+  border-radius: 999px;
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.videos-review-inspector-tabs {
+  min-height: 42px;
+  gap: 21px;
+  padding: 0 18px;
+}
+
+.videos-review-inspector-tabs button {
+  height: 41px;
+  font-size: 11px;
+}
+
+.videos-review-inspector-scroll {
+  padding: 0 18px 28px;
+}
+
+.videos-review-inspector-section {
+  padding: 18px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 70%, transparent);
+}
+
+.videos-review-inspector-section:last-child {
+  border-bottom: 0;
+}
+
+.videos-review-inspector-section h3 {
+  margin: 0 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.videos-review-inspector-section > p {
+  margin: 0;
+  color: var(--vr-muted-fg);
+  font-size: 11px;
+  line-height: 1.62;
+}
+
+.videos-review-facts {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.videos-review-facts > div {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.75fr) minmax(0, 1.4fr);
+  gap: 14px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.videos-review-facts dt {
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.videos-review-facts .is-muted dd {
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-facts .is-warning dd,
+.videos-review-warning {
+  color: color-mix(in srgb, var(--vr-fg) 84%, #b16d40);
+}
+
+.videos-review-relationship-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.videos-review-relationship-summary > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--vr-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--vr-bg) 66%, transparent);
+}
+
+.videos-review-relationship-summary svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-relationship-summary span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.videos-review-relationship-summary strong {
+  font-size: 10px;
+}
+
+.videos-review-relationship-summary small {
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+}
+
+.videos-review-queue-relationship {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+}
+
+.videos-review-queue-relationship strong {
+  color: var(--vr-fg);
+  font-weight: 550;
+}
+
+.videos-review-source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.videos-review-source-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--vr-fg);
+  font-size: 10px;
+  text-decoration: underline;
+  text-decoration-color: var(--vr-border);
+  text-underline-offset: 3px;
+}
+
+.videos-review-source-links a svg {
+  width: 10px;
+  height: 10px;
+}
+
+.videos-review-history {
+  padding-top: 5px;
+}
+
+.videos-review-history article {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 64%, transparent);
+}
+
+.videos-review-history-marker {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--vr-border);
+  border-radius: 50%;
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-history-marker svg {
+  width: 11px;
+  height: 11px;
+}
+
+.videos-review-history-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.videos-review-history-title strong {
+  font-size: 10px;
+}
+
+.videos-review-history-title span {
+  color: var(--vr-muted-fg);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.videos-review-history article p {
+  margin: 4px 0 0;
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+}
+
+.videos-review-history article small {
+  display: block;
+  margin-top: 5px;
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.videos-review-history .videos-review-source-links {
+  margin-top: 6px;
+}
+
+.videos-review-channel-library-list {
+  display: grid;
+  gap: 2px;
+}
+
+.videos-review-channel-library-list > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px;
+  border-radius: 5px;
+}
+
+.videos-review-channel-library-list > div:hover {
+  background: var(--vr-hover);
+}
+
+.videos-review-channel-library-list > div > span:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.videos-review-channel-library-list strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.videos-review-channel-library-list small {
+  color: var(--vr-muted-fg);
+  font-size: 9px;
+}
+
+.videos-review-channel-header {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 13px;
+  padding: 17px 18px 15px;
+  border-bottom: 1px solid var(--vr-border);
+}
+
+.videos-review-channel-header > div {
+  min-width: 0;
+}
+
+.videos-review-channel-header > div > span {
+  display: inline-block;
+  margin-top: 9px;
+}
+
+.videos-review-channel-header dl {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.videos-review-channel-header dl > div {
+  padding: 8px;
+  border: 1px solid var(--vr-border);
+  border-radius: 5px;
+}
+
+.videos-review-channel-header dt {
+  margin-bottom: 3px;
+  color: var(--vr-muted-fg);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.videos-review-channel-header dd {
+  margin: 0;
+  font-size: 10px;
+}
+
+.videos-review-subscriptions {
+  display: grid;
+  gap: 9px;
+}
+
+.videos-review-subscriptions > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vr-border) 60%, transparent);
+  font-size: 9px;
+}
+
+.videos-review-subscriptions > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.videos-review-subscriptions strong {
+  font-size: 10px;
+}
+
+.videos-review-subscriptions span,
+.videos-review-subscriptions small {
+  color: var(--vr-muted-fg);
+}
+
+.videos-review-subscriptions small {
+  grid-column: 1 / -1;
+}
+
+.videos-review-library-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  margin: 16px 0 12px;
+  padding: 3px;
+  border: 1px solid var(--vr-border);
+  border-radius: 6px;
+  background: var(--vr-bg);
+}
+
+.videos-review-library-switch button {
+  height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vr-muted-fg);
+  font-size: 10px;
+}
+
+.videos-review-library-switch button.is-active {
+  background: var(--vr-selection);
+  color: var(--vr-fg);
+}
+
+@media (max-width: 1450px) {
+  .videos-review-list-head,
+  .videos-review-list-row {
+    grid-template-columns:
+      minmax(250px, 2.3fr) minmax(102px, 1fr) minmax(112px, 1.05fr) minmax(62px, 0.55fr)
+      minmax(55px, 0.5fr);
+  }
+
+  .videos-review-list-head > :nth-child(3),
+  .videos-review-list-head > :nth-child(4),
+  .videos-review-list-row > :nth-child(3),
+  .videos-review-list-row > :nth-child(4) {
+    display: none;
+  }
+
+  .videos-review-mobile-metadata {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--vr-muted-fg);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .videos-review-thumbnail--row {
+    width: 116px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .videos-review-inspector {
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(440px, 100%);
+    min-width: 0;
+    box-shadow: -12px 0 32px rgb(0 0 0 / 22%);
+  }
+
+  .videos-review-body {
+    position: relative;
+  }
+
+  .videos-review-following-head,
+  .videos-review-following-row {
+    grid-template-columns: minmax(230px, 2fr) minmax(110px, 1fr) minmax(86px, 0.8fr) minmax(
+        72px,
+        0.65fr
+      );
+  }
+
+  .videos-review-following-head > :nth-child(3),
+  .videos-review-following-row > :nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .videos-review-header > span,
+  .videos-review-filter-button > :not(svg),
+  .videos-review-results-meta span {
+    display: none;
+  }
+
+  .videos-review-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .videos-review-search {
+    flex-basis: 100%;
+  }
+
+  .videos-review-list-head {
+    display: none;
+  }
+
+  .videos-review-list-row {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 0.5fr);
+  }
+
+  .videos-review-list-row > :not(.videos-review-video-cell):not(.videos-review-relationship-date) {
+    display: none;
+  }
+
+  .videos-review-mobile-channel {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--vr-muted-fg);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .videos-review-following-head {
+    display: none;
+  }
+
+  .videos-review-following-row {
+    grid-template-columns: minmax(210px, 1fr) minmax(86px, 0.4fr);
+  }
+
+  .videos-review-following-row > :not(.videos-review-channel-cell):nth-child(n + 2) {
+    display: none;
+  }
+
+  .videos-review-following-row > :not(.videos-review-channel-cell):nth-child(3) {
+    display: block;
+  }
+}
+
+@media (max-width: 560px) {
+  .videos-review-header,
+  .videos-review-mode-tabs {
+    padding-inline: 16px;
+  }
+
+  .videos-review-mode-tabs {
+    gap: 18px;
+  }
+
+  .videos-review-collection {
+    min-width: 0;
+  }
+
+  .videos-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .videos-review-list-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .videos-review-list-row > .videos-review-relationship-date {
+    display: none;
+  }
+
+  .videos-review-thumbnail--row {
+    width: 104px;
+  }
+}

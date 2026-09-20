@@ -74,6 +74,17 @@ Organize first by media type, then by Archive or Queue. Priority order:
 Books, Movies, Articles, Podcasts, YouTube videos, Songs. This is the owner's
 rough priority order, not a commitment to identical behavior across types.
 
+Queue membership is source-specific: Movies use the Letterboxd watchlist;
+Articles use Readwise Inbox, Later, and Shortlist; Books use Hardcover Want to
+Read and Currently Reading until a supported completed read exists;
+Podcasts use Spotify library episodes without playback activity; Videos use
+YouTube Watch Later.
+Songs have no Queue. Songs also need a distinct presentation for their much
+larger collection and listening history. The
+[Library implementation handoff](../planning/library-implementation.md) folds
+these rules, evidence ambiguities, and song-counting decisions into its first
+per-media specification step.
+
 The initial Library is for browsing and viewing imported details. Adding items,
 editing ratings/status, and other writes are future work. Leave room for those
 capabilities without displaying disabled or speculative editing controls. Reading, watching,
@@ -83,13 +94,17 @@ Use shared search, filtering, sorting, and selection patterns while allowing
 media-specific layouts. Books and Movies favor covers/posters; Articles can
 use image thumbnails alongside compact text rows, without AI summary subtext.
 Podcasts and Songs need their own metadata/density treatment. Detailed decisions
-must be grounded in each source's available data during implementation.
-Books and Songs in particular may need substantially different experiences.
+are recorded in the owner-approved
+[Library surface specification](../planning/library-phase-2-surfaces.md) and its
+per-media contracts. Books use sparse grid and Readwise-style list modes;
+Articles use restrained and expanded row densities; Podcasts include Following;
+Music includes Tracks, Albums, and Artists; Videos include a Channels activity
+rollup with an optional Following filter. Books and Songs in particular use
+substantially different experiences.
 Letterboxd and Hardcover supply personal ratings; do not assume every source
-supports them. The detailed source-by-source field and behavior review is
-explicitly deferred until implementation; establish the cross-surface layout
-first. Ratings appear only when available and must distinguish personal from community
-ratings. Missing artwork and unknown dates need deliberate presentation.
+supports them. Ratings appear only when available and must distinguish personal
+from community ratings. Missing artwork and unknown dates need deliberate
+presentation.
 
 Show each item once, with all supported consumption occurrences inside its
 inspector. Date filters match **any** occurrence. Within a selected period,

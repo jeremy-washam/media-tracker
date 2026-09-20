@@ -8,6 +8,7 @@
 coverage/
 dist/
 exports/
+apps/web/public/__private__/
 node_modules/
 .pnpm-store/
 playwright-report/

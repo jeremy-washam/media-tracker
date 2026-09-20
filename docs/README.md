@@ -19,6 +19,13 @@
 
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
+- [Library implementation handoff](planning/library-implementation.md): per-media
+  specification, source-derived Queue rules, Songs, and production delivery steps
+- [Library Phase 1 decisions](planning/library-phase-1-decisions.md): researched
+  product choices and the owner's resolved direction
+- [Library Phase 2 surfaces](planning/library-phase-2-surfaces.md): approved
+  per-surface fields, layouts, filters, sorts, inspectors, and links to the
+  detailed media contracts
 - [Media inspector proposal](planning/media-inspector.md): initial research on
   click-through details, existing integration coverage, and catalog dependencies
 - [AI Chat proposal](planning/ai-chat-plan.md): multi-model integration, subscription
