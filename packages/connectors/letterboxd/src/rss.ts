@@ -55,6 +55,26 @@ function text(value: XmlValue | undefined): string | null {
   return object === undefined ? null : text(object['#text'])
 }
 
+function decodeNestedEntities(value: string | null): string | null {
+  if (value === null) return null
+  let decoded = value
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = decoded
+      .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, code: string) =>
+        String.fromCodePoint(Number.parseInt(code, 16)),
+      )
+      .replaceAll('&apos;', "'")
+      .replaceAll('&quot;', '"')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+    if (next === decoded) break
+    decoded = next
+  }
+  return decoded
+}
+
 function items(value: XmlValue | undefined): XmlObject[] {
   const values = Array.isArray(value) ? value : value === undefined ? [] : [value]
   return values.map(asObject).filter((item): item is XmlObject => item !== undefined)
@@ -107,7 +127,7 @@ export async function parseLetterboxdRss(xml: string): Promise<LetterboxdRssEntr
         rating: rating === null || Number.isNaN(rating) ? null : rating,
         liked: yesNo(text(item['letterboxd:memberLike'])),
         tmdbMovieId: text(item['tmdb:movieId']),
-        filmTitle: text(item['letterboxd:filmTitle']),
+        filmTitle: decodeNestedEntities(text(item['letterboxd:filmTitle'])),
         filmYear: text(item['letterboxd:filmYear']),
         entryUrl: text(item.link),
         entryHash: await hash(JSON.stringify(item)),

@@ -65,12 +65,18 @@ describe('inspectLetterboxdExportBytes', () => {
       'reviews.csv': csv(
         'Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n2025-02-03,Synthetic One,2024,https://boxd.it/diary-two,4,Yes,Synthetic review,,2025-02-02\n',
       ),
+      'watchlist.csv': csv(
+        'Date,Name,Year,Letterboxd URI\n2025-03-01,Queue Only,2025,https://boxd.it/queue-only\n',
+      ),
+      'likes/films.csv': csv(
+        'Date,Name,Year,Letterboxd URI\n2025-02-04,Synthetic One,2024,https://boxd.it/film-one\n',
+      ),
     })
 
     const projection = parseLetterboxdExportBytes(archive)
 
     expect(projection.unresolvedDiaryRecords).toEqual([])
-    expect(projection.films).toHaveLength(2)
+    expect(projection.films).toHaveLength(3)
     expect(projection.films[0]).toMatchObject({
       filmUri: 'https://boxd.it/film-one',
       releaseYear: '2024',
@@ -80,14 +86,24 @@ describe('inspectLetterboxdExportBytes', () => {
           diaryUri: 'https://boxd.it/diary-two',
           consumedOn: '2025-02-02',
           rating: 4,
+          rewatch: true,
           reviewText: 'Synthetic review',
         },
       ],
+      likedRecord: { recordPath: 'likes/films.csv#row=2' },
     })
     expect(projection.films[1]).toMatchObject({
       filmUri: 'https://boxd.it/film-two',
       currentRating: 3,
       diaryOccurrences: [],
+    })
+    expect(projection.films[2]).toMatchObject({
+      filmUri: 'https://boxd.it/queue-only',
+      watchedRecord: null,
+      watchlistRecord: {
+        recordPath: 'watchlist.csv#row=2',
+        sourceRecordedOn: '2025-03-01',
+      },
     })
   })
 

@@ -23,6 +23,8 @@
   and connector sequencing
 - [Library implementation handoff](planning/library-implementation.md): per-media
   specification, source-derived Queue rules, Songs, and production delivery steps
+- [Movies implementation plan](planning/movies-implementation.md): end-to-end
+  Letterboxd Archive/Queue, TMDB enrichment, API, UI, replay, and validation plan
 - [Library Phase 1 decisions](planning/library-phase-1-decisions.md): researched
   product choices and the owner's resolved direction
 - [Library Phase 2 surfaces](planning/library-phase-2-surfaces.md): approved

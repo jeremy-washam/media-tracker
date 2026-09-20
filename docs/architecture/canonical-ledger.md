@@ -245,12 +245,15 @@ overlapping export or RSS record can support the same Archive occurrence by
 adding evidence rather than creating a duplicate occurrence or overwriting its
 only provenance link.
 
-### Deferred Queue model
+### Source-derived Queue model
 
-Queue is local future intent and remains separate from Archive, but it is not a
-table in the initial ingestion schema. Watch Later, Want to Read, watchlist, and
-saved-episode observations remain source records until concrete Queue behavior
-is designed. Archive membership never implicitly erases that evidence.
+Queue remains separate from Archive. Migration 0006 implements the narrow
+source-derived relationship and evidence tables accepted in
+[ADR 0011](../decisions/0011-source-derived-queue.md). A successful complete
+snapshot may retire an absent membership within its connection; partial or
+failed observations may not. Archive membership never implicitly erases Queue
+membership or its evidence. Manual local intent, write-back, and conflict
+resolution remain deferred.
 
 ## Cross-source reconciliation rules
 

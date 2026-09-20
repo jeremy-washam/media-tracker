@@ -223,7 +223,10 @@ access, however, automatic queue synchronization is not dependable:
 - Automatic add/remove operations should remain unsupported unless Letterboxd
   changes its API policy or grants this app access.
 
-The local Queue should therefore remain the reliable source of truth.
+The read-only local Queue projection is therefore derived from the latest
+successful complete export. It preserves an explicit watchlist membership even
+when Archive history also exists. Local edits and automatic write-back remain
+unsupported.
 
 ## Completeness assessment
 
@@ -263,3 +266,21 @@ reconciliation and recovery policies in [ADR 0010](../decisions/0010-reconciliat
 This implementation update does not represent a new private payload probe or a
 new verification of upstream API capabilities. See the connector README for
 current behavior; earlier reconnaissance questions remain historical evidence.
+
+## Library implementation update — 2026-09-20
+
+Export parser v6 now builds the movie universe from watched, ratings, likes, and
+watchlist files. It projects current film rating and liked state separately from
+Diary occurrence ratings/reviews, preserves rewatch metadata, admits queue-only
+movies, and reconciles watchlist removals only after a successful complete
+snapshot. RSS parser v3 decodes nested title entities before matching. The
+Movies Library exposes Archive and Queue through movie-specific collection,
+detail, and History APIs and remains useful without TMDB configured.
+
+The retained export still contains 670 unique film URIs across the four
+film-level files and 309 watchlist memberships. An isolated parser-v6 replay
+against a copy of the real local state produced 371 active Archive movies, 402
+active viewing occurrences, 309 Queue movies, and three Archive/Queue overlaps.
+Three legacy RSS/export duplicates were retired into their canonical same-day
+occurrence without deleting source evidence. Raw owner rows remain ignored and
+are not fixtures.

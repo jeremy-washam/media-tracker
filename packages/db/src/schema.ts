@@ -723,6 +723,161 @@ export const bookIdentifiers = sqliteTable(
   (table) => [primaryKey({ columns: [table.mediaItemId, table.type, table.normalizedValue] })],
 )
 
+export const queueEntries = sqliteTable(
+  'queue_entries',
+  {
+    id: text('id').primaryKey(),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    sourceMembershipKey: text('source_membership_key').notNull(),
+    relationshipType: text('relationship_type').notNull(),
+    addedAtValue: text('added_at_value'),
+    addedAtPrecision: text('added_at_precision', { enum: temporalPrecisions }),
+    addedAtBasis: text('added_at_basis', { enum: temporalBases }),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredObservedAt: text('retired_observed_at'),
+    projectionVersion: integer('projection_version').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('queue_entries_connection_membership_unique').on(
+      table.connectionId,
+      table.sourceMembershipKey,
+    ),
+    index('queue_entries_media_state_idx').on(table.mediaItemId, table.upstreamState),
+    index('queue_entries_connection_added_idx').on(
+      table.connectionId,
+      table.upstreamState,
+      table.addedAtValue,
+      table.mediaItemId,
+    ),
+    check(
+      'queue_entries_added_temporal_complete',
+      temporalCheck('added_at_value', 'added_at_precision', 'added_at_basis'),
+    ),
+  ],
+)
+
+export const queueEntryEvidence = sqliteTable(
+  'queue_entry_evidence',
+  {
+    id: text('id').primaryKey(),
+    queueEntryId: text('queue_entry_id')
+      .notNull()
+      .references(() => queueEntries.id, { onDelete: 'restrict' }),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    role: text('role', { enum: ['membership', 'added_time', 'removal'] }).notNull(),
+    linkedAt: text('linked_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('queue_entry_evidence_unique').on(
+      table.queueEntryId,
+      table.sourceRecordId,
+      table.role,
+    ),
+    index('queue_entry_evidence_source_idx').on(table.sourceRecordId),
+  ],
+)
+
+export const letterboxdMovieState = sqliteTable(
+  'letterboxd_movie_state',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    filmUri: text('film_uri').notNull(),
+    importedTitle: text('imported_title').notNull(),
+    releaseYear: text('release_year').notNull(),
+    currentRatingValue: real('current_rating_value'),
+    ratingSourceRecordId: text('rating_source_record_id').references(() => sourceRecords.id, {
+      onDelete: 'restrict',
+    }),
+    liked: integer('liked', { mode: 'boolean' }).notNull(),
+    likeSourceRecordId: text('like_source_record_id').references(() => sourceRecords.id, {
+      onDelete: 'restrict',
+    }),
+    lastCompleteExportRawObjectId: text('last_complete_export_raw_object_id')
+      .notNull()
+      .references(() => rawObjects.id, { onDelete: 'restrict' }),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.mediaItemId] }),
+    uniqueIndex('letterboxd_movie_state_connection_uri_unique').on(
+      table.connectionId,
+      table.filmUri,
+    ),
+    index('letterboxd_movie_state_rating_idx').on(table.currentRatingValue, table.mediaItemId),
+  ],
+)
+
+export const letterboxdMovieViewings = sqliteTable(
+  'letterboxd_movie_viewings',
+  {
+    archiveEntryId: text('archive_entry_id')
+      .primaryKey()
+      .references(() => archiveEntries.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    diaryUri: text('diary_uri'),
+    rewatch: integer('rewatch', { mode: 'boolean' }).notNull(),
+    logUrl: text('log_url'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    projectionVersion: integer('projection_version').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('letterboxd_movie_viewings_media_idx').on(table.mediaItemId, table.archiveEntryId),
+  ],
+)
+
+export const movieLibraryProjection = sqliteTable('movie_library_projection', {
+  mediaItemId: text('media_item_id')
+    .primaryKey()
+    .references(() => mediaItems.id, { onDelete: 'restrict' }),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  filmUri: text('film_uri'),
+  importedTitle: text('imported_title').notNull(),
+  displayTitle: text('display_title').notNull(),
+  normalizedTitle: text('normalized_title').notNull(),
+  releaseYear: text('release_year'),
+  posterUrl: text('poster_url'),
+  directorNames: text('director_names'),
+  runtimeMinutes: integer('runtime_minutes'),
+  currentRatingValue: real('current_rating_value'),
+  liked: integer('liked', { mode: 'boolean' }).notNull(),
+  reviewed: integer('reviewed', { mode: 'boolean' }).notNull(),
+  inArchive: integer('in_archive', { mode: 'boolean' }).notNull(),
+  inQueue: integer('in_queue', { mode: 'boolean' }).notNull(),
+  queueAddedOn: text('queue_added_on'),
+  latestKnownWatchedOn: text('latest_known_watched_on'),
+  activeWatchCount: integer('active_watch_count').notNull(),
+  hasUnknownWatchedDate: integer('has_unknown_watched_date', { mode: 'boolean' }).notNull(),
+  sourceRefreshedAt: text('source_refreshed_at').notNull(),
+  projectionVersion: integer('projection_version').notNull(),
+})
+
 export const schema = {
   archiveEntries,
   archiveEntryEvidence,
@@ -740,7 +895,12 @@ export const schema = {
   hardcoverWorkContributors,
   hardcoverWorkSeries,
   hardcoverWorkTaxonomy,
+  letterboxdMovieState,
+  letterboxdMovieViewings,
   mediaItems,
+  movieLibraryProjection,
+  queueEntries,
+  queueEntryEvidence,
   rawObjects,
   sourceRecords,
   sources,

@@ -3,7 +3,12 @@ import {
   type LetterboxdRecordReference,
 } from '@media-tracker/connector-letterboxd'
 import type { LetterboxdImportResponse } from '@media-tracker/contracts'
-import type { ArchiveEntryWrite, CanonicalLedgerRepository } from '@media-tracker/db'
+import type {
+  ArchiveEntryWrite,
+  CanonicalLedgerRepository,
+  LetterboxdMovieSnapshotFilm,
+  LetterboxdMovieSnapshotViewing,
+} from '@media-tracker/db'
 import {
   archiveEntryEvidenceId,
   archiveEntryId,
@@ -31,9 +36,9 @@ import {
 import { ulid } from 'ulid'
 
 import type { Bindings } from './env'
-import { createLedgerRepository } from './env'
+import { createLedgerRepository, createMoviesRepository } from './env'
 
-const parserVersion = 'letterboxd-export@2'
+const parserVersion = 'letterboxd-export@6'
 
 export class LetterboxdImportError extends Error {
   constructor(message: string) {
@@ -85,6 +90,7 @@ export async function importLetterboxdExport(
   if (archive.byteLength === 0) throw new LetterboxdImportError('The Letterboxd export is empty')
 
   const repository = createLedgerRepository(bindings.DB)
+  const moviesRepository = createMoviesRepository(bindings.DB)
   const startedAt = instantNow()
   const connection = await connectionForImport(repository, startedAt)
   const runId = syncRunId(ulid())
@@ -162,6 +168,8 @@ export async function importLetterboxdExport(
     const mediaItems: MediaItem[] = []
     const externalIdentities: ExternalIdentity[] = []
     const archiveEntries: ArchiveEntryWrite[] = []
+    const movieSnapshotFilms: LetterboxdMovieSnapshotFilm[] = []
+    const movieSnapshotViewings: LetterboxdMovieSnapshotViewing[] = []
 
     const addSourceRecord = (
       reference: LetterboxdRecordReference,
@@ -190,8 +198,35 @@ export async function importLetterboxdExport(
       return record
     }
 
+    const snapshotRecord = addSourceRecord(
+      {
+        recordPath: '$snapshot',
+        sourceRecordKey: `complete-export:${archiveChecksum.hex}`,
+        sourceRecordedOn: null,
+      },
+      'export_snapshot',
+      'normalized',
+    )
+
     for (const film of projection.films) {
-      const watchedRecord = addSourceRecord(film.watchedRecord, 'watched_film', 'normalized')
+      const watchedRecord =
+        film.watchedRecord === null
+          ? null
+          : addSourceRecord(film.watchedRecord, 'watched_film', 'normalized')
+      const ratingRecord =
+        film.ratingRecord === null
+          ? null
+          : addSourceRecord(film.ratingRecord, 'film_rating', 'normalized')
+      const likedRecord =
+        film.likedRecord === null
+          ? null
+          : addSourceRecord(film.likedRecord, 'film_like', 'normalized')
+      const watchlistRecord =
+        film.watchlistRecord === null
+          ? null
+          : addSourceRecord(film.watchlistRecord, 'watchlist_film', 'normalized')
+      const identityRecord = watchedRecord ?? ratingRecord ?? likedRecord ?? watchlistRecord
+      if (identityRecord === null) continue
       const knownFilmIdentity = await repository.findExternalIdentity({
         namespace: 'letterboxd',
         externalType: 'film_uri',
@@ -258,12 +293,24 @@ export async function importLetterboxdExport(
         externalId: film.filmUri,
         scope: { kind: 'global' },
         canonicalUrl: film.filmUri,
-        firstObservedSourceRecordId: watchedRecord.id,
-        lastObservedSourceRecordId: watchedRecord.id,
+        firstObservedSourceRecordId: identityRecord.id,
+        lastObservedSourceRecordId: identityRecord.id,
         retiredAt: null,
       })
 
-      if (film.diaryOccurrences.length === 0) {
+      movieSnapshotFilms.push({
+        mediaItemId: itemId,
+        filmUri: film.filmUri,
+        title: film.title,
+        releaseYear: film.releaseYear,
+        currentRating: film.currentRating,
+        ratingSourceRecordId: ratingRecord?.id ?? null,
+        likedSourceRecordId: likedRecord?.id ?? null,
+        watchlistSourceRecordId: watchlistRecord?.id ?? null,
+        watchlistAddedOn: film.watchlistRecord?.sourceRecordedOn ?? null,
+      })
+
+      if (film.diaryOccurrences.length === 0 && watchedRecord !== null) {
         const occurrenceKey = `watched:${film.filmUri}`
         const knownEntryId = await repository.findArchiveEntryId(connection.id, occurrenceKey)
         const entryId = knownEntryId ?? archiveEntryId(ulid())
@@ -276,16 +323,6 @@ export async function importLetterboxdExport(
             linkedAt: startedAt,
           },
         ]
-        if (film.ratingRecord !== null) {
-          const ratingRecord = addSourceRecord(film.ratingRecord, 'film_rating', 'normalized')
-          evidence.push({
-            id: archiveEntryEvidenceId(ulid()),
-            archiveEntryId: entryId,
-            sourceRecordId: ratingRecord.id,
-            role: 'rating',
-            linkedAt: startedAt,
-          })
-        }
         archiveEntries.push({
           replaceRating: true,
           replaceReview: true,
@@ -297,15 +334,22 @@ export async function importLetterboxdExport(
             sourceOccurrenceKey: occurrenceKey,
             admissionReason: 'letterboxd_watched_state',
             consumedAt: null,
-            sourceRecordedAt: sourceRecordedAt(film.watchedRecord),
-            sourceRating:
-              film.currentRating === null ? null : sourceRating(film.currentRating, 0.5, 5),
+            sourceRecordedAt: watchedRecord.sourceRecordedAt,
+            sourceRating: null,
             reviewText: null,
             upstreamState: 'active',
             createdAt: startedAt,
             updatedAt: startedAt,
           },
           evidence,
+        })
+        movieSnapshotViewings.push({
+          archiveEntryId: entryId,
+          mediaItemId: itemId,
+          diaryUri: null,
+          rewatch: false,
+          logUrl: film.filmUri,
+          sourceRecordId: watchedRecord.id,
         })
         continue
       }
@@ -320,14 +364,11 @@ export async function importLetterboxdExport(
           evidence: {
             id: archiveEntryEvidenceId(ulid()),
             archiveEntryId: watchedFallback,
-            sourceRecordId: watchedRecord.id,
+            sourceRecordId: watchedRecord?.id ?? snapshotRecord.id,
             role: 'removal',
             linkedAt: startedAt,
           },
         })
-      if (film.ratingRecord !== null) {
-        addSourceRecord(film.ratingRecord, 'film_rating', 'ignored')
-      }
       for (const occurrence of film.diaryOccurrences) {
         const diaryRecord = addSourceRecord(occurrence, 'diary_entry', 'normalized')
         const knownDiaryIdentity = await repository.findExternalIdentity({
@@ -412,6 +453,14 @@ export async function importLetterboxdExport(
           },
           evidence,
         })
+        movieSnapshotViewings.push({
+          archiveEntryId: entryId,
+          mediaItemId: itemId,
+          diaryUri: occurrence.diaryUri,
+          rewatch: occurrence.rewatch,
+          logUrl: occurrence.diaryUri,
+          sourceRecordId: diaryRecord.id,
+        })
       }
     }
 
@@ -432,6 +481,21 @@ export async function importLetterboxdExport(
       },
     }
     await repository.commit({
+      sourceRecords,
+      retireOccurrences,
+      mediaItems,
+      externalIdentities,
+      archiveEntries,
+    })
+    await moviesRepository.applyLetterboxdSnapshot({
+      connectionId: connection.id,
+      rawObjectId: rawId,
+      snapshotSourceRecordId: snapshotRecord.id,
+      observedAt: startedAt,
+      films: movieSnapshotFilms,
+      viewings: movieSnapshotViewings,
+    })
+    await repository.commit({
       syncRun: succeededRun,
       rawObjects: [
         {
@@ -440,11 +504,6 @@ export async function importLetterboxdExport(
           lastParserVersion: parserVersion,
         },
       ],
-      sourceRecords,
-      retireOccurrences,
-      mediaItems,
-      externalIdentities,
-      archiveEntries,
     })
     await repository.saveConnection({ ...connection, updatedAt: finishedAt })
 

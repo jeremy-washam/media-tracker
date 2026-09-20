@@ -64,6 +64,7 @@ export interface LetterboxdDiaryOccurrence extends LetterboxdRecordReference {
   diaryUri: string
   consumedOn: string
   rating: number | null
+  rewatch: boolean
   reviewText: string | null
   reviewRecord: LetterboxdRecordReference | null
 }
@@ -72,9 +73,11 @@ export interface LetterboxdFilm {
   filmUri: string
   title: string
   releaseYear: string
-  watchedRecord: LetterboxdRecordReference
+  watchedRecord: LetterboxdRecordReference | null
   currentRating: number | null
   ratingRecord: LetterboxdRecordReference | null
+  likedRecord: LetterboxdRecordReference | null
+  watchlistRecord: LetterboxdRecordReference | null
   diaryOccurrences: LetterboxdDiaryOccurrence[]
 }
 
@@ -288,6 +291,8 @@ export function parseLetterboxdExportBytes(archive: Uint8Array): LetterboxdExpor
   const diaryRows = requireRows(files, 'diary.csv')
   const ratingRows = requireRows(files, 'ratings.csv')
   const reviewRows = requireRows(files, 'reviews.csv')
+  const likedRows = requireRows(files, 'likes/films.csv')
+  const watchlistRows = requireRows(files, 'watchlist.csv')
 
   const ratingByFilmUri = new Map<string, { rating: number; record: LetterboxdRecordReference }>()
   for (const [index, row] of ratingRows.entries()) {
@@ -319,35 +324,62 @@ export function parseLetterboxdExportBytes(archive: Uint8Array): LetterboxdExpor
     })
   }
 
-  const films: LetterboxdFilm[] = []
-  const filmByKey = new Map<string, LetterboxdFilm>()
-  for (const [index, row] of watchedRows.entries()) {
-    const path = `watched.csv#row=${index + 2}`
+  const likedByFilmUri = new Map<string, LetterboxdRecordReference>()
+  for (const [index, row] of likedRows.entries()) {
+    const path = `likes/films.csv#row=${index + 2}`
+    const filmUri = requiredValue(row, 'Letterboxd URI', path)
+    likedByFilmUri.set(
+      filmUri,
+      recordReference('likes/films.csv', index, filmUri, optionalDate(row, 'Date', path)),
+    )
+  }
+
+  const watchlistByFilmUri = new Map<string, LetterboxdRecordReference>()
+  for (const [index, row] of watchlistRows.entries()) {
+    const path = `watchlist.csv#row=${index + 2}`
+    const filmUri = requiredValue(row, 'Letterboxd URI', path)
+    watchlistByFilmUri.set(
+      filmUri,
+      recordReference('watchlist.csv', index, filmUri, optionalDate(row, 'Date', path)),
+    )
+  }
+
+  const filmsByUri = new Map<string, LetterboxdFilm>()
+  const filmsByKey = new Map<string, LetterboxdFilm[]>()
+  const addFilmRow = (row: CsvRow, file: string, index: number) => {
+    const path = `${file}#row=${index + 2}`
     const title = requiredValue(row, 'Name', path)
     const releaseYear = requiredYear(row, path)
     const filmUri = requiredValue(row, 'Letterboxd URI', path)
-    const key = `${title}\u0000${releaseYear}`
-    if (filmByKey.has(key)) {
-      throw new Error(`Letterboxd export has an ambiguous watched-film identity for ${title}`)
-    }
-    const currentRating = ratingByFilmUri.get(filmUri) ?? null
-    const film: LetterboxdFilm = {
-      filmUri,
-      title,
-      releaseYear,
-      watchedRecord: recordReference(
-        'watched.csv',
-        index,
+    let film = filmsByUri.get(filmUri)
+    if (film === undefined) {
+      const currentRating = ratingByFilmUri.get(filmUri) ?? null
+      film = {
         filmUri,
-        optionalDate(row, 'Date', path),
-      ),
-      currentRating: currentRating?.rating ?? null,
-      ratingRecord: currentRating?.record ?? null,
-      diaryOccurrences: [],
+        title,
+        releaseYear,
+        watchedRecord: null,
+        currentRating: currentRating?.rating ?? null,
+        ratingRecord: currentRating?.record ?? null,
+        likedRecord: likedByFilmUri.get(filmUri) ?? null,
+        watchlistRecord: watchlistByFilmUri.get(filmUri) ?? null,
+        diaryOccurrences: [],
+      }
+      filmsByUri.set(filmUri, film)
+      const key = `${title}\u0000${releaseYear}`
+      filmsByKey.set(key, [...(filmsByKey.get(key) ?? []), film])
+    } else if (film.title !== title || film.releaseYear !== releaseYear) {
+      throw new Error(`Letterboxd export uses conflicting metadata for ${filmUri}`)
     }
-    films.push(film)
-    filmByKey.set(key, film)
+    if (file === 'watched.csv') {
+      film.watchedRecord = recordReference(file, index, filmUri, optionalDate(row, 'Date', path))
+    }
   }
+
+  for (const [index, row] of watchedRows.entries()) addFilmRow(row, 'watched.csv', index)
+  for (const [index, row] of ratingRows.entries()) addFilmRow(row, 'ratings.csv', index)
+  for (const [index, row] of likedRows.entries()) addFilmRow(row, 'likes/films.csv', index)
+  for (const [index, row] of watchlistRows.entries()) addFilmRow(row, 'watchlist.csv', index)
 
   const unresolvedDiaryRecords: LetterboxdRecordReference[] = []
   for (const [index, row] of diaryRows.entries()) {
@@ -357,11 +389,12 @@ export function parseLetterboxdExportBytes(archive: Uint8Array): LetterboxdExpor
     const diaryUri = requiredValue(row, 'Letterboxd URI', path)
     const sourceRecordedOn = optionalDate(row, 'Date', path)
     const record = recordReference('diary.csv', index, diaryUri, sourceRecordedOn)
-    const film = filmByKey.get(`${title}\u0000${releaseYear}`)
-    if (film === undefined) {
+    const matches = filmsByKey.get(`${title}\u0000${releaseYear}`) ?? []
+    if (matches.length !== 1) {
       unresolvedDiaryRecords.push(record)
       continue
     }
+    const film = matches[0]!
     const consumedOn = optionalDate(row, 'Watched Date', path)
     if (consumedOn === null) throw new Error(`Letterboxd export ${path} is missing Watched Date`)
     const review = reviewByDiaryUri.get(diaryUri) ?? null
@@ -370,12 +403,13 @@ export function parseLetterboxdExportBytes(archive: Uint8Array): LetterboxdExpor
       diaryUri,
       consumedOn,
       rating: optionalRating(row, path),
+      rewatch: (row.Rewatch?.trim().toLowerCase() ?? '') === 'yes',
       reviewText: review?.reviewText ?? null,
       reviewRecord: review?.record ?? null,
     })
   }
 
-  return { films, unresolvedDiaryRecords }
+  return { films: [...filmsByUri.values()], unresolvedDiaryRecords }
 }
 
 export function inspectLetterboxdExportBytes(archive: Uint8Array): LetterboxdExportSummary {

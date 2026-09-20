@@ -28,7 +28,6 @@ type DisabledNavigationItem = {
 
 const unavailableMedia: DisabledNavigationItem[] = [
   { label: 'Articles', icon: FileText },
-  { label: 'Movies', icon: Film },
   { label: 'Podcasts', icon: Headphones },
   { label: 'Music', icon: Music2 },
   { label: 'Videos', icon: Video },
@@ -52,6 +51,8 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const inBooks = location.pathname.startsWith('/library/books')
+  const inMovies = location.pathname.startsWith('/library/movies')
+  const inLibrary = inBooks || inMovies
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -110,8 +111,8 @@ export function AppShell() {
           <UnavailableNavigation label="Chat" icon={MessageSquare} collapsed={collapsed} />
           <Link
             to="/library/books/archive"
-            className={inBooks ? 'active' : ''}
-            aria-current={inBooks ? 'page' : undefined}
+            className={inLibrary ? 'active' : ''}
+            aria-current={inLibrary ? 'page' : undefined}
             title="Library"
             onClick={() => setMobileOpen(false)}
           >
@@ -133,6 +134,17 @@ export function AppShell() {
           >
             <BookOpen aria-hidden="true" />
             {!collapsed ? <span>Books</span> : null}
+          </Link>
+          <Link
+            to="/library/movies/archive"
+            activeOptions={{ includeSearch: false }}
+            className={inMovies ? 'active' : ''}
+            aria-current={inMovies ? 'page' : undefined}
+            title="Movies"
+            onClick={() => setMobileOpen(false)}
+          >
+            <Film aria-hidden="true" />
+            {!collapsed ? <span>Movies</span> : null}
           </Link>
           {unavailableMedia.map((item) => (
             <UnavailableNavigation key={item.label} {...item} collapsed={collapsed} />
@@ -176,11 +188,11 @@ export function AppShell() {
             <Menu aria-hidden="true" />
           </button>
           <div>
-            {inBooks ? (
+            {inLibrary ? (
               <>
                 <span>Library</span>
                 <span aria-hidden="true">/</span>
-                <strong>Books</strong>
+                <strong>{inMovies ? 'Movies' : 'Books'}</strong>
               </>
             ) : (
               <strong>Connections</strong>

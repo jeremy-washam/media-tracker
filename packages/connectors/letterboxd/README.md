@@ -26,10 +26,13 @@ In the running application, open **Connections** and choose **Import ZIP** for
 Letterboxd. Upload the ZIP exactly as downloaded from Letterboxd. The Worker:
 
 - preserves the exact ZIP in private R2 using its SHA-256 checksum;
-- creates one movie for each row in `watched.csv`;
+- creates one movie for each unique film URI across watched, ratings, likes, and
+  watchlist rows, including queue-only films;
 - creates a dated Archive occurrence for every Diary row;
 - creates one undated occurrence for a watched film with no Diary row;
-- retains Letterboxd film and Diary-entry URIs as separate identities; and
+- retains Letterboxd film and Diary-entry URIs as separate identities;
+- projects current rating, liked state, rewatch metadata, and watchlist-derived
+  Queue membership with source evidence; and
 - skips only successfully processed exports under the current parser; failures retry.
 
 Diary rows that cannot be joined to a watched film by exact title and year are
@@ -37,8 +40,11 @@ retained as unresolved source records instead of being silently merged. Ratings
 remain on Letterboxd's 0.5–5 scale. Reviews attach to the matching Diary URI.
 
 The current import limit is 25 MB. The export must contain `watched.csv`,
-`diary.csv`, `ratings.csv`, and `reviews.csv`. Deletion reconciliation and
-periodic export reminders remain future work.
+`diary.csv`, `ratings.csv`, `reviews.csv`, `likes/films.csv`, and
+`watchlist.csv`. A successful complete export retires absent Queue memberships
+and clears absent current likes/ratings without deleting Archive history.
+Deletion-tombstone reconciliation and periodic export reminders remain future
+work.
 
 ## RSS reconciliation
 
@@ -59,9 +65,11 @@ plain-text reviews. A fresh export supplies old edits, private activity, and wat
 Deletion reconciliation is still deferred; importing a later ZIP does not
 currently apply deletion tombstones.
 
-Export and RSS parser v2 reconcile in both acquisition orders. RSS observations
+Export parser v6 and RSS parser v3 reconcile in both acquisition orders. RSS observations
 retain Diary URLs and consult stable occurrence keys before date matching, so
 watched-date edits update the existing occurrence. Export matching prefers known
 film/Diary identities; an unambiguous exact title/year plus RSS viewing date is
-an explicit fallback. Ambiguous matches are not merged. Rating/review nulls in
-full exports clear current canonical fields while earlier raw evidence remains.
+an explicit fallback. Nested RSS title entities are decoded before matching;
+replay can repair an exact unambiguous legacy title/year duplicate while
+preserving its evidence. Ambiguous matches are not merged. Rating/review nulls
+in full exports clear current canonical fields while earlier raw evidence remains.

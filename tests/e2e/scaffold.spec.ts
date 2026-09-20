@@ -31,6 +31,50 @@ const booksResponse = (data = [book], nextCursor: string | null = null) => ({
   freshness: { lastSuccessfulSyncAt: '2026-09-20T10:00:00.000Z', degraded: false },
 })
 
+const movie = {
+  id: 'movie-one',
+  displayTitle: 'A Distant Movie',
+  importedTitle: 'A Distant Movie',
+  releaseYear: '2020',
+  posterUrl: null,
+  directors: [],
+  runtimeMinutes: null,
+  personal: { currentRating: 4.5, liked: true, reviewed: true },
+  archive: {
+    active: true,
+    lifetimeWatchCount: 2,
+    matchingWatchCount: 2,
+    latestKnownWatchedOn: '2026-09-12',
+    referenceWatchedOn: '2026-09-12',
+    hasUnknownWatchedDate: false,
+  },
+  queue: { active: false, addedOn: null },
+  enrichment: { provider: null, status: 'not_configured' as const, refreshedAt: null },
+}
+
+const moviesResponse = (data = [movie], nextCursor: string | null = null) => ({
+  data,
+  nextCursor,
+  totalCount: 372,
+  filteredCount: data.length,
+  filteredOccurrenceCount: data.reduce((total, item) => total + item.archive.matchingWatchCount, 0),
+  overlapCount: 2,
+  membershipCounts: { archiveItems: 372, archiveOccurrences: 403, queueItems: 309 },
+  facets: {
+    watchedUnknown: 180,
+    addedUnknown: 370,
+    releaseYearUnknown: 0,
+    unrated: 19,
+    reviewed: 13,
+    runtimeUnknown: 372,
+    runtimeAvailable: false,
+  },
+  sourceFreshness: {
+    lastCompleteExportAt: '2026-09-12T10:00:00.000Z',
+    lastRssSuccessAt: '2026-09-20T10:00:00.000Z',
+  },
+})
+
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
 })
@@ -189,6 +233,104 @@ test('opens a selected Book and loads personal activity in History', async ({ pa
   await expect(page.getByText('Paperback')).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).last().click()
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeFocused()
+})
+
+test('keeps loaded Movies pages while changing layout and inspecting History', async ({ page }) => {
+  const requested: string[] = []
+  await page.route('**/api/library/movies?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url.search)
+    const second = url.searchParams.has('cursor')
+    await route.fulfill({
+      json: moviesResponse(
+        [
+          {
+            ...movie,
+            id: second ? 'movie-two' : 'movie-one',
+            displayTitle: second ? 'Second Movie' : movie.displayTitle,
+            importedTitle: second ? 'Second Movie' : movie.importedTitle,
+          },
+        ],
+        second ? null : 'next-movies-page',
+      ),
+    })
+  })
+  await page.route('**/api/library/movies/movie-one', (route) =>
+    route.fulfill({
+      json: {
+        ...movie,
+        overview: null,
+        originalTitle: null,
+        originalLanguage: null,
+        releaseDate: null,
+        tagline: null,
+        backdropUrl: null,
+        genres: [],
+        cast: [],
+        countries: [],
+        tmdbRating: null,
+        tmdbVoteCount: null,
+        source: {
+          letterboxdUrl: 'https://letterboxd.com/film/a-distant-movie/',
+          tmdbUrl: null,
+          imdbUrl: null,
+          connectionLabel: 'Letterboxd',
+          coverage: 'complete',
+          lastCompleteExportAt: '2026-09-12T10:00:00.000Z',
+          lastRssSuccessAt: '2026-09-20T10:00:00.000Z',
+          metadataStatus: 'not_configured',
+        },
+      },
+    }),
+  )
+  await page.route('**/api/library/movies/movie-one/history*', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            archiveEntryId: 'watch-one',
+            watchedAt: {
+              value: '2026-09-12',
+              precision: 'day',
+              basis: 'source_asserted',
+            },
+            sourceRecordedAt: null,
+            rating: { value: 4.5, minimum: 0.5, maximum: 5 },
+            reviewText: 'A personal review.',
+            sourceRewatch: true,
+            letterboxdLogUrl: 'https://letterboxd.com/example/film/a-distant-movie/',
+            letterboxdFilmUrl: 'https://letterboxd.com/film/a-distant-movie/',
+            matchesFilter: true,
+            connection: { id: 'letterboxd-one', label: 'Letterboxd' },
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  )
+
+  await page.goto('/library/movies/archive')
+  await expect(page.getByRole('heading', { name: 'Movies' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Archive 372' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Queue 309' })).toBeVisible()
+  await page.getByRole('button', { name: 'Load more movies' }).click()
+  await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
+
+  const requestsAfterPaging = requested.length
+  await page.getByRole('button', { name: 'List view' }).click()
+  await expect(page).toHaveURL(/view=list/)
+  await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
+  await page.getByRole('button', { name: /A Distant Movie/ }).click()
+  await expect(page).toHaveURL(/item=movie-one/)
+  await expect(page.getByText('TMDB not configured.')).toBeVisible()
+  await page.getByRole('tab', { name: 'History (2)' }).click()
+  await expect(page.getByText('A personal review.')).toBeVisible()
+  await page.getByRole('button', { name: 'Close inspector' }).last().click()
+  await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
+  expect(requested).toHaveLength(requestsAfterPaging)
+  expect(requested.every((value) => !value.includes('view=') && !value.includes('item='))).toBe(
+    true,
+  )
 })
 
 test('shows separate account progress and resumes the selected account', async ({ page }) => {

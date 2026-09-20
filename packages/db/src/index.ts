@@ -31,6 +31,17 @@ export type {
   HardcoverTaxonomyProjection,
 } from './books-repository'
 export { SqlBooksRepository } from './books-repository'
+export type {
+  LetterboxdMovieSnapshot,
+  LetterboxdMovieSnapshotFilm,
+  LetterboxdMovieSnapshotViewing,
+  MovieCollectionRecord,
+  MovieDetailRecord,
+  MovieHistoryRecord,
+  MoviesListInput,
+  MoviesPageRecord,
+} from './movies-repository'
+export { SqlMoviesRepository } from './movies-repository'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'

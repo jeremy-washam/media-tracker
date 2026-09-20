@@ -41,7 +41,7 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createLedgerRepository } from './env'
 
-const parserVersion = 'letterboxd-rss@2'
+const parserVersion = 'letterboxd-rss@3'
 
 export class LetterboxdRssConfigurationError extends Error {
   constructor() {

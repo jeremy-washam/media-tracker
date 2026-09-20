@@ -14,6 +14,11 @@ import {
   MediaQuerySchema,
   PageQuerySchema,
   MediaSummarySchema,
+  MovieDetailSchema,
+  MovieHistoryQuerySchema,
+  MovieHistoryResponseSchema,
+  MoviesQuerySchema,
+  MoviesResponseSchema,
   ReadwiseSyncResponseSchema,
   SpotifyImportResponseSchema,
   SpotifySyncResponseSchema,
@@ -27,7 +32,12 @@ import { z } from 'zod'
 
 import type { ApiError } from '@media-tracker/contracts'
 
-import { createBooksRepository, createLedgerRepository, type AppEnv } from './env'
+import {
+  createBooksRepository,
+  createLedgerRepository,
+  createMoviesRepository,
+  type AppEnv,
+} from './env'
 import { HardcoverTokenMissingError, syncHardcover } from './hardcover-sync'
 import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-import'
 import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
@@ -120,6 +130,42 @@ const bookHistoryRoute = createRoute({
   },
   responses: {
     200: jsonContent(BookHistoryResponseSchema, 'Book activity history'),
+    400: jsonContent(ApiErrorSchema, 'Invalid history cursor'),
+  },
+})
+
+const moviesRoute = createRoute({
+  method: 'get',
+  path: '/api/library/movies',
+  tags: ['Library', 'Movies'],
+  request: { query: MoviesQuerySchema },
+  responses: {
+    200: jsonContent(MoviesResponseSchema, 'Movies collection'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Movies query'),
+  },
+})
+
+const movieDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/movies/{mediaItemId}',
+  tags: ['Library', 'Movies'],
+  request: { params: z.object({ mediaItemId: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(MovieDetailSchema, 'Movie details'),
+    404: jsonContent(ApiErrorSchema, 'Movie not found'),
+  },
+})
+
+const movieHistoryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/movies/{mediaItemId}/history',
+  tags: ['Library', 'Movies'],
+  request: {
+    params: z.object({ mediaItemId: z.string().min(1) }),
+    query: MovieHistoryQuerySchema,
+  },
+  responses: {
+    200: jsonContent(MovieHistoryResponseSchema, 'Movie viewing history'),
     400: jsonContent(ApiErrorSchema, 'Invalid history cursor'),
   },
 })
@@ -367,6 +413,78 @@ app.openapi(bookHistoryRoute, async (context) => {
     return context.json(BookHistoryResponseSchema.parse(history), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Book history cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
+app.openapi(moviesRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createMoviesRepository(context.env.DB).listMovies({
+      collection: query.collection,
+      ...(query.q === undefined ? {} : { q: query.q }),
+      watchedMode: query.watched,
+      ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
+      ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
+      addedMode: query.added,
+      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+      ...(query.releaseYearFrom === undefined ? {} : { releaseYearFrom: query.releaseYearFrom }),
+      ...(query.releaseYearTo === undefined ? {} : { releaseYearTo: query.releaseYearTo }),
+      releaseYearUnknown: query.releaseYearUnknown,
+      ratingMode: query.rating,
+      ...(query.ratingMin === undefined ? {} : { ratingMin: query.ratingMin }),
+      ...(query.ratingMax === undefined ? {} : { ratingMax: query.ratingMax }),
+      reviewed: query.reviewed,
+      archive: query.archive,
+      runtime: query.runtime,
+      runtimeUnknown: query.runtimeUnknown,
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.direction === undefined ? {} : { direction: query.direction }),
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(MoviesResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Movies pagination cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
+app.openapi(movieDetailRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const movie = await createMoviesRepository(context.env.DB).findMovie(id)
+  if (movie !== null) return context.json(MovieDetailSchema.parse(movie), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No movie exists with media item ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(movieHistoryRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const query = context.req.valid('query')
+  try {
+    const history = await createMoviesRepository(context.env.DB).listMovieHistory(id, {
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+      watchedMode: query.watched,
+      ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
+      ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
+    })
+    return context.json(MovieHistoryResponseSchema.parse(history), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Movie history cursor') {
       throw new HTTPException(400, { message: error.message })
     }
     throw error

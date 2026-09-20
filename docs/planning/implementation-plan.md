@@ -772,7 +772,9 @@ inspector behavior. Production delivery should:
    data without silently changing the approved field contract.
 3. Implement Library behavior in priority order: Books, Movies, Articles,
    Podcasts, YouTube videos, Songs. Preserve one item with multiple occurrences
-   and the per-media occurrence semantics in the approved contracts.
+   and the per-media occurrence semantics in the approved contracts. The
+   [Movies implementation plan](movies-implementation.md) records the shipped
+   Letterboxd-only vertical slice and the remaining TMDB credential gate.
 4. Specify Chat history/artifact flows and interactive visualization behavior;
    consult the separate catalog reconnaissance for references outside Library.
 5. Specify browsable monthly/yearly Recaps and their relationship to shared

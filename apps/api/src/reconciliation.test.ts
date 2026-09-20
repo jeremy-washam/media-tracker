@@ -91,6 +91,21 @@ class D1SqliteDatabase {
         'utf8',
       ),
     )
+    this.database.exec(
+      readFileSync(
+        new NodeURL('../../../packages/db/migrations/0006_movies_library.sql', import.meta.url),
+        'utf8',
+      ),
+    )
+    this.database.exec(
+      readFileSync(
+        new NodeURL(
+          '../../../packages/db/migrations/0007_movies_nullable_source_link.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    )
   }
 
   prepare(query: string): D1SqliteStatement {
@@ -163,6 +178,8 @@ const lbArchive = zipSync({
   'reviews.csv': csv(
     'Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n2025-02-03,Synthetic One,2024,https://boxd.it/diary-two,4,Yes,Synthetic review,,2025-02-02\n',
   ),
+  'watchlist.csv': csv('Date,Name,Year,Letterboxd URI\n'),
+  'likes/films.csv': csv('Date,Name,Year,Letterboxd URI\n'),
 })
 
 const rss = `<?xml version="1.0" encoding="utf-8"?>

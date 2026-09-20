@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { MEDIA_TYPES } from '@media-tracker/domain'
 
 export * from './books'
+export * from './movies'
 
 export const ApiErrorCodeSchema = z.enum([
   'BAD_REQUEST',

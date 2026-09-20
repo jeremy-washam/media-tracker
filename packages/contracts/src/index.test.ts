@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { BooksQuerySchema, HealthResponseSchema, MediaTypeSchema, SyncJobSchema } from './index'
+import {
+  BooksQuerySchema,
+  HealthResponseSchema,
+  MediaTypeSchema,
+  MoviesQuerySchema,
+  SyncJobSchema,
+} from './index'
 
 describe('API contracts', () => {
   it('accepts a valid health response', () => {
@@ -43,5 +49,20 @@ describe('API contracts', () => {
     expect(
       BooksQuerySchema.safeParse({ collection: 'archive', ratingMode: 'minimum' }).success,
     ).toBe(false)
+  })
+
+  it('validates collection-specific Movies sorts and required filter bounds', () => {
+    expect(MoviesQuerySchema.safeParse({ collection: 'archive', sort: 'watchedAt' }).success).toBe(
+      true,
+    )
+    expect(MoviesQuerySchema.safeParse({ collection: 'queue', sort: 'watchedAt' }).success).toBe(
+      false,
+    )
+    expect(MoviesQuerySchema.safeParse({ collection: 'archive', watched: 'range' }).success).toBe(
+      false,
+    )
+    expect(MoviesQuerySchema.safeParse({ collection: 'queue', rating: 'range' }).success).toBe(
+      false,
+    )
   })
 })

@@ -1,7 +1,7 @@
 # Library implementation handoff
 
 - Date: 2026-09-19
-- Status: In progress; Step 1 and the Books vertical slice are implemented
+- Status: In progress; Step 1, Books, and Letterboxd-backed Movies are implemented
 - Intended implementer: Sol agent
 - Scope: Production Library, including Archive, source-derived Queue, and item inspection
 
@@ -55,7 +55,7 @@ and not all illustrative metadata in the specimen is currently available.
 | ----------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Library API | Books has rich list/detail/History contracts; other media remain generic        | Repeat the media-specific API pattern for the remaining types                                                       |
 | Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped  | Iterate on production feedback without weakening source/provenance semantics                                        |
-| Movies      | Letterboxd consumption and personal data imported                               | Project retained useful RSS fields; import watchlist membership; obtain missing artwork/metadata where possible     |
+| Movies      | Archive/Queue API and UI shipped from Letterboxd export/RSS data                | Add TMDB catalog enrichment after a credentialed live probe                                                         |
 | Articles    | Reader supplies basic author, summary, image, publication date, and source link | Inbox/Later projection; expose useful retained fields; acquire/project notes and highlights needed by the inspector |
 | Podcasts    | Export supplies playback history; saved-episode sync enriches a subset          | Saved-library Queue projection, reconciliation against all known playback, and metadata for export-only episodes    |
 | Videos      | Takeout supplies identities, titles/channels where present, and watch evidence  | Watch Later membership projection and additional public metadata acquisition                                        |
@@ -201,6 +201,19 @@ reconciled 1,114 relationships into 128 Archive books and 986 Queue books.
 Deliver Movies, Articles, Podcasts, Videos, then Songs using the Step 1 matrix.
 Include each type's Queue ingestion and UI in its slice; do not defer all Queue
 work until the end. Songs omit Queue entirely.
+
+The first slice in this step is specified in the
+[Movies end-to-end implementation plan](movies-implementation.md). It separates
+the immediately implementable Letterboxd Archive/Queue work from the
+credential-gated TMDB live probe and enrichment stages.
+
+**Implemented 2026-09-20:** Movies Archive and watchlist-derived Queue now ship
+through movie-specific collection, detail, and History APIs with server-side
+search, filters, sorts, exact counts, keyset pagination, grid/list layouts, and
+real-data missing-catalog states. An isolated real replay produced 371 active
+Archive movies, 402 viewing occurrences, 309 Queue movies, and three overlaps.
+TMDB artwork and metadata remain gated on the required owner credential and live
+probe.
 
 Expose stored facts first, project useful retained evidence next, then acquire
 missing metadata. Use the inspector research to choose the smallest extensions:

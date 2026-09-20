@@ -15,6 +15,7 @@ Accepted decisions:
 9. [Canonical ledger identity and evidence model](./0009-canonical-ledger-identity-and-evidence.md)
 
 10. [Snapshot reconciliation and import recovery](./0010-reconciliation-and-recovery.md)
+11. [Source-derived Queue relationships](./0011-source-derived-queue.md)
 
 ADRs are append-only records of consequential technical choices. If a decision
 changes, add a new ADR that supersedes the old one rather than rewriting history.

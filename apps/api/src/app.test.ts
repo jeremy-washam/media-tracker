@@ -6,6 +6,7 @@ import {
   ConnectionsResponseSchema,
   HealthResponseSchema,
   MediaListResponseSchema,
+  MoviesResponseSchema,
 } from '@media-tracker/contracts'
 
 import app from './app'
@@ -106,6 +107,38 @@ describe('API', () => {
     })
   })
 
+  it('returns an empty Movies collection through its media-specific contract', async () => {
+    const response = await app.request(
+      '/api/library/movies?collection=archive',
+      undefined,
+      testBindings,
+    )
+    const payload = MoviesResponseSchema.parse(await response.json())
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      data: [],
+      nextCursor: null,
+      totalCount: 0,
+      filteredCount: 0,
+      filteredOccurrenceCount: 0,
+      overlapCount: 0,
+      membershipCounts: { archiveItems: 0, archiveOccurrences: 0, queueItems: 0 },
+    })
+  })
+
+  it('rejects collection-incompatible Movies sorts before querying storage', async () => {
+    const response = await app.request(
+      '/api/library/movies?collection=queue&sort=watchedAt',
+      undefined,
+      testBindings,
+    )
+    const payload = ApiErrorSchema.parse(await response.json())
+
+    expect(response.status).toBe(400)
+    expect(payload.error.code).toBe('BAD_REQUEST')
+  })
+
   it('explains when Readwise has not been configured', async () => {
     const response = await app.request(
       '/api/connections/readwise/sync',
@@ -151,6 +184,9 @@ describe('API', () => {
     expect(document.paths).toHaveProperty('/api/library/books')
     expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}')
     expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}/history')
+    expect(document.paths).toHaveProperty('/api/library/movies')
+    expect(document.paths).toHaveProperty('/api/library/movies/{mediaItemId}')
+    expect(document.paths).toHaveProperty('/api/library/movies/{mediaItemId}/history')
     expect(document.paths).toHaveProperty('/api/connections')
     expect(document.paths).toHaveProperty('/api/connections/readwise/sync')
     expect(document.paths).toHaveProperty('/api/connections/hardcover/sync')

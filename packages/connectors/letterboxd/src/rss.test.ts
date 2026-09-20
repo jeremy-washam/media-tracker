@@ -60,6 +60,13 @@ describe('Letterboxd RSS', () => {
     expect(entries[1]?.kind).toBe('list')
   })
 
+  it('decodes nested numeric entities in structured film titles', async () => {
+    const entries = await parseLetterboxdRss(
+      rss.replaceAll('Synthetic Film', 'Kiki&amp;#039;s Delivery Service'),
+    )
+    expect(entries[0]?.filmTitle).toBe("Kiki's Delivery Service")
+  })
+
   it('summarizes coverage and detects stable consecutive polls', async () => {
     const first = await snapshot(rss)
     const second = await snapshot(rss)

@@ -3,6 +3,8 @@ import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/
 import { AppShell, NotFoundPage, RouteError } from './components/app-shell'
 import { BooksCollectionPage } from './features/books/books-collection-page'
 import { parseBooksRouteSearch } from './features/books/books-route-search'
+import { MoviesCollectionPage } from './features/movies/movies-collection-page'
+import { parseMoviesRouteSearch } from './features/movies/movies-route-search'
 import { ConnectionsPage } from './pages/connections-page'
 
 const rootRoute = createRootRoute({
@@ -33,6 +35,20 @@ const booksQueueRoute = createRoute({
   component: () => <BooksCollectionPage collection="queue" />,
 })
 
+const moviesArchiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/movies/archive',
+  validateSearch: parseMoviesRouteSearch,
+  component: () => <MoviesCollectionPage collection="archive" />,
+})
+
+const moviesQueueRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/movies/queue',
+  validateSearch: parseMoviesRouteSearch,
+  component: () => <MoviesCollectionPage collection="queue" />,
+})
+
 const connectionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/connections',
@@ -43,6 +59,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   booksArchiveRoute,
   booksQueueRoute,
+  moviesArchiveRoute,
+  moviesQueueRoute,
   connectionsRoute,
 ])
 

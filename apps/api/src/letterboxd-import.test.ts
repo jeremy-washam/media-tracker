@@ -15,6 +15,19 @@ const migration = readFileSync(
   ),
   'utf8',
 )
+const moviesMigration = readFileSync(
+  fileURLToPath(
+    new URL('../../../packages/db/migrations/0006_movies_library.sql', import.meta.url).href,
+  ),
+  'utf8',
+)
+const nullableMovieSourceMigration = readFileSync(
+  fileURLToPath(
+    new URL('../../../packages/db/migrations/0007_movies_nullable_source_link.sql', import.meta.url)
+      .href,
+  ),
+  'utf8',
+)
 
 type SqlValue = ArrayBuffer | null | number | string
 
@@ -59,7 +72,7 @@ class D1SqliteDatabase {
   readonly database = new DatabaseSync(':memory:')
 
   constructor() {
-    this.database.exec(migration)
+    this.database.exec(`${migration}\n${moviesMigration}\n${nullableMovieSourceMigration}`)
   }
 
   prepare(query: string): D1SqliteStatement {
@@ -116,6 +129,8 @@ const archive = zipSync({
   'reviews.csv': csv(
     'Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n2025-02-03,Synthetic One,2024,https://boxd.it/diary-two,4,Yes,Synthetic review,,2025-02-02\n',
   ),
+  'watchlist.csv': csv('Date,Name,Year,Letterboxd URI\n'),
+  'likes/films.csv': csv('Date,Name,Year,Letterboxd URI\n'),
 })
 
 const rss = `<?xml version="1.0" encoding="utf-8"?>
@@ -214,7 +229,7 @@ describe('Letterboxd export import', () => {
         admission_reason: 'letterboxd_watched_state',
         consumed_at_value: null,
         consumed_at_precision: null,
-        rating_value: 3,
+        rating_value: null,
         review_text: null,
       },
       {
