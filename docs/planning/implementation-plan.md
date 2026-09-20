@@ -1,6 +1,6 @@
-# Media Tracker Implementation Plan
+# Imladris Implementation Plan
 
-Last updated: 2026-09-19
+Last updated: 2026-09-20
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.

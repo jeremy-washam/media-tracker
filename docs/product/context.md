@@ -1,6 +1,14 @@
-# Media Tracker — Product Context
+# Imladris — Product Context
 
 This document records the durable product intent and constraints for the project.
+
+The product name is **Imladris**. It replaces the earlier working name “Media
+Tracker” and the “Margin” label used in exploratory interface studies. Existing
+`media-tracker` repository, package-scope, storage, and deployment identifiers
+remain compatibility identifiers until a separate infrastructure migration is
+needed; they are not the product name.
+See the [product naming history](naming.md) for the complete brainstorming trail
+and selection rationale.
 
 ## Purpose
 

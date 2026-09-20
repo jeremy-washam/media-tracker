@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Media Tracker is a private, single-user ledger of media consumption. It imports
+Imladris is a private, single-user ledger of media consumption. It imports
 history from existing services, preserves the source evidence, and presents a
 normalized view suitable for browsing and, later, evidence-backed LLM queries.
 

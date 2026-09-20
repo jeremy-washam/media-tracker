@@ -139,7 +139,7 @@ export function LibraryReviewApp() {
           <div className="review-brand">
             {!collapsed && (
               <span>
-                Margin<span aria-hidden="true">.</span>
+                Imladris<span aria-hidden="true">.</span>
               </span>
             )}
             <button

@@ -76,13 +76,13 @@ export function AppShell() {
         <div className="app-brand">
           <Link
             to="/library/books/archive"
-            aria-label="Media Tracker Books"
+            aria-label="Imladris Books"
             onClick={() => setMobileOpen(false)}
           >
             <span className="app-brand-mark" aria-hidden="true">
-              M
+              I
             </span>
-            {!collapsed ? <strong>Media Tracker</strong> : null}
+            {!collapsed ? <strong>Imladris</strong> : null}
           </Link>
           <button
             className="sidebar-collapse"

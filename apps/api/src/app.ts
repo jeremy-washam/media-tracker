@@ -687,7 +687,7 @@ app.openapi(syncRunsRoute, async (context) => {
 app.doc('/api/openapi.json', {
   openapi: '3.1.0',
   info: {
-    title: 'Media Tracker API',
+    title: 'Imladris API',
     version: apiVersion,
   },
 })

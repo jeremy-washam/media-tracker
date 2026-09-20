@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
 - Status: Index selected as the base; detailed surface design remains open
-- Last updated: 2026-09-19
+- Last updated: 2026-09-20
 
 ## Purpose and scope
 
@@ -26,6 +26,10 @@ The owner selected **Index** as the base after reviewing seven structural
 approaches. Preserve its global sidebar, central workspace, and optional compact
 right-hand inspector. This selects an overall structure, not every prototype
 component, spacing value, artwork treatment, or typography choice.
+
+The product name is **Imladris**. It replaces the earlier “Media Tracker”
+working name and the exploratory “Margin” mock label. Use Imladris consistently
+in production UI, metadata, and maintained design artifacts.
 
 Make the left sidebar collapsible across all three surfaces. Collapsing it
 reclaims width without changing the navigation model, current media type,
@@ -246,7 +250,7 @@ list/grid, one inspector, sample conversations, artifacts, expandable charts,
 and chart interaction. State is ephemeral. Chat replies, rollup numbers, media
 history and artwork are explicitly illustrative, not the owner's actual data.
 Concept cover designs are composed in CSS; web fonts load from Google Fonts with
-local fallbacks. The exploratory name “Margin” is not a naming decision.
+local fallbacks. The studies use the accepted Imladris product name.
 
 The preview has a separate Vite HTML entry and does not replace the operational
 application. Index is selected and its shell, sidebar collapse, Graphite tokens,

@@ -1,11 +1,11 @@
 # Long-Term Product Vision
 
 - Status: Initial surface scope agreed; longer-term concepts exploratory
-- Last updated: 2026-09-19
+- Last updated: 2026-09-20
 
 ## Purpose
 
-Media Tracker begins as a trustworthy, private record of personal media
+Imladris begins as a trustworthy, private record of personal media
 consumption. Over time, that record may support reflection, intentional learning,
 discovery, and explainable recommendations.
 

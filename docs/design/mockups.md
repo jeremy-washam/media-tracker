@@ -54,7 +54,7 @@ Runtime selections, filters, draft messages, artifact renames, and other changes
 made while exploring are ephemeral. No live LLM, API-backed Library, artifact
 storage, or real analytics are connected. Histories and recap statistics are
 illustrative; cover artwork is composed in CSS. Fonts load from Google Fonts
-with local fallbacks. “Margin” is a placeholder name.
+with local fallbacks. The studies use the accepted Imladris product name.
 
 The chosen sidebar collapse behavior is documented next work; it is not yet
 implemented in the saved Index study. See the

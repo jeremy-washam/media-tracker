@@ -366,9 +366,9 @@ export default function App() {
       <div className="app-frame">
         <aside className="global-nav">
           <div className="wordmark">
-            <span className="brand-mark">m</span>
+            <span className="brand-mark">i</span>
             <span>
-              Margin<span className="brand-period">.</span>
+              Imladris<span className="brand-period">.</span>
             </span>
           </div>
 
@@ -736,7 +736,7 @@ export default function App() {
                                   : 'What connects the books I’ve been reading lately?'}
                             </div>
                             <div className="assistant-label">
-                              <Icon name="spark" /> MARGIN
+                              <Icon name="spark" /> IMLADRIS
                             </div>
                             <h2>
                               {chatTitle === 'Los Angeles, on film'

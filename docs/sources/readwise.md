@@ -206,7 +206,7 @@ original strings and source precision during ingestion.
 | `first_opened_at`                | First time Reader recorded the document as opened | Opening is not completion                                                          |
 | `last_opened_at`                 | Most recent Reader-recorded open                  | Opening is not completion                                                          |
 | `last_moved_at`                  | Latest location movement                          | Chosen inferred consumption time for eligible archived media                       |
-| Webhook receipt time             | When Media Tracker received an event              | Ingestion time only unless the payload supplies a confirmed event time             |
+| Webhook receipt time             | When Imladris received an event                   | Ingestion time only unless the payload supplies a confirmed event time             |
 | Highlight `highlighted_at`       | When the highlight was taken                      | May be absent according to the Readwise API                                        |
 | Highlight `created_at`           | Readwise highlight creation time                  | Not necessarily the highlight occurrence time                                      |
 | Highlight `updated_at`/`updated` | Latest highlight update                           | Incremental synchronization signal                                                 |

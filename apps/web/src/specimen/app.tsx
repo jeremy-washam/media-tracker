@@ -146,7 +146,7 @@ export function Specimen() {
             <div className="brand">
               {!collapsed && (
                 <span>
-                  Margin<span className="accent">.</span>
+                  Imladris<span className="accent">.</span>
                 </span>
               )}
               <IconButton

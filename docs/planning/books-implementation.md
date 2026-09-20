@@ -517,8 +517,7 @@ The accepted information architecture is:
 - Recaps
 - Connections and Settings/appearance in the secondary area
 
-Use the approved Index visual hierarchy. Keep the production name “Media
-Tracker”; the mock label “Margin” was not a naming decision.
+Use the approved Index visual hierarchy and the production name **Imladris**.
 
 Recommended collapse behavior is a 64-pixel icon rail, not a completely hidden
 sidebar. Persist the preference locally and preserve active route context. On a
@@ -984,8 +983,7 @@ input for this implementation.
 - Include the accepted Genre filter and available Hardcover community facts in
   the initial slice. An enrichment failure degrades only those facts, not
   Archive or Queue.
-- Continue to use “Media Tracker” in production. “Margin” remains mock content,
-  not a naming decision.
+- Use **Imladris** consistently in production and design artifacts.
 - Keep the design artifacts as references and extract production components
   deliberately.
 - Preserve all raw source data, provenance, and canonical history.

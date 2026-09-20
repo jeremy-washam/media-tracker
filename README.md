@@ -1,6 +1,6 @@
-# Media Tracker
+# Imladris
 
-Media Tracker is a private, single-user ledger that consolidates personal media
+Imladris is a private, single-user ledger that consolidates personal media
 history from Letterboxd, Hardcover, Spotify, Readwise Reader, and YouTube. The
 initial goal is trustworthy historical backfill and ongoing synchronization.
 Future work includes a centralized queue, evidence-backed LLM search, and

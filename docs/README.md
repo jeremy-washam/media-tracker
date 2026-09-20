@@ -4,6 +4,8 @@
 
 - [Product context](product/context.md): purpose, scope, priorities, and future
   direction
+- [Product naming history](product/naming.md): naming brief, explored
+  candidates, rationale, and the Imladris decision
 - [Long-term vision](product/long-term-vision.md): initial surface scope and exploratory Lists, Topics/Explorations,
   Feed, and recommendation concepts
 

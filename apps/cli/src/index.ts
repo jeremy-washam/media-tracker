@@ -1,4 +1,4 @@
-const help = `Media Tracker CLI
+const help = `Imladris CLI
 
 Generalized import, replay, export, and recovery commands are not implemented.
 Use Connections or the HTTP API for source imports and resumable processing.
