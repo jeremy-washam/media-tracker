@@ -53,6 +53,10 @@ pre-build a second detail level or a separate full-page item view. Evaluate the
 fit during detailed design. Interactive visualizations can expand within the
 main workspace; that does not imply a second media-inspection level.
 
+For paginated Library collections, opening or closing the inspector and changing
+between grid and list are presentation changes: they preserve every loaded page
+and do not restart the collection query.
+
 ## Visual and writing principles
 
 Use Readwise Reader for polish, density, hierarchy, and contextual browsing, and

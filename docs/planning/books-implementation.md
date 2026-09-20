@@ -108,7 +108,13 @@ implementation unless validation exposes a genuine contradiction.
 - Unknown sort values follow known values in either direction. Normalized title
   and canonical media item ID provide stable final tie-breakers.
 - Format means the format of the latest supported read in Archive. Queue format
-  uses the current selected edition when known.
+  uses the current selected edition when known. The user-facing classification
+  is exactly Physical, Ebook, Audiobook, or Edition unknown, derived from
+  Hardcover's verified `reading_format_id`/`reading_format`; noisy raw edition
+  labels remain stored as provenance and never drive the facet.
+- Published ranges compare the interval implied by source precision. A stored
+  year overlaps every day in that year and a stored month overlaps every day in
+  that month; the stored value and precision remain unchanged.
 - The Archive header reports filtered distinct works and their supported-read
   count. Queue reports filtered distinct active works and no read count.
 
@@ -118,6 +124,10 @@ implementation unless validation exposes a genuine contradiction.
   Selected edition, Hardcover community metadata, and Source.
 - History owns all personal activity: current status, collection memberships,
   date added, rating, review, progress, and every read occurrence.
+- History dates a fact only from a timestamp that establishes that event. In
+  particular, `user_books.updated_at` is not a status, rating, review, or
+  progress event date. Reviews use `reviewed_at` when present; other current
+  facts remain explicitly undated when Hardcover supplies no event timestamp.
 - “Your book” is not used as a section name.
 
 ### Canonical URLs
@@ -355,6 +365,11 @@ Use an explicit sync-run ID and mark-and-retire reconciliation:
    source-owned rows not seen in the completed run.
 7. Advance the connection sync cursor and record success only after finalization
    commits.
+
+Retirement removes current Queue membership but never removes an active
+canonical Archive occurrence. The Books read model, FTS document, detail, and
+History remain available from retained source projections for every archived
+work omitted by a later complete snapshot.
 
 A failed or partial run retires nothing and advances no cursor. Its raw objects
 remain available for diagnosis and replay.
@@ -611,9 +626,12 @@ Avoid a second context/store mirroring these values.
 ### Query cache
 
 Use TanStack Query infinite queries for collection pages and normal queries for
-detail and History. Query keys include the complete normalized server query.
+detail and History. Query keys include the complete normalized server query,
+but exclude presentation-only URL state such as layout and selected item.
 
 - Keep the prior page visible while a compatible filter request loads.
+- Preserve every loaded page and the collection position while opening or
+  closing the inspector or switching grid/list layout.
 - Cancel or ignore stale responses when search/filter state changes.
 - Prefetch detail on intentional hover/focus where it does not create a request
   storm.
