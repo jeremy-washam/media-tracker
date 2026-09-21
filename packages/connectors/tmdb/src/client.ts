@@ -178,15 +178,20 @@ export class TmdbClient {
   ): Promise<{ data: z.output<Schema>; etag: string | null }> {
     const url = new URL(path, 'https://api.themoviedb.org')
     if (parameters !== undefined) url.search = parameters.toString()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     let response: Response
     try {
-      response = await this.request(url, {
+      const request = this.request
+      response = await request(url, {
         headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/json' },
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: controller.signal,
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw new TmdbApiError(408, null)
       throw error
+    } finally {
+      clearTimeout(timeout)
     }
     if (!response.ok) {
       const retryAfter = response.headers.get('retry-after')

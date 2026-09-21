@@ -2,7 +2,7 @@
 
 - Status: Takeout-backed Archive, Queue, Channels, inspectors, production UI,
   and refreshable public metadata integration implemented; OAuth Following removed
-  from scope; final hardening and local backfill remain
+  from scope; full local backfill completed; final visual acceptance remains
 - Date: 2026-09-21
 - Scope: YouTube-backed Library > Videos Archive, Watch Later Queue, Channels,
   and video/channel inspectors
@@ -94,6 +94,21 @@ Migration 0019, the typed client, durable refresh jobs, cache-backed projections
 and metadata UI activation implement Stages 5–6. OAuth and current Following were
 explicitly removed from product scope; imported subscription snapshots remain
 retained evidence only.
+
+The full local Data API backfill completed on 2026-09-21. It checked all 20,292
+Library video identities: 18,723 have current public profiles and 1,569 were
+omitted by a successful exact-ID response and are therefore currently marked
+unavailable. The cache also holds 7,925 current channel profiles and 32 US
+category rows; the activity-derived Channels projection contains 7,964 exact
+channel identities. The final projection and both FTS indexes contain every
+Library video, while Archive and Watch Later counts remain 20,227 and 110.
+
+The real run also verified durable cursor continuation after worker reloads and
+recovered two integrity edge cases without refetching completed records: a
+provider `fetch` binding incompatibility and a current video whose referenced
+channel was omitted from `channels.list`. Projection rebuild now materializes a
+minimal channel identity from current video profiles before applying the
+foreign-keyed read model.
 
 ## Scope
 
@@ -1396,7 +1411,7 @@ Exit criteria:
 Work:
 
 1. [x] Add durable video/channel/category catalog jobs and Queue consumer handling.
-2. Backfill exact known video IDs in bounded batches.
+2. [x] Backfill exact known video IDs in bounded batches.
 3. [x] Fetch channel/category metadata only for Library needs.
 4. [x] Merge current catalog facts into projections/FTS with deterministic expiry.
 5. [x] Enable metadata-dependent fields, filters, sorts, excerpts, artwork, live
@@ -1426,9 +1441,9 @@ Work:
 2. Exercise complete/partial/missing Watch Later and subscription components.
 3. Exercise provider backfill, expiry, omission, auth failure, quota failure,
    and stale reservation recovery.
-4. Run fresh and upgrade migration chains.
-5. Run all repository checks, builds, and relevant browser tests after the
-   final edit.
+4. [x] Run fresh and upgrade migration chains.
+5. [x] Run all repository checks, builds, and relevant browser tests after the
+       final edit.
 6. Visually inspect both themes; Archive/Queue list/grid; Channels; adjacent/
    sheet inspectors; and missing/unavailable/stale/long-content states using
    bounded ignored real data.
@@ -1711,14 +1726,14 @@ delivery.
       sheet mode work.
 - [x] Query plans and pagination are validated at or above observed scale.
 - [x] Fresh and upgrade migrations pass.
-- [ ] `pnpm check`, `pnpm build`, relevant `pnpm test:e2e`, and migration checks
+- [x] `pnpm check`, `pnpm build`, relevant `pnpm test:e2e`, and migration checks
       pass after the final edit.
 - [ ] Both themes and responsive modes receive real-data visual QA with obvious
       defects fixed.
 - [ ] An independent final review finds no unresolved correctness issue.
 - [x] No credential, raw export, provider response, or unsanitized owner fixture
       is committed.
-- [ ] Owning documentation is updated before commit.
+- [x] Owning documentation is updated before commit.
 
 ## Ready-to-copy implementation brief
 

@@ -665,6 +665,21 @@ export class SqlVideosRepository {
       WHERE a.channel_id=c.channel_id AND a.url IS NOT NULL
       ORDER BY r.acquired_at DESC,a.source_record_id DESC LIMIT 1)`
     await this.database.batch([
+      statement(
+        this.database,
+        `INSERT INTO youtube_channels(channel_id,latest_title,latest_url,first_observed_at,
+           last_observed_at,updated_at)
+         SELECT vp.channel_id,MAX(vp.channel_title),'https://www.youtube.com/channel/'||vp.channel_id,
+           MIN(vp.fetched_at),MAX(vp.checked_at),MAX(vp.checked_at)
+         FROM youtube_video_catalog_profiles vp
+         WHERE vp.channel_id IS NOT NULL AND vp.expires_at>?
+         GROUP BY vp.channel_id
+         ON CONFLICT(channel_id) DO UPDATE SET
+           latest_title=COALESCE(excluded.latest_title,youtube_channels.latest_title),
+           latest_url=COALESCE(youtube_channels.latest_url,excluded.latest_url),
+           last_observed_at=excluded.last_observed_at,updated_at=excluded.updated_at`,
+        [at],
+      ),
       statement(this.database, 'DELETE FROM video_library_projection'),
       statement(
         this.database,
@@ -910,6 +925,27 @@ export class SqlVideosRepository {
         )
         continue
       }
+      if (video.channelId !== null) {
+        writes.push(
+          statement(
+            this.database,
+            `INSERT INTO youtube_channels(channel_id,latest_title,latest_url,first_observed_at,
+               last_observed_at,updated_at) VALUES(?,?,?,?,?,?)
+             ON CONFLICT(channel_id) DO UPDATE SET
+               latest_title=COALESCE(excluded.latest_title,youtube_channels.latest_title),
+               latest_url=COALESCE(youtube_channels.latest_url,excluded.latest_url),
+               last_observed_at=excluded.last_observed_at,updated_at=excluded.updated_at`,
+            [
+              video.channelId,
+              video.channelTitle,
+              `https://www.youtube.com/channel/${video.channelId}`,
+              input.at,
+              input.at,
+              input.at,
+            ],
+          ),
+        )
+      }
       writes.push(
         statement(
           this.database,
@@ -989,7 +1025,6 @@ export class SqlVideosRepository {
     }
     for (let offset = 0; offset < writes.length; offset += 50)
       await this.database.batch(writes.slice(offset, offset + 50))
-    await this.rebuild(input.at)
   }
 
   async purgeExpiredYoutubeCatalog(at: string): Promise<boolean> {

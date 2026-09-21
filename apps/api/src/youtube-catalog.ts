@@ -10,10 +10,38 @@ import { ulid } from 'ulid'
 import { createCatalogJobsRepository, createVideosRepository } from './env'
 import type { Bindings } from './env'
 
-const batchSize = 50
+const candidateBatchSize = 250
+const providerBatchSize = 50
+
+function chunks<Value>(values: readonly Value[], size: number): Value[][] {
+  const result: Value[][] = []
+  for (let offset = 0; offset < values.length; offset += size)
+    result.push(values.slice(offset, offset + size))
+  return result
+}
 
 function daysAfter(at: string, days: number) {
   return new Date(Date.parse(at) + days * 86_400_000).toISOString()
+}
+
+function runtimeErrorKind(error: unknown) {
+  if (!(error instanceof Error)) return 'unknown'
+  const message = error.message.toLowerCase()
+  if (message.includes('abortsignal')) return 'abort_signal'
+  if (message.includes('abortcontroller')) return 'abort_controller'
+  if (message.includes('fetch') || message.includes('network')) return 'fetch_transport'
+  if (message.includes('url')) return 'url'
+  if (message.includes('not a function')) return 'not_function'
+  if (message.includes('undefined')) return 'undefined'
+  if (message.includes('d1')) return 'd1'
+  return error.name
+}
+
+function safeRuntimeDiagnostic(error: unknown, secret: string) {
+  if (!(error instanceof Error)) return 'Unknown failure'
+  const message =
+    secret.length === 0 ? error.message : error.message.replaceAll(secret, '[redacted]')
+  return message.replace(/https?:\/\/[^\s"']+/giu, '[url]').slice(0, 240)
 }
 
 function jobMessage(jobId: string, cursor = ''): SyncJob {
@@ -58,20 +86,30 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
   )
   if (!reserved) return
   const repository = createVideosRepository(env.DB)
+  let stage = 'candidate_query'
   try {
     const candidates = await repository.listYoutubeCatalogCandidates({
       ...(current.cursor === null ? {} : { afterMediaItemId: current.cursor }),
       at,
-      limit: batchSize,
+      limit: candidateBatchSize,
     })
     if (candidates.length === 0) {
+      stage = 'expiry_purge'
       await repository.purgeExpiredYoutubeCatalog(at)
+      stage = 'completion'
       await jobs.complete(job.catalogJobId, at)
+      stage = 'projection_rebuild'
       await repository.rebuild(at)
       return
     }
+    stage = 'provider_request'
     const client = new YoutubeDataApiClient(env.YOUTUBE_API_KEY)
-    const videos = await client.videos(candidates.map((candidate) => candidate.videoId))
+    const videoBatches = chunks(candidates, providerBatchSize)
+    const videos = (
+      await Promise.all(
+        videoBatches.map((batch) => client.videos(batch.map((candidate) => candidate.videoId))),
+      )
+    ).flat()
     const channelIds = [
       ...new Set(
         videos
@@ -79,11 +117,14 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
           .filter((value): value is string => value !== null),
       ),
     ]
-    const [channels, categories] = await Promise.all([
-      channelIds.length === 0 ? Promise.resolve([]) : client.channels(channelIds),
+    const channelBatches = chunks(channelIds, providerBatchSize)
+    const [channelResults, categories] = await Promise.all([
+      Promise.all(channelBatches.map((batch) => client.channels(batch))),
       current.cursor === null ? client.categories('US') : Promise.resolve([]),
     ])
+    const channels = channelResults.flat()
     const expiresAt = daysAfter(at, 30)
+    stage = 'persistence'
     await repository.applyYoutubeCatalogBatch({
       jobId: job.catalogJobId,
       at,
@@ -139,16 +180,26 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
         expiresAt,
       })),
     })
+    stage = 'advance'
     await jobs.advance(job.catalogJobId, {
       cursor: candidates.at(-1)!.mediaItemId,
       requested: candidates.length,
       returned: videos.length,
       omitted: candidates.length - videos.length,
-      quotaUnits: 1 + (channelIds.length > 0 ? 1 : 0) + (current.cursor === null ? 1 : 0),
+      quotaUnits: videoBatches.length + channelBatches.length + (current.cursor === null ? 1 : 0),
       at,
     })
+    stage = 'enqueue'
     await env.SYNC_QUEUE.send(jobMessage(job.catalogJobId, candidates.at(-1)!.mediaItemId))
   } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        event: 'youtube.catalog_stage_failed',
+        stage,
+        diagnostic: safeRuntimeDiagnostic(error, env.YOUTUBE_API_KEY),
+      }),
+    )
     if (error instanceof YoutubeApiError && error.retryable)
       await jobs.release(job.catalogJobId, at)
     else
@@ -157,7 +208,7 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
         error instanceof YoutubeApiError
           ? `http_${error.status}`
           : error instanceof Error
-            ? error.name
+            ? `internal_${stage}_${runtimeErrorKind(error)}`
             : 'unknown',
         at,
       )

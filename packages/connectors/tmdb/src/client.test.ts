@@ -33,7 +33,12 @@ describe('TmdbClient', () => {
   })
 
   it('uses bearer authentication and validates details', async () => {
-    const request = vi.fn(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const request = vi.fn(async function (
+      this: unknown,
+      _input: Parameters<typeof fetch>[0],
+      init?: RequestInit,
+    ) {
+      expect(this).toBeUndefined()
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer secret')
       return new Response(
         JSON.stringify({

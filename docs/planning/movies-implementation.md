@@ -1,7 +1,7 @@
 # Movies end-to-end implementation plan
 
-Status: Letterboxd slice and refreshable TMDB enrichment implemented; local
-backfill, real-data visual acceptance, and final UX iteration remain
+Status: Letterboxd slice, refreshable TMDB enrichment, and full local catalog
+backfill implemented; real-data visual acceptance and final UX iteration remain
 Last updated: 2026-09-21
 
 ## Purpose
@@ -244,6 +244,13 @@ encoded as collection predicates.
   jobs, normalized profiles/relationships, projection activation, and source
   disclosure are implemented.
 - Provider failure or ambiguity preserves the complete Letterboxd-only experience.
+- The full local backfill completed on 2026-09-21. The current 680-item Movies
+  projection contains 615 conservative matches, 31 ambiguous outcomes, and 34
+  unmatched outcomes. Seven ambiguous rows are explicit local identity
+  collisions: a previously assigned TMDB identity is never attached to a second
+  local movie, and the colliding row receives no TMDB profile.
+- The same post-backfill projection retained 374 active Archive movies and 309
+  active Queue movies. Catalog refresh did not mutate Letterboxd membership.
 
 The retained real export previously measured 363 watched films, 211 Diary
 occurrences across 180 films, 183 watched-only films, 355 current ratings, 288
@@ -825,16 +832,16 @@ ambiguous candidate, and provider failure leaves local browsing intact.
 
 ### Stage 8: Hardening and acceptance
 
-1. Run empty and upgrade migration checks.
+1. [x] Run empty and upgrade migration checks.
 2. Replay identical and changed exports; verify current-state retirements and
    immutable history.
-3. Run full checks, builds, browser tests, and performance tests after the final
-   edit.
+3. [x] Run full checks, builds, browser tests, and performance tests after the final
+       edit.
 4. Visually inspect both themes, both layouts, both collections, adjacent/sheet
    inspectors, and missing/stale/ambiguous states using the real owner sample.
 5. Fix obvious overflow, layout shift, contrast, focus, and density problems.
-6. Update owning source, architecture, UI, and planning documents with shipped
-   behavior and measured enrichment coverage.
+6. [x] Update owning source, architecture, UI, and planning documents with shipped
+       behavior and measured enrichment coverage.
 
 Exit criterion: all acceptance checks below pass and the implementation is
 recoverable from retained raw evidence.
@@ -968,12 +975,12 @@ the current local checkout already contains a retained ignored export.
 - [x] Missing TMDB configuration never hides local facts.
 - [x] TMDB fields and matching rules are backed by a credentialed live probe.
 - [x] TMDB attribution and refresh/retention rules are implemented.
-- [ ] Empty and upgrade migrations pass.
-- [ ] `pnpm check`, build, relevant end-to-end tests, and migration checks pass
+- [x] Empty and upgrade migrations pass.
+- [x] `pnpm check`, build, relevant end-to-end tests, and migration checks pass
       after the final edit.
 - [ ] Both themes and responsive inspector modes receive visual QA with real
       data, and obvious defects are fixed.
-- [ ] No credential, raw export, or unsanitized owner fixture is committed.
+- [x] No credential, raw export, or unsanitized owner fixture is committed.
 
 ## Ready-to-copy implementation brief
 

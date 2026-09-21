@@ -42,7 +42,9 @@ Library read request. A failed provider request preserves the last still-valid
 cache and never changes Archive or Queue membership. For YouTube, only an ID
 omitted from a successful complete `videos.list` batch is recorded as currently
 unavailable; a failed or malformed batch proves nothing about its requested
-IDs.
+IDs. Batch cache writes remain invisible to browse projections until the durable
+job completes, when projections and full-text search rebuild once from the
+completed cache state.
 
 TMDB matching uses this confidence order:
 
@@ -56,6 +58,12 @@ scores, popularity, artwork, and fuzzy similarity never auto-match. Durable
 match provenance may retain the accepted provider identity, method, matcher
 version, candidate count, and attempt timestamps after mutable profile fields
 expire. Search candidate payloads are not retained.
+
+A provider movie identity may belong to only one local media item. If two local
+records independently resolve to the same TMDB identity, the first confirmed
+assignment remains intact and the later record is stored as ambiguous with an
+identity-collision error. It receives no TMDB profile data until the local
+identity conflict is resolved explicitly.
 
 TMDB-backed UI includes the required attribution and distinguishes the owner's
 rating from the TMDB community rating. YouTube enrichment uses only public

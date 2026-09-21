@@ -831,6 +831,7 @@ describe('SqlVideosRepository', () => {
       expiresAt: '2026-10-20T12:00:00.000Z',
       requested: [
         { mediaItemId: 'video-1', videoId: 'video-1' },
+        { mediaItemId: 'video-2', videoId: 'video-2' },
         { mediaItemId: 'video-3', videoId: 'video-3' },
       ],
       videos: [
@@ -862,6 +863,34 @@ describe('SqlVideosRepository', () => {
           expiresAt: '2026-10-20T12:00:00.000Z',
           etag: 'etag-1',
         },
+        {
+          mediaItemId: 'video-3',
+          videoId: 'video-3',
+          title: 'Current Video Without Channel Details',
+          description: '',
+          channelId: 'channel-3',
+          channelTitle: 'Channel From Video',
+          publishedAt: null,
+          durationMs: null,
+          categoryId: null,
+          tags: [],
+          captionAvailable: null,
+          definition: null,
+          projection: null,
+          privacyStatus: null,
+          uploadStatus: null,
+          embeddable: null,
+          madeForKids: null,
+          regionRestriction: null,
+          liveBroadcastContent: null,
+          scheduledStartAt: null,
+          actualStartAt: null,
+          actualEndAt: null,
+          thumbnails: {},
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+          etag: null,
+        },
       ],
       channels: [
         {
@@ -888,6 +917,8 @@ describe('SqlVideosRepository', () => {
         },
       ],
     })
+    database.prepare("DELETE FROM youtube_channels WHERE channel_id='channel-3'").run()
+    await repository.rebuild(now)
     expect(await repository.findVideo('video-1')).toMatchObject({
       title: 'Current Video Title',
       description: 'Current description',
@@ -896,7 +927,17 @@ describe('SqlVideosRepository', () => {
       imageUrl: 'https://example.com/high.jpg',
       metadataMessage: null,
     })
-    expect(await repository.findVideo('video-3')).toMatchObject({ availability: 'unavailable' })
+    expect(await repository.findVideo('video-2')).toMatchObject({ availability: 'unavailable' })
+    expect(await repository.findVideo('video-3')).toMatchObject({
+      title: 'Current Video Without Channel Details',
+      channelTitle: 'Channel From Video',
+      availability: 'available',
+    })
+    expect(
+      database
+        .prepare("SELECT latest_title FROM youtube_channels WHERE channel_id='channel-3'")
+        .get(),
+    ).toEqual({ latest_title: 'Channel From Video' })
     await expect(
       repository.listVideos(
         input({
@@ -913,16 +954,16 @@ describe('SqlVideosRepository', () => {
       facets: { categories: [{ value: '22', label: 'People & Blogs', count: 1 }] },
     })
     expect(
-      (await repository.listVideos(input({ availability: 'unavailable' }))).data.map(
+      (await repository.listVideos(input({ view: 'queue', availability: 'unavailable' }))).data.map(
         (item) => item.id,
       ),
-    ).toEqual(['video-3'])
+    ).toEqual(['video-2'])
     expect((await repository.listVideos(input({ durationUnknown: true }))).data).toEqual([
       expect.objectContaining({ id: 'video-3' }),
     ])
     expect(
       database
-        .prepare("SELECT outcome FROM youtube_catalog_request_outcomes WHERE video_id='video-3'")
+        .prepare("SELECT outcome FROM youtube_catalog_request_outcomes WHERE video_id='video-2'")
         .get(),
     ).toEqual({ outcome: 'omitted' })
     database.exec("UPDATE catalog_refresh_jobs SET state='succeeded' WHERE id='catalog-1'")

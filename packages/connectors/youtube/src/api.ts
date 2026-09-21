@@ -167,13 +167,18 @@ export class YoutubeDataApiClient {
     const url = new URL(path, 'https://www.googleapis.com')
     parameters.set('key', this.apiKey)
     url.search = parameters.toString()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     let response: Response
     try {
-      response = await this.request(url, { signal: AbortSignal.timeout(this.timeoutMs) })
+      const request = this.request
+      response = await request(url, { signal: controller.signal })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError')
         throw new YoutubeApiError(408, null)
       throw error
+    } finally {
+      clearTimeout(timeout)
     }
     if (!response.ok) {
       const retryAfter = response.headers.get('retry-after')

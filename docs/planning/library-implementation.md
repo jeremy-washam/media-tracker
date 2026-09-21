@@ -56,10 +56,10 @@ and not all illustrative metadata in the specimen is currently available.
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
 | Library API | All six media types have media-specific list, detail, History, filter, sort, and inspector contracts                                                               | Harden and iterate against production UX feedback                            |
 | Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped                                                                                     | Iterate on production feedback without weakening source/provenance semantics |
-| Movies      | Archive/Queue API and UI plus conservative, refreshable TMDB enrichment are implemented                                                                            | Finish hardening, local backfill, and visual acceptance                      |
+| Movies      | Archive/Queue API and UI plus conservative, refreshable TMDB enrichment and full local backfill are implemented                                                    | Finish hardening and visual acceptance                                       |
 | Articles    | Archive/Queue/Feed API and list UI ship with all-location Reader sync, annotations, and 250 eligible documents acquired/indexed under the selective-content policy | Iterate on production feedback without weakening provenance                  |
 | Podcasts    | Archive/Queue/Following, export replay, live saved-state/player reconciliation, Reader Archive routing, APIs, filters, inspectors, and UI are implemented          | Complete the explicit hardening list in the Podcasts implementation plan     |
-| Videos      | Archive/Watch Later Queue/Channels APIs and UI plus refreshable YouTube Data API metadata are implemented; OAuth Following is out of scope                         | Finish hardening, local backfill, and visual acceptance                      |
+| Videos      | Archive/Watch Later Queue/Channels APIs and UI plus refreshable YouTube Data API metadata and full local backfill are implemented; OAuth Following is out of scope | Finish hardening and visual acceptance                                       |
 | Songs       | All identified export rows plus Recently Played feed Tracks/Albums/Artists APIs, filters, inspectors, UI, and bounded exact-ID catalog enrichment                  | Complete the explicit hardening list in the Music implementation plan        |
 
 Verify this inventory against code before editing; other work may have advanced.
@@ -213,8 +213,10 @@ through movie-specific collection, detail, and History APIs with server-side
 search, filters, sorts, exact counts, keyset pagination, grid/list layouts, and
 real-data missing-catalog states. An isolated real replay produced 371 active
 Archive movies, 402 viewing occurrences, 309 Queue movies, and three overlaps.
-TMDB artwork and metadata remain gated on the required owner credential and live
-probe.
+The credentialed TMDB integration and full local backfill followed on
+2026-09-21. The current projection has 615 conservative matches, 31 ambiguous
+outcomes, and 34 unmatched outcomes across 680 movies; catalog refresh retained
+374 active Archive and 309 active Queue memberships.
 
 The next slice is specified in the
 [Articles end-to-end implementation plan](articles-implementation.md). It uses

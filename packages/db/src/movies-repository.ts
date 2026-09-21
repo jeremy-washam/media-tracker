@@ -921,7 +921,6 @@ export class SqlMoviesRepository {
   }): Promise<void> {
     if (input.configuration !== undefined) await this.saveTmdbConfiguration(input.configuration)
     for (const movie of input.movies) await this.saveTmdbMovie(movie)
-    await this.#database.batch(movieProjectionStatements(this.#database, input.at))
   }
 
   async rebuild(at: string): Promise<void> {
@@ -952,6 +951,26 @@ export class SqlMoviesRepository {
   }
 
   private async saveTmdbMovie(movie: TmdbMovieProfileProjection): Promise<void> {
+    const conflictingMatch =
+      movie.tmdbMovieId === null
+        ? null
+        : await statement(
+            this.#database,
+            `SELECT media_item_id FROM tmdb_movie_matches
+             WHERE tmdb_movie_id=? AND media_item_id<>? LIMIT 1`,
+            [movie.tmdbMovieId, movie.mediaItemId],
+          ).first<{ media_item_id: string }>()
+    const resolvedMovie: TmdbMovieProfileProjection =
+      conflictingMatch === null
+        ? movie
+        : {
+            ...movie,
+            tmdbMovieId: null,
+            matchStatus: 'ambiguous',
+            matchMethod: null,
+            safeErrorCode: 'tmdb_identity_collision',
+            profile: null,
+          }
     const writes: DatabaseStatement[] = [
       statement(
         this.#database,
@@ -964,21 +983,21 @@ export class SqlMoviesRepository {
            matched_at=excluded.matched_at,safe_error_code=excluded.safe_error_code,
            updated_at=excluded.updated_at`,
         [
-          movie.mediaItemId,
-          movie.tmdbMovieId,
-          movie.matchStatus,
-          movie.matchMethod,
-          movie.candidateCount,
-          movie.matcherVersion,
-          movie.attemptedAt,
-          movie.matchStatus === 'matched' ? movie.attemptedAt : null,
-          movie.safeErrorCode,
-          movie.attemptedAt,
+          resolvedMovie.mediaItemId,
+          resolvedMovie.tmdbMovieId,
+          resolvedMovie.matchStatus,
+          resolvedMovie.matchMethod,
+          resolvedMovie.candidateCount,
+          resolvedMovie.matcherVersion,
+          resolvedMovie.attemptedAt,
+          resolvedMovie.matchStatus === 'matched' ? resolvedMovie.attemptedAt : null,
+          resolvedMovie.safeErrorCode,
+          resolvedMovie.attemptedAt,
         ],
       ),
     ]
-    const profile = movie.profile
-    if (profile !== null && movie.tmdbMovieId !== null) {
+    const profile = resolvedMovie.profile
+    if (profile !== null && resolvedMovie.tmdbMovieId !== null) {
       writes.push(
         statement(
           this.#database,
@@ -995,7 +1014,7 @@ export class SqlMoviesRepository {
              fetched_at=excluded.fetched_at,checked_at=excluded.checked_at,
              expires_at=excluded.expires_at,etag=excluded.etag`,
           [
-            movie.tmdbMovieId,
+            resolvedMovie.tmdbMovieId,
             profile.currentTitle,
             profile.originalTitle,
             profile.originalLanguage,
@@ -1016,18 +1035,18 @@ export class SqlMoviesRepository {
           ],
         ),
         statement(this.#database, 'DELETE FROM tmdb_movie_genres WHERE tmdb_movie_id=?', [
-          movie.tmdbMovieId,
+          resolvedMovie.tmdbMovieId,
         ]),
         statement(this.#database, 'DELETE FROM tmdb_movie_credits WHERE tmdb_movie_id=?', [
-          movie.tmdbMovieId,
+          resolvedMovie.tmdbMovieId,
         ]),
         statement(this.#database, 'DELETE FROM tmdb_movie_countries WHERE tmdb_movie_id=?', [
-          movie.tmdbMovieId,
+          resolvedMovie.tmdbMovieId,
         ]),
         statement(
           this.#database,
           'DELETE FROM tmdb_movie_alternative_titles WHERE tmdb_movie_id=?',
-          [movie.tmdbMovieId],
+          [resolvedMovie.tmdbMovieId],
         ),
       )
       profile.genres.forEach((genre, position) =>
@@ -1035,7 +1054,7 @@ export class SqlMoviesRepository {
           statement(
             this.#database,
             'INSERT INTO tmdb_movie_genres(tmdb_movie_id,genre_id,name,position) VALUES(?,?,?,?)',
-            [movie.tmdbMovieId!, genre.id, genre.name, position],
+            [resolvedMovie.tmdbMovieId, genre.id, genre.name, position],
           ),
         ),
       )
@@ -1044,7 +1063,7 @@ export class SqlMoviesRepository {
           statement(
             this.#database,
             `INSERT INTO tmdb_movie_credits(tmdb_movie_id,credit_id,person_id,name,credit_kind,character_name,position) VALUES(?,?,?,?,'director',NULL,?)`,
-            [movie.tmdbMovieId!, credit.creditId, credit.personId, credit.name, position],
+            [resolvedMovie.tmdbMovieId, credit.creditId, credit.personId, credit.name, position],
           ),
         ),
       )
@@ -1056,7 +1075,7 @@ export class SqlMoviesRepository {
               this.#database,
               `INSERT INTO tmdb_movie_credits(tmdb_movie_id,credit_id,person_id,name,credit_kind,character_name,position) VALUES(?,?,?,?,'cast',?,?)`,
               [
-                movie.tmdbMovieId!,
+                resolvedMovie.tmdbMovieId,
                 credit.creditId,
                 credit.personId,
                 credit.name,
@@ -1071,7 +1090,7 @@ export class SqlMoviesRepository {
           statement(
             this.#database,
             'INSERT INTO tmdb_movie_countries(tmdb_movie_id,country_code,name,position) VALUES(?,?,?,?)',
-            [movie.tmdbMovieId!, country.code, country.name, position],
+            [resolvedMovie.tmdbMovieId, country.code, country.name, position],
           ),
         ),
       )
@@ -1080,7 +1099,7 @@ export class SqlMoviesRepository {
           statement(
             this.#database,
             'INSERT INTO tmdb_movie_alternative_titles(tmdb_movie_id,country_code,title,position) VALUES(?,?,?,?)',
-            [movie.tmdbMovieId!, title.countryCode, title.title, position],
+            [resolvedMovie.tmdbMovieId, title.countryCode, title.title, position],
           ),
         ),
       )

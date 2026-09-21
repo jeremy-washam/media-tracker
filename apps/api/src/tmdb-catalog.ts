@@ -17,6 +17,26 @@ function daysAfter(at: string, days: number) {
   return new Date(Date.parse(at) + days * 86_400_000).toISOString()
 }
 
+function runtimeErrorKind(error: unknown) {
+  if (!(error instanceof Error)) return 'unknown'
+  const message = error.message.toLowerCase()
+  if (message.includes('abortsignal')) return 'abort_signal'
+  if (message.includes('abortcontroller')) return 'abort_controller'
+  if (message.includes('fetch') || message.includes('network')) return 'fetch_transport'
+  if (message.includes('url')) return 'url'
+  if (message.includes('not a function')) return 'not_function'
+  if (message.includes('undefined')) return 'undefined'
+  if (message.includes('d1')) return 'd1'
+  return error.name
+}
+
+function safeRuntimeDiagnostic(error: unknown, secret: string) {
+  if (!(error instanceof Error)) return 'Unknown failure'
+  const message =
+    secret.length === 0 ? error.message : error.message.replaceAll(secret, '[redacted]')
+  return message.replace(/https?:\/\/[^\s"']+/giu, '[url]').slice(0, 240)
+}
+
 function jobMessage(jobId: string, cursor = ''): SyncJob {
   return {
     idempotencyKey: `catalog:tmdb:${jobId}`,
@@ -60,6 +80,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
   )
   if (!reserved) return
   const movies = createMoviesRepository(env.DB)
+  let stage = 'candidate_query'
   try {
     const candidates = await movies.listTmdbEnrichmentCandidates({
       ...(current.cursor === null ? {} : { afterMediaItemId: current.cursor }),
@@ -67,12 +88,15 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       at,
       limit: batchSize,
     })
+    stage = 'configuration_state'
     const configurationNeeded =
       current.cursor === null && (await movies.needsTmdbConfigurationRefresh(at))
     if (candidates.length === 0) {
       if (configurationNeeded) {
+        stage = 'provider_request'
         const client = new TmdbClient(env.TMDB_API_READ_TOKEN)
         const configuration = await client.configuration()
+        stage = 'persistence'
         await movies.applyTmdbCatalogBatch({
           at,
           configuration: {
@@ -88,9 +112,13 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
           movies: [],
         })
       }
+      stage = 'completion'
       await jobs.complete(job.catalogJobId, at)
+      stage = 'projection_rebuild'
+      await movies.rebuild(at)
       return
     }
+    stage = 'provider_request'
     const client = new TmdbClient(env.TMDB_API_READ_TOKEN)
     const configuration = configurationNeeded ? await client.configuration() : null
     const results: TmdbMovieProfileProjection[] = []
@@ -194,6 +222,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
         },
       })
     }
+    stage = 'persistence'
     await movies.applyTmdbCatalogBatch({
       at,
       ...(configuration === null
@@ -212,6 +241,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
           }),
       movies: results,
     })
+    stage = 'advance'
     await jobs.advance(job.catalogJobId, {
       cursor: candidates.at(-1)!.mediaItemId,
       requested: candidates.length,
@@ -220,8 +250,17 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       quotaUnits: requestCount,
       at,
     })
+    stage = 'enqueue'
     await env.SYNC_QUEUE.send(jobMessage(job.catalogJobId, candidates.at(-1)!.mediaItemId))
   } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        event: 'tmdb.catalog_stage_failed',
+        stage,
+        diagnostic: safeRuntimeDiagnostic(error, env.TMDB_API_READ_TOKEN),
+      }),
+    )
     if (error instanceof TmdbApiError && error.retryable) await jobs.release(job.catalogJobId, at)
     else
       await jobs.fail(
@@ -229,7 +268,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
         error instanceof TmdbApiError
           ? `http_${error.status}`
           : error instanceof Error
-            ? error.name
+            ? `internal_${stage}_${runtimeErrorKind(error)}`
             : 'unknown',
         at,
       )

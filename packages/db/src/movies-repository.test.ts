@@ -10,7 +10,11 @@ import type {
   DatabaseStatement,
   DatabaseValue,
 } from './database'
-import { SqlMoviesRepository, type LetterboxdMovieSnapshotFilm } from './movies-repository'
+import {
+  SqlMoviesRepository,
+  type LetterboxdMovieSnapshotFilm,
+  type TmdbMovieProfileProjection,
+} from './movies-repository'
 
 const migrations = [
   '0001_canonical_ledger.sql',
@@ -565,6 +569,40 @@ describe('SqlMoviesRepository', () => {
 
   it('projects a conservative TMDB match into collection and detail metadata', async () => {
     await applyFullSnapshot()
+    const matchedMovie: TmdbMovieProfileProjection = {
+      mediaItemId: 'movie-1',
+      tmdbMovieId: 101,
+      matchStatus: 'matched',
+      matchMethod: 'exact_title_year',
+      candidateCount: 1,
+      matcherVersion: 'tmdb-conservative@1',
+      attemptedAt: now,
+      safeErrorCode: null,
+      profile: {
+        currentTitle: 'First Movie Restored',
+        originalTitle: 'First Movie',
+        originalLanguage: 'en',
+        overview: 'A restored synopsis.',
+        releaseDate: '2001-03-04',
+        runtimeMinutes: 111,
+        posterPath: '/poster.jpg',
+        backdropPath: '/backdrop.jpg',
+        tagline: 'A tagline',
+        imdbId: 'tt0000101',
+        status: 'Released',
+        voteAverage: 7.5,
+        voteCount: 100,
+        fetchedAt: now,
+        checkedAt: now,
+        expiresAt: '2026-10-20T12:00:00.000Z',
+        etag: null,
+        genres: [{ id: 1, name: 'Drama' }],
+        directors: [{ creditId: 'director-1', personId: 1, name: 'Director One' }],
+        cast: [{ creditId: 'cast-1', personId: 2, name: 'Actor One', character: 'Lead' }],
+        countries: [{ code: 'US', name: 'United States of America' }],
+        alternativeTitles: [{ countryCode: 'US', title: 'First Alternate' }],
+      },
+    }
     await repository.applyTmdbCatalogBatch({
       at: now,
       configuration: {
@@ -577,43 +615,9 @@ describe('SqlMoviesRepository', () => {
         expiresAt: '2026-10-20T12:00:00.000Z',
         etag: null,
       },
-      movies: [
-        {
-          mediaItemId: 'movie-1',
-          tmdbMovieId: 101,
-          matchStatus: 'matched',
-          matchMethod: 'exact_title_year',
-          candidateCount: 1,
-          matcherVersion: 'tmdb-conservative@1',
-          attemptedAt: now,
-          safeErrorCode: null,
-          profile: {
-            currentTitle: 'First Movie Restored',
-            originalTitle: 'First Movie',
-            originalLanguage: 'en',
-            overview: 'A restored synopsis.',
-            releaseDate: '2001-03-04',
-            runtimeMinutes: 111,
-            posterPath: '/poster.jpg',
-            backdropPath: '/backdrop.jpg',
-            tagline: 'A tagline',
-            imdbId: 'tt0000101',
-            status: 'Released',
-            voteAverage: 7.5,
-            voteCount: 100,
-            fetchedAt: now,
-            checkedAt: now,
-            expiresAt: '2026-10-20T12:00:00.000Z',
-            etag: null,
-            genres: [{ id: 1, name: 'Drama' }],
-            directors: [{ creditId: 'director-1', personId: 1, name: 'Director One' }],
-            cast: [{ creditId: 'cast-1', personId: 2, name: 'Actor One', character: 'Lead' }],
-            countries: [{ code: 'US', name: 'United States of America' }],
-            alternativeTitles: [{ countryCode: 'US', title: 'First Alternate' }],
-          },
-        },
-      ],
+      movies: [matchedMovie],
     })
+    await repository.rebuild(now)
     expect(await repository.findMovie('movie-1')).toMatchObject({
       displayTitle: 'First Movie Restored',
       posterUrl: 'https://image.tmdb.org/t/p/w500/poster.jpg',
@@ -624,5 +628,23 @@ describe('SqlMoviesRepository', () => {
     })
     expect(await repository.needsTmdbConfigurationRefresh(now)).toBe(false)
     expect(await repository.needsTmdbConfigurationRefresh('2026-11-01T00:00:00.000Z')).toBe(true)
+
+    await repository.applyTmdbCatalogBatch({
+      at: now,
+      movies: [{ ...matchedMovie, mediaItemId: 'movie-2' }],
+    })
+    expect(
+      database
+        .prepare(
+          `SELECT tmdb_movie_id,match_status,match_method,safe_error_code
+           FROM tmdb_movie_matches WHERE media_item_id='movie-2'`,
+        )
+        .get(),
+    ).toEqual({
+      tmdb_movie_id: null,
+      match_status: 'ambiguous',
+      match_method: null,
+      safe_error_code: 'tmdb_identity_collision',
+    })
   })
 })

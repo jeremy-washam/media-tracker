@@ -4,7 +4,8 @@ import { YoutubeApiError, YoutubeDataApiClient, youtubeDurationMilliseconds } fr
 
 describe('YoutubeDataApiClient', () => {
   it('parses exact batches and durations', async () => {
-    const request = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+    const request = vi.fn(async function (this: unknown, input: Parameters<typeof fetch>[0]) {
+      expect(this).toBeUndefined()
       const url = new URL(String(input))
       expect(url.searchParams.get('key')).toBe('secret')
       return Response.json({
