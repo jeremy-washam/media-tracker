@@ -75,6 +75,54 @@ const moviesResponse = (data = [movie], nextCursor: string | null = null) => ({
   },
 })
 
+const article = {
+  id: 'article-one',
+  title: 'A Distant Article',
+  subtype: 'article' as const,
+  imageUrl: null,
+  author: 'Ada Author',
+  publication: 'Example Journal',
+  publishedAt: { value: '2020', precision: 'year' as const, basis: 'source_asserted' as const },
+  readingTime: { raw: '8 mins', minutes: 8 },
+  progress: { value: 0.5, valid: true },
+  opened: true,
+  archive: { active: true, count: 1, latestAt: '2026-09-12T10:00:00.000Z' },
+  queue: { active: false, state: null, addedAt: null },
+  feed: { active: false, arrivedAt: null },
+  currentAvailable: true,
+  searchExcerpt: null,
+}
+const articlesResponse = (data = [article], nextCursor: string | null = null) => ({
+  data,
+  nextCursor,
+  sectionCounts: { archive: 72, queue: 178, feed: 666 },
+  totalCount: 72,
+  filteredCount: data.length,
+  occurrenceCount: data.reduce((sum, item) => sum + item.archive.count, 0),
+  facets: {
+    types: [{ value: 'article', label: 'article', count: 72 }],
+    authors: [{ value: 'ada author', label: 'Ada Author', count: 1 }],
+    publications: [{ value: 'example journal', label: 'Example Journal', count: 1 }],
+    readingTimes: [{ value: '5to15', label: '5–15 min', count: 1 }],
+    progress: [{ value: 'inProgress', label: 'In progress', count: 1 }],
+    currentStates: [{ value: 'archive', label: 'Archive', count: 1 }],
+    queueStates: [],
+    opened: [{ value: 'opened', label: 'Opened', count: 1 }],
+    history: [{ value: 'archived', label: 'Archived before', count: 1 }],
+    publishedUnknown: 0,
+    readingTimeUnknown: 0,
+    progressUnknown: 0,
+    dateUnknown: 0,
+  },
+  capabilities: { fullTextSearch: true, highlights: true },
+  coverage: {
+    allLocationsBackfilled: true,
+    highlightsBackfilled: true,
+    fullTextPolicy: 'archive_queue' as const,
+    lastSuccessfulSyncAt: '2026-09-20T10:00:00.000Z',
+  },
+})
+
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
 })
@@ -400,6 +448,139 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
       ),
     )
     .toBe(true)
+})
+
+test('keeps loaded Article pages while changing density and inspecting History', async ({
+  page,
+}) => {
+  const requested: string[] = []
+  await page.route('**/api/library/articles?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url.search)
+    const second = url.searchParams.has('cursor')
+    await route.fulfill({
+      json: articlesResponse(
+        [
+          {
+            ...article,
+            id: second ? 'article-two' : 'article-one',
+            title: second ? 'Second Article' : article.title,
+          },
+        ],
+        second ? null : 'next-articles-page',
+      ),
+    })
+  })
+  await page.route('**/api/library/articles/article-one', (route) =>
+    route.fulfill({
+      json: {
+        ...article,
+        sourceCategory: 'article',
+        currentLocation: 'archive',
+        acquisitionSource: 'web',
+        summary: 'A concise article summary.',
+        wordCount: 1200,
+        documentNote: 'Remember this.',
+        highlightDocumentNote: null,
+        tags: [{ key: 'important', name: 'Important', type: 'manual' }],
+        dates: {
+          createdAt: null,
+          savedAt: '2026-01-01T10:00:00.000Z',
+          firstOpenedAt: '2026-02-01T10:00:00.000Z',
+          lastOpenedAt: null,
+          lastMovedAt: '2026-09-12T10:00:00.000Z',
+          updatedAt: '2026-09-12T10:00:00.000Z',
+          observedAt: '2026-09-20T10:00:00.000Z',
+        },
+        annotations: { active: 1, deleted: 0, discarded: 0 },
+        content: { available: true, state: 'ready', coverage: 'full', failureClass: null },
+        links: {
+          original: 'https://example.com/article',
+          reader: 'https://read.readwise.io/read/article-one',
+        },
+        readerRelationships: [
+          {
+            documentId: 'article-one',
+            location: 'archive',
+            available: true,
+            readerUrl: 'https://read.readwise.io/read/article-one',
+          },
+        ],
+        source: {
+          connectionLabel: 'Readwise Reader',
+          coverage: 'partial',
+          sourceRefreshedAt: '2026-09-20T10:00:00.000Z',
+        },
+      },
+    }),
+  )
+  await page.route('**/api/library/articles/article-one/history*', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            archiveEntryId: 'archive-one',
+            archivedAt: {
+              value: '2026-09-12T10:00:00.000Z',
+              precision: 'instant',
+              basis: 'inferred',
+            },
+            sourceRecordedAt: null,
+            admissionReason: 'readwise_archive_state',
+            disposition: 'current',
+            connection: { id: 'readwise-one', label: 'Readwise Reader' },
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  )
+  await page.route('**/api/library/articles/article-one/highlights*', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            id: 'highlight-one',
+            text: 'A useful passage.',
+            note: 'My note.',
+            favorite: false,
+            highlightedAt: '2026-09-12T10:00:00.000Z',
+            location: 'order 1',
+            readerUrl: 'https://readwise.io/open/highlight-one',
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  )
+  await page.goto('/library/articles/archive')
+  await expect(page.getByRole('heading', { name: 'Articles' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Archive 72' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Queue 178' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Feed 666' })).toBeVisible()
+  await page.getByRole('button', { name: 'Load more articles' }).click()
+  await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
+  const afterPaging = requested.length
+  await page.getByRole('button', { name: 'Expanded' }).click()
+  await expect(page).toHaveURL(/density=expanded/)
+  await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
+  await page.getByRole('button', { name: /A Distant Article/ }).click()
+  await expect(page.getByText('A concise article summary.')).toBeVisible()
+  await expect(page.getByText('1,200')).toBeVisible()
+  await expect(page.getByText('Readwise Reader · archive')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reader relationships' })).toBeVisible()
+  await page.getByRole('tab', { name: 'History' }).click()
+  await expect(page.getByText('Current state')).toBeVisible()
+  await expect(page.getByText('50%')).toBeVisible()
+  await expect(page.getByText('Remember this.')).toBeVisible()
+  await expect(page.getByText('A useful passage.')).toBeVisible()
+  await expect(page.getByText('My note.')).toBeVisible()
+  await page.getByRole('button', { name: 'Close inspector' }).last().click()
+  await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
+  expect(requested).toHaveLength(afterPaging)
+  expect(requested.every((value) => !value.includes('density=') && !value.includes('item='))).toBe(
+    true,
+  )
 })
 
 test('shows separate account progress and resumes the selected account', async ({ page }) => {

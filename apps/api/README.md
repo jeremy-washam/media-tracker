@@ -17,11 +17,22 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars
 pnpm dev
 ```
 
-Use **Connections → Readwise Reader → Sync now**. The initial backfill retrieves the current Reader Archive; later polls retrieve
-changed documents across all locations, stores each exact response page in private R2, and adds
-eligible articles, PDFs, RSS items, videos, and podcasts to the local Archive.
-Tweets and other ineligible rows are retained as source records but are not
-shown as media.
+Use **Connections → Readwise Reader → Sync now**. The initial backfill retrieves
+all current Reader locations; later polls use an overlapped update watermark and
+a daily complete reconciliation. Each exact v3 page and v2 highlight-export
+page is stored in private R2 before projection. Eligible articles, PDFs, RSS
+items, and newsletters project into Articles Archive, Queue, or Feed according
+to current and retained source state. Eligible videos and podcasts continue to
+project into their media types. Tweets and other ineligible rows remain source
+evidence only.
+
+Articles are available from `/api/library/articles`, with detail, History, and
+highlight subroutes under `/api/library/articles/{id}`. Full-text acquisition is
+handled by durable `acquire_article_content` queue messages and is restricted to
+Archive/Queue documents; metadata sync and browsing remain useful when content
+is unavailable. Exact content responses are retained before parsing, indexing
+is staged in bounded queue invocations, and failed or stale jobs are recoverable
+without exposing a partially indexed manifest.
 
 ## Letterboxd export import
 
@@ -78,4 +89,5 @@ from a later snapshot never removes a watch.
   resumes a stored import; include the YouTube `connectionId` on every request.
 
 Imports are HTTP-driven and stop when the browser stops requesting chunks. Use
-Resume import after reopening Connections. The queue consumer remains a scaffold.
+Resume import after reopening Connections. The queue consumer handles selective
+Reader article-content jobs; other generalized background work remains deferred.

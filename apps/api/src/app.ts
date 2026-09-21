@@ -1,5 +1,12 @@
 import {
   ApiErrorSchema,
+  ArticleDetailSchema,
+  ArticleHighlightsQuerySchema,
+  ArticleHighlightsResponseSchema,
+  ArticleHistoryQuerySchema,
+  ArticleHistoryResponseSchema,
+  ArticlesQuerySchema,
+  ArticlesResponseSchema,
   BookDetailSchema,
   BookHistoryQuerySchema,
   BookHistoryResponseSchema,
@@ -33,6 +40,7 @@ import { z } from 'zod'
 import type { ApiError } from '@media-tracker/contracts'
 
 import {
+  createArticlesRepository,
   createBooksRepository,
   createLedgerRepository,
   createMoviesRepository,
@@ -43,6 +51,7 @@ import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-impo
 import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
 import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
+import { hydrateArticleTextExcerpts } from './article-excerpts'
 import {
   continueSpotifyExtendedHistoryImport,
   importSpotifyExtendedHistory,
@@ -142,6 +151,56 @@ const moviesRoute = createRoute({
   responses: {
     200: jsonContent(MoviesResponseSchema, 'Movies collection'),
     400: jsonContent(ApiErrorSchema, 'Invalid Movies query'),
+  },
+})
+
+const articlesRoute = createRoute({
+  method: 'get',
+  path: '/api/library/articles',
+  tags: ['Library', 'Articles'],
+  request: { query: ArticlesQuerySchema },
+  responses: {
+    200: jsonContent(ArticlesResponseSchema, 'Articles collection'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Articles query'),
+  },
+})
+
+const articleDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/articles/{mediaItemId}',
+  tags: ['Library', 'Articles'],
+  request: { params: z.object({ mediaItemId: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(ArticleDetailSchema, 'Article details'),
+    404: jsonContent(ApiErrorSchema, 'Article not found'),
+  },
+})
+
+const articleHistoryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/articles/{mediaItemId}/history',
+  tags: ['Library', 'Articles'],
+  request: {
+    params: z.object({ mediaItemId: z.string().min(1) }),
+    query: ArticleHistoryQuerySchema,
+  },
+  responses: {
+    200: jsonContent(ArticleHistoryResponseSchema, 'Article archive history'),
+    400: jsonContent(ApiErrorSchema, 'Invalid history cursor'),
+  },
+})
+
+const articleHighlightsRoute = createRoute({
+  method: 'get',
+  path: '/api/library/articles/{mediaItemId}/highlights',
+  tags: ['Library', 'Articles'],
+  request: {
+    params: z.object({ mediaItemId: z.string().min(1) }),
+    query: ArticleHighlightsQuerySchema,
+  },
+  responses: {
+    200: jsonContent(ArticleHighlightsResponseSchema, 'Article highlights'),
+    400: jsonContent(ApiErrorSchema, 'Invalid highlight cursor'),
   },
 })
 
@@ -415,6 +474,104 @@ app.openapi(bookHistoryRoute, async (context) => {
     if (error instanceof TypeError && error.message === 'Invalid Book history cursor') {
       throw new HTTPException(400, { message: error.message })
     }
+    throw error
+  }
+})
+
+app.openapi(articlesRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const repository = createArticlesRepository(context.env.DB)
+    const page = await repository.listArticles({
+      section: query.section,
+      ...(query.q === undefined ? {} : { q: query.q }),
+      types: query.type,
+      authors: query.author,
+      publications: query.publication,
+      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+      publishedUnknown: query.publishedUnknown,
+      readingTimes: query.readingTime,
+      progress: query.progress,
+      ...(query.archivedFrom === undefined ? {} : { archivedFrom: query.archivedFrom }),
+      ...(query.archivedTo === undefined ? {} : { archivedTo: query.archivedTo }),
+      archivedUnknown: query.archivedUnknown,
+      currentStates: query.currentState,
+      queueStates: query.queueState,
+      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+      addedUnknown: query.addedUnknown,
+      ...(query.arrivedFrom === undefined ? {} : { arrivedFrom: query.arrivedFrom }),
+      ...(query.arrivedTo === undefined ? {} : { arrivedTo: query.arrivedTo }),
+      arrivedUnknown: query.arrivedUnknown,
+      opened: query.opened,
+      history: query.history,
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.direction === undefined ? {} : { direction: query.direction }),
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    if (query.q !== undefined) {
+      await hydrateArticleTextExcerpts({
+        items: page.data,
+        query: query.q,
+        repository,
+        bucket: context.env.RAW_BUCKET,
+      })
+    }
+    return context.json(ArticlesResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Articles pagination cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
+app.openapi(articleDetailRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const article = await createArticlesRepository(context.env.DB).findArticle(id)
+  if (article !== null) return context.json(ArticleDetailSchema.parse(article), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No article exists with media item ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(articleHistoryRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const query = context.req.valid('query')
+  try {
+    const result = await createArticlesRepository(context.env.DB).listArticleHistory(id, {
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(ArticleHistoryResponseSchema.parse(result), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Article history cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(articleHighlightsRoute, async (context) => {
+  const id = context.req.valid('param').mediaItemId
+  const query = context.req.valid('query')
+  try {
+    const result = await createArticlesRepository(context.env.DB).listArticleHighlights(id, {
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(ArticleHighlightsResponseSchema.parse(result), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Article highlight cursor')
+      throw new HTTPException(400, { message: error.message })
     throw error
   }
 })

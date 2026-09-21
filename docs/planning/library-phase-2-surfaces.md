@@ -1,7 +1,7 @@
 # Library Phase 2 surface specification
 
 - Date: 2026-09-20
-- Status: Owner review complete; Books and Letterboxd-backed Movies are shipped, and other media remain implementation baselines
+- Status: Owner review complete; Books, Letterboxd-backed Movies, and Readwise-backed Articles are shipped, and other media remain implementation baselines
 - Scope: Exact production Library fields, sections, search, filters, sorts, and
   inspectors for all six media types
 - Governing decisions: [Phase 1 decision register](library-phase-1-decisions.md)

@@ -878,9 +878,362 @@ export const movieLibraryProjection = sqliteTable('movie_library_projection', {
   projectionVersion: integer('projection_version').notNull(),
 })
 
+export const readwiseDocuments = sqliteTable(
+  'readwise_documents',
+  {
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    documentId: text('document_id').notNull(),
+    mediaItemId: text('media_item_id').references(() => mediaItems.id),
+    externalIdentityId: text('external_identity_id').references(() => externalIdentities.id),
+    readerUrl: text('reader_url'),
+    sourceUrl: text('source_url'),
+    rawCategory: text('raw_category').notNull(),
+    subtype: text('subtype', { enum: ['article', 'newsletter', 'pdf', 'rss'] }),
+    currentLocation: text('current_location').notNull(),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    title: text('title'),
+    normalizedTitle: text('normalized_title'),
+    author: text('author'),
+    authorKey: text('author_key'),
+    publication: text('publication'),
+    publicationKey: text('publication_key'),
+    acquisitionSource: text('acquisition_source'),
+    summary: text('summary'),
+    imageUrl: text('image_url'),
+    documentNote: text('document_note'),
+    wordCount: integer('word_count'),
+    readingTimeRaw: text('reading_time_raw'),
+    readingTimeMinutes: real('reading_time_minutes'),
+    readingTimeParserVersion: integer('reading_time_parser_version').notNull(),
+    listeningTimeRaw: text('listening_time_raw'),
+    readingProgress: real('reading_progress'),
+    progressValid: integer('progress_valid', { mode: 'boolean' }).notNull(),
+    publishedAtValue: text('published_at_value'),
+    publishedAtPrecision: text('published_at_precision', { enum: temporalPrecisions }),
+    publishedAtBasis: text('published_at_basis', { enum: temporalBases }),
+    createdAtSource: text('created_at_source'),
+    savedAt: text('saved_at'),
+    firstOpenedAt: text('first_opened_at'),
+    lastOpenedAt: text('last_opened_at'),
+    lastMovedAt: text('last_moved_at'),
+    updatedAtSource: text('updated_at_source'),
+    lastSourceRecordId: text('last_source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastObservedAt: text('last_observed_at').notNull(),
+    lastSnapshotRunId: text('last_snapshot_run_id').references(() => syncRuns.id),
+    projectionVersion: integer('projection_version').notNull(),
+  },
+  (table) => [
+    uniqueIndex('readwise_documents_connection_document_unique').on(
+      table.connectionId,
+      table.documentId,
+    ),
+    index('readwise_documents_media_connection_idx').on(table.mediaItemId, table.connectionId),
+    index('readwise_documents_location_idx').on(
+      table.connectionId,
+      table.currentLocation,
+      table.upstreamState,
+      table.savedAt,
+      table.mediaItemId,
+    ),
+  ],
+)
+
+export const readwiseProjectionState = sqliteTable('readwise_projection_state', {
+  connectionId: text('connection_id')
+    .primaryKey()
+    .references(() => connections.id),
+  documentsSnapshotRunId: text('documents_snapshot_run_id').references(() => syncRuns.id),
+  documentsSnapshotCompletedAt: text('documents_snapshot_completed_at'),
+  documentsParserVersion: text('documents_parser_version'),
+  incrementalWatermark: text('incremental_watermark'),
+  tagsSnapshotRunId: text('tags_snapshot_run_id').references(() => syncRuns.id),
+  tagsSnapshotCompletedAt: text('tags_snapshot_completed_at'),
+  highlightsSnapshotRunId: text('highlights_snapshot_run_id').references(() => syncRuns.id),
+  highlightsSnapshotCompletedAt: text('highlights_snapshot_completed_at'),
+  highlightsParserVersion: text('highlights_parser_version'),
+  fullTextPolicy: text('full_text_policy', { enum: ['archive_queue', 'disabled'] }).notNull(),
+  contentAcquisitionVersion: integer('content_acquisition_version').notNull(),
+  contentIndexVersion: integer('content_index_version').notNull(),
+  projectionRunId: text('projection_run_id').references(() => syncRuns.id),
+  projectionRebuiltAt: text('projection_rebuilt_at'),
+  projectionVersion: integer('projection_version').notNull(),
+})
+
+export const readwiseTags = sqliteTable(
+  'readwise_tags',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    tagKey: text('tag_key').notNull(),
+    displayName: text('display_name').notNull(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.tagKey] })],
+)
+
+export const readwiseDocumentTags = sqliteTable(
+  'readwise_document_tags',
+  {
+    readwiseDocumentId: text('readwise_document_id')
+      .notNull()
+      .references(() => readwiseDocuments.id),
+    tagKey: text('tag_key').notNull(),
+    sourceType: text('source_type'),
+    createdValue: text('created_value'),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.readwiseDocumentId, table.tagKey] })],
+)
+
+export const readwiseHighlightContainers = sqliteTable(
+  'readwise_highlight_containers',
+  {
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    userBookId: integer('user_book_id').notNull(),
+    externalId: text('external_id'),
+    readwiseDocumentId: text('readwise_document_id').references(() => readwiseDocuments.id),
+    title: text('title'),
+    author: text('author'),
+    source: text('source'),
+    category: text('category'),
+    sourceUrl: text('source_url'),
+    documentNote: text('document_note'),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    sourceUpdatedAt: text('source_updated_at'),
+    lastObservedAt: text('last_observed_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('readwise_highlight_containers_connection_book_unique').on(
+      table.connectionId,
+      table.userBookId,
+    ),
+  ],
+)
+
+export const readwiseHighlights = sqliteTable(
+  'readwise_highlights',
+  {
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    highlightId: integer('highlight_id').notNull(),
+    containerId: text('container_id')
+      .notNull()
+      .references(() => readwiseHighlightContainers.id),
+    text: text('text'),
+    note: text('note'),
+    location: integer('location'),
+    endLocation: integer('end_location'),
+    locationType: text('location_type'),
+    color: text('color'),
+    isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull(),
+    isDiscard: integer('is_discard', { mode: 'boolean' }).notNull(),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    highlightedAt: text('highlighted_at'),
+    createdAtSource: text('created_at_source'),
+    updatedAtSource: text('updated_at_source'),
+    readerUrl: text('reader_url'),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id),
+    lastObservedAt: text('last_observed_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('readwise_highlights_connection_highlight_unique').on(
+      table.connectionId,
+      table.highlightId,
+    ),
+  ],
+)
+
+export const articleLibraryProjection = sqliteTable('article_library_projection', {
+  mediaItemId: text('media_item_id')
+    .primaryKey()
+    .references(() => mediaItems.id),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id),
+  readwiseDocumentId: text('readwise_document_id')
+    .notNull()
+    .references(() => readwiseDocuments.id),
+  displayTitle: text('display_title').notNull(),
+  importedTitle: text('imported_title'),
+  normalizedTitle: text('normalized_title').notNull(),
+  subtype: text('subtype', { enum: ['article', 'newsletter', 'pdf', 'rss'] }).notNull(),
+  imageUrl: text('image_url'),
+  author: text('author'),
+  authorKey: text('author_key'),
+  publication: text('publication'),
+  publicationKey: text('publication_key'),
+  publishedAtValue: text('published_at_value'),
+  publishedAtPrecision: text('published_at_precision'),
+  readingTimeRaw: text('reading_time_raw'),
+  readingTimeMinutes: real('reading_time_minutes'),
+  readingProgress: real('reading_progress'),
+  progressValid: integer('progress_valid', { mode: 'boolean' }).notNull(),
+  opened: integer('opened', { mode: 'boolean' }).notNull(),
+  inArchive: integer('in_archive', { mode: 'boolean' }).notNull(),
+  archiveOccurrenceCount: integer('archive_occurrence_count').notNull(),
+  latestArchiveAt: text('latest_archive_at'),
+  hasUnknownArchiveDate: integer('has_unknown_archive_date', { mode: 'boolean' }).notNull(),
+  inQueue: integer('in_queue', { mode: 'boolean' }).notNull(),
+  queueState: text('queue_state', { enum: ['inbox', 'later', 'shortlist'] }),
+  queueInbox: integer('queue_inbox', { mode: 'boolean' }).notNull(),
+  queueLater: integer('queue_later', { mode: 'boolean' }).notNull(),
+  queueShortlist: integer('queue_shortlist', { mode: 'boolean' }).notNull(),
+  queueAddedAt: text('queue_added_at'),
+  inFeed: integer('in_feed', { mode: 'boolean' }).notNull(),
+  feedArrivedAt: text('feed_arrived_at'),
+  currentLocation: text('current_location').notNull(),
+  currentAvailable: integer('current_available', { mode: 'boolean' }).notNull(),
+  tagCount: integer('tag_count').notNull(),
+  activeHighlightCount: integer('active_highlight_count').notNull(),
+  contentAvailable: integer('content_available', { mode: 'boolean' }).notNull(),
+  sourceRefreshedAt: text('source_refreshed_at').notNull(),
+  projectionVersion: integer('projection_version').notNull(),
+})
+
+export const articleContentManifests = sqliteTable('article_content_manifests', {
+  id: text('id').primaryKey(),
+  readwiseDocumentId: text('readwise_document_id')
+    .notNull()
+    .references(() => readwiseDocuments.id),
+  mediaItemId: text('media_item_id')
+    .notNull()
+    .references(() => mediaItems.id),
+  contentKind: text('content_kind', { enum: ['reader_html'] }).notNull(),
+  rawObjectKey: text('raw_object_key').notNull(),
+  rawSha256: text('raw_sha256').notNull(),
+  extractedObjectKey: text('extracted_object_key').notNull(),
+  extractedSha256: text('extracted_sha256').notNull(),
+  sourceUpdatedAt: text('source_updated_at'),
+  extractionVersion: integer('extraction_version').notNull(),
+  state: text('state', { enum: ['pending', 'ready', 'failed', 'expired'] }).notNull(),
+  coverage: text('coverage', { enum: ['full', 'partial'] }).notNull(),
+  language: text('language'),
+  acquiredAt: text('acquired_at').notNull(),
+  processedAt: text('processed_at'),
+  policyVersion: integer('policy_version').notNull(),
+  failureClass: text('failure_class'),
+})
+
+export const articleContentChunks = sqliteTable(
+  'article_content_chunks',
+  {
+    manifestId: text('manifest_id')
+      .notNull()
+      .references(() => articleContentManifests.id),
+    ordinal: integer('ordinal').notNull(),
+    byteStart: integer('byte_start').notNull(),
+    byteLength: integer('byte_length').notNull(),
+    sha256: text('sha256').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.manifestId, table.ordinal] })],
+)
+
+export const articleContentSearchMap = sqliteTable(
+  'article_content_search_map',
+  {
+    rowid: integer('rowid').primaryKey({ autoIncrement: true }),
+    manifestId: text('manifest_id')
+      .notNull()
+      .references(() => articleContentManifests.id),
+    chunkOrdinal: integer('chunk_ordinal').notNull(),
+  },
+  (table) => [
+    uniqueIndex('article_content_search_map_chunk_unique').on(table.manifestId, table.chunkOrdinal),
+  ],
+)
+
+export const articleContentJobs = sqliteTable('article_content_jobs', {
+  idempotencyKey: text('idempotency_key').primaryKey(),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id),
+  readwiseDocumentId: text('readwise_document_id')
+    .notNull()
+    .references(() => readwiseDocuments.id),
+  documentId: text('document_id').notNull(),
+  sourceUpdatedAt: text('source_updated_at'),
+  reservationId: text('reservation_id').notNull(),
+  status: text('status', { enum: ['pending', 'completed', 'failed'] }).notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at'),
+  lastAttemptAt: text('last_attempt_at'),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  completedAt: text('completed_at'),
+  failureClass: text('failure_class'),
+})
+
+export const articleContentRawAcquisitions = sqliteTable(
+  'article_content_raw_acquisitions',
+  {
+    id: text('id').primaryKey(),
+    idempotencyKey: text('idempotency_key')
+      .notNull()
+      .references(() => articleContentJobs.idempotencyKey, { onDelete: 'restrict' }),
+    attemptNumber: integer('attempt_number').notNull(),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    readwiseDocumentId: text('readwise_document_id')
+      .notNull()
+      .references(() => readwiseDocuments.id),
+    storageKey: text('storage_key').notNull(),
+    sha256: text('sha256').notNull(),
+    contentType: text('content_type').notNull(),
+    byteLength: integer('byte_length').notNull(),
+    acquiredAt: text('acquired_at').notNull(),
+    processingStatus: text('processing_status', {
+      enum: ['pending', 'processed', 'failed'],
+    }).notNull(),
+    processingError: text('processing_error'),
+  },
+  (table) => [
+    uniqueIndex('article_content_raw_acquisitions_job_attempt_unique').on(
+      table.idempotencyKey,
+      table.attemptNumber,
+    ),
+    index('article_content_raw_acquisitions_document_idx').on(
+      table.readwiseDocumentId,
+      table.acquiredAt,
+    ),
+    check('article_content_raw_acquisitions_attempt_positive', sql`${table.attemptNumber} > 0`),
+  ],
+)
+
 export const schema = {
   archiveEntries,
   archiveEntryEvidence,
+  articleLibraryProjection,
+  articleContentChunks,
+  articleContentManifests,
+  articleContentJobs,
+  articleContentRawAcquisitions,
+  articleContentSearchMap,
   bookIdentifiers,
   bookLibraryProjection,
   connections,
@@ -902,6 +1255,12 @@ export const schema = {
   queueEntries,
   queueEntryEvidence,
   rawObjects,
+  readwiseDocumentTags,
+  readwiseDocuments,
+  readwiseHighlightContainers,
+  readwiseHighlights,
+  readwiseProjectionState,
+  readwiseTags,
   sourceRecords,
   sources,
   syncCursors,

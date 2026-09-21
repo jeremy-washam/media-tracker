@@ -255,6 +255,13 @@ failed observations may not. Archive membership never implicitly erases Queue
 membership or its evidence. Manual local intent, write-back, and conflict
 resolution remain deferred.
 
+Reader Articles use this model directly. `readwise_documents` remains
+authoritative for current Inbox, Later, Shortlist, Feed, and unknown locations;
+`queue_entries` materializes only active Inbox/Later/Shortlist relationships and
+retains membership/removal evidence. Archive admission is independent and
+retained after a later Reader move. A complete Reader snapshot may retire an
+absent Queue relationship but does not erase the historical Archive occurrence.
+
 ## Cross-source reconciliation rules
 
 1. Match on an authoritative identity before creating a new media item.

@@ -1,8 +1,8 @@
 # Readwise Reader Source Reconnaissance
 
-- Status: API reconnaissance and private read-only schema probe complete;
+- Status: production all-location documents and v2 highlights implemented;
   webhook/raw-source probes pending
-- Last reviewed: 2026-07-18
+- Last reviewed: 2026-09-20
 - Coverage assessment: strong for current library state and queue mirroring; partial
   for historical consumption timestamps and deletions
 
@@ -353,6 +353,41 @@ examples represent attached tags as an object keyed by tag key, with nested name
 type, and created metadata. The probe must confirm this shape for manual and
 generated tags.
 
+## Production connector behavior
+
+The implemented connector uses `GET /api/v3/list/` without a location filter.
+The first run, and a reconciliation run at least every 24 hours, enumerates the
+complete current document set at 100 records per page. Intervening runs use an
+`updatedAfter` watermark with a five-minute overlap. Every exact response page
+is stored in private R2 before parsing, and the durable cursor advances only
+after the source records and rebuilt projection commit successfully.
+
+Reader documents are authoritative for current Inbox, Later, Shortlist, Feed,
+and other Reader state. Generic `queue_entries` are a read-only, provenance-
+bearing projection for current Inbox, Later, and Shortlist membership. Moving a
+document out of those locations retires that Queue relationship; moving it out
+of Archive does not erase an already admitted Archive occurrence.
+
+Each document response supplies its attached tag dictionary. The connector
+stores that vocabulary and each document/tag relationship while processing the
+document page; the independent tag-list endpoint is not required for the
+approved user-visible surface because tags are inspector facts, not a
+collection facet.
+
+Every document reconciliation also reads the v2 export with
+`includeDeleted=true`. A container links to a Reader document only when
+`source=reader` and its `external_id` exactly matches the Reader document ID.
+Deleted or discarded highlight text is not retained in normalized highlight or
+search rows; deletion/discard state and raw evidence remain available.
+
+Parsed HTML acquisition is implemented as a separate durable queue path for
+Archive and Queue documents. A job requests one exact document with
+`withHtmlContent=true`, stores the returned HTML plus extracted plain text in
+private R2, and indexes bounded chunks in contentless D1 FTS. Feed-only items
+are excluded. The ordinary document sync does not request article bodies, so a
+failed or absent content job cannot remove metadata results. Temporary
+`raw_source_url` downloads remain out of scope.
+
 ## Private payload observation
 
 A read-only owner-account probe on 2026-07-18 authenticated successfully and
@@ -391,6 +426,22 @@ The 3 tweets remain source evidence only. `last_moved_at` is available as an
 inferred consumption timestamp for all current Archive items, but the API still
 does not prove which location transition that timestamp represents. Preserve it
 as inferred rather than an exact finished-at fact.
+
+A complete production-shape reconciliation on 2026-09-20 observed 1,021
+documents across 11 pages. The resulting eligible Article sections contained
+72 retained Archive items, 178 current Queue items, and 666 Feed items. Queue
+contained 45 articles and 14 PDFs in Later plus 105 articles, 6 PDFs, and 8 RSS
+items in Inbox; no eligible item overlapped Archive and Queue or Archive and
+Feed at that instant. Two documents had a null location, which the connector
+preserves as unknown rather than rejecting or guessing.
+
+The same run observed 16 v2 highlight containers and 26 highlights. Fifteen
+containers joined exactly to Reader documents. Nineteen highlights were active
+and seven were deleted; 18 active highlights projected onto 12 eligible
+Articles. One active highlight remained unlinked because the export did not
+provide a verified Reader-document match. A ten-document HTML sample continued
+to return content for all ten requests. These are dated account observations,
+not permanent product assumptions.
 
 ## Remaining private probe plan
 
@@ -435,8 +486,10 @@ Later samples, HTML availability, and the v2 highlight join. Remaining work:
 
 ## Recommended next action
 
-The synthetic Reader v3 fixture, manual Archive pagination, raw-page R2 storage,
-and eligible-media normalization are implemented. Exercise that path against the
-owner account, then add incremental reconciliation only after the initial
-Archive is visible and correct. Readwise v2 highlights, webhook delivery, and
-raw-source downloads remain deferred.
+Use the shipped all-location reconciliation, completed owner-authorized initial
+selective-content run, and Articles surface as the operational baseline. The
+initial run acquired and indexed all 250 currently eligible Archive/Queue
+documents. Later syncs enqueue only new, changed, failed-recoverable, or
+provenance-incomplete eligible content. Webhook delivery and temporary
+raw-source downloads remain deferred until their authentication, delivery, and
+retention behavior is needed and can be probed directly.

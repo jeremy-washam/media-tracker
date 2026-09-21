@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { MEDIA_TYPES } from '@media-tracker/domain'
 
 export * from './books'
+export * from './articles'
 export * from './movies'
 
 export const ApiErrorCodeSchema = z.enum([
@@ -171,11 +172,42 @@ export const SyncRunsResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 })
 
-export const SyncJobSchema = z.object({
-  idempotencyKey: z.string().min(1),
-  source: ConnectionSummarySchema.shape.source,
-  operation: z.enum(['backfill', 'reconcile', 'process_raw_object']),
-})
+export const SyncJobSchema = z
+  .object({
+    idempotencyKey: z.string().min(1),
+    source: ConnectionSummarySchema.shape.source,
+    operation: z.enum([
+      'backfill',
+      'reconcile',
+      'process_raw_object',
+      'acquire_article_content',
+      'index_article_content',
+    ]),
+    connectionId: z.string().optional(),
+    documentId: z.string().optional(),
+    manifestId: z.string().optional(),
+    nextOrdinal: z.number().int().nonnegative().optional(),
+  })
+  .superRefine((job, context) => {
+    if (
+      job.operation === 'acquire_article_content' &&
+      (job.source !== 'readwise' || job.connectionId === undefined || job.documentId === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Article content jobs require a Readwise connection and document.',
+      })
+    }
+    if (
+      job.operation === 'index_article_content' &&
+      (job.source !== 'readwise' || job.manifestId === undefined || job.nextOrdinal === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Article indexing jobs require a Readwise manifest and next ordinal.',
+      })
+    }
+  })
 
 export type ApiError = z.infer<typeof ApiErrorSchema>
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>

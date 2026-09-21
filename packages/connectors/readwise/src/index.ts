@@ -15,3 +15,12 @@ export {
   type FetchReaderPageInput,
   type RawReaderPage,
 } from './client'
+export {
+  ReadwiseHighlightContainerSchema,
+  ReadwiseHighlightPageSchema,
+  ReadwiseHighlightSchema,
+  parseReadwiseHighlightPage,
+  type ReadwiseHighlightContainer,
+  type ReadwiseHighlightPage,
+} from './highlights'
+export { fetchReadwiseHighlightPage } from './client'

@@ -51,15 +51,15 @@ accepted decision.
 The ledger and source imports already exist. This is not a frontend-only task,
 and not all illustrative metadata in the specimen is currently available.
 
-| Area        | Current state                                                                   | Work needed                                                                                                         |
-| ----------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Library API | Books has rich list/detail/History contracts; other media remain generic        | Repeat the media-specific API pattern for the remaining types                                                       |
-| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped  | Iterate on production feedback without weakening source/provenance semantics                                        |
-| Movies      | Archive/Queue API and UI shipped from Letterboxd export/RSS data                | Add TMDB catalog enrichment after a credentialed live probe                                                         |
-| Articles    | Reader supplies basic author, summary, image, publication date, and source link | Inbox/Later projection; expose useful retained fields; acquire/project notes and highlights needed by the inspector |
-| Podcasts    | Export supplies playback history; saved-episode sync enriches a subset          | Saved-library Queue projection, reconciliation against all known playback, and metadata for export-only episodes    |
-| Videos      | Takeout supplies identities, titles/channels where present, and watch evidence  | Watch Later membership projection and additional public metadata acquisition                                        |
-| Songs       | Spotify song records retained in raw exports, without Library projection        | Admission/counting specification, ingestion, aggregate queries, and a scalable dedicated view                       |
+| Area        | Current state                                                                                                                                                      | Work needed                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Library API | Books has rich list/detail/History contracts; other media remain generic                                                                                           | Repeat the media-specific API pattern for the remaining types                                                    |
+| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped                                                                                     | Iterate on production feedback without weakening source/provenance semantics                                     |
+| Movies      | Archive/Queue API and UI shipped from Letterboxd export/RSS data                                                                                                   | Add TMDB catalog enrichment after a credentialed live probe                                                      |
+| Articles    | Archive/Queue/Feed API and list UI ship with all-location Reader sync, annotations, and 250 eligible documents acquired/indexed under the selective-content policy | Iterate on production feedback without weakening provenance                                                      |
+| Podcasts    | Export supplies playback history; saved-episode sync enriches a subset                                                                                             | Saved-library Queue projection, reconciliation against all known playback, and metadata for export-only episodes |
+| Videos      | Takeout supplies identities, titles/channels where present, and watch evidence                                                                                     | Watch Later membership projection and additional public metadata acquisition                                     |
+| Songs       | Spotify song records retained in raw exports, without Library projection                                                                                           | Admission/counting specification, ingestion, aggregate queries, and a scalable dedicated view                    |
 
 Verify this inventory against code before editing; other work may have advanced.
 Relevant entry points are `packages/contracts/src/index.ts`,
@@ -214,6 +214,21 @@ real-data missing-catalog states. An isolated real replay produced 371 active
 Archive movies, 402 viewing occurrences, 309 Queue movies, and three overlaps.
 TMDB artwork and metadata remain gated on the required owner credential and live
 probe.
+
+The next slice is specified in the
+[Articles end-to-end implementation plan](articles-implementation.md). It uses
+the existing credentialed Reader inventory to add retained Archive history,
+source-derived Inbox/Later/Shortlist Queue, a separate Reader Feed, annotations,
+and selective authorized text search without requiring another provider.
+
+**Implemented 2026-09-20:** Articles now ships all-location Reader document
+reconciliation, retained Archive history, source-derived Inbox/Later/Shortlist
+Queue, separate Feed, deletion-aware v2 highlights, server-side collection and
+inspector APIs, two list densities, and selective full-text acquisition/indexing
+plumbing. The real reconciliation produced 72 Archive, 178 Queue, and 666 Feed
+items. The owner-authorized initial selective acquisition indexed all 250
+currently eligible Archive/Queue documents; metadata, notes, and highlight
+search continue to work independently when text is unavailable.
 
 Expose stored facts first, project useful retained evidence next, then acquire
 missing metadata. Use the inspector research to choose the smallest extensions:

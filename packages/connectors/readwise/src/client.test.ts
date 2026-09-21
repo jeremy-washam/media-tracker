@@ -20,7 +20,7 @@ describe('Reader API client', () => {
     const [requestUrl, requestInit] = fetchMock.mock.calls[0]!
     const url = new URL(String(requestUrl))
     expect(url.searchParams.get('location')).toBe('archive')
-    expect(url.searchParams.get('limit')).toBe('15')
+    expect(url.searchParams.get('limit')).toBe('100')
     expect(url.searchParams.get('pageCursor')).toBe('next-page')
     expect((requestInit?.headers as Record<string, string>).authorization).toBe(
       'Token synthetic-token',

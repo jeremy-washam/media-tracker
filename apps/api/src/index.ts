@@ -4,7 +4,9 @@ import app from './app'
 import { syncHardcover } from './hardcover-sync'
 import { syncLetterboxdRss } from './letterboxd-rss-sync'
 import { syncReadwiseArchive } from './readwise-sync'
+import { acquireReadwiseArticleContent, indexReadwiseArticleContent } from './readwise-content'
 import { syncSpotifySavedEpisodes } from './spotify-sync'
+import { createArticlesRepository } from './env'
 
 import type { SyncJob } from '@media-tracker/contracts'
 
@@ -160,7 +162,7 @@ const worker = {
       context.waitUntil(tasks.reduce((chain, task) => chain.then(task), Promise.resolve()))
     }
   },
-  queue(batch) {
+  async queue(batch, env) {
     for (const message of batch.messages) {
       const result = SyncJobSchema.safeParse(message.body)
 
@@ -173,6 +175,34 @@ const worker = {
           }),
         )
         message.ack()
+        continue
+      }
+
+      if (
+        result.data.operation === 'acquire_article_content' ||
+        result.data.operation === 'index_article_content'
+      ) {
+        try {
+          if (result.data.operation === 'acquire_article_content')
+            await acquireReadwiseArticleContent(env, result.data)
+          else await indexReadwiseArticleContent(env, result.data)
+          message.ack()
+        } catch (error) {
+          await createArticlesRepository(env.DB).failContentJob(
+            result.data.idempotencyKey,
+            new Date().toISOString(),
+            error instanceof Error ? error.name : 'UnknownError',
+          )
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              event: 'readwise.content_failed',
+              messageId: message.id,
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+            }),
+          )
+          message.retry()
+        }
         continue
       }
 

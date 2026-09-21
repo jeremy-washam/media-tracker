@@ -1,6 +1,7 @@
 import type { SyncJob } from '@media-tracker/contracts'
 import {
   D1DatabaseClient,
+  SqlArticlesRepository,
   SqlBooksRepository,
   SqlCanonicalLedgerRepository,
   SqlMoviesRepository,
@@ -30,6 +31,10 @@ export interface AppEnv {
 
 export function createLedgerRepository(database: D1Database): CanonicalLedgerRepository {
   return new SqlCanonicalLedgerRepository(new D1DatabaseClient(database))
+}
+
+export function createArticlesRepository(database: D1Database): SqlArticlesRepository {
+  return new SqlArticlesRepository(new D1DatabaseClient(database))
 }
 
 export function createBooksRepository(database: D1Database): SqlBooksRepository {

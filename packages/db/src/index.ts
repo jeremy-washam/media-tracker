@@ -32,6 +32,18 @@ export type {
 } from './books-repository'
 export { SqlBooksRepository } from './books-repository'
 export type {
+  ArticleCollectionRecord,
+  ArticleDetailRecord,
+  ArticleContentProjection,
+  ArticleContentTarget,
+  ArticlesListInput,
+  ArticlesPageRecord,
+  ReaderArticleDocumentProjection,
+  ReaderArticleRetirementProjection,
+  ReaderHighlightContainerProjection,
+} from './articles-repository'
+export { SqlArticlesRepository } from './articles-repository'
+export type {
   LetterboxdMovieSnapshot,
   LetterboxdMovieSnapshotFilm,
   LetterboxdMovieSnapshotViewing,

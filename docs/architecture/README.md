@@ -87,8 +87,9 @@ after payload reconnaissance.
 ## Current operational implementation
 
 Source imports and resumable chunks run through HTTP; hourly polling runs in the
-deployed scheduled handler. Queues are bound but the consumer remains a
-placeholder. Local cron triggers are invoked manually. Generalized CLI replay,
+deployed scheduled handler. The queue consumer handles bounded Reader article-
+content acquisition; other generalized queue work remains deferred. Local cron
+triggers are invoked manually. Generalized CLI replay,
 export, and recovery remain deferred. Browser APIs provide keyset-paginated
 History and sync runs, complete media counts, and all connection lineages.
 Rotating Spotify tokens use an encrypted D1 credential store and refresh lease,
@@ -102,3 +103,14 @@ are rebuildable query models, not new sources of truth. Books Queue membership
 is derived from active Hardcover statuses 1 and 2; it is not a generic editable
 queue. Media-specific repositories keep these browse semantics out of route
 handlers and the pure domain package.
+
+Articles is the third complete Library vertical slice. Reader v3 documents own
+current Article state; retained canonical Archive occurrences preserve history,
+and generic Queue entries materialize current Inbox/Later/Shortlist membership
+with source evidence. `readwise_documents`, annotation tables, and private R2
+content objects retain source-specific facts. `article_library_projection`,
+metadata FTS, and contentless full-text FTS are rebuildable query models. Reader
+Feed is a separate current-state view and does not become Queue or the future
+recommendation Feed. Exact content API responses are private raw evidence;
+bounded chunk indexing promotes a manifest only after the final batch commits,
+and failed or stale reservations remain recoverable.

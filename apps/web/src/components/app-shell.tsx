@@ -27,7 +27,6 @@ type DisabledNavigationItem = {
 }
 
 const unavailableMedia: DisabledNavigationItem[] = [
-  { label: 'Articles', icon: FileText },
   { label: 'Podcasts', icon: Headphones },
   { label: 'Music', icon: Music2 },
   { label: 'Videos', icon: Video },
@@ -52,7 +51,8 @@ export function AppShell() {
   const location = useLocation()
   const inBooks = location.pathname.startsWith('/library/books')
   const inMovies = location.pathname.startsWith('/library/movies')
-  const inLibrary = inBooks || inMovies
+  const inArticles = location.pathname.startsWith('/library/articles')
+  const inLibrary = inBooks || inMovies || inArticles
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -146,6 +146,17 @@ export function AppShell() {
             <Film aria-hidden="true" />
             {!collapsed ? <span>Movies</span> : null}
           </Link>
+          <Link
+            to="/library/articles/archive"
+            activeOptions={{ includeSearch: false }}
+            className={inArticles ? 'active' : ''}
+            aria-current={inArticles ? 'page' : undefined}
+            title="Articles"
+            onClick={() => setMobileOpen(false)}
+          >
+            <FileText aria-hidden="true" />
+            {!collapsed ? <span>Articles</span> : null}
+          </Link>
           {unavailableMedia.map((item) => (
             <UnavailableNavigation key={item.label} {...item} collapsed={collapsed} />
           ))}
@@ -192,7 +203,7 @@ export function AppShell() {
               <>
                 <span>Library</span>
                 <span aria-hidden="true">/</span>
-                <strong>{inMovies ? 'Movies' : 'Books'}</strong>
+                <strong>{inMovies ? 'Movies' : inArticles ? 'Articles' : 'Books'}</strong>
               </>
             ) : (
               <strong>Connections</strong>
