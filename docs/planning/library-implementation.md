@@ -214,9 +214,13 @@ search, filters, sorts, exact counts, keyset pagination, grid/list layouts, and
 real-data missing-catalog states. An isolated real replay produced 371 active
 Archive movies, 402 viewing occurrences, 309 Queue movies, and three overlaps.
 The credentialed TMDB integration and full local backfill followed on
-2026-09-21. The current projection has 615 conservative matches, 31 ambiguous
-outcomes, and 34 unmatched outcomes across 680 movies; catalog refresh retained
-374 active Archive and 309 active Queue memberships.
+2026-09-21. A second evidence-aware pass reconciled seven duplicate
+Letterboxd identities, verified alternate titles and country release dates,
+and matched Letterboxd-logged series through distinct TMDB TV identities.
+The current local projection has 669 matches, no ambiguous outcomes, and four
+unmatched outcomes across 673 items, with 371 active Archive and 309 active
+Queue memberships. See [ADR 0013](../decisions/0013-tmdb-letterboxd-match-evidence.md)
+for the revised matching rule and remaining uncertainty.
 
 The next slice is specified in the
 [Articles end-to-end implementation plan](articles-implementation.md). It uses

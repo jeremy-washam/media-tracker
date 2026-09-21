@@ -138,6 +138,7 @@ export const MovieCollectionItemSchema = z.object({
   queue: z.object({ active: z.boolean(), addedOn: calendarDate.nullable() }),
   enrichment: z.object({
     provider: z.literal('tmdb').nullable(),
+    mediaType: z.enum(['movie', 'tv']).nullable(),
     status: z.enum(['not_configured', 'pending', 'matched', 'unmatched', 'ambiguous', 'error']),
     refreshedAt: z.string().datetime().nullable(),
   }),

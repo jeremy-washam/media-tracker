@@ -1,6 +1,10 @@
 import {
   TmdbApiError,
   TmdbClient,
+  movieHasExactTitle,
+  movieHasReleaseYear,
+  normalizeTmdbTitle,
+  selectDominantVoteCandidate,
   selectExactTitleYearCandidates,
 } from '@media-tracker/connector-tmdb'
 import type { SyncJob } from '@media-tracker/contracts'
@@ -11,7 +15,7 @@ import { createCatalogJobsRepository, createMoviesRepository } from './env'
 import type { Bindings } from './env'
 
 const batchSize = 10
-const matcherVersion = 'tmdb-conservative@1'
+const matcherVersion = 'tmdb-evidence@2'
 
 function daysAfter(at: string, days: number) {
   return new Date(Date.parse(at) + days * 86_400_000).toISOString()
@@ -85,6 +89,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     const candidates = await movies.listTmdbEnrichmentCandidates({
       ...(current.cursor === null ? {} : { afterMediaItemId: current.cursor }),
       retryBefore: daysAfter(at, -90),
+      matcherVersion,
       at,
       limit: batchSize,
     })
@@ -113,6 +118,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
         })
       }
       stage = 'completion'
+      await movies.reconcileTmdbIdentityCollisions(at)
       await jobs.complete(job.catalogJobId, at)
       stage = 'projection_rebuild'
       await movies.rebuild(at)
@@ -125,9 +131,14 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     let requestCount = configuration === null ? 0 : 1
     for (const candidate of candidates) {
       let movieId: number | null = null
+      let tvId: number | null = candidate.matchedTmdbTvId
       let method: TmdbMovieProfileProjection['matchMethod'] = null
       let candidateCount = 0
-      if (candidate.exactTmdbMovieId !== null) {
+      let selectedDetail: Awaited<ReturnType<TmdbClient['movieDetails']>> | null = null
+      if (tvId !== null) {
+        method = 'exact_tv_title_year'
+        candidateCount = 1
+      } else if (candidate.exactTmdbMovieId !== null) {
         movieId = candidate.exactTmdbMovieId
         method = 'exact_tmdb_id'
         candidateCount = 1
@@ -151,7 +162,121 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
         if (exact.length === 1) {
           movieId = exact[0]!.id
           method = 'exact_title_year'
+        } else if (exact.length > 1) {
+          const dominant = selectDominantVoteCandidate(exact)
+          if (dominant !== null) {
+            movieId = dominant.id
+            method = 'dominant_title_year_votes'
+          }
         }
+        if (exact.length === 0) {
+          const withoutYear = await client.searchMovieWithoutYear(candidate.importedTitle)
+          requestCount += 1
+          const normalized = normalizeTmdbTitle(candidate.importedTitle)
+          const exactTitles = withoutYear.filter((result) =>
+            [result.title, result.original_title].some(
+              (title) => normalizeTmdbTitle(title) === normalized,
+            ),
+          )
+          // Search ranking is used only to bound requests. An accepted result
+          // must independently verify an exact title (including alternatives)
+          // and an actual country release in the source year.
+          const candidatesToVerify = [
+            ...exactTitles,
+            ...withoutYear.slice(0, 5).filter((result) => !exactTitles.includes(result)),
+          ].slice(0, 10)
+          const verified: Array<{
+            result: (typeof withoutYear)[number]
+            detail: Awaited<ReturnType<TmdbClient['movieDetails']>>
+          }> = []
+          for (const result of candidatesToVerify) {
+            const detail = await client.movieDetails(result.id)
+            requestCount += 1
+            if (
+              movieHasExactTitle(detail.data, candidate.importedTitle) &&
+              movieHasReleaseYear(detail.data, candidate.releaseYear)
+            )
+              verified.push({ result, detail })
+          }
+          candidateCount = verified.length
+          const winner =
+            verified.length === 1
+              ? verified[0]
+              : verified.find(
+                  (item) =>
+                    item.result === selectDominantVoteCandidate(verified.map((v) => v.result)),
+                )
+          if (winner !== undefined) {
+            movieId = winner.result.id
+            selectedDetail = winner.detail
+            method = verified.length === 1 ? 'verified_release_year' : 'dominant_title_year_votes'
+          }
+        }
+      }
+      if (
+        movieId === null &&
+        tvId === null &&
+        candidateCount === 0 &&
+        candidate.releaseYear !== null
+      ) {
+        const tvResults = await client.searchTv(candidate.importedTitle, candidate.releaseYear)
+        requestCount += 1
+        const normalized = normalizeTmdbTitle(candidate.importedTitle)
+        const exactTv = tvResults.filter(
+          (item) =>
+            item.first_air_date?.slice(0, 4) === candidate.releaseYear &&
+            [item.name, item.original_name].some(
+              (title) => normalizeTmdbTitle(title) === normalized,
+            ),
+        )
+        candidateCount = exactTv.length
+        const selected = exactTv.length === 1 ? exactTv[0] : selectDominantVoteCandidate(exactTv)
+        if (selected !== null && selected !== undefined) {
+          tvId = selected.id
+          method = exactTv.length === 1 ? 'exact_tv_title_year' : 'dominant_title_year_votes'
+        }
+      }
+      if (tvId !== null) {
+        const detail = await client.tvDetails(tvId)
+        requestCount += 1
+        const data = detail.data
+        results.push({
+          mediaItemId: candidate.mediaItemId,
+          tmdbMovieId: null,
+          tmdbTvId: tvId,
+          matchStatus: 'matched',
+          matchMethod: method,
+          candidateCount,
+          matcherVersion,
+          attemptedAt: at,
+          safeErrorCode: null,
+          profile: null,
+          tvProfile: {
+            currentTitle: data.name,
+            originalTitle: data.original_name,
+            originalLanguage: data.original_language,
+            overview: data.overview,
+            firstAirDate: data.first_air_date,
+            posterPath: data.poster_path,
+            backdropPath: data.backdrop_path,
+            tagline: data.tagline,
+            status: data.status,
+            voteAverage: data.vote_average,
+            voteCount: data.vote_count,
+            creatorNames: data.created_by.map((creator) => creator.name),
+            genres: data.genres.map((genre) => genre.name),
+            cast: data.credits.cast.slice(0, 5).map((credit) => ({
+              name: credit.name,
+              character: credit.character,
+            })),
+            countries: data.production_countries.map((country) => country.name),
+            fetchedAt: at,
+            checkedAt: at,
+            expiresAt: daysAfter(at, 30),
+            etag: detail.etag,
+          },
+        })
+        continue
       }
       if (movieId === null) {
         results.push({
@@ -167,8 +292,8 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
         })
         continue
       }
-      const detail = await client.movieDetails(movieId)
-      requestCount += 1
+      const detail = selectedDetail ?? (await client.movieDetails(movieId))
+      if (selectedDetail === null) requestCount += 1
       const data = detail.data
       results.push({
         mediaItemId: candidate.mediaItemId,

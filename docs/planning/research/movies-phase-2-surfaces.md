@@ -805,6 +805,13 @@ rewriting consumption history.
 
 ## Required TMDB matching and projections
 
+Implementation update (2026-09-21): The initial exact-movie-only rule below is
+superseded by [ADR 0013](../../decisions/0013-tmdb-letterboxd-match-evidence.md).
+The current matcher also verifies alternative titles and country release dates,
+uses a bounded vote-count tie-break for exact title/year collisions, and can
+attach separate TMDB TV metadata to a Letterboxd-logged series. The original
+Letterboxd year remains the Library release year.
+
 ### Match order
 
 1. Use an already attached global `tmdb/movie_id` identity.

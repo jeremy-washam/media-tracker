@@ -17,6 +17,7 @@ const migrations = [
   '0017_videos_snapshot_safety.sql',
   '0018_videos_snapshot_head_backfill.sql',
   '0019_provider_catalog_caches.sql',
+  '0020_tmdb_match_evidence.sql',
 ]
   .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
   .join('\n')
@@ -125,6 +126,9 @@ it('backfills component heads from the newest existing complete snapshots', () =
         new URL('../migrations/0019_provider_catalog_caches.sql', import.meta.url),
         'utf8',
       ),
+    )
+    existing.exec(
+      readFileSync(new URL('../migrations/0020_tmdb_match_evidence.sql', import.meta.url), 'utf8'),
     )
 
     expect(

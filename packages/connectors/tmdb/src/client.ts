@@ -32,6 +32,7 @@ const searchResultSchema = z.object({
   original_title: z.string(),
   release_date: nullableString,
   poster_path: nullableString,
+  vote_count: z.number().int().nonnegative().default(0),
 })
 
 const searchResponseSchema = z.object({
@@ -39,6 +40,41 @@ const searchResponseSchema = z.object({
   results: z.array(searchResultSchema),
   total_pages: z.number().int().nonnegative(),
   total_results: z.number().int().nonnegative(),
+})
+
+const tvSearchResultSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  original_name: z.string(),
+  first_air_date: nullableString,
+  vote_count: z.number().int().nonnegative().default(0),
+})
+
+const tvSearchResponseSchema = z.object({ results: z.array(tvSearchResultSchema) })
+
+const tvDetailsSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  original_name: z.string(),
+  original_language: nullableString,
+  overview: nullableString,
+  first_air_date: nullableString,
+  poster_path: nullableString,
+  backdrop_path: nullableString,
+  tagline: nullableString,
+  status: nullableString,
+  vote_average: nullableNumber,
+  vote_count: z.number().int().nonnegative().default(0),
+  created_by: z.array(z.object({ name: z.string() }).passthrough()).default([]),
+  genres: z.array(z.object({ name: z.string() }).passthrough()).default([]),
+  production_countries: z.array(z.object({ iso_3166_1: z.string(), name: z.string() })).default([]),
+  credits: z
+    .object({
+      cast: z
+        .array(z.object({ name: z.string(), character: nullableString }).passthrough())
+        .default([]),
+    })
+    .default({ cast: [] }),
 })
 
 const movieDetailsSchema = z.object({
@@ -102,6 +138,16 @@ const movieDetailsSchema = z.object({
       titles: z.array(z.object({ iso_3166_1: z.string(), title: z.string() })).default([]),
     })
     .default({ titles: [] }),
+  release_dates: z
+    .object({
+      results: z.array(
+        z.object({
+          iso_3166_1: z.string(),
+          release_dates: z.array(z.object({ release_date: z.string() }).passthrough()),
+        }),
+      ),
+    })
+    .default({ results: [] }),
 })
 
 const findResponseSchema = z.object({ movie_results: z.array(searchResultSchema).default([]) })
@@ -109,6 +155,8 @@ const findResponseSchema = z.object({ movie_results: z.array(searchResultSchema)
 export type TmdbConfiguration = z.infer<typeof configurationSchema>
 export type TmdbMovieSearchResult = z.infer<typeof searchResultSchema>
 export type TmdbMovieDetails = z.infer<typeof movieDetailsSchema>
+export type TmdbTvSearchResult = z.infer<typeof tvSearchResultSchema>
+export type TmdbTvDetails = z.infer<typeof tvDetailsSchema>
 
 export class TmdbApiError extends Error {
   constructor(
@@ -141,7 +189,7 @@ export class TmdbClient {
       movieDetailsSchema,
       new URLSearchParams({
         language: 'en-US',
-        append_to_response: 'credits,external_ids,images,alternative_titles',
+        append_to_response: 'credits,external_ids,images,alternative_titles,release_dates',
         include_image_language: 'en,null',
       }),
     )
@@ -162,6 +210,20 @@ export class TmdbClient {
     return response.data.results
   }
 
+  async searchMovieWithoutYear(title: string): Promise<TmdbMovieSearchResult[]> {
+    const response = await this.get(
+      '/3/search/movie',
+      searchResponseSchema,
+      new URLSearchParams({
+        query: title,
+        language: 'en-US',
+        include_adult: 'false',
+        page: '1',
+      }),
+    )
+    return response.data.results
+  }
+
   async findMovieByImdb(imdbId: string): Promise<TmdbMovieSearchResult[]> {
     const response = await this.get(
       `/3/find/${encodeURIComponent(imdbId)}`,
@@ -169,6 +231,32 @@ export class TmdbClient {
       new URLSearchParams({ external_source: 'imdb_id', language: 'en-US' }),
     )
     return response.data.movie_results
+  }
+
+  async searchTv(title: string, year: string): Promise<TmdbTvSearchResult[]> {
+    const response = await this.get(
+      '/3/search/tv',
+      tvSearchResponseSchema,
+      new URLSearchParams({
+        query: title,
+        first_air_date_year: year,
+        language: 'en-US',
+        include_adult: 'false',
+        page: '1',
+      }),
+    )
+    return response.data.results
+  }
+
+  async tvDetails(tvId: number): Promise<{ data: TmdbTvDetails; etag: string | null }> {
+    return this.get(
+      `/3/tv/${tvId}`,
+      tvDetailsSchema,
+      new URLSearchParams({
+        language: 'en-US',
+        append_to_response: 'credits',
+      }),
+    )
   }
 
   private async get<Schema extends z.ZodType>(
@@ -226,4 +314,32 @@ export function selectExactTitleYearCandidates(
         (candidateTitle) => normalizeTmdbTitle(candidateTitle) === normalized,
       ),
   )
+}
+
+/** Popularity is not an identifier; a large voting lead is a bounded tie-break only. */
+export function selectDominantVoteCandidate<T extends { vote_count: number }>(
+  candidates: readonly T[],
+): T | null {
+  if (candidates.length < 2) return null
+  const ordered = [...candidates].sort((a, b) => b.vote_count - a.vote_count)
+  const first = ordered[0]!
+  const second = ordered[1]!
+  return first.vote_count >= 20 && first.vote_count >= Math.max(1, second.vote_count) * 20
+    ? first
+    : null
+}
+
+export function movieHasReleaseYear(details: TmdbMovieDetails, year: string): boolean {
+  return details.release_dates.results.some((country) =>
+    country.release_dates.some((date) => date.release_date.slice(0, 4) === year),
+  )
+}
+
+export function movieHasExactTitle(details: TmdbMovieDetails, title: string): boolean {
+  const normalized = normalizeTmdbTitle(title)
+  return [
+    details.title,
+    details.original_title,
+    ...details.alternative_titles.titles.map((alternate) => alternate.title),
+  ].some((value) => normalizeTmdbTitle(value) === normalized)
 }

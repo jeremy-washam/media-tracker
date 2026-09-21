@@ -565,10 +565,35 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
   ): Promise<ArchiveOccurrenceReference | null> {
     const row = await statement(
       this.#database,
-      'SELECT id, source_occurrence_key, consumed_identity_id FROM archive_entries WHERE connection_id = ? AND source_occurrence_key = ?',
+      'SELECT id, source_occurrence_key, consumed_identity_id, upstream_state FROM archive_entries WHERE connection_id = ? AND source_occurrence_key = ?',
       [connection, key],
-    ).first<{ id: string; source_occurrence_key: string; consumed_identity_id: string | null }>()
-    return row === null ? null : occurrenceReference(row)
+    ).first<{
+      id: string
+      source_occurrence_key: string
+      consumed_identity_id: string | null
+      upstream_state: string
+    }>()
+    if (row === null) return null
+    if (row.upstream_state !== 'removed') return occurrenceReference(row)
+    // A reconciled RSS occurrence keeps its original key and evidence, while its
+    // evidence is also attached to the surviving active Diary occurrence. Replay
+    // must update that survivor instead of reviving the retired duplicate.
+    const successors = await statement(
+      this.#database,
+      `SELECT DISTINCT target.id, target.source_occurrence_key, target.consumed_identity_id
+       FROM archive_entry_evidence old_evidence
+       JOIN archive_entry_evidence new_evidence
+         ON new_evidence.source_record_id=old_evidence.source_record_id
+        AND new_evidence.role=old_evidence.role
+       JOIN archive_entries target ON target.id=new_evidence.archive_entry_id
+       WHERE old_evidence.archive_entry_id=? AND target.id<>?
+         AND target.connection_id=? AND target.upstream_state='active'
+       LIMIT 2`,
+      [row.id, row.id, connection],
+    ).all<{ id: string; source_occurrence_key: string; consumed_identity_id: string | null }>()
+    return successors.results.length === 1
+      ? occurrenceReference(successors.results[0]!)
+      : occurrenceReference(row)
   }
   async findOccurrencesAt(
     connection: ConnectionId,

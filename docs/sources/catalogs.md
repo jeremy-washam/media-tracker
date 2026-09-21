@@ -58,6 +58,13 @@ existing export probe found no TMDB/IMDb IDs, so unresolved historical films nee
 candidate search followed by an explicit match. Preserve the Letterboxd identity
 and import evidence. See [Letterboxd reconnaissance](letterboxd.md).
 
+**Implemented matching update, 2026-09-21.** [ADR 0013](../decisions/0013-tmdb-letterboxd-match-evidence.md)
+records the bounded exact-title/year vote tie-break, exact alternative-title and
+country-release-year verification, separate TV identity/profile lookup for
+Letterboxd-logged series, and constrained RSS/export duplicate reconciliation.
+The film export year remains the displayed source year even when TMDB's primary
+display release year differs. Public Letterboxd film HTML is not scraped.
+
 **Observed live contract, 2026-09-21.** A credentialed aggregate-only probe used
 one exact RSS-supplied TMDB identity and five owner title/year samples. The exact
 detail request returned `200` with details plus appended credits, external IDs,

@@ -4,6 +4,15 @@ Status: Letterboxd slice, refreshable TMDB enrichment, and full local catalog
 backfill implemented; real-data visual acceptance and final UX iteration remain
 Last updated: 2026-09-21
 
+The evidence-aware follow-up backfill resolved all seven local export/RSS
+identity collisions and matched Letterboxd-logged series through separate TMDB
+TV identities without changing their Library section. The current local
+projection has 673 items: 669 matched, zero ambiguous, and four unmatched;
+Archive has 371 and Queue has 309. The revised acceptance rule is recorded in
+[ADR 0013](../decisions/0013-tmdb-letterboxd-match-evidence.md). The four
+remaining unmatched entries need item-level review rather than a generic
+search-score fallback.
+
 ## Purpose
 
 Movies is the second production Library vertical slice. It should prove that the

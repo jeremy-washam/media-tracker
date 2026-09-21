@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 
+import { connectionId } from '@media-tracker/domain'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type {
@@ -15,8 +17,9 @@ import {
   type LetterboxdMovieSnapshotFilm,
   type TmdbMovieProfileProjection,
 } from './movies-repository'
+import { SqlCanonicalLedgerRepository } from './repository'
 
-const migrations = [
+const migrationSql = [
   '0001_canonical_ledger.sql',
   '0006_movies_library.sql',
   '0007_movies_nullable_source_link.sql',
@@ -24,9 +27,9 @@ const migrations = [
   '0017_videos_snapshot_safety.sql',
   '0018_videos_snapshot_head_backfill.sql',
   '0019_provider_catalog_caches.sql',
-]
-  .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
-  .join('\n')
+  '0020_tmdb_match_evidence.sql',
+].map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
+const migrations = migrationSql.join('\n')
 
 class SqliteStatement implements DatabaseStatement {
   #values: readonly DatabaseValue[] = []
@@ -74,6 +77,39 @@ class SqliteClient implements DatabaseClient {
 }
 
 const now = '2026-09-20T12:00:00.000Z'
+
+it('upgrades existing TMDB match rows while adding separate TV identities', () => {
+  const upgrade = new DatabaseSync(':memory:')
+  try {
+    upgrade.exec(migrationSql.slice(0, -1).join('\n'))
+    upgrade.exec(`
+      INSERT INTO media_items(id,type,title,created_at,updated_at)
+      VALUES ('movie-old','movie','Old movie','${now}','${now}'),
+             ('movie-tv','movie','TV record','${now}','${now}');
+      INSERT INTO tmdb_movie_matches(media_item_id,tmdb_movie_id,match_status,
+        match_method,candidate_count,matcher_version,last_attempted_at,matched_at,updated_at)
+      VALUES ('movie-old',101,'matched','exact_title_year',1,
+        'tmdb-conservative@1','${now}','${now}','${now}');
+    `)
+    upgrade.exec(migrationSql.at(-1)!)
+    expect(
+      upgrade
+        .prepare(
+          "SELECT tmdb_movie_id,match_method FROM tmdb_movie_matches WHERE media_item_id='movie-old'",
+        )
+        .get(),
+    ).toEqual({ tmdb_movie_id: 101, match_method: 'exact_title_year' })
+    upgrade.exec(`
+      INSERT INTO tmdb_movie_matches(media_item_id,tmdb_tv_id,match_status,
+        match_method,candidate_count,matcher_version,last_attempted_at,matched_at,updated_at)
+      VALUES ('movie-tv',61617,'matched','exact_tv_title_year',1,
+        'tmdb-evidence@2','${now}','${now}','${now}');
+    `)
+    expect(upgrade.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  } finally {
+    upgrade.close()
+  }
+})
 
 function listInput(overrides: Partial<Parameters<SqlMoviesRepository['listMovies']>[0]> = {}) {
   return {
@@ -550,6 +586,139 @@ describe('SqlMoviesRepository', () => {
     ).toEqual({ count: 0 })
   })
 
+  async function addRssCollision(input: {
+    title: string
+    year: string
+    target: string
+    watchedOn: string
+    tmdbId: number
+    matchedOnRss: boolean
+  }) {
+    database
+      .prepare(
+        `INSERT INTO raw_objects(id,connection_id,sync_run_id,kind,acquisition_key,
+         storage_key,sha256,content_type,byte_length,acquired_at,processing_status,
+         last_parser_version) VALUES('raw-rss','letterboxd-1','run-1','rss','rss-collision',
+         'raw/rss-collision.xml',?,'application/rss+xml',100,?,'processed','letterboxd-rss@3')`,
+      )
+      .run('b'.repeat(64), now)
+    database
+      .prepare(
+        `INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,
+         source_record_key,observed_at,parser_version,disposition,upstream_state)
+       VALUES('rss-collision','raw-rss','letterboxd-1','rss_movie_entry','$.item[0]',
+         'rss-collision',?,'letterboxd-rss@3','normalized','active')`,
+      )
+      .run(now)
+    database
+      .prepare(
+        `INSERT INTO media_items(id,type,title,published_at_value,published_at_precision,
+         published_at_basis,created_at,updated_at)
+       VALUES('rss-movie','movie',? ,?,'year','source_asserted',?,?)`,
+      )
+      .run(input.title, input.year, now, now)
+    database
+      .prepare(
+        `INSERT INTO external_identities(id,media_item_id,namespace,external_type,external_id,
+         scope,first_observed_source_record_id,last_observed_source_record_id)
+       VALUES('rss-tmdb','rss-movie','tmdb','movie_id',?,'global',
+         'rss-collision','rss-collision')`,
+      )
+      .run(String(input.tmdbId))
+    database
+      .prepare(
+        `INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,
+         admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,
+         upstream_state,created_at,updated_at)
+       VALUES('rss-archive','rss-movie','letterboxd-1','rss:collision',
+         'letterboxd_diary_entry',?,'day','source_asserted','active',?,?)`,
+      )
+      .run(input.watchedOn, now, now)
+    database
+      .prepare(
+        `INSERT INTO archive_entry_evidence(id,archive_entry_id,source_record_id,role,linked_at)
+       VALUES('rss-evidence','rss-archive','rss-collision','admission',?)`,
+      )
+      .run(now)
+    await repository.rebuild(now)
+    const matched = input.matchedOnRss ? 'rss-movie' : input.target
+    const collision = input.matchedOnRss ? input.target : 'rss-movie'
+    database
+      .prepare(
+        `INSERT INTO tmdb_movie_matches(media_item_id,tmdb_movie_id,match_status,match_method,
+         candidate_count,matcher_version,last_attempted_at,matched_at,updated_at)
+       VALUES(?,?,'matched','exact_tmdb_id',1,'tmdb-conservative@1',?,?,?)`,
+      )
+      .run(matched, input.tmdbId, now, now, now)
+    database
+      .prepare(
+        `INSERT INTO tmdb_movie_matches(media_item_id,match_status,candidate_count,
+         matcher_version,last_attempted_at,safe_error_code,updated_at)
+       VALUES(?,'ambiguous',1,'tmdb-conservative@1',?,
+         'tmdb_identity_collision',?)`,
+      )
+      .run(collision, now, now)
+  }
+
+  it('joins an RSS watch to a queue-only export film after a TMDB identity collision', async () => {
+    await applyFullSnapshot()
+    await addRssCollision({
+      title: 'Queue Movie',
+      year: '2020',
+      target: 'movie-2',
+      watchedOn: '2025-03-04',
+      tmdbId: 501,
+      matchedOnRss: true,
+    })
+    expect(await repository.reconcileTmdbIdentityCollisions(now)).toBe(1)
+    await repository.rebuild(now)
+    expect(await repository.reconcileTmdbIdentityCollisions(now)).toBe(0)
+    expect(
+      database.prepare("SELECT media_item_id FROM archive_entries WHERE id='rss-archive'").get(),
+    ).toEqual({ media_item_id: 'movie-2' })
+    expect(
+      database.prepare("SELECT media_item_id FROM external_identities WHERE id='rss-tmdb'").get(),
+    ).toEqual({ media_item_id: 'movie-2' })
+    expect(
+      database
+        .prepare('SELECT media_item_id FROM tmdb_movie_matches WHERE tmdb_movie_id=501')
+        .get(),
+    ).toEqual({ media_item_id: 'movie-2' })
+    expect((await repository.listMovies(listInput())).data.map((movie) => movie.id)).toContain(
+      'movie-2',
+    )
+  })
+
+  it('retires a duplicate RSS watch but preserves its evidence and replay target', async () => {
+    await applyFullSnapshot()
+    await addRssCollision({
+      title: 'First Movie',
+      year: '2001',
+      target: 'movie-1',
+      watchedOn: '2025-01-01',
+      tmdbId: 502,
+      matchedOnRss: false,
+    })
+    expect(await repository.reconcileTmdbIdentityCollisions(now)).toBe(1)
+    await repository.rebuild(now)
+    expect(
+      database.prepare("SELECT upstream_state FROM archive_entries WHERE id='rss-archive'").get(),
+    ).toEqual({ upstream_state: 'removed' })
+    expect(
+      database
+        .prepare(
+          "SELECT count(*) count FROM archive_entry_evidence WHERE archive_entry_id='archive-2' AND source_record_id='rss-collision'",
+        )
+        .get(),
+    ).toEqual({ count: 1 })
+    const ledger = new SqlCanonicalLedgerRepository(new SqliteClient(database))
+    expect(
+      await ledger.findArchiveOccurrence(connectionId('letterboxd-1'), 'rss:collision'),
+    ).toMatchObject({ id: 'archive-2', sourceOccurrenceKey: 'diary:2' })
+    expect((await repository.listMovies(listInput())).data).toHaveLength(1)
+    expect((await repository.listMovies(listInput())).data[0]?.archive.lifetimeWatchCount).toBe(2)
+  })
+
   it('treats SQL LIKE metacharacters literally in one-character searches', async () => {
     await applyFullSnapshot()
     for (const [title, query] of [
@@ -645,6 +814,62 @@ describe('SqlMoviesRepository', () => {
       match_status: 'ambiguous',
       match_method: null,
       safe_error_code: 'tmdb_identity_collision',
+    })
+  })
+
+  it('projects a TMDB TV profile without colliding with movie IDs or changing source year', async () => {
+    await applyFullSnapshot()
+    await repository.applyTmdbCatalogBatch({
+      at: now,
+      movies: [
+        {
+          mediaItemId: 'movie-2',
+          tmdbMovieId: null,
+          tmdbTvId: 61617,
+          matchStatus: 'matched',
+          matchMethod: 'exact_tv_title_year',
+          candidateCount: 1,
+          matcherVersion: 'tmdb-evidence@2',
+          attemptedAt: now,
+          safeErrorCode: null,
+          profile: null,
+          tvProfile: {
+            currentTitle: 'Over the Garden Wall',
+            originalTitle: 'Over the Garden Wall',
+            originalLanguage: 'en',
+            overview: 'A miniseries.',
+            firstAirDate: '2014-11-03',
+            posterPath: '/tv.jpg',
+            backdropPath: null,
+            tagline: null,
+            status: 'Ended',
+            voteAverage: 8.6,
+            voteCount: 1822,
+            creatorNames: ['Creator One'],
+            genres: ['Animation'],
+            cast: [{ name: 'Actor One', character: 'Wirt' }],
+            countries: ['United States'],
+            fetchedAt: now,
+            checkedAt: now,
+            expiresAt: '2026-10-20T12:00:00.000Z',
+            etag: null,
+          },
+        },
+      ],
+    })
+    await repository.rebuild(now)
+    const queue = await repository.listMovies(listInput({ collection: 'queue' }))
+    expect(queue.data.find((movie) => movie.id === 'movie-2')).toMatchObject({
+      displayTitle: 'Over the Garden Wall',
+      releaseYear: '2020',
+      directors: ['Creator One'],
+      enrichment: { status: 'matched', mediaType: 'tv' },
+    })
+    expect(await repository.findMovie('movie-2')).toMatchObject({
+      overview: 'A miniseries.',
+      genres: ['Animation'],
+      cast: [{ name: 'Actor One', character: 'Wirt' }],
+      source: { tmdbUrl: 'https://www.themoviedb.org/tv/61617' },
     })
   })
 })

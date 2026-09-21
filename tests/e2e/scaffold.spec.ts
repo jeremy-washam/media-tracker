@@ -217,7 +217,12 @@ const movie = {
     hasUnknownWatchedDate: false,
   },
   queue: { active: false, addedOn: null },
-  enrichment: { provider: null, status: 'not_configured' as const, refreshedAt: null },
+  enrichment: {
+    provider: null,
+    mediaType: null,
+    status: 'not_configured' as const,
+    refreshedAt: null,
+  },
 }
 
 const moviesResponse = (data = [movie], nextCursor: string | null = null) => ({
@@ -657,6 +662,57 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   expect(requested.every((value) => !value.includes('view=') && !value.includes('item='))).toBe(
     true,
   )
+})
+
+test('labels TMDB TV creators correctly in a Letterboxd-logged series', async ({ page }) => {
+  const series = {
+    ...movie,
+    displayTitle: 'Over the Garden Wall',
+    importedTitle: 'Over the Garden Wall',
+    directors: ['Patrick McHale'],
+    enrichment: {
+      provider: 'tmdb' as const,
+      mediaType: 'tv' as const,
+      status: 'matched' as const,
+      refreshedAt: '2026-09-21T10:00:00.000Z',
+    },
+  }
+  await page.route('**/api/library/movies?*', (route) =>
+    route.fulfill({ json: moviesResponse([series]) }),
+  )
+  await page.route('**/api/library/movies/movie-one', (route) =>
+    route.fulfill({
+      json: {
+        ...series,
+        personal: { ...series.personal, reviewedOccurrenceCount: 0 },
+        overview: 'A miniseries.',
+        originalTitle: series.displayTitle,
+        originalLanguage: 'en',
+        releaseDate: '2014-11-03',
+        tagline: null,
+        backdropUrl: null,
+        genres: ['Animation'],
+        cast: [],
+        countries: [],
+        tmdbRating: null,
+        tmdbVoteCount: null,
+        source: {
+          letterboxdUrl: 'https://boxd.it/example',
+          tmdbUrl: 'https://www.themoviedb.org/tv/61617',
+          imdbUrl: null,
+          connectionLabel: 'Letterboxd',
+          coverage: 'complete',
+          lastCompleteExportAt: null,
+          lastRssSuccessAt: null,
+          metadataStatus: 'matched',
+        },
+      },
+    }),
+  )
+  await page.goto('/library/movies/archive')
+  await page.getByRole('button', { name: /Over the Garden Wall/ }).click()
+  await expect(page.getByText('Creators', { exact: true })).toBeVisible()
+  await expect(page.getByText('Patrick McHale', { exact: true })).toBeVisible()
 })
 
 test('keeps incomplete Movie filter drafts out of API requests', async ({ page }) => {

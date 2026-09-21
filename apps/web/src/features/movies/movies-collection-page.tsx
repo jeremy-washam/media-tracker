@@ -424,7 +424,11 @@ function MovieResult({
   buttonRef?: Ref<HTMLButtonElement> | undefined
   onSelect: () => void
 }) {
-  const director = movie.directors.length ? movie.directors.join(', ') : 'Director unavailable'
+  const director = movie.directors.length
+    ? movie.directors.join(', ')
+    : movie.enrichment.mediaType === 'tv'
+      ? 'Creator unavailable'
+      : 'Director unavailable'
   if (view === 'grid') {
     return (
       <button
@@ -955,7 +959,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           <dl className="detail-list">
             {movie.directors.length ? (
               <>
-                <dt>Director</dt>
+                <dt>{movie.enrichment.mediaType === 'tv' ? 'Creators' : 'Director'}</dt>
                 <dd>{movie.directors.join(', ')}</dd>
               </>
             ) : null}
