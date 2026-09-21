@@ -64,6 +64,15 @@ export type {
   TrackMetadataProjection,
 } from './spotify-library-repository'
 export { SqlSpotifyLibraryRepository } from './spotify-library-repository'
+export type {
+  VideosListInput,
+  YoutubeComponentProjection,
+  YoutubeSnapshotMembership,
+  YoutubeSnapshotSubscription,
+  YoutubeTakeoutFinalization,
+  YoutubeWatchProjection,
+} from './videos-repository'
+export { SqlVideosRepository } from './videos-repository'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'

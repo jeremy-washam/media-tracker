@@ -1468,6 +1468,165 @@ export const spotifySongTrackArtists = sqliteTable(
   (table) => [primaryKey({ columns: [table.mediaItemId, table.artistId] })],
 )
 
+export const youtubeTakeoutComponents = sqliteTable(
+  'youtube_takeout_components',
+  {
+    rawObjectId: text('raw_object_id')
+      .notNull()
+      .references(() => rawObjects.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    componentKind: text('component_kind', {
+      enum: ['watch_history', 'watch_later', 'playlist_index', 'subscriptions'],
+    }).notNull(),
+    memberName: text('member_name'),
+    parserVersion: text('parser_version').notNull(),
+    status: text('status', {
+      enum: ['missing', 'invalid', 'processing', 'complete', 'failed'],
+    }).notNull(),
+    expectedRecordCount: integer('expected_record_count').notNull(),
+    processedRecordCount: integer('processed_record_count').notNull(),
+    syncRunId: text('sync_run_id').references(() => syncRuns.id, { onDelete: 'restrict' }),
+    completedAt: text('completed_at'),
+    finalizedAt: text('finalized_at'),
+    errorCode: text('error_code'),
+  },
+  (table) => [primaryKey({ columns: [table.rawObjectId, table.componentKind] })],
+)
+
+export const youtubeChannels = sqliteTable('youtube_channels', {
+  channelId: text('channel_id').primaryKey(),
+  latestTitle: text('latest_title'),
+  latestUrl: text('latest_url'),
+  firstObservedAt: text('first_observed_at').notNull(),
+  lastObservedAt: text('last_observed_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const youtubeChannelAssertions = sqliteTable('youtube_channel_assertions', {
+  sourceRecordId: text('source_record_id')
+    .primaryKey()
+    .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+  channelId: text('channel_id')
+    .notNull()
+    .references(() => youtubeChannels.channelId, { onDelete: 'restrict' }),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  assertionKind: text('assertion_kind', { enum: ['watch', 'subscription'] }).notNull(),
+  title: text('title'),
+  url: text('url'),
+  observedAt: text('observed_at').notNull(),
+})
+
+export const youtubeWatchObservations = sqliteTable('youtube_watch_observations', {
+  sourceRecordId: text('source_record_id')
+    .primaryKey()
+    .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+  archiveEntryId: text('archive_entry_id')
+    .notNull()
+    .references(() => archiveEntries.id, { onDelete: 'restrict' }),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  mediaItemId: text('media_item_id')
+    .notNull()
+    .references(() => mediaItems.id, { onDelete: 'restrict' }),
+  videoId: text('video_id').notNull(),
+  historicalTitle: text('historical_title'),
+  sourceVideoUrl: text('source_video_url'),
+  historicalChannelTitle: text('historical_channel_title'),
+  sourceChannelUrl: text('source_channel_url'),
+  channelId: text('channel_id').references(() => youtubeChannels.channelId, {
+    onDelete: 'restrict',
+  }),
+  product: text('product', { enum: ['youtube', 'youtube_music', 'unknown'] }).notNull(),
+  fromGoogleAds: integer('from_google_ads', { mode: 'boolean' }).notNull(),
+  occurredAt: text('occurred_at').notNull(),
+  occurredAtRaw: text('occurred_at_raw'),
+  occurrenceRank: integer('occurrence_rank').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  observedAt: text('observed_at').notNull(),
+})
+
+export const youtubeChannelSubscriptions = sqliteTable(
+  'youtube_channel_subscriptions',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => youtubeChannels.channelId, { onDelete: 'restrict' }),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    providerSubscriptionId: text('provider_subscription_id'),
+    channelTitle: text('channel_title'),
+    channelUrl: text('channel_url'),
+    subscribedAt: text('subscribed_at'),
+    sourceKind: text('source_kind', { enum: ['takeout', 'oauth'] }).notNull(),
+    upstreamState: text('upstream_state', { enum: upstreamStates }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredObservedAt: text('retired_observed_at'),
+    parserVersion: text('parser_version').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.channelId] })],
+)
+
+export const videoLibraryProjection = sqliteTable('video_library_projection', {
+  mediaItemId: text('media_item_id')
+    .primaryKey()
+    .references(() => mediaItems.id, { onDelete: 'restrict' }),
+  videoId: text('video_id').notNull().unique(),
+  displayTitle: text('display_title').notNull(),
+  normalizedTitle: text('normalized_title').notNull(),
+  channelId: text('channel_id').references(() => youtubeChannels.channelId, {
+    onDelete: 'restrict',
+  }),
+  displayChannelTitle: text('display_channel_title'),
+  normalizedChannelTitle: text('normalized_channel_title'),
+  canonicalUrl: text('canonical_url').notNull(),
+  imageUrl: text('image_url'),
+  publishedAt: text('published_at'),
+  durationMs: integer('duration_ms'),
+  availabilityState: text('availability_state').notNull(),
+  metadataState: text('metadata_state').notNull(),
+  sourceFormat: text('source_format').notNull(),
+  archiveActive: integer('archive_active', { mode: 'boolean' }).notNull(),
+  watchOccurrenceCount: integer('watch_occurrence_count').notNull(),
+  watchAccountCount: integer('watch_account_count').notNull(),
+  latestWatchedAt: text('latest_watched_at'),
+  queueActive: integer('queue_active', { mode: 'boolean' }).notNull(),
+  queueRelationshipCount: integer('queue_relationship_count').notNull(),
+  queueAccountCount: integer('queue_account_count').notNull(),
+  latestQueueAddedAt: text('latest_queue_added_at'),
+  projectionGeneration: integer('projection_generation').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const videoChannelProjection = sqliteTable('video_channel_projection', {
+  channelId: text('channel_id')
+    .primaryKey()
+    .references(() => youtubeChannels.channelId, { onDelete: 'restrict' }),
+  displayTitle: text('display_title').notNull(),
+  normalizedTitle: text('normalized_title').notNull(),
+  canonicalUrl: text('canonical_url').notNull(),
+  imageUrl: text('image_url'),
+  libraryActive: integer('library_active', { mode: 'boolean' }).notNull(),
+  followingActive: integer('following_active', { mode: 'boolean' }).notNull(),
+  subscriptionCount: integer('subscription_count').notNull(),
+  archiveVideoCount: integer('archive_video_count').notNull(),
+  watchOccurrenceCount: integer('watch_occurrence_count').notNull(),
+  latestWatchedAt: text('latest_watched_at'),
+  queueVideoCount: integer('queue_video_count').notNull(),
+  projectionGeneration: integer('projection_generation').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
 export const schema = {
   archiveEntries,
   archiveEntryEvidence,
@@ -1520,6 +1679,13 @@ export const schema = {
   spotifySongTracks,
   syncCursors,
   syncRuns,
+  videoChannelProjection,
+  videoLibraryProjection,
+  youtubeChannelAssertions,
+  youtubeChannelSubscriptions,
+  youtubeChannels,
+  youtubeTakeoutComponents,
+  youtubeWatchObservations,
 }
 
 // Operational secret storage; never part of raw source evidence or browser responses.

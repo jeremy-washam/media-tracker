@@ -178,6 +178,9 @@ export const importYoutube = async (
     unresolvedRecords: chunk.unresolvedRecords,
     ignoredRecords: chunk.ignoredRecords,
     watchLaterRecords: chunk.watchLaterRecords,
+    queueEntries: chunk.queueEntries,
+    subscriptionRecords: chunk.subscriptionRecords,
+    channels: chunk.channels,
   }
 
   while (!chunk.completed) {
@@ -199,6 +202,9 @@ export const importYoutube = async (
     totals.unresolvedRecords += chunk.unresolvedRecords
     totals.ignoredRecords += chunk.ignoredRecords
     totals.watchLaterRecords += chunk.watchLaterRecords
+    totals.queueEntries += chunk.queueEntries
+    totals.subscriptionRecords += chunk.subscriptionRecords
+    totals.channels += chunk.channels
   }
 
   return { ...chunk, ...totals }

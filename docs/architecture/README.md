@@ -77,6 +77,13 @@ Repositories isolate SQL from business rules. The CLI will provide a documented
 export of normalized records and raw-object metadata so the system can move to
 Postgres and S3-compatible storage without rewriting connectors or clients.
 
+The Videos read path follows the same ownership split: immutable Takeout records
+and canonical Archive occurrences remain authoritative; generic Queue entries
+carry Watch Later provenance; YouTube-owned channel/subscription observations
+support exact rollups; and rebuildable video/channel projections plus FTS serve
+bounded APIs. Complete snapshot markers, relationship upserts, and retirement
+are ordered so a failed or missing component cannot clear prior current state.
+
 See the accepted decisions in `docs/decisions` and the accompanying
 [threat model](./threat-model.md) and
 [development standards](./development-standards.md). The

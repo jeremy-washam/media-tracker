@@ -1,7 +1,8 @@
 # Videos end-to-end implementation plan
 
-- Status: Ready for Takeout-backed implementation; public metadata and current
-  Following require owner credentials and live probes
+- Status: Takeout-backed Archive, Queue, Channels, inspectors, and production
+  UI implemented; public metadata and continuously current Following remain
+  gated on owner credentials and live probes
 - Date: 2026-09-20
 - Scope: YouTube-backed Library > Videos Archive, Watch Later Queue, Channels,
   and video/channel inspectors
@@ -62,6 +63,36 @@ Takeout-only work must not wait for Google credentials. The implementation can
 ship an honest Archive, Queue, Channels rollup, and Takeout-backed subscription
 snapshot first. The complete accepted slice remains gated on the credentialed
 Data API probe and current OAuth Following reconciliation described below.
+
+### Implemented local slice
+
+The credential-free delivery is now implemented through migration 0016 and
+parser `youtube-takeout@4`. It parses and records component completeness for
+watch history, Watch Later, playlist index, and subscriptions; projects exact
+watch/channel observations; maintains source-derived Queue and Following
+relationships only from complete snapshots; and exposes Archive, Queue,
+Channels, video History, and bounded channel Library APIs and UI.
+
+Collection requests use server-side filters, counts, stable generation-bound
+keyset cursors, and presentation-independent query keys. Opening an inspector
+or changing list/grid layout therefore retains loaded collection pages. D1
+snapshot finalization uses bounded idempotent membership batches followed by a
+final completion/retirement commit, which was verified with the owner-sized
+subscription snapshots.
+
+Both retained owner Takeouts were replayed through the local HTTP API. Persisted
+aggregate validation produced 23,865 supported watch observations, 20,227
+Archive videos, 110 active Watch Later relationships, 134 active subscription
+relationships, and eight complete component records across the two lineages.
+The 45 global Archive/Queue overlaps include cross-lineage identity convergence;
+the earlier probe's 41 figure counted same-lineage overlap only. Owner content
+remains ignored and is not committed.
+
+Stages 5–7 remain intentionally unimplemented until the owner supplies a
+restricted YouTube Data API key and read-only OAuth configuration. Current
+artwork, duration, publication/category/availability/live fields and
+continuously current Following must continue to report `not_configured` or use
+Takeout fallback facts until those credentialed live probes are reviewed.
 
 ## Scope
 

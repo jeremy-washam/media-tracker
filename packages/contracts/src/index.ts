@@ -6,6 +6,7 @@ export * from './books'
 export * from './articles'
 export * from './movies'
 export * from './podcasts'
+export * from './videos'
 export * from './music'
 
 export const ApiErrorCodeSchema = z.enum([
@@ -136,6 +137,16 @@ export const YoutubeImportResponseSchema = z.object({
   unresolvedRecords: z.number().int().nonnegative(),
   ignoredRecords: z.number().int().nonnegative(),
   watchLaterRecords: z.number().int().nonnegative(),
+  queueEntries: z.number().int().nonnegative(),
+  subscriptionRecords: z.number().int().nonnegative(),
+  channels: z.number().int().nonnegative(),
+  components: z.array(
+    z.object({
+      kind: z.string(),
+      status: z.string(),
+      records: z.number().int().nonnegative(),
+    }),
+  ),
 })
 
 export const ConnectionSummarySchema = z.object({

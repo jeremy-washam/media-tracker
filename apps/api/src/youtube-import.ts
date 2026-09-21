@@ -1,10 +1,20 @@
 import {
   inspectYoutubeTakeoutBytes,
+  youtubeChannelId,
+  type YoutubePlaylistEntry,
+  type YoutubeSubscriptionEntry,
   type YoutubeTakeout,
   type YoutubeWatchEntry,
   type YoutubeWatchLaterEntry,
 } from '@media-tracker/connector-youtube'
-import type { ArchiveEntryWrite, CanonicalLedgerRepository } from '@media-tracker/db'
+import type {
+  ArchiveEntryWrite,
+  CanonicalLedgerRepository,
+  YoutubeComponentProjection,
+  YoutubeSnapshotMembership,
+  YoutubeSnapshotSubscription,
+  YoutubeWatchProjection,
+} from '@media-tracker/db'
 import {
   archiveEntryEvidenceId,
   archiveEntryId,
@@ -28,10 +38,10 @@ import {
 } from '@media-tracker/domain'
 
 import type { Bindings } from './env'
-import { createLedgerRepository } from './env'
+import { createLedgerRepository, createVideosRepository } from './env'
 
-const parserVersion = 'youtube-takeout@3'
-const parserId = 'v3'
+const parserVersion = 'youtube-takeout@4'
+const parserId = 'v4'
 const defaultChunkSize = 100
 const maximumChunkSize = 100
 
@@ -59,6 +69,14 @@ export interface YoutubeTakeoutImportResult {
   unresolvedRecords: number
   ignoredRecords: number
   watchLaterRecords: number
+  queueEntries: number
+  subscriptionRecords: number
+  channels: number
+  components: readonly {
+    kind: string
+    status: string
+    records: number
+  }[]
 }
 
 interface YoutubeCheckpoint {
@@ -75,12 +93,15 @@ interface ImportContext {
   connection: SourceConnection
   rawObject: RawObject
   repository: CanonicalLedgerRepository
+  videosRepository: ReturnType<typeof createVideosRepository>
   runningRun: SyncRun
 }
 
 type OrderedTakeoutRecord =
   | { index: number; kind: 'watch'; value: YoutubeWatchEntry }
   | { index: number; kind: 'watch_later'; value: YoutubeWatchLaterEntry }
+  | { index: number; kind: 'subscription'; value: YoutubeSubscriptionEntry }
+  | { index: number; kind: 'playlist'; value: YoutubePlaylistEntry }
 
 export class YoutubeTakeoutImportError extends Error {
   constructor(message: string) {
@@ -194,6 +215,16 @@ function orderedRecords(takeout: YoutubeTakeout): OrderedTakeoutRecord[] {
       kind: 'watch_later',
       value,
     })),
+    ...takeout.subscriptions.map((value, index): OrderedTakeoutRecord => ({
+      index,
+      kind: 'subscription',
+      value,
+    })),
+    ...takeout.playlists.map((value, index): OrderedTakeoutRecord => ({
+      index,
+      kind: 'playlist',
+      value,
+    })),
   ]
 }
 
@@ -219,6 +250,7 @@ async function importContext(
   rawAlreadyExists: boolean
 }> {
   const repository = createLedgerRepository(bindings.DB)
+  const videosRepository = createVideosRepository(bindings.DB)
   const startedAt = instantNow()
   const connection = await connectionForImport(repository, startedAt, options)
   const archiveHash = await checksum(archive)
@@ -273,6 +305,7 @@ async function importContext(
       connection,
       rawObject,
       repository,
+      videosRepository,
       runningRun,
     },
     checkpoint,
@@ -300,6 +333,14 @@ function emptyResult(
     unresolvedRecords: 0,
     ignoredRecords: 0,
     watchLaterRecords: takeout.watchLater.length,
+    queueEntries: 0,
+    subscriptionRecords: takeout.subscriptions.length,
+    channels: 0,
+    components: takeout.components.map((component) => ({
+      kind: component.kind,
+      status: component.status,
+      records: component.recordCount,
+    })),
   }
 }
 
@@ -319,9 +360,56 @@ async function normalizeChunk(
   const mediaItems = new Map<string, MediaItem>()
   const identities = new Map<string, ExternalIdentity>()
   const archiveEntries: ArchiveEntryWrite[] = []
+  const watchProjections: YoutubeWatchProjection[] = []
   let unresolvedRecords = 0
   let ignoredRecords = 0
   let watchLaterRecords = 0
+  let subscriptionRecords = 0
+  const projectedChannels = new Set<string>()
+
+  async function ensureVideo(
+    videoId: string,
+    sourceRecordIdValue: ReturnType<typeof sourceRecordId>,
+    title: string | null,
+    channelTitle: string | null,
+    candidateUrl: string | null,
+  ) {
+    const videoHash = await stableHash(`youtube-video:${videoId}`)
+    const itemId = mediaItemId(`youtube_media_${videoHash}`)
+    const identityId = externalIdentityId(`youtube_identity_${videoHash}`)
+    const url = candidateUrl ?? canonicalWatchUrl(videoId)
+    if (!mediaItems.has(videoId)) {
+      mediaItems.set(videoId, {
+        id: itemId,
+        type: 'video',
+        title,
+        subtitle: null,
+        primaryCreatorName: channelTitle,
+        description: null,
+        canonicalUrl: url,
+        imageUrl: null,
+        publishedAt: null,
+        durationMs: null,
+        createdAt: observedAt,
+        updatedAt: observedAt,
+      })
+    }
+    const earlierIdentity = identities.get(videoId)
+    identities.set(videoId, {
+      id: identityId,
+      mediaItemId: itemId,
+      namespace: 'youtube',
+      externalType: 'video_id',
+      externalId: videoId,
+      scope: { kind: 'global' },
+      canonicalUrl: url,
+      firstObservedSourceRecordId:
+        earlierIdentity?.firstObservedSourceRecordId ?? sourceRecordIdValue,
+      lastObservedSourceRecordId: sourceRecordIdValue,
+      retiredAt: null,
+    })
+    return { itemId, identityId, url }
+  }
 
   const ordinals = new Map<string, number>()
   const occurrenceRanks = new Map<number, number>()
@@ -336,27 +424,83 @@ async function normalizeChunk(
   for (const ordered of chunk) {
     if (ordered.kind === 'watch_later') {
       const entry = ordered.value
-      ignoredRecords += 1
       watchLaterRecords += 1
+      const recordId = sourceRecordId(
+        `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_watch_later_${ordered.index + 2}`,
+      )
+      const parsedAddedAt =
+        entry.addedAt === null || Number.isNaN(Date.parse(entry.addedAt))
+          ? null
+          : new Date(entry.addedAt).toISOString()
+      const usable = entry.videoId !== null
+      if (!usable) unresolvedRecords += 1
       sourceRecords.push({
-        id: sourceRecordId(
-          `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_watch_later_${ordered.index + 2}`,
-        ),
+        id: recordId,
         rawObjectId: context.rawObject.id,
         connectionId: context.connection.id,
         recordType: 'watch_later',
         recordPath: `playlists/Watch later-videos.csv#row=${ordered.index + 2}`,
         sourceRecordKey: entry.videoId === null ? null : `watch_later:${entry.videoId}`,
-        sourceRecordedAt:
-          entry.addedAt === null || Number.isNaN(Date.parse(entry.addedAt))
-            ? null
-            : temporalInstant(new Date(entry.addedAt).toISOString()),
+        sourceRecordedAt: parsedAddedAt === null ? null : temporalInstant(parsedAddedAt),
         observedAt,
         parserVersion,
         contentSha256: null,
-        disposition: 'ignored',
+        disposition: usable ? 'normalized' : 'unresolved',
         upstreamState: 'active',
-        errorCode: null,
+        errorCode: usable ? null : 'missing_video_identity',
+      })
+      if (entry.videoId !== null) await ensureVideo(entry.videoId, recordId, null, null, null)
+      continue
+    }
+
+    if (ordered.kind === 'subscription') {
+      const entry = ordered.value
+      subscriptionRecords += 1
+      const recordId = sourceRecordId(
+        `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_subscription_${ordered.index + 2}`,
+      )
+      const channelId = entry.channelId?.trim() || youtubeChannelId(entry.channelUrl) || null
+      if (channelId === null) unresolvedRecords += 1
+      else projectedChannels.add(channelId)
+      sourceRecords.push({
+        id: recordId,
+        rawObjectId: context.rawObject.id,
+        connectionId: context.connection.id,
+        recordType: 'channel_subscription',
+        recordPath: `subscriptions/subscriptions.csv#row=${ordered.index + 2}`,
+        sourceRecordKey: channelId === null ? null : `subscription:${channelId}`,
+        sourceRecordedAt: null,
+        observedAt,
+        parserVersion,
+        contentSha256: null,
+        disposition: channelId === null ? 'unresolved' : 'normalized',
+        upstreamState: 'active',
+        errorCode: channelId === null ? 'missing_channel_identity' : null,
+      })
+      continue
+    }
+
+    if (ordered.kind === 'playlist') {
+      const entry = ordered.value
+      sourceRecords.push({
+        id: sourceRecordId(
+          `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_playlist_${ordered.index + 2}`,
+        ),
+        rawObjectId: context.rawObject.id,
+        connectionId: context.connection.id,
+        recordType: 'playlist_metadata',
+        recordPath: `playlists/playlists.csv#row=${ordered.index + 2}`,
+        sourceRecordKey: entry.playlistId === null ? null : `playlist:${entry.playlistId}`,
+        sourceRecordedAt:
+          entry.updatedAt === null || Number.isNaN(Date.parse(entry.updatedAt))
+            ? null
+            : temporalInstant(new Date(entry.updatedAt).toISOString()),
+        observedAt,
+        parserVersion,
+        contentSha256: null,
+        disposition: entry.playlistId === null ? 'unresolved' : 'normalized',
+        upstreamState: 'active',
+        errorCode: entry.playlistId === null ? 'missing_playlist_identity' : null,
       })
       continue
     }
@@ -393,40 +537,13 @@ async function normalizeChunk(
       continue
     }
 
-    const videoHash = await stableHash(`youtube-video:${entry.videoId}`)
-    const itemId = mediaItemId(`youtube_media_${videoHash}`)
-    const identityId = externalIdentityId(`youtube_identity_${videoHash}`)
-    const url = entry.titleUrl ?? canonicalWatchUrl(entry.videoId)
-
-    if (!mediaItems.has(entry.videoId)) {
-      mediaItems.set(entry.videoId, {
-        id: itemId,
-        type: 'video',
-        title: entry.title,
-        subtitle: null,
-        primaryCreatorName: entry.channelTitle,
-        description: null,
-        canonicalUrl: url,
-        imageUrl: null,
-        publishedAt: null,
-        durationMs: null,
-        createdAt: observedAt,
-        updatedAt: observedAt,
-      })
-    }
-    const earlierIdentity = identities.get(entry.videoId)
-    identities.set(entry.videoId, {
-      id: identityId,
-      mediaItemId: itemId,
-      namespace: 'youtube',
-      externalType: 'video_id',
-      externalId: entry.videoId,
-      scope: { kind: 'global' },
-      canonicalUrl: url,
-      firstObservedSourceRecordId: earlierIdentity?.firstObservedSourceRecordId ?? recordId,
-      lastObservedSourceRecordId: recordId,
-      retiredAt: null,
-    })
+    const { itemId, identityId, url } = await ensureVideo(
+      entry.videoId,
+      recordId,
+      entry.title,
+      entry.channelTitle,
+      entry.titleUrl,
+    )
 
     const rank = occurrenceRanks.get(ordered.index)!
     const matches = await context.repository.findOccurrencesAt(
@@ -466,10 +583,69 @@ async function normalizeChunk(
         linkedAt: observedAt,
       })),
     })
+    const channelId = youtubeChannelId(entry.channelUrl)
+    if (channelId !== null) projectedChannels.add(channelId)
+    watchProjections.push({
+      sourceRecordId: recordId,
+      archiveEntryId: entryId,
+      connectionId: context.connection.id,
+      mediaItemId: itemId,
+      videoId: entry.videoId,
+      historicalTitle: entry.title,
+      sourceVideoUrl: url,
+      historicalChannelTitle: entry.channelTitle,
+      sourceChannelUrl: entry.channelUrl,
+      channelId,
+      product: entry.product,
+      fromGoogleAds: entry.fromGoogleAds,
+      occurredAt: entry.occurredAt,
+      occurredAtRaw: entry.occurredAtRaw,
+      occurrenceRank: rank,
+      parserVersion,
+      observedAt,
+    })
   }
 
   const nextOffsetValue = offset + chunk.length
   const completed = nextOffsetValue >= records.length
+  const componentProjections: YoutubeComponentProjection[] = takeout.components.map(
+    (component) => ({
+      kind: component.kind,
+      memberName: component.memberName,
+      status: component.status,
+      recordCount: component.recordCount,
+      errorCode: component.errorCode,
+      snapshotSourceRecordId: null,
+    }),
+  )
+  if (completed) {
+    for (const component of componentProjections) {
+      const markerId = sourceRecordId(
+        `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_component_${component.kind}`,
+      )
+      sourceRecords.push({
+        id: markerId,
+        rawObjectId: context.rawObject.id,
+        connectionId: context.connection.id,
+        recordType: 'takeout_component_snapshot',
+        recordPath: `components/${component.kind}`,
+        sourceRecordKey: `component:${component.kind}:${context.archiveChecksum}`,
+        sourceRecordedAt: null,
+        observedAt,
+        parserVersion,
+        contentSha256: null,
+        disposition:
+          component.status === 'complete'
+            ? 'normalized'
+            : component.status === 'invalid'
+              ? 'invalid'
+              : 'ignored',
+        upstreamState: 'active',
+        errorCode: component.errorCode,
+      })
+      component.snapshotSourceRecordId = markerId
+    }
+  }
   const existingCursor = await context.repository.findSyncCursor(
     context.connection.id,
     context.cursorName,
@@ -504,6 +680,75 @@ async function normalizeChunk(
   }
 
   await context.repository.commit({
+    rawObjects: [
+      {
+        ...context.rawObject,
+        processingStatus: 'processing',
+        lastParserVersion: parserVersion,
+      },
+    ],
+    sourceRecords,
+    mediaItems: [...mediaItems.values()],
+    externalIdentities: [...identities.values()],
+    archiveEntries,
+  })
+  await context.videosRepository.projectWatches(watchProjections)
+  if (completed) {
+    const watchLater: YoutubeSnapshotMembership[] = []
+    for (const [index, entry] of takeout.watchLater.entries()) {
+      if (entry.videoId === null) continue
+      const mediaHash = await stableHash(`youtube-video:${entry.videoId}`)
+      const membershipHash = await stableHash(
+        `${context.connection.id}:watch-later:${entry.videoId}`,
+      )
+      const addedAt =
+        entry.addedAt === null || Number.isNaN(Date.parse(entry.addedAt))
+          ? null
+          : new Date(entry.addedAt).toISOString()
+      watchLater.push({
+        sourceRecordId: sourceRecordId(
+          `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_watch_later_${index + 2}`,
+        ),
+        mediaItemId: mediaItemId(`youtube_media_${mediaHash}`),
+        videoId: entry.videoId,
+        queueEntryId: `youtube_queue_${membershipHash}`,
+        membershipEvidenceId: `youtube_queue_evidence_${parserId}_${membershipHash}_membership_${context.archiveChecksum}`,
+        addedEvidenceId:
+          addedAt === null
+            ? null
+            : `youtube_queue_evidence_${parserId}_${membershipHash}_added_${context.archiveChecksum}`,
+        addedAt,
+      })
+    }
+    const subscriptions: YoutubeSnapshotSubscription[] = takeout.subscriptions.flatMap(
+      (entry, index) => {
+        const channelId = entry.channelId?.trim() || youtubeChannelId(entry.channelUrl) || null
+        return channelId === null
+          ? []
+          : [
+              {
+                sourceRecordId: sourceRecordId(
+                  `youtube_sr_${parserId}_${context.connectionHash}_${context.archiveChecksum}_subscription_${index + 2}`,
+                ),
+                channelId,
+                channelTitle: entry.channelTitle,
+                channelUrl: entry.channelUrl,
+              },
+            ]
+      },
+    )
+    await context.videosRepository.finalizeTakeout({
+      rawObjectId: context.rawObject.id,
+      connectionId: context.connection.id,
+      syncRunId: context.runningRun.id,
+      parserVersion,
+      observedAt,
+      components: componentProjections,
+      watchLater,
+      subscriptions,
+    })
+  }
+  await context.repository.commit({
     syncRun,
     rawObjects: [
       {
@@ -512,10 +757,6 @@ async function normalizeChunk(
         lastParserVersion: parserVersion,
       },
     ],
-    sourceRecords,
-    mediaItems: [...mediaItems.values()],
-    externalIdentities: [...identities.values()],
-    archiveEntries,
     cursor,
   })
   if (completed) {
@@ -536,6 +777,16 @@ async function normalizeChunk(
     unresolvedRecords,
     ignoredRecords,
     watchLaterRecords,
+    queueEntries: completed
+      ? takeout.watchLater.filter((entry) => entry.videoId !== null).length
+      : 0,
+    subscriptionRecords,
+    channels: projectedChannels.size,
+    components: takeout.components.map((component) => ({
+      kind: component.kind,
+      status: component.status,
+      records: component.recordCount,
+    })),
   }
 }
 

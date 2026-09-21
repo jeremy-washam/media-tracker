@@ -21,12 +21,16 @@ const watchLater = `Video ID,Playlist Video Creation Timestamp
 synthetic-video,2026-01-01T00:00:00+00:00
 future-video,2026-01-02T00:00:00+00:00
 `
+const subscriptions = `Channel Id,Channel Url,Channel Title
+UC1234567890abcdefghijAB,https://www.youtube.com/channel/UC1234567890abcdefghijAB,Synthetic Channel
+`
 
 function takeout(label: string) {
   return inspectYoutubeTakeoutBytes(
     zipSync({
       'Takeout/YouTube and YouTube Music/history/watch-history.html': strToU8(html),
       'Takeout/YouTube and YouTube Music/playlists/Watch later-videos.csv': strToU8(watchLater),
+      'Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv': strToU8(subscriptions),
     }),
     label,
   )
@@ -81,7 +85,22 @@ describe('YouTube Takeout inspection', () => {
     expect(entries[0]).toMatchObject({ action: 'Watched', product: 'unknown', videoId: null })
   })
 
-  it('reports an invalid ZIP and a missing history file with safe messages', () => {
+  it('tracks component completeness without treating a missing optional member as empty', () => {
+    const result = inspectYoutubeTakeoutBytes(
+      zipSync({
+        'Takeout/YouTube and YouTube Music/history/watch-history.html': strToU8(html),
+      }),
+      'private-name.zip',
+    )
+    expect(result.components).toEqual([
+      expect.objectContaining({ kind: 'watch_history', status: 'complete', recordCount: 2 }),
+      expect.objectContaining({ kind: 'watch_later', status: 'missing', recordCount: 0 }),
+      expect.objectContaining({ kind: 'playlist_index', status: 'missing', recordCount: 0 }),
+      expect.objectContaining({ kind: 'subscriptions', status: 'missing', recordCount: 0 }),
+    ])
+  })
+
+  it('reports an invalid ZIP and an export without supported members with safe messages', () => {
     expect(() => inspectYoutubeTakeoutBytes(strToU8('not a zip'), 'private-name.zip')).toThrow(
       'not a valid Google Takeout ZIP export',
     )
@@ -90,6 +109,6 @@ describe('YouTube Takeout inspection', () => {
         zipSync({ 'Takeout/other.txt': strToU8('x') }),
         'private-name.zip',
       ),
-    ).toThrow('has no YouTube watch-history.html')
+    ).toThrow('has no supported YouTube members')
   })
 })

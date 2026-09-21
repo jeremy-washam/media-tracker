@@ -26,7 +26,7 @@ type DisabledNavigationItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>
 }
 
-const unavailableMedia: DisabledNavigationItem[] = [{ label: 'Videos', icon: Video }]
+const unavailableMedia: DisabledNavigationItem[] = []
 
 function preference(key: string): boolean {
   return typeof window !== 'undefined' && window.localStorage.getItem(key) === 'true'
@@ -50,7 +50,8 @@ export function AppShell() {
   const inArticles = location.pathname.startsWith('/library/articles')
   const inPodcasts = location.pathname.startsWith('/library/podcasts')
   const inMusic = location.pathname.startsWith('/library/music')
-  const inLibrary = inBooks || inMovies || inArticles || inPodcasts || inMusic
+  const inVideos = location.pathname.startsWith('/library/videos')
+  const inLibrary = inBooks || inMovies || inArticles || inPodcasts || inMusic || inVideos
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -177,6 +178,17 @@ export function AppShell() {
             <Music2 aria-hidden="true" />
             {!collapsed ? <span>Music</span> : null}
           </Link>
+          <Link
+            to="/library/videos/archive"
+            activeOptions={{ includeSearch: false }}
+            className={inVideos ? 'active' : ''}
+            aria-current={inVideos ? 'page' : undefined}
+            title="Videos"
+            onClick={() => setMobileOpen(false)}
+          >
+            <Video aria-hidden="true" />
+            {!collapsed ? <span>Videos</span> : null}
+          </Link>
           {unavailableMedia.map((item) => (
             <UnavailableNavigation key={item.label} {...item} collapsed={collapsed} />
           ))}
@@ -232,7 +244,9 @@ export function AppShell() {
                         ? 'Podcasts'
                         : inMusic
                           ? 'Music'
-                          : 'Books'}
+                          : inVideos
+                            ? 'Videos'
+                            : 'Books'}
                 </strong>
               </>
             ) : (

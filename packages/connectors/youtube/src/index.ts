@@ -1,9 +1,16 @@
 export {
   inspectYoutubeTakeoutBytes,
+  parseYoutubePlaylistsCsv,
+  parseYoutubeSubscriptionsCsv,
   parseYoutubeWatchHistoryHtml,
   parseYoutubeWatchLaterCsv,
   summarizeYoutubeTakeouts,
+  youtubeChannelId,
+  type YoutubePlaylistEntry,
+  type YoutubeSubscriptionEntry,
   type YoutubeTakeout,
+  type YoutubeTakeoutComponent,
+  type YoutubeTakeoutComponentKind,
   type YoutubeWatchEntry,
   type YoutubeWatchLaterEntry,
 } from './takeout'

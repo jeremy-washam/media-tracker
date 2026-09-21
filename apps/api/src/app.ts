@@ -40,6 +40,14 @@ import {
   SpotifyImportResponseSchema,
   SpotifySyncResponseSchema,
   SyncRunsResponseSchema,
+  VideoChannelDetailSchema,
+  VideoChannelLibraryQuerySchema,
+  VideoChannelLibraryResponseSchema,
+  VideoDetailSchema,
+  VideoHistoryQuerySchema,
+  VideoHistoryResponseSchema,
+  VideosQuerySchema,
+  VideosResponseSchema,
   YoutubeImportResponseSchema,
 } from '@media-tracker/contracts'
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi'
@@ -55,6 +63,7 @@ import {
   createLedgerRepository,
   createMoviesRepository,
   createSpotifyLibraryRepository,
+  createVideosRepository,
   type AppEnv,
 } from './env'
 import { HardcoverTokenMissingError, syncHardcover } from './hardcover-sync'
@@ -308,6 +317,64 @@ const musicHistoryRoute = createRoute({
   responses: {
     200: jsonContent(MusicHistoryResponseSchema, 'Track playback history'),
     400: jsonContent(ApiErrorSchema, 'Invalid Music history cursor'),
+  },
+})
+
+const videosRoute = createRoute({
+  method: 'get',
+  path: '/api/library/videos',
+  tags: ['Library', 'Videos'],
+  request: { query: VideosQuerySchema },
+  responses: {
+    200: jsonContent(VideosResponseSchema, 'Videos library'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Videos query'),
+  },
+})
+
+const videoDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/videos/{id}',
+  tags: ['Library', 'Videos'],
+  request: { params: z.object({ id: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(VideoDetailSchema, 'Video details'),
+    404: jsonContent(ApiErrorSchema, 'Video not found'),
+  },
+})
+
+const videoHistoryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/videos/{id}/history',
+  tags: ['Library', 'Videos'],
+  request: { params: z.object({ id: z.string().min(1) }), query: VideoHistoryQuerySchema },
+  responses: {
+    200: jsonContent(VideoHistoryResponseSchema, 'Video watch history'),
+    400: jsonContent(ApiErrorSchema, 'Invalid video history cursor'),
+  },
+})
+
+const videoChannelDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/video-channels/{id}',
+  tags: ['Library', 'Videos'],
+  request: { params: z.object({ id: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(VideoChannelDetailSchema, 'Video channel details'),
+    404: jsonContent(ApiErrorSchema, 'Video channel not found'),
+  },
+})
+
+const videoChannelLibraryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/video-channels/{id}/videos',
+  tags: ['Library', 'Videos'],
+  request: {
+    params: z.object({ id: z.string().min(1) }),
+    query: VideoChannelLibraryQuerySchema,
+  },
+  responses: {
+    200: jsonContent(VideoChannelLibraryResponseSchema, 'Videos for one Library channel'),
+    400: jsonContent(ApiErrorSchema, 'Invalid channel Library cursor'),
   },
 })
 
@@ -856,6 +923,103 @@ app.openapi(musicHistoryRoute, async (context) => {
     return context.json(MusicHistoryResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(videosRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createVideosRepository(context.env.DB).listVideos({
+      view: query.view,
+      ...(query.q === undefined ? {} : { q: query.q }),
+      account: query.account,
+      channel: query.channel,
+      ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
+      ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
+      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+      watchCount: query.watchCount,
+      overlap: query.overlap,
+      format: query.format,
+      availability: query.availability,
+      following: query.following,
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.direction === undefined ? {} : { direction: query.direction }),
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(VideosResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(videoDetailRoute, async (context) => {
+  const id = context.req.valid('param').id
+  const item = await createVideosRepository(context.env.DB).findVideo(id)
+  if (item !== null) return context.json(VideoDetailSchema.parse(item), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No video exists with ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(videoHistoryRoute, async (context) => {
+  const id = context.req.valid('param').id
+  const query = context.req.valid('query')
+  try {
+    const page = await createVideosRepository(context.env.DB).listHistory(
+      id,
+      query.limit,
+      query.cursor,
+    )
+    return context.json(VideoHistoryResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Videos pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(videoChannelDetailRoute, async (context) => {
+  const id = context.req.valid('param').id
+  const item = await createVideosRepository(context.env.DB).findChannel(id)
+  if (item !== null) return context.json(VideoChannelDetailSchema.parse(item), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No Library channel exists with ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(videoChannelLibraryRoute, async (context) => {
+  const id = context.req.valid('param').id
+  const query = context.req.valid('query')
+  try {
+    const page = await createVideosRepository(context.env.DB).listChannelVideos(
+      id,
+      query.membership,
+      query.limit,
+      query.cursor,
+    )
+    return context.json(VideoChannelLibraryResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Videos pagination cursor')
       throw new HTTPException(400, { message: error.message })
     throw error
   }

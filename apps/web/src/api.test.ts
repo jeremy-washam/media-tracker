@@ -181,6 +181,10 @@ describe('API client', () => {
       unresolvedRecords: 1,
       ignoredRecords: 1,
       watchLaterRecords: 1,
+      queueEntries: 1,
+      subscriptionRecords: 2,
+      channels: 2,
+      components: [],
     }
     const fetcher = vi.fn(async () => Response.json(response)) as unknown as typeof fetch
     const archive = new File(['synthetic'], 'takeout.zip', { type: 'application/zip' })
@@ -208,6 +212,10 @@ describe('API client', () => {
       unresolvedRecords: 0,
       ignoredRecords: 0,
       watchLaterRecords: 0,
+      queueEntries: 0,
+      subscriptionRecords: 0,
+      channels: 0,
+      components: [],
     }
     const last = {
       ...first,

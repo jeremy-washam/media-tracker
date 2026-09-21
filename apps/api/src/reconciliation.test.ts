@@ -119,6 +119,7 @@ class D1SqliteDatabase {
       '0013_article_content_attempts.sql',
       '0014_podcasts_library.sql',
       '0015_songs_library.sql',
+      '0016_videos_takeout_library.sql',
     ]) {
       this.database.exec(
         readFileSync(
@@ -642,7 +643,7 @@ it('keeps same-timestamp repeat watches across reordered snapshots and chunk bou
   while (!next.completed)
     next = await importYoutubeTakeout(bindings, youtubeArchive(4, true), { chunkSize: 1 })
   expect(count(database.database, 'archive_entries')).toBe(4)
-  expect(count(database.database, 'source_records')).toBe(7)
+  expect(count(database.database, 'source_records')).toBe(15)
 })
 it('paginates the complete Archive and filters before applying the limit', async () => {
   const zip = youtubeArchive(1005)
@@ -782,7 +783,7 @@ it('reuses a legacy YouTube occurrence on reprocessing and later snapshots', asy
   }
   await importYoutubeTakeout(bindings, zip)
   expect(database.database.prepare('SELECT id FROM archive_entries').all()).toEqual([original])
-  expect(count(database.database, 'source_records')).toBe(2)
+  expect(count(database.database, 'source_records')).toBe(5)
 })
 
 it('retries Letterboxd after records committed but the connection update failed', async () => {

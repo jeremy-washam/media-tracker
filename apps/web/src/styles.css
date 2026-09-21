@@ -2,6 +2,12 @@
 @import './components.css';
 
 :root {
+  --workspace-header-height: 54px;
+  --surface: var(--card);
+  --surface-raised: var(--secondary);
+  --line: var(--border);
+  --ink: var(--foreground);
+  --ink-muted: var(--muted-foreground);
   font-family:
     Inter,
     ui-sans-serif,
@@ -2656,6 +2662,35 @@ a:focus-visible {
   padding: 7px 0;
 }
 
+.media-inspector ol.history-list,
+.media-inspector ul.history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.media-inspector ol.history-list::before,
+.media-inspector ul.history-list::before {
+  display: none;
+}
+
+.media-inspector .history-list li {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.media-inspector .history-list li strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-inspector .history-list li span {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
 .media-inspector dt,
 .history-list span {
   color: var(--ink-muted);
@@ -2669,6 +2704,188 @@ a:focus-visible {
 
 .media-inspector a svg {
   width: 14px;
+}
+
+/* Videos collection */
+.videos-page:has(.media-inspector) {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 410px);
+}
+
+.videos-page .books-toolbar {
+  grid-template-columns: minmax(230px, 1fr) repeat(4, auto);
+}
+
+.video-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+  gap: 20px 16px;
+}
+
+.videos-list .video-result-grid,
+.video-channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-block: 1px solid var(--line);
+}
+
+.video-result,
+.video-channel-row {
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  padding: 9px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.videos-list .video-result,
+.video-channel-row {
+  border-width: 0 0 1px;
+  border-color: var(--line);
+  border-radius: 0;
+}
+
+.video-result:hover,
+.video-result.selected,
+.video-channel-row:hover,
+.video-channel-row.selected {
+  background: var(--surface-raised);
+  border-color: var(--accent);
+}
+
+.videos-grid .video-result {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.video-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 150px;
+  aspect-ratio: 16 / 9;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-raised));
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+
+.video-thumbnail > svg {
+  width: 28px;
+  height: 28px;
+}
+
+.videos-grid .video-thumbnail {
+  width: 100%;
+}
+
+.video-thumbnail img,
+.video-channel-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-result-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+
+.video-result-copy strong,
+.video-result-copy span,
+.video-result-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-result-copy span,
+.video-result-copy small,
+.video-result-date,
+.library-coverage-note {
+  color: var(--ink-muted);
+}
+
+.video-list-extra {
+  display: block;
+}
+
+.videos-grid .video-list-extra {
+  display: none;
+}
+
+.video-channel-avatar {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-raised));
+  color: var(--accent);
+}
+
+.video-result-date {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.library-coverage-note {
+  margin: -4px 0 14px;
+  font-size: 11px;
+}
+
+.video-inspector-hero {
+  grid-template-columns: 132px 1fr;
+}
+
+.video-inspector-hero .video-thumbnail {
+  width: 132px;
+}
+
+.inspector-tabs button.active {
+  color: var(--foreground);
+  font-weight: 650;
+}
+
+@media (max-width: 1280px) {
+  .videos-page:has(.media-inspector) {
+    grid-template-columns: 1fr;
+  }
+
+  .videos-page .media-inspector {
+    position: fixed;
+    inset: var(--workspace-header-height) 0 0 auto;
+    width: min(430px, 100vw);
+    z-index: 20;
+    box-shadow: -8px 0 28px rgb(0 0 0 / 16%);
+  }
+}
+
+@media (max-width: 760px) {
+  .videos-page .books-toolbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .video-result-date,
+  .video-list-extra {
+    display: none;
+  }
+
+  .video-thumbnail {
+    width: 112px;
+  }
 }
 
 @media (max-width: 900px) {

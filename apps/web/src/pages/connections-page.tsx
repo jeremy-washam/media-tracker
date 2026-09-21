@@ -416,7 +416,7 @@ export function ConnectionsPage() {
         <p className="checkpoint-note">
           {youtubeImport.data.alreadyImported
             ? 'That exact YouTube Takeout was already imported.'
-            : `Imported ${youtubeImport.data.archiveEntries} YouTube watch occurrences.`}
+            : `Imported ${youtubeImport.data.archiveEntries} YouTube watch occurrences, ${youtubeImport.data.queueEntries} Watch Later entries, and ${youtubeImport.data.subscriptionRecords} subscriptions.`}
         </p>
       ) : null}
       {youtubeImport.isError ? (

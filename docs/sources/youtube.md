@@ -1,8 +1,9 @@
 # YouTube Source Reconnaissance
 
-- Status: Private Takeout history and Watch Later probes complete
-- Last verified: 2026-07-19
-- Priority: Watched-video history first; Watch Later is future Queue evidence
+- Status: Private Takeout history, Watch Later, and subscriptions implemented;
+  public Data API/OAuth probes remain credential-gated
+- Last verified: 2026-09-20
+- Priority: Takeout-backed Library shipped; public catalog metadata next
 - Sources: Official Google/YouTube documentation and private aggregate probes
 
 ## Executive assessment
@@ -28,7 +29,7 @@ Recommended integration shape:
    video ID.
 4. Preserve non-watch activity and unavailable rows as source evidence without
    admitting them as watched videos.
-5. Import Watch Later independently as Queue evidence when Queue is implemented.
+5. Import Watch Later independently as current, source-derived Queue evidence.
 6. Enrich known public video IDs through `videos.list` later, without making
    metadata enrichment a prerequisite for preserving history.
 
@@ -63,27 +64,26 @@ Two separate Takeout ZIPs were inspected. Both contained:
 - `playlists/Watch later-videos.csv`;
 - subscription, channel, comment, and related account files.
 
-Only watch history and Watch Later were parsed. Search history, comments, chats,
-subscriptions, channel identity, and other private account material were not
-printed or normalized.
+Watch history, Watch Later, playlist index, and subscriptions are now parsed by
+the application. Search history, comments, chats, and other private account
+material are not normalized. Real-data validation reports aggregate counts
+only; owner titles, channels, IDs, and raw content are not committed.
 
 ### History A
 
 - 4,486 activity cards total;
 - 4,418 `Watched` occurrences;
-- 4,410 watched occurrences with a video ID;
-- 3,975 unique watched video IDs;
-- 435 repeated watch occurrences beyond the unique-ID count;
-- 8 watched rows without a usable video ID;
+- 4,407 supported watched occurrences with both usable identity and timestamp;
+- 3,974 unique supported video IDs;
+- 11 watched rows excluded by the supported identity-and-timestamp rule;
 - 68 non-watch cards: 40 `Viewed`, 21 `Visited`, and 7 `Answered`;
-- no missing parsed timestamps;
 - UTC range 2023-07-31 through 2026-07-19.
 
 ### History B
 
 - 19,483 activity cards total;
 - 19,466 `Watched` occurrences;
-- 19,458 watched occurrences with a video ID;
+- 19,458 supported watched occurrences with both usable identity and timestamp;
 - 16,385 unique watched video IDs;
 - 3,073 repeated watch occurrences beyond the unique-ID count;
 - 8 watched rows without a usable video ID;
@@ -94,10 +94,11 @@ printed or normalized.
 
 ### Combined implications
 
-Across both source archives there are 23,884 watched occurrences and 20,228
-unique video IDs. The histories share 132 video IDs, but they have zero exact
-video-ID-plus-timestamp occurrence overlaps. They must remain separate source
-connections: a shared video does not prove a duplicate watch.
+Across both source archives the production parser retains 23,865 supported watch
+occurrences and 20,227 global video identities. It also retains 110 active Watch
+Later relationships and 134 active subscription relationships. The histories
+must remain separate source connections: a shared video does not prove a
+duplicate watch.
 
 The HTML file name is misleading: it includes `Viewed`, `Visited`, and
 `Answered` activity cards alongside actual watches. Archive admission must test

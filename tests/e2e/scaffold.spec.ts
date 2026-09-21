@@ -131,6 +131,56 @@ test('keeps loaded Music pages while changing layout and opening the inspector',
   )
 })
 
+test('keeps loaded Video pages while changing layout and opening the inspector', async ({
+  page,
+}) => {
+  const requested: string[] = []
+  await page.route('**/api/library/videos?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url.search)
+    const second = url.searchParams.has('cursor')
+    await route.fulfill({
+      json: videosResponse(
+        [
+          {
+            ...video,
+            id: second ? 'video-two' : 'video-one',
+            title: second ? 'Second Video' : video.title,
+          },
+        ],
+        second ? null : 'next-video-page',
+      ),
+    })
+  })
+  await page.route('**/api/library/videos/video-one', (route) =>
+    route.fulfill({
+      json: {
+        ...video,
+        description: null,
+        historyCount: 2,
+        queueRelationships: [],
+        metadataMessage: 'YouTube Data API metadata is not configured.',
+      },
+    }),
+  )
+  await page.route('**/api/library/videos/video-one/history*', (route) =>
+    route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
+  )
+  await page.goto('/library/videos/archive')
+  await page.getByRole('button', { name: 'Load more' }).click()
+  await expect(page.getByRole('button', { name: /Second Video/ })).toBeVisible()
+  const afterPaging = requested.length
+  await page.getByRole('button', { name: 'Grid view' }).click()
+  await page.getByRole('button', { name: /A Distant Video/ }).click()
+  await expect(page.getByRole('heading', { name: 'A Distant Video' })).toBeVisible()
+  await page.getByRole('button', { name: 'Close inspector' }).click()
+  await expect(page.getByRole('button', { name: /Second Video/ })).toBeVisible()
+  expect(requested).toHaveLength(afterPaging)
+  expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
+    true,
+  )
+})
+
 const booksResponse = (data = [book], nextCursor: string | null = null) => ({
   data,
   nextCursor,
@@ -284,6 +334,43 @@ const musicResponse = (data = [track], nextCursor: string | null = null) => ({
   totalCount: data.length,
   filteredCount: data.length,
   sectionCounts: { tracks: 24, albums: 8, artists: 6 },
+})
+const video = {
+  id: 'video-one',
+  kind: 'video' as const,
+  title: 'A Distant Video',
+  channelId: 'channel-one',
+  channelTitle: 'A Distant Channel',
+  imageUrl: null,
+  canonicalUrl: 'https://www.youtube.com/watch?v=video-one',
+  date: '2026-09-12T10:00:00.000Z',
+  publishedAt: null,
+  durationMs: null,
+  availability: 'not_configured' as const,
+  format: 'youtube' as const,
+  inArchive: true,
+  inQueue: false,
+  watchCount: 2,
+  watchAccountCount: 1,
+  queueAccountCount: 0,
+  archiveVideoCount: 0,
+  queueVideoCount: 0,
+  following: false,
+  subscriptionCount: 0,
+}
+const videosResponse = (data = [video], nextCursor: string | null = null) => ({
+  data,
+  nextCursor,
+  totalCount: data.length,
+  filteredCount: data.length,
+  sectionCounts: { archive: 20_227, queue: 110, channels: 2_400 },
+  occurrenceCount: 23_865,
+  facets: { accounts: [], channels: [] },
+  coverage: {
+    watchLater: 'complete' as const,
+    subscriptions: 'complete' as const,
+    catalog: 'not_configured' as const,
+  },
 })
 
 test.beforeEach(async ({ page }) => {

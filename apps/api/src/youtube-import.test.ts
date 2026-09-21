@@ -8,12 +8,31 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Bindings } from './env'
 import { continueYoutubeTakeoutImport, importYoutubeTakeout } from './youtube-import'
 
-const migration = readFileSync(
-  fileURLToPath(
-    new URL('../../../packages/db/migrations/0001_canonical_ledger.sql', import.meta.url).href,
-  ),
-  'utf8',
-)
+const migration = [
+  '0001_canonical_ledger.sql',
+  '0002_rotating_credentials.sql',
+  '0003_books_library.sql',
+  '0004_books_review_facts.sql',
+  '0005_books_format_projection.sql',
+  '0006_movies_library.sql',
+  '0007_movies_nullable_source_link.sql',
+  '0008_articles_library.sql',
+  '0009_article_content_search_map.sql',
+  '0010_article_content_jobs.sql',
+  '0011_article_current_availability.sql',
+  '0012_article_content_reliability.sql',
+  '0013_article_content_attempts.sql',
+  '0014_podcasts_library.sql',
+  '0015_songs_library.sql',
+  '0016_videos_takeout_library.sql',
+]
+  .map((name) =>
+    readFileSync(
+      fileURLToPath(new URL(`../../../packages/db/migrations/${name}`, import.meta.url).href),
+      'utf8',
+    ),
+  )
+  .join('\n')
 
 type SqlValue = ArrayBuffer | null | number | string
 
@@ -117,12 +136,12 @@ function count(database: DatabaseSync, table: string): number {
 const html = `<!doctype html>
 <div class="outer-cell"><div class="content-cell">
 Watched&nbsp;<a href="https://www.youtube.com/watch?v=synthetic-video">Synthetic Video</a><br>
-<a href="https://www.youtube.com/channel/synthetic-channel">Synthetic Channel</a><br>
+<a href="https://www.youtube.com/channel/UC1234567890abcdefghijAB">Synthetic Channel</a><br>
 Jan 1, 2026, 12:00:00 PM PST
 </div></div>
 <div class="outer-cell"><div class="content-cell">
 Watched&nbsp;<a href="https://music.youtube.com/watch?v=synthetic-video">Historical Title</a><br>
-<a href="https://www.youtube.com/channel/synthetic-channel">Synthetic Channel</a><br>
+<a href="https://www.youtube.com/channel/UC1234567890abcdefghijAB">Synthetic Channel</a><br>
 Jan 2, 2026, 12:00:00 PM PST
 </div></div>
 <div class="outer-cell"><div class="content-cell">
@@ -136,10 +155,18 @@ Jan 4, 2026, 12:00:00 PM PST
 const watchLater = `Video ID,Playlist Video Creation Timestamp
 future-video,2026-01-05T00:00:00+00:00
 `
+const subscriptions = `Channel Id,Channel Url,Channel Title
+UC1234567890abcdefghijAB,https://www.youtube.com/channel/UC1234567890abcdefghijAB,Synthetic Channel
+`
+const playlists = `Playlist ID,Add new videos to top,Playlist Title (Original),Playlist Title (Original) Language,Playlist Create Timestamp,Playlist Update Timestamp,Playlist Video Order,Playlist Visibility
+WL,true,Watch later,en,2020-01-01T00:00:00+00:00,2026-01-05T00:00:00+00:00,Manual,Private
+`
 
 const archive = zipSync({
   'Takeout/YouTube and YouTube Music/history/watch-history.html': strToU8(html),
   'Takeout/YouTube and YouTube Music/playlists/Watch later-videos.csv': strToU8(watchLater),
+  'Takeout/YouTube and YouTube Music/playlists/playlists.csv': strToU8(playlists),
+  'Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv': strToU8(subscriptions),
 })
 
 describe('YouTube Takeout import', () => {
@@ -161,12 +188,15 @@ describe('YouTube Takeout import', () => {
     await expect(importYoutubeTakeout(bindings, archive)).resolves.toMatchObject({
       alreadyImported: false,
       activityCards: 4,
-      videos: 1,
+      videos: 2,
       archiveEntries: 2,
-      sourceRecords: 5,
+      sourceRecords: 11,
       unresolvedRecords: 1,
-      ignoredRecords: 2,
+      ignoredRecords: 1,
       watchLaterRecords: 1,
+      queueEntries: 1,
+      subscriptionRecords: 1,
+      channels: 1,
     })
     await expect(importYoutubeTakeout(bindings, archive)).resolves.toMatchObject({
       alreadyImported: true,
@@ -177,11 +207,15 @@ describe('YouTube Takeout import', () => {
     expect(bucket.objects.size).toBe(1)
     expect([...bucket.objects.values()][0]).toEqual(archive)
     expect(count(database.database, 'raw_objects')).toBe(1)
-    expect(count(database.database, 'source_records')).toBe(5)
-    expect(count(database.database, 'media_items')).toBe(1)
-    expect(count(database.database, 'external_identities')).toBe(1)
+    expect(count(database.database, 'source_records')).toBe(11)
+    expect(count(database.database, 'media_items')).toBe(2)
+    expect(count(database.database, 'external_identities')).toBe(2)
     expect(count(database.database, 'archive_entries')).toBe(2)
     expect(count(database.database, 'archive_entry_evidence')).toBe(6)
+    expect(count(database.database, 'queue_entries')).toBe(1)
+    expect(count(database.database, 'youtube_channel_subscriptions')).toBe(1)
+    expect(count(database.database, 'video_library_projection')).toBe(2)
+    expect(count(database.database, 'video_channel_projection')).toBe(1)
     expect(count(database.database, 'sync_runs')).toBe(1)
 
     expect(
@@ -216,8 +250,8 @@ describe('YouTube Takeout import', () => {
         )
         .all(),
     ).toEqual([
-      { disposition: 'ignored', count: 2 },
-      { disposition: 'normalized', count: 2 },
+      { disposition: 'ignored', count: 1 },
+      { disposition: 'normalized', count: 9 },
       { disposition: 'unresolved', count: 1 },
     ])
   })
@@ -236,9 +270,10 @@ describe('YouTube Takeout import', () => {
 
     expect(count(database.database, 'connections')).toBe(2)
     expect(count(database.database, 'raw_objects')).toBe(2)
-    expect(count(database.database, 'media_items')).toBe(1)
-    expect(count(database.database, 'external_identities')).toBe(1)
+    expect(count(database.database, 'media_items')).toBe(2)
+    expect(count(database.database, 'external_identities')).toBe(2)
     expect(count(database.database, 'archive_entries')).toBe(4)
+    expect(count(database.database, 'queue_entries')).toBe(2)
   })
 
   it('resumes from the last atomic chunk and safely retries a failed chunk', async () => {
@@ -255,7 +290,7 @@ describe('YouTube Takeout import', () => {
     expect(count(database.database, 'source_records')).toBe(2)
     expect(count(database.database, 'archive_entries')).toBe(2)
 
-    database.failOnBatchCall = database.batchCalls + 3
+    database.failOnBatchCall = database.batchCalls + 2
     await expect(continueYoutubeTakeoutImport(bindings, first.importId, options)).rejects.toThrow(
       'Synthetic D1 failure',
     )
@@ -274,17 +309,26 @@ describe('YouTube Takeout import', () => {
       sourceRecords: 2,
       archiveEntries: 0,
     })
+    const third = await continueYoutubeTakeoutImport(bindings, first.importId, options)
+    expect(third).toMatchObject({
+      completed: false,
+      nextOffset: 6,
+      sourceRecords: 2,
+      archiveEntries: 0,
+      watchLaterRecords: 1,
+      subscriptionRecords: 1,
+    })
     await expect(
       continueYoutubeTakeoutImport(bindings, first.importId, options),
     ).resolves.toMatchObject({
       completed: true,
       nextOffset: null,
-      sourceRecords: 1,
+      sourceRecords: 5,
       archiveEntries: 0,
-      watchLaterRecords: 1,
+      queueEntries: 1,
     })
 
-    expect(count(database.database, 'source_records')).toBe(5)
+    expect(count(database.database, 'source_records')).toBe(11)
     expect(count(database.database, 'archive_entries')).toBe(2)
     expect(count(database.database, 'archive_entry_evidence')).toBe(6)
     expect(
@@ -295,7 +339,7 @@ describe('YouTube Takeout import', () => {
            FROM sync_runs`,
         )
         .get(),
-    ).toEqual({ runs: 3, source_records: 5, succeeded: 3 })
+    ).toEqual({ runs: 4, source_records: 11, succeeded: 4 })
   })
 
   it('bounds each D1 transaction for exports larger than one chunk', async () => {
@@ -316,7 +360,7 @@ Jan 1, 2026, 12:00:00 PM UTC
       result = await continueYoutubeTakeoutImport(bindings, result.importId)
     }
 
-    expect(count(database.database, 'source_records')).toBe(205)
+    expect(count(database.database, 'source_records')).toBe(209)
     expect(count(database.database, 'media_items')).toBe(205)
     expect(count(database.database, 'archive_entries')).toBe(205)
     expect(database.largestBatch).toBeLessThanOrEqual(703)
@@ -335,7 +379,7 @@ Jan 1, 2026, 12:00:00 PM UTC
       database.database
         .prepare('SELECT processing_status, last_parser_version FROM raw_objects')
         .get(),
-    ).toEqual({ processing_status: 'failed', last_parser_version: 'youtube-takeout@3' })
+    ).toEqual({ processing_status: 'failed', last_parser_version: 'youtube-takeout@4' })
     expect(
       database.database.prepare('SELECT status, failed_record_count FROM sync_runs').get(),
     ).toEqual({ status: 'failed', failed_record_count: 1 })

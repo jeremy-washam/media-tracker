@@ -1,7 +1,8 @@
 # Library implementation handoff
 
 - Date: 2026-09-19
-- Status: In progress; Step 1 through the initial Podcasts and Music production slices are implemented
+- Status: In progress; Step 1 through the initial Podcasts, Music, and
+  Takeout-backed Videos production slices are implemented
 - Intended implementer: Sol agent
 - Scope: Production Library, including Archive, source-derived Queue, and item inspection
 
@@ -51,15 +52,15 @@ accepted decision.
 The ledger and source imports already exist. This is not a frontend-only task,
 and not all illustrative metadata in the specimen is currently available.
 
-| Area        | Current state                                                                                                                                                      | Work needed                                                                  |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| Library API | Books has rich list/detail/History contracts; other media remain generic                                                                                           | Repeat the media-specific API pattern for the remaining types                |
-| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped                                                                                     | Iterate on production feedback without weakening source/provenance semantics |
-| Movies      | Archive/Queue API and UI shipped from Letterboxd export/RSS data                                                                                                   | Add TMDB catalog enrichment after a credentialed live probe                  |
-| Articles    | Archive/Queue/Feed API and list UI ship with all-location Reader sync, annotations, and 250 eligible documents acquired/indexed under the selective-content policy | Iterate on production feedback without weakening provenance                  |
-| Podcasts    | Archive/Queue/Following, export replay, live saved-state/player reconciliation, Reader Archive routing, APIs, filters, inspectors, and UI are implemented          | Complete the explicit hardening list in the Podcasts implementation plan     |
-| Videos      | Takeout supplies identities, titles/channels where present, and watch evidence                                                                                     | Watch Later membership projection and additional public metadata acquisition |
-| Songs       | All identified export rows plus Recently Played feed Tracks/Albums/Artists APIs, filters, inspectors, UI, and bounded exact-ID catalog enrichment                  | Complete the explicit hardening list in the Music implementation plan        |
+| Area        | Current state                                                                                                                                                      | Work needed                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Library API | Books has rich list/detail/History contracts; other media remain generic                                                                                           | Repeat the media-specific API pattern for the remaining types                            |
+| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped                                                                                     | Iterate on production feedback without weakening source/provenance semantics             |
+| Movies      | Archive/Queue API and UI shipped from Letterboxd export/RSS data                                                                                                   | Add TMDB catalog enrichment after a credentialed live probe                              |
+| Articles    | Archive/Queue/Feed API and list UI ship with all-location Reader sync, annotations, and 250 eligible documents acquired/indexed under the selective-content policy | Iterate on production feedback without weakening provenance                              |
+| Podcasts    | Archive/Queue/Following, export replay, live saved-state/player reconciliation, Reader Archive routing, APIs, filters, inspectors, and UI are implemented          | Complete the explicit hardening list in the Podcasts implementation plan                 |
+| Videos      | Archive/Watch Later Queue/Channels APIs and UI ship from real Takeout replay, including exact channel rollups and Takeout Following snapshots                      | Add Data API catalog metadata and OAuth-current Following after credentialed live probes |
+| Songs       | All identified export rows plus Recently Played feed Tracks/Albums/Artists APIs, filters, inspectors, UI, and bounded exact-ID catalog enrichment                  | Complete the explicit hardening list in the Music implementation plan                    |
 
 Verify this inventory against code before editing; other work may have advanced.
 Relevant entry points are `packages/contracts/src/index.ts`,

@@ -9,7 +9,10 @@ The [Library implementation handoff](library-implementation.md) specifies the
 next production UI delivery, including source-derived Queue and Songs.
 The [Podcasts](podcasts-implementation.md) and
 [Music](music-implementation.md) plans now record their initial production
-implementations and the remaining explicit hardening work.
+implementations and the remaining explicit hardening work. The
+[Videos](videos-implementation.md) plan records the shipped Takeout-backed
+Archive, Watch Later Queue, Channels, and UI plus the credential-gated Data API
+and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 

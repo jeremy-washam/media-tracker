@@ -25,8 +25,38 @@ export interface YoutubeWatchLaterEntry {
   videoId: string | null
 }
 
+export interface YoutubeSubscriptionEntry {
+  channelId: string | null
+  channelTitle: string | null
+  channelUrl: string | null
+}
+
+export interface YoutubePlaylistEntry {
+  addNewVideosToTop: boolean | null
+  createdAt: string | null
+  playlistId: string | null
+  title: string | null
+  updatedAt: string | null
+  videoOrder: string | null
+  visibility: string | null
+}
+
+export type YoutubeTakeoutComponentKind =
+  'watch_history' | 'watch_later' | 'playlist_index' | 'subscriptions'
+
+export interface YoutubeTakeoutComponent {
+  errorCode: string | null
+  kind: YoutubeTakeoutComponentKind
+  memberName: string | null
+  recordCount: number
+  status: 'complete' | 'invalid' | 'missing'
+}
+
 export interface YoutubeTakeout {
+  components: YoutubeTakeoutComponent[]
   label: string
+  playlists: YoutubePlaylistEntry[]
+  subscriptions: YoutubeSubscriptionEntry[]
   watchHistory: YoutubeWatchEntry[]
   watchLater: YoutubeWatchLaterEntry[]
 }
@@ -77,6 +107,21 @@ function videoIdentity(value: string | null): {
   }
 }
 
+export function youtubeChannelId(value: string | null): string | null {
+  if (value === null) return null
+  try {
+    const url = new URL(value)
+    if (!['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname.toLowerCase()))
+      return null
+    const parts = url.pathname.split('/').filter(Boolean)
+    if (parts.length !== 2 || parts[0] !== 'channel') return null
+    const id = parts[1] ?? ''
+    return /^[A-Za-z0-9_-]{10,100}$/.test(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 export function parseYoutubeWatchHistoryHtml(html: string): YoutubeWatchEntry[] {
   const $ = load(html)
   const entries: YoutubeWatchEntry[] = []
@@ -122,10 +167,61 @@ export function parseYoutubeWatchHistoryHtml(html: string): YoutubeWatchEntry[] 
 }
 
 export function parseYoutubeWatchLaterCsv(csv: string): YoutubeWatchLaterEntry[] {
-  const rows = parse(csv, { columns: true, skip_empty_lines: true }) as Record<string, string>[]
+  const rows = csvRows(csv, ['Video ID', 'Playlist Video Creation Timestamp'])
   return rows.map((row) => ({
     addedAt: row['Playlist Video Creation Timestamp'] || null,
     videoId: row['Video ID'] || null,
+  }))
+}
+
+function csvRows(csv: string, expectedHeaders: readonly string[]): Record<string, string>[] {
+  let headers: string[] = []
+  const rows = parse(csv, {
+    columns(value: string[]) {
+      headers = value.map((item) => item.replace(/^\uFEFF/, '').trim())
+      return headers
+    },
+    skip_empty_lines: true,
+    trim: true,
+  }) as Record<string, string>[]
+  if (
+    headers.length !== expectedHeaders.length ||
+    expectedHeaders.some((header, index) => headers[index] !== header)
+  ) {
+    throw new Error('unsupported_headers')
+  }
+  return rows
+}
+
+export function parseYoutubeSubscriptionsCsv(csv: string): YoutubeSubscriptionEntry[] {
+  return csvRows(csv, ['Channel Id', 'Channel Url', 'Channel Title']).map((row) => ({
+    channelId: row['Channel Id'] || youtubeChannelId(row['Channel Url'] || null),
+    channelTitle: row['Channel Title'] || null,
+    channelUrl: row['Channel Url'] || null,
+  }))
+}
+
+export function parseYoutubePlaylistsCsv(csv: string): YoutubePlaylistEntry[] {
+  return csvRows(csv, [
+    'Playlist ID',
+    'Add new videos to top',
+    'Playlist Title (Original)',
+    'Playlist Title (Original) Language',
+    'Playlist Create Timestamp',
+    'Playlist Update Timestamp',
+    'Playlist Video Order',
+    'Playlist Visibility',
+  ]).map((row) => ({
+    addNewVideosToTop:
+      (row['Add new videos to top'] ?? '') === ''
+        ? null
+        : (row['Add new videos to top'] ?? '').toLowerCase() === 'true',
+    createdAt: row['Playlist Create Timestamp'] || null,
+    playlistId: row['Playlist ID'] || null,
+    title: row['Playlist Title (Original)'] || null,
+    updatedAt: row['Playlist Update Timestamp'] || null,
+    videoOrder: row['Playlist Video Order'] || null,
+    visibility: row['Playlist Visibility'] || null,
   }))
 }
 
@@ -220,6 +316,7 @@ export function summarizeYoutubeTakeouts(takeouts: YoutubeTakeout[]) {
       ).length,
       crossTakeoutDuplicateEvents,
       watchLaterEntries: takeouts.reduce((sum, takeout) => sum + takeout.watchLater.length, 0),
+      subscriptionEntries: takeouts.reduce((sum, takeout) => sum + takeout.subscriptions.length, 0),
       watchLaterVideoIdsPresentInMultipleArchives: [...watchLaterSources.values()].filter(
         (sources) => sources.size > 1,
       ).length,
@@ -234,7 +331,9 @@ export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): Yo
     members = unzipSync(bytes, {
       filter: (file) =>
         file.name.endsWith('/history/watch-history.html') ||
-        file.name.endsWith('/playlists/Watch later-videos.csv'),
+        file.name.endsWith('/playlists/Watch later-videos.csv') ||
+        file.name.endsWith('/playlists/playlists.csv') ||
+        file.name.endsWith('/subscriptions/subscriptions.csv'),
     })
   } catch {
     throw new Error('The selected file is not a valid Google Takeout ZIP export')
@@ -242,19 +341,74 @@ export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): Yo
   const watchHistoryName = Object.keys(members).find((name) =>
     name.endsWith('/history/watch-history.html'),
   )
-  if (watchHistoryName === undefined) {
-    throw new Error('The Google Takeout export has no YouTube watch-history.html')
-  }
   const watchLaterName = Object.keys(members).find((name) =>
     name.endsWith('/playlists/Watch later-videos.csv'),
   )
+  const playlistIndexName = Object.keys(members).find((name) =>
+    name.endsWith('/playlists/playlists.csv'),
+  )
+  const subscriptionsName = Object.keys(members).find((name) =>
+    name.endsWith('/subscriptions/subscriptions.csv'),
+  )
+
+  if (
+    watchHistoryName === undefined &&
+    watchLaterName === undefined &&
+    playlistIndexName === undefined &&
+    subscriptionsName === undefined
+  ) {
+    throw new Error('The Google Takeout export has no supported YouTube members')
+  }
+
+  const components: YoutubeTakeoutComponent[] = []
+  function component<T>(
+    kind: YoutubeTakeoutComponentKind,
+    memberName: string | undefined,
+    parseMember: (value: string) => T[],
+  ): T[] {
+    if (memberName === undefined) {
+      components.push({
+        kind,
+        memberName: null,
+        status: 'missing',
+        recordCount: 0,
+        errorCode: null,
+      })
+      return []
+    }
+    try {
+      const values = parseMember(strFromU8(members[memberName]!))
+      components.push({
+        kind,
+        memberName,
+        status: 'complete',
+        recordCount: values.length,
+        errorCode: null,
+      })
+      return values
+    } catch {
+      components.push({
+        kind,
+        memberName,
+        status: 'invalid',
+        recordCount: 0,
+        errorCode: 'unsupported_or_invalid_member',
+      })
+      return []
+    }
+  }
+
+  const watchHistory = component('watch_history', watchHistoryName, parseYoutubeWatchHistoryHtml)
+  const watchLater = component('watch_later', watchLaterName, parseYoutubeWatchLaterCsv)
+  const playlists = component('playlist_index', playlistIndexName, parseYoutubePlaylistsCsv)
+  const subscriptions = component('subscriptions', subscriptionsName, parseYoutubeSubscriptionsCsv)
 
   return {
+    components,
     label,
-    watchHistory: parseYoutubeWatchHistoryHtml(strFromU8(members[watchHistoryName]!)),
-    watchLater:
-      watchLaterName === undefined
-        ? []
-        : parseYoutubeWatchLaterCsv(strFromU8(members[watchLaterName]!)),
+    playlists,
+    subscriptions,
+    watchHistory,
+    watchLater,
   }
 }
