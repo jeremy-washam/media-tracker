@@ -125,6 +125,9 @@ describe('API client', () => {
       totalPodcastSegments: 12,
       totalArchiveEpisodes: 4,
       archiveEpisodes: 4,
+      totalSongSegments: 100,
+      totalArchiveTracks: 25,
+      songObservations: 100,
       sourceRecords: 12,
       unresolvedPodcastSegments: 0,
     }
@@ -137,6 +140,11 @@ describe('API client', () => {
       queueCandidates: 30,
       unresolvedEpisodes: 20,
       refreshTokenRotated: false,
+      savedShows: 0,
+      playerObserved: false,
+      recentTracks: 0,
+      catalogTracks: 0,
+      partialFailures: [],
     }
     const fetcher = vi
       .fn()

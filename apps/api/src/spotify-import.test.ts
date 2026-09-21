@@ -13,12 +13,31 @@ import {
 } from './spotify-import'
 import { syncSpotifySavedEpisodes } from './spotify-sync'
 
-const migration = readFileSync(
-  fileURLToPath(
-    new NodeURL('../../../packages/db/migrations/0001_canonical_ledger.sql', import.meta.url).href,
-  ),
-  'utf8',
-)
+const migrationNames = [
+  '0001_canonical_ledger.sql',
+  '0002_rotating_credentials.sql',
+  '0003_books_library.sql',
+  '0004_books_review_facts.sql',
+  '0005_books_format_projection.sql',
+  '0006_movies_library.sql',
+  '0007_movies_nullable_source_link.sql',
+  '0008_articles_library.sql',
+  '0009_article_content_search_map.sql',
+  '0010_article_content_jobs.sql',
+  '0011_article_current_availability.sql',
+  '0012_article_content_reliability.sql',
+  '0013_article_content_attempts.sql',
+  '0014_podcasts_library.sql',
+  '0015_songs_library.sql',
+]
+const migration = migrationNames
+  .map((name) =>
+    readFileSync(
+      fileURLToPath(new NodeURL(`../../../packages/db/migrations/${name}`, import.meta.url).href),
+      'utf8',
+    ),
+  )
+  .join('\n')
 
 type SqlValue = ArrayBuffer | null | number | string
 
@@ -67,15 +86,6 @@ class D1SqliteDatabase {
 
   constructor() {
     this.database.exec(migration)
-    this.database.exec(
-      readFileSync(
-        new NodeURL(
-          '../../../packages/db/migrations/0002_rotating_credentials.sql',
-          import.meta.url,
-        ),
-        'utf8',
-      ),
-    )
   }
 
   prepare(query: string): D1SqliteStatement {
@@ -219,7 +229,7 @@ describe('Spotify Extended Streaming History import', () => {
     const first = await importSpotifyExtendedHistory(bindings, archive, { chunkSize: 2 })
     expect(first).toMatchObject({
       alreadyImported: false,
-      archiveEpisodes: 0,
+      archiveEpisodes: 1,
       completed: false,
       nextOffset: 2,
       sourceRecords: 2,
@@ -231,10 +241,13 @@ describe('Spotify Extended Streaming History import', () => {
       importSpotifyExtendedHistory(bindings, archive, { chunkSize: 2 }),
     ).resolves.toMatchObject({
       archiveEpisodes: 1,
-      completed: true,
-      nextOffset: null,
+      completed: false,
+      nextOffset: 4,
       sourceRecords: 2,
     })
+    await expect(
+      continueSpotifyExtendedHistoryImport(bindings, first.importId, { chunkSize: 2 }),
+    ).resolves.toMatchObject({ completed: true, archiveEpisodes: 0, sourceRecords: 1 })
     await expect(importSpotifyExtendedHistory(bindings, archive)).resolves.toMatchObject({
       alreadyImported: true,
       archiveEpisodes: 0,
@@ -247,11 +260,15 @@ describe('Spotify Extended Streaming History import', () => {
       archive,
     )
     expect(count(database.database, 'raw_objects')).toBe(1)
-    expect(count(database.database, 'source_records')).toBe(4)
-    expect(count(database.database, 'media_items')).toBe(1)
-    expect(count(database.database, 'archive_entries')).toBe(1)
+    expect(count(database.database, 'source_records')).toBe(5)
+    expect(count(database.database, 'media_items')).toBe(3)
+    expect(count(database.database, 'archive_entries')).toBe(2)
     expect(
-      database.database.prepare('SELECT consumed_at_value FROM archive_entries').get(),
+      database.database
+        .prepare(
+          "SELECT consumed_at_value FROM archive_entries WHERE admission_reason='spotify_positive_playback'",
+        )
+        .get(),
     ).toEqual({ consumed_at_value: '2026-02-01T00:00:00.000Z' })
   })
 
@@ -271,9 +288,12 @@ describe('Spotify Extended Streaming History import', () => {
     database.failOnBatchCall = null
     await expect(
       continueSpotifyExtendedHistoryImport(bindings, first.importId, { chunkSize: 2 }),
-    ).resolves.toMatchObject({ completed: true, archiveEpisodes: 1, sourceRecords: 2 })
-    expect(count(database.database, 'source_records')).toBe(4)
-    expect(count(database.database, 'archive_entries')).toBe(1)
+    ).resolves.toMatchObject({ completed: false, archiveEpisodes: 1, sourceRecords: 2 })
+    await expect(
+      continueSpotifyExtendedHistoryImport(bindings, first.importId, { chunkSize: 2 }),
+    ).resolves.toMatchObject({ completed: true, archiveEpisodes: 0, sourceRecords: 1 })
+    expect(count(database.database, 'source_records')).toBe(5)
+    expect(count(database.database, 'archive_entries')).toBe(2)
   })
 
   it('reconciles into an episode previously created by API polling', async () => {
@@ -286,14 +306,14 @@ describe('Spotify Extended Streaming History import', () => {
     })
 
     expect(count(database.database, 'connections')).toBe(1)
-    expect(count(database.database, 'media_items')).toBe(1)
-    expect(count(database.database, 'external_identities')).toBe(1)
-    expect(count(database.database, 'archive_entries')).toBe(1)
+    expect(count(database.database, 'media_items')).toBe(3)
+    expect(count(database.database, 'external_identities')).toBe(3)
+    expect(count(database.database, 'archive_entries')).toBe(2)
     expect(
       database.database
         .prepare(
           `SELECT id, media_item_id, consumed_identity_id, consumed_at_value
-           FROM archive_entries`,
+           FROM archive_entries WHERE media_item_id='spotify-api-media'`,
         )
         .get(),
     ).toEqual({
@@ -309,7 +329,7 @@ describe('Spotify Extended Streaming History import', () => {
            WHERE archive_entry_id = 'spotify-api-archive'`,
         )
         .get(),
-    ).toEqual({ count: 3 })
+    ).toEqual({ count: 7 })
   })
 
   it('reconciles API polling into an episode previously created by export import', async () => {
@@ -365,12 +385,16 @@ describe('Spotify Extended Streaming History import', () => {
       sourceRecords: 1,
     })
     expect(count(database.database, 'connections')).toBe(1)
-    expect(count(database.database, 'media_items')).toBe(1)
-    expect(count(database.database, 'external_identities')).toBe(1)
-    expect(count(database.database, 'archive_entries')).toBe(1)
-    expect(count(database.database, 'archive_entry_evidence')).toBe(3)
+    expect(count(database.database, 'media_items')).toBe(3)
+    expect(count(database.database, 'external_identities')).toBe(3)
+    expect(count(database.database, 'archive_entries')).toBe(2)
+    expect(count(database.database, 'archive_entry_evidence')).toBe(9)
     expect(
-      database.database.prepare('SELECT consumed_at_value FROM archive_entries').get(),
+      database.database
+        .prepare(
+          'SELECT consumed_at_value FROM archive_entries WHERE media_item_id != (SELECT media_item_id FROM spotify_song_tracks LIMIT 1) ORDER BY consumed_at_value DESC LIMIT 1',
+        )
+        .get(),
     ).toEqual({ consumed_at_value: '2026-02-01T00:00:00.000Z' })
   })
 

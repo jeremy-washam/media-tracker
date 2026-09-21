@@ -26,6 +26,16 @@ import {
   MovieHistoryResponseSchema,
   MoviesQuerySchema,
   MoviesResponseSchema,
+  MusicDetailSchema,
+  MusicHistoryQuerySchema,
+  MusicHistoryResponseSchema,
+  MusicQuerySchema,
+  MusicResponseSchema,
+  PodcastDetailSchema,
+  PodcastHistoryQuerySchema,
+  PodcastHistoryResponseSchema,
+  PodcastsQuerySchema,
+  PodcastsResponseSchema,
   ReadwiseSyncResponseSchema,
   SpotifyImportResponseSchema,
   SpotifySyncResponseSchema,
@@ -44,6 +54,7 @@ import {
   createBooksRepository,
   createLedgerRepository,
   createMoviesRepository,
+  createSpotifyLibraryRepository,
   type AppEnv,
 } from './env'
 import { HardcoverTokenMissingError, syncHardcover } from './hardcover-sync'
@@ -226,6 +237,77 @@ const movieHistoryRoute = createRoute({
   responses: {
     200: jsonContent(MovieHistoryResponseSchema, 'Movie viewing history'),
     400: jsonContent(ApiErrorSchema, 'Invalid history cursor'),
+  },
+})
+
+const podcastsRoute = createRoute({
+  method: 'get',
+  path: '/api/library/podcasts',
+  tags: ['Library', 'Podcasts'],
+  request: { query: PodcastsQuerySchema },
+  responses: {
+    200: jsonContent(PodcastsResponseSchema, 'Podcast library'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Podcasts query'),
+  },
+})
+
+const podcastDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/podcasts/{kind}/{id}',
+  tags: ['Library', 'Podcasts'],
+  request: { params: z.object({ kind: z.enum(['episodes', 'shows']), id: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(PodcastDetailSchema, 'Podcast details'),
+    404: jsonContent(ApiErrorSchema, 'Podcast item not found'),
+  },
+})
+
+const podcastHistoryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/podcasts/episodes/{id}/history',
+  tags: ['Library', 'Podcasts'],
+  request: {
+    params: z.object({ id: z.string().min(1) }),
+    query: PodcastHistoryQuerySchema,
+  },
+  responses: {
+    200: jsonContent(PodcastHistoryResponseSchema, 'Podcast listening history'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Podcast history cursor'),
+  },
+})
+
+const musicRoute = createRoute({
+  method: 'get',
+  path: '/api/library/music',
+  tags: ['Library', 'Music'],
+  request: { query: MusicQuerySchema },
+  responses: {
+    200: jsonContent(MusicResponseSchema, 'Music library'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Music query'),
+  },
+})
+
+const musicDetailRoute = createRoute({
+  method: 'get',
+  path: '/api/library/music/{kind}/{id}',
+  tags: ['Library', 'Music'],
+  request: {
+    params: z.object({ kind: z.enum(['tracks', 'albums', 'artists']), id: z.string().min(1) }),
+  },
+  responses: {
+    200: jsonContent(MusicDetailSchema, 'Music details'),
+    404: jsonContent(ApiErrorSchema, 'Music item not found'),
+  },
+})
+
+const musicHistoryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/music/tracks/{id}/history',
+  tags: ['Library', 'Music'],
+  request: { params: z.object({ id: z.string().min(1) }), query: MusicHistoryQuerySchema },
+  responses: {
+    200: jsonContent(MusicHistoryResponseSchema, 'Track playback history'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Music history cursor'),
   },
 })
 
@@ -644,6 +726,137 @@ app.openapi(movieHistoryRoute, async (context) => {
     if (error instanceof TypeError && error.message === 'Invalid Movie history cursor') {
       throw new HTTPException(400, { message: error.message })
     }
+    throw error
+  }
+})
+
+app.openapi(podcastsRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createSpotifyLibraryRepository(context.env.DB).listPodcasts({
+      view: query.view,
+      ...(query.q === undefined ? {} : { q: query.q }),
+      show: query.show,
+      following: query.following,
+      ...(query.dateFrom === undefined ? {} : { dateFrom: query.dateFrom }),
+      ...(query.dateTo === undefined ? {} : { dateTo: query.dateTo }),
+      dateUnknown: query.dateUnknown,
+      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+      publishedUnknown: query.publishedUnknown,
+      publisher: query.publisher,
+      language: query.language,
+      libraryEpisodes: query.libraryEpisodes,
+      duration: query.duration,
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.direction === undefined ? {} : { direction: query.direction }),
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(PodcastsResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(podcastDetailRoute, async (context) => {
+  const { kind, id } = context.req.valid('param')
+  const repository = createSpotifyLibraryRepository(context.env.DB)
+  const item =
+    kind === 'shows' ? await repository.findPodcastShow(id) : await repository.findPodcast(id)
+  if (item !== null) return context.json(PodcastDetailSchema.parse(item), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No podcast item exists with ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(podcastHistoryRoute, async (context) => {
+  const { id } = context.req.valid('param')
+  const query = context.req.valid('query')
+  try {
+    const page = await createSpotifyLibraryRepository(context.env.DB).listPodcastHistory(
+      id,
+      query.limit,
+      query.cursor,
+    )
+    return context.json(PodcastHistoryResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(musicRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createSpotifyLibraryRepository(context.env.DB).listMusic({
+      view: query.view,
+      ...(query.q === undefined ? {} : { q: query.q }),
+      ...(query.from === undefined ? {} : { from: query.from }),
+      ...(query.to === undefined ? {} : { to: query.to }),
+      source: query.source,
+      ...(query.minPlaybacks === undefined ? {} : { minPlaybacks: query.minPlaybacks }),
+      playbackCount: query.playbackCount,
+      metadata: query.metadata,
+      artist: query.artist,
+      album: query.album,
+      explicit: query.explicit,
+      albumType: query.albumType,
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.direction === undefined ? {} : { direction: query.direction }),
+      limit: query.limit,
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    })
+    return context.json(MusicResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(musicDetailRoute, async (context) => {
+  const { kind, id } = context.req.valid('param')
+  const item = await createSpotifyLibraryRepository(context.env.DB).findMusic(
+    id,
+    kind === 'tracks' ? 'track' : kind === 'albums' ? 'album' : 'artist',
+  )
+  if (item !== null) return context.json(MusicDetailSchema.parse(item), 200)
+  return context.json(
+    ApiErrorSchema.parse({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No music item exists with ID ${id}.`,
+        requestId: context.get('requestId'),
+      },
+    }),
+    404,
+  )
+})
+
+app.openapi(musicHistoryRoute, async (context) => {
+  const { id } = context.req.valid('param')
+  const query = context.req.valid('query')
+  try {
+    const page = await createSpotifyLibraryRepository(context.env.DB).listMusicHistory(
+      id,
+      query.limit,
+      query.cursor,
+    )
+    return context.json(MusicHistoryResponseSchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
     throw error
   }
 })

@@ -79,7 +79,7 @@ and “A little distance. A different perspective.” A recap can simply be titl
 ## Library
 
 Organize first by media type, then by Archive or Queue. Priority order:
-Books, Movies, Articles, Podcasts, YouTube videos, Songs. This is the owner's
+Books, Movies, Articles, Podcasts, Songs, YouTube videos. This is the owner's
 rough priority order, not a commitment to identical behavior across types.
 
 Queue membership is source-specific: Movies use the Letterboxd watchlist;

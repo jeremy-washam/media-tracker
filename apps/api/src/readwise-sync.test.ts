@@ -16,6 +16,7 @@ const migration = [
   '0011_article_current_availability.sql',
   '0012_article_content_reliability.sql',
   '0013_article_content_attempts.sql',
+  '0014_podcasts_library.sql',
 ]
   .map((name) =>
     readFileSync(

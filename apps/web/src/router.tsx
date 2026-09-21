@@ -7,6 +7,10 @@ import { parseArticlesRouteSearch } from './features/articles/articles-route-sea
 import { parseBooksRouteSearch } from './features/books/books-route-search'
 import { MoviesCollectionPage } from './features/movies/movies-collection-page'
 import { parseMoviesRouteSearch } from './features/movies/movies-route-search'
+import { PodcastsCollectionPage } from './features/podcasts/podcasts-collection-page'
+import { parsePodcastsRouteSearch } from './features/podcasts/podcasts-route-search'
+import { MusicCollectionPage } from './features/music/music-collection-page'
+import { parseMusicRouteSearch } from './features/music/music-route-search'
 import { ConnectionsPage } from './pages/connections-page'
 
 const rootRoute = createRootRoute({
@@ -70,6 +74,43 @@ const articlesFeedRoute = createRoute({
   component: () => <ArticlesCollectionPage section="feed" />,
 })
 
+const podcastsArchiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/podcasts/archive',
+  validateSearch: parsePodcastsRouteSearch,
+  component: () => <PodcastsCollectionPage view="archive" />,
+})
+const podcastsQueueRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/podcasts/queue',
+  validateSearch: parsePodcastsRouteSearch,
+  component: () => <PodcastsCollectionPage view="queue" />,
+})
+const podcastsFollowingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/podcasts/following',
+  validateSearch: parsePodcastsRouteSearch,
+  component: () => <PodcastsCollectionPage view="following" />,
+})
+const musicTracksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/music/tracks',
+  validateSearch: parseMusicRouteSearch,
+  component: () => <MusicCollectionPage view="tracks" />,
+})
+const musicAlbumsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/music/albums',
+  validateSearch: parseMusicRouteSearch,
+  component: () => <MusicCollectionPage view="albums" />,
+})
+const musicArtistsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/music/artists',
+  validateSearch: parseMusicRouteSearch,
+  component: () => <MusicCollectionPage view="artists" />,
+})
+
 const connectionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/connections',
@@ -85,6 +126,12 @@ const routeTree = rootRoute.addChildren([
   articlesArchiveRoute,
   articlesQueueRoute,
   articlesFeedRoute,
+  podcastsArchiveRoute,
+  podcastsQueueRoute,
+  podcastsFollowingRoute,
+  musicTracksRoute,
+  musicAlbumsRoute,
+  musicArtistsRoute,
   connectionsRoute,
 ])
 

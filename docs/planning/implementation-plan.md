@@ -7,6 +7,9 @@ features. Section 18 records the ingestion MVP and its September 14 follow-ups.
 Section 20 records the subsequent interface decisions and next design work.
 The [Library implementation handoff](library-implementation.md) specifies the
 next production UI delivery, including source-derived Queue and Songs.
+The [Podcasts](podcasts-implementation.md) and
+[Music](music-implementation.md) plans now record their initial production
+implementations and the remaining explicit hardening work.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
@@ -771,13 +774,16 @@ inspector behavior. Production delivery should:
    sample as the initial visual reference, then tune density against production
    data without silently changing the approved field contract.
 3. Implement Library behavior in priority order: Books, Movies, Articles,
-   Podcasts, YouTube videos, Songs. Preserve one item with multiple occurrences
+   Podcasts, Songs, YouTube videos. Preserve one item with multiple occurrences
    and the per-media occurrence semantics in the approved contracts. The
    [Movies implementation plan](movies-implementation.md) records the shipped
    Letterboxd-only vertical slice and the remaining TMDB credential gate. The
-   [Articles implementation plan](articles-implementation.md) defines the next
-   Readwise-backed Archive, Queue, Feed, annotation, and selective-text vertical
-   slice.
+   [Articles implementation plan](articles-implementation.md) records the
+   shipped Readwise-backed Archive, Queue, Feed, annotation, and selective-text
+   vertical slice. The coordinated remaining plans cover
+   [Podcasts](podcasts-implementation.md),
+   [Music](music-implementation.md), and
+   [Videos](videos-implementation.md) in that implementation order.
 4. Specify Chat history/artifact flows and interactive visualization behavior;
    consult the separate catalog reconnaissance for references outside Library.
 5. Specify browsable monthly/yearly Recaps and their relationship to shared

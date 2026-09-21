@@ -54,6 +54,16 @@ export type {
   MoviesPageRecord,
 } from './movies-repository'
 export { SqlMoviesRepository } from './movies-repository'
+export type {
+  MusicListInput,
+  PodcastsListInput,
+  SavedEpisodeProjection,
+  SavedShowProjection,
+  SpotifyPodcastObservationProjection,
+  SpotifySongObservationProjection,
+  TrackMetadataProjection,
+} from './spotify-library-repository'
+export { SqlSpotifyLibraryRepository } from './spotify-library-repository'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'

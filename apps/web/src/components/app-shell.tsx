@@ -26,11 +26,7 @@ type DisabledNavigationItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>
 }
 
-const unavailableMedia: DisabledNavigationItem[] = [
-  { label: 'Podcasts', icon: Headphones },
-  { label: 'Music', icon: Music2 },
-  { label: 'Videos', icon: Video },
-]
+const unavailableMedia: DisabledNavigationItem[] = [{ label: 'Videos', icon: Video }]
 
 function preference(key: string): boolean {
   return typeof window !== 'undefined' && window.localStorage.getItem(key) === 'true'
@@ -52,7 +48,9 @@ export function AppShell() {
   const inBooks = location.pathname.startsWith('/library/books')
   const inMovies = location.pathname.startsWith('/library/movies')
   const inArticles = location.pathname.startsWith('/library/articles')
-  const inLibrary = inBooks || inMovies || inArticles
+  const inPodcasts = location.pathname.startsWith('/library/podcasts')
+  const inMusic = location.pathname.startsWith('/library/music')
+  const inLibrary = inBooks || inMovies || inArticles || inPodcasts || inMusic
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -157,6 +155,28 @@ export function AppShell() {
             <FileText aria-hidden="true" />
             {!collapsed ? <span>Articles</span> : null}
           </Link>
+          <Link
+            to="/library/podcasts/archive"
+            activeOptions={{ includeSearch: false }}
+            className={inPodcasts ? 'active' : ''}
+            aria-current={inPodcasts ? 'page' : undefined}
+            title="Podcasts"
+            onClick={() => setMobileOpen(false)}
+          >
+            <Headphones aria-hidden="true" />
+            {!collapsed ? <span>Podcasts</span> : null}
+          </Link>
+          <Link
+            to="/library/music/tracks"
+            activeOptions={{ includeSearch: false }}
+            className={inMusic ? 'active' : ''}
+            aria-current={inMusic ? 'page' : undefined}
+            title="Music"
+            onClick={() => setMobileOpen(false)}
+          >
+            <Music2 aria-hidden="true" />
+            {!collapsed ? <span>Music</span> : null}
+          </Link>
           {unavailableMedia.map((item) => (
             <UnavailableNavigation key={item.label} {...item} collapsed={collapsed} />
           ))}
@@ -203,7 +223,17 @@ export function AppShell() {
               <>
                 <span>Library</span>
                 <span aria-hidden="true">/</span>
-                <strong>{inMovies ? 'Movies' : inArticles ? 'Articles' : 'Books'}</strong>
+                <strong>
+                  {inMovies
+                    ? 'Movies'
+                    : inArticles
+                      ? 'Articles'
+                      : inPodcasts
+                        ? 'Podcasts'
+                        : inMusic
+                          ? 'Music'
+                          : 'Books'}
+                </strong>
               </>
             ) : (
               <strong>Connections</strong>

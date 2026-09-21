@@ -5,6 +5,8 @@ import { MEDIA_TYPES } from '@media-tracker/domain'
 export * from './books'
 export * from './articles'
 export * from './movies'
+export * from './podcasts'
+export * from './music'
 
 export const ApiErrorCodeSchema = z.enum([
   'BAD_REQUEST',
@@ -97,6 +99,9 @@ export const SpotifyImportResponseSchema = z.object({
   totalPodcastSegments: z.number().int().nonnegative(),
   totalArchiveEpisodes: z.number().int().nonnegative(),
   archiveEpisodes: z.number().int().nonnegative(),
+  totalSongSegments: z.number().int().nonnegative(),
+  totalArchiveTracks: z.number().int().nonnegative(),
+  songObservations: z.number().int().nonnegative(),
   sourceRecords: z.number().int().nonnegative(),
   unresolvedPodcastSegments: z.number().int().nonnegative(),
 })
@@ -110,6 +115,11 @@ export const SpotifySyncResponseSchema = z.object({
   queueCandidates: z.number().int().nonnegative(),
   unresolvedEpisodes: z.number().int().nonnegative(),
   refreshTokenRotated: z.boolean(),
+  savedShows: z.number().int().nonnegative().default(0),
+  playerObserved: z.boolean().default(false),
+  recentTracks: z.number().int().nonnegative().default(0),
+  catalogTracks: z.number().int().nonnegative().default(0),
+  partialFailures: z.array(z.string()).default([]),
 })
 
 export const YoutubeImportResponseSchema = z.object({

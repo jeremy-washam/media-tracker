@@ -23,10 +23,21 @@
   and connector sequencing
 - [Library implementation handoff](planning/library-implementation.md): per-media
   specification, source-derived Queue rules, Songs, and production delivery steps
+- [Books implementation plan](planning/books-implementation.md): end-to-end
+  Hardcover Archive/Queue, API, UI, replay, and validation plan
 - [Movies implementation plan](planning/movies-implementation.md): end-to-end
   Letterboxd Archive/Queue, TMDB enrichment, API, UI, replay, and validation plan
 - [Articles implementation plan](planning/articles-implementation.md): end-to-end
   Readwise Archive/Queue/Feed, annotations, selective text, API, UI, and replay plan
+- [Podcasts implementation plan](planning/podcasts-implementation.md): end-to-end
+  Spotify/Reader Archive, saved-episode Queue, Following, player polling, API,
+  UI, replay, and validation plan
+- [Music implementation plan](planning/music-implementation.md): end-to-end
+  Spotify playback ingestion, Tracks/Albums/Artists, aggregation, API, UI,
+  replay, and validation plan
+- [Videos implementation plan](planning/videos-implementation.md): end-to-end
+  YouTube Takeout Archive/Watch Later Queue, Channels, Data API enrichment,
+  Following, API, UI, replay, and validation plan
 - [Library Phase 1 decisions](planning/library-phase-1-decisions.md): researched
   product choices and the owner's resolved direction
 - [Library Phase 2 surfaces](planning/library-phase-2-surfaces.md): approved

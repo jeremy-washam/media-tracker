@@ -2,8 +2,14 @@ import {
   isSpotifyHistoryMember,
   parseSpotifyHistoryMember,
   type SpotifyPodcastSegment,
+  type SpotifySongSegment,
 } from '@media-tracker/connector-spotify'
-import type { ArchiveEntryWrite, CanonicalLedgerRepository } from '@media-tracker/db'
+import type {
+  ArchiveEntryWrite,
+  CanonicalLedgerRepository,
+  SpotifyPodcastObservationProjection,
+  SpotifySongObservationProjection,
+} from '@media-tracker/db'
 import {
   archiveEntryEvidenceId,
   archiveEntryId,
@@ -27,10 +33,10 @@ import {
 import { Unzip, UnzipInflate } from 'fflate'
 
 import type { Bindings } from './env'
-import { createLedgerRepository } from './env'
+import { createLedgerRepository, createSpotifyLibraryRepository } from './env'
 
-const parserVersion = 'spotify-extended-history@3'
-const parserId = 'v3'
+const parserVersion = 'spotify-extended-history@4'
+const parserId = 'v4'
 const defaultChunkSize = 100
 const maximumChunkSize = 100
 
@@ -40,13 +46,16 @@ export interface SpotifyImportOptions {
 export interface SpotifyImportResponse {
   readonly alreadyImported: boolean
   readonly archiveEpisodes: number
+  readonly songObservations: number
   readonly completed: boolean
   readonly importId: string
   readonly nextOffset: number | null
   readonly sourceRecords: number
   readonly syncRunId: string
   readonly totalArchiveEpisodes: number
+  readonly totalArchiveTracks: number
   readonly totalPodcastSegments: number
+  readonly totalSongSegments: number
   readonly unresolvedPodcastSegments: number
 }
 interface Checkpoint {
@@ -62,8 +71,13 @@ interface Context {
   cursorName: string
   raw: RawObject
   repository: CanonicalLedgerRepository
+  spotifyRepository: ReturnType<typeof createSpotifyLibraryRepository>
   run: SyncRun
 }
+
+type SpotifyHistoryRecord =
+  | { readonly kind: 'podcast'; readonly value: SpotifyPodcastSegment }
+  | { readonly kind: 'song'; readonly value: SpotifySongSegment }
 
 export class SpotifyImportError extends Error {
   constructor(message: string) {
@@ -122,9 +136,9 @@ async function spotifyConnection(
     },
   }
 }
-function parseArchive(archive: Uint8Array): Promise<SpotifyPodcastSegment[]> {
+function parseArchive(archive: Uint8Array): Promise<SpotifyHistoryRecord[]> {
   return new Promise((resolve, reject) => {
-    const members: { name: string; segments: readonly SpotifyPodcastSegment[] }[] = []
+    const members: { name: string; records: readonly SpotifyHistoryRecord[] }[] = []
     let pending = 0
     let pushed = false
     let settled = false
@@ -133,7 +147,7 @@ function parseArchive(archive: Uint8Array): Promise<SpotifyPodcastSegment[]> {
       settled = true
       if (members.length === 0)
         return reject(new SpotifyImportError('No Extended Streaming History JSON files were found'))
-      resolve(members.sort((a, b) => a.name.localeCompare(b.name)).flatMap((v) => v.segments))
+      resolve(members.sort((a, b) => a.name.localeCompare(b.name)).flatMap((v) => v.records))
     }
     const fail = (error: unknown) => {
       if (!settled) {
@@ -158,9 +172,13 @@ function parseArchive(archive: Uint8Array): Promise<SpotifyPodcastSegment[]> {
             bytes.set(value, offset)
             offset += value.byteLength
           }
+          const projection = parseSpotifyHistoryMember(file.name, bytes)
           members.push({
             name: file.name,
-            segments: parseSpotifyHistoryMember(file.name, bytes).podcastSegments,
+            records: [
+              ...projection.podcastSegments.map((value) => ({ kind: 'podcast' as const, value })),
+              ...projection.songSegments.map((value) => ({ kind: 'song' as const, value })),
+            ].sort((a, b) => a.value.rowIndex - b.value.rowIndex),
           })
           pending -= 1
           finish()
@@ -180,9 +198,11 @@ function parseArchive(archive: Uint8Array): Promise<SpotifyPodcastSegment[]> {
     }
   })
 }
-function latestSegments(segments: readonly SpotifyPodcastSegment[]) {
+function latestSegments(records: readonly SpotifyHistoryRecord[]) {
   const latest = new Map<string, SpotifyPodcastSegment>()
-  for (const segment of segments) {
+  for (const record of records) {
+    if (record.kind !== 'podcast') continue
+    const segment = record.value
     if (
       segment.episodeId === null ||
       segment.episodeUri === null ||
@@ -203,44 +223,47 @@ function latestSegments(segments: readonly SpotifyPodcastSegment[]) {
 function parseManifest(
   value: unknown,
   importId: string,
-): { archiveByteLength: number; segments: SpotifyPodcastSegment[] } {
+): { archiveByteLength: number; records: SpotifyHistoryRecord[] } {
   if (typeof value !== 'object' || value === null)
     throw new SpotifyImportError('The Spotify import manifest is invalid')
   const manifest = value as {
     archiveSha256?: unknown
     archiveByteLength?: unknown
-    segments?: unknown
+    records?: unknown
   }
   if (
     manifest.archiveSha256 !== importId ||
     !Number.isInteger(manifest.archiveByteLength) ||
     (manifest.archiveByteLength as number) < 1 ||
-    !Array.isArray(manifest.segments)
+    !Array.isArray(manifest.records)
   ) {
     throw new SpotifyImportError('The Spotify import manifest is invalid')
   }
-  for (const segment of manifest.segments) {
+  for (const record of manifest.records) {
     if (
-      typeof segment !== 'object' ||
-      segment === null ||
-      typeof Reflect.get(segment, 'memberName') !== 'string' ||
-      typeof Reflect.get(segment, 'rowIndex') !== 'number' ||
-      typeof Reflect.get(segment, 'recordPath') !== 'string' ||
-      typeof Reflect.get(segment, 'millisecondsPlayed') !== 'number'
+      typeof record !== 'object' ||
+      record === null ||
+      !['podcast', 'song'].includes(String(Reflect.get(record, 'kind'))) ||
+      typeof Reflect.get(record, 'value') !== 'object' ||
+      typeof Reflect.get(Reflect.get(record, 'value')!, 'memberName') !== 'string' ||
+      typeof Reflect.get(Reflect.get(record, 'value')!, 'rowIndex') !== 'number' ||
+      typeof Reflect.get(Reflect.get(record, 'value')!, 'recordPath') !== 'string' ||
+      typeof Reflect.get(Reflect.get(record, 'value')!, 'millisecondsPlayed') !== 'number'
     ) {
       throw new SpotifyImportError('The Spotify import manifest is invalid')
     }
   }
   return {
     archiveByteLength: manifest.archiveByteLength as number,
-    segments: manifest.segments as SpotifyPodcastSegment[],
+    records: manifest.records as SpotifyHistoryRecord[],
   }
 }
 function manifestKey(importId: string) {
-  return `derived/spotify/${importId}.podcasts-${parserVersion}.json`
+  return `derived/spotify/${importId}.classified-${parserVersion}.json`
 }
 async function prepare(bindings: Bindings, archiveHash: string, archiveByteLength: number) {
   const repository = createLedgerRepository(bindings.DB)
+  const spotifyRepository = createSpotifyLibraryRepository(bindings.DB)
   const startedAt = instantNow()
   const { connection, hash: connectionHash } = await spotifyConnection(repository, startedAt)
   const acquisitionKey = `spotify:extended-history:sha256:${archiveHash}`
@@ -288,6 +311,7 @@ async function prepare(bindings: Bindings, archiveHash: string, archiveByteLengt
       cursorName,
       raw,
       repository,
+      spotifyRepository,
       run,
     } satisfies Context,
     rawExists,
@@ -298,135 +322,262 @@ function temporal(value: string | null) {
 }
 async function normalizeChunk(
   context: Context,
-  segments: readonly SpotifyPodcastSegment[],
-  latest: ReadonlyMap<string, SpotifyPodcastSegment>,
+  records: readonly SpotifyHistoryRecord[],
   offset: number,
   size: number,
 ): Promise<SpotifyImportResponse> {
-  if (!Number.isInteger(offset) || offset < 0 || offset > segments.length)
+  if (!Number.isInteger(offset) || offset < 0 || offset > records.length)
     throw new SpotifyImportError('The Spotify import continuation is invalid')
-  const records = segments.slice(offset, offset + size)
+  const chunk = records.slice(offset, offset + size)
   const at = instantNow()
   const sourceRecords: SourceRecord[] = []
   const mediaItems: MediaItem[] = []
   const identities: ExternalIdentity[] = []
   const archiveEntries: ArchiveEntryWrite[] = []
+  const podcasts: SpotifyPodcastObservationProjection[] = []
+  const songs: SpotifySongObservationProjection[] = []
   let unresolved = 0
-  for (const segment of records) {
-    const positive = segment.millisecondsPlayed > 0
-    const identified = segment.episodeId !== null && segment.episodeUri !== null
-    if (positive && !identified) unresolved += 1
+  for (const record of chunk) {
+    const segment = record.value
     const segmentHash = await stableHash(
       `${context.archiveHash}:${segment.memberName}:${segment.rowIndex}`,
     )
     const recordId = sourceRecordId(`spotify_sr_${parserId}_${segmentHash}`)
+    const identified =
+      record.kind === 'song' ||
+      (record.value.episodeId !== null && record.value.episodeUri !== null)
+    const positive = segment.millisecondsPlayed > 0
+    if (record.kind === 'podcast' && positive && !identified) unresolved += 1
     sourceRecords.push({
       id: recordId,
       rawObjectId: context.raw.id,
       connectionId: context.connection.id,
-      recordType: 'playback_segment',
+      recordType: record.kind === 'podcast' ? 'podcast_playback_segment' : 'song_playback_segment',
       recordPath: segment.recordPath,
       sourceRecordKey: `${segment.memberName}:${segment.rowIndex}`,
       sourceRecordedAt: temporal(segment.occurredAt),
       observedAt: at,
       parserVersion,
       contentSha256: null,
-      disposition: positive ? (identified ? 'normalized' : 'unresolved') : 'ignored',
+      disposition: identified ? 'normalized' : 'unresolved',
       upstreamState: 'active',
-      errorCode: positive && !identified ? 'missing_episode_identity' : null,
+      errorCode: !identified ? 'missing_episode_identity' : null,
     })
-    if (
-      !positive ||
-      !identified ||
-      latest.get(segment.episodeUri!)?.recordPath !== segment.recordPath
-    )
-      continue
-    const episodeHash = await stableHash(`spotify-episode:${segment.episodeUri!}`)
-    const knownIdentity = await context.repository.findExternalIdentity({
-      namespace: 'spotify',
-      externalType: 'episode_uri',
-      externalId: segment.episodeUri!,
-      connectionId: null,
-    })
-    const itemId = knownIdentity?.mediaItemId ?? mediaItemId(`spotify_media_${episodeHash}`)
-    const identityId = knownIdentity?.id ?? externalIdentityId(`spotify_identity_${episodeHash}`)
-    const occurrenceKey = `episode:${segment.episodeUri!}`
-    const knownEntryId = await context.repository.findArchiveEntryId(
-      context.connection.id,
-      occurrenceKey,
-    )
-    const entryId =
-      knownEntryId ?? archiveEntryId(`spotify_archive_${context.connectionHash}_${episodeHash}`)
-    const url = `https://open.spotify.com/episode/${segment.episodeId!}`
-    mediaItems.push({
-      id: itemId,
-      type: 'podcast_episode',
-      title: segment.episodeName,
-      subtitle: segment.showName,
-      primaryCreatorName: segment.showName,
-      description: null,
-      canonicalUrl: url,
-      imageUrl: null,
-      publishedAt: null,
-      durationMs: null,
-      createdAt: at,
-      updatedAt: at,
-    })
-    identities.push({
-      id: identityId,
-      mediaItemId: itemId,
-      namespace: 'spotify',
-      externalType: 'episode_uri',
-      externalId: segment.episodeUri!,
-      scope: { kind: 'global' },
-      canonicalUrl: url,
-      firstObservedSourceRecordId: recordId,
-      lastObservedSourceRecordId: recordId,
-      retiredAt: null,
-    })
-    archiveEntries.push({
-      latestConsumedAt: true,
-      entry: {
-        id: entryId,
-        mediaItemId: itemId,
-        connectionId: context.connection.id,
-        consumedIdentityId: identityId,
-        sourceOccurrenceKey: occurrenceKey,
-        admissionReason: 'spotify_positive_playback',
-        consumedAt: temporal(segment.occurredAt),
-        sourceRecordedAt: temporal(segment.occurredAt),
-        sourceRating: null,
-        reviewText: null,
-        upstreamState: 'active',
-        createdAt: at,
-        updatedAt: at,
-      },
-      evidence: [
-        {
-          id: archiveEntryEvidenceId(`spotify_evidence_${parserId}_${segmentHash}_admission`),
-          archiveEntryId: entryId,
-          sourceRecordId: recordId,
-          role: 'admission',
-          linkedAt: at,
-        },
-        ...(segment.occurredAt === null
-          ? []
-          : [
+    if (record.kind === 'podcast') {
+      const podcast = record.value
+      let itemId: ReturnType<typeof mediaItemId> | null = null
+      if (podcast.episodeId !== null && podcast.episodeUri !== null) {
+        const episodeHash = await stableHash(`spotify-episode:${podcast.episodeUri}`)
+        const knownIdentity = await context.repository.findExternalIdentity({
+          namespace: 'spotify',
+          externalType: 'episode_uri',
+          externalId: podcast.episodeUri,
+          connectionId: null,
+        })
+        itemId = knownIdentity?.mediaItemId ?? mediaItemId(`spotify_media_${episodeHash}`)
+        const identityId =
+          knownIdentity?.id ?? externalIdentityId(`spotify_identity_${episodeHash}`)
+        const entryId =
+          (await context.repository.findArchiveEntryId(
+            context.connection.id,
+            `episode:${podcast.episodeUri}`,
+          )) ?? archiveEntryId(`spotify_archive_${context.connectionHash}_${episodeHash}`)
+        const url = `https://open.spotify.com/episode/${podcast.episodeId}`
+        mediaItems.push({
+          id: itemId,
+          type: 'podcast_episode',
+          title: podcast.episodeName,
+          subtitle: podcast.showName,
+          primaryCreatorName: podcast.showName,
+          description: null,
+          canonicalUrl: url,
+          imageUrl: null,
+          publishedAt: null,
+          durationMs: null,
+          createdAt: at,
+          updatedAt: at,
+        })
+        identities.push({
+          id: identityId,
+          mediaItemId: itemId,
+          namespace: 'spotify',
+          externalType: 'episode_uri',
+          externalId: podcast.episodeUri,
+          scope: { kind: 'global' },
+          canonicalUrl: url,
+          firstObservedSourceRecordId: recordId,
+          lastObservedSourceRecordId: recordId,
+          retiredAt: null,
+        })
+        if (positive) {
+          archiveEntries.push({
+            latestConsumedAt: true,
+            entry: {
+              id: entryId,
+              mediaItemId: itemId,
+              connectionId: context.connection.id,
+              consumedIdentityId: identityId,
+              sourceOccurrenceKey: `episode:${podcast.episodeUri}`,
+              admissionReason: 'spotify_positive_playback',
+              consumedAt: temporal(podcast.occurredAt),
+              sourceRecordedAt: temporal(podcast.occurredAt),
+              sourceRating: null,
+              reviewText: null,
+              upstreamState: 'active',
+              createdAt: at,
+              updatedAt: at,
+            },
+            evidence: [
               {
-                id: archiveEntryEvidenceId(
-                  `spotify_evidence_${parserId}_${segmentHash}_occurrence_time`,
-                ),
+                id: archiveEntryEvidenceId(`spotify_evidence_${parserId}_${segmentHash}_admission`),
                 archiveEntryId: entryId,
                 sourceRecordId: recordId,
-                role: 'occurrence_time' as const,
+                role: 'admission',
                 linkedAt: at,
               },
-            ]),
-      ],
-    })
+              ...(podcast.occurredAt === null
+                ? []
+                : [
+                    {
+                      id: archiveEntryEvidenceId(
+                        `spotify_evidence_${parserId}_${segmentHash}_occurrence_time`,
+                      ),
+                      archiveEntryId: entryId,
+                      sourceRecordId: recordId,
+                      role: 'occurrence_time' as const,
+                      linkedAt: at,
+                    },
+                  ]),
+            ],
+          })
+        }
+      }
+      podcasts.push({
+        id: `spotify_podcast_observation_${segmentHash}`,
+        sourceRecordId: recordId,
+        connectionId: context.connection.id,
+        mediaItemId: itemId,
+        episodeUri: podcast.episodeUri,
+        episodeId: podcast.episodeId,
+        occurredAt: podcast.occurredAt,
+        millisecondsPlayed: podcast.millisecondsPlayed,
+        episodeTitle: podcast.episodeName,
+        showName: podcast.showName,
+        reasonStart: podcast.reasonStart,
+        reasonEnd: podcast.reasonEnd,
+        skipped: podcast.skipped,
+        parserVersion,
+        updatedAt: at,
+      })
+    } else {
+      const song = record.value
+      const trackHash = await stableHash(`spotify-track:${song.trackUri}`)
+      const knownIdentity = await context.repository.findExternalIdentity({
+        namespace: 'spotify',
+        externalType: 'track_uri',
+        externalId: song.trackUri,
+        connectionId: null,
+      })
+      const itemId = knownIdentity?.mediaItemId ?? mediaItemId(`spotify_song_${trackHash}`)
+      const identityId =
+        knownIdentity?.id ?? externalIdentityId(`spotify_track_identity_${trackHash}`)
+      const entryId =
+        (await context.repository.findArchiveEntryId(
+          context.connection.id,
+          `track:${song.trackUri}`,
+        )) ?? archiveEntryId(`spotify_song_archive_${context.connectionHash}_${trackHash}`)
+      const url = `https://open.spotify.com/track/${song.trackId}`
+      mediaItems.push({
+        id: itemId,
+        type: 'song',
+        title: song.trackName,
+        subtitle: song.artistName,
+        primaryCreatorName: song.artistName,
+        description: null,
+        canonicalUrl: url,
+        imageUrl: null,
+        publishedAt: null,
+        durationMs: null,
+        createdAt: at,
+        updatedAt: at,
+      })
+      identities.push({
+        id: identityId,
+        mediaItemId: itemId,
+        namespace: 'spotify',
+        externalType: 'track_uri',
+        externalId: song.trackUri,
+        scope: { kind: 'global' },
+        canonicalUrl: url,
+        firstObservedSourceRecordId: recordId,
+        lastObservedSourceRecordId: recordId,
+        retiredAt: null,
+      })
+      archiveEntries.push({
+        latestConsumedAt: true,
+        entry: {
+          id: entryId,
+          mediaItemId: itemId,
+          connectionId: context.connection.id,
+          consumedIdentityId: identityId,
+          sourceOccurrenceKey: `track:${song.trackUri}`,
+          admissionReason: 'spotify_positive_playback',
+          consumedAt: temporal(song.occurredAt),
+          sourceRecordedAt: temporal(song.occurredAt),
+          sourceRating: null,
+          reviewText: null,
+          upstreamState: 'active',
+          createdAt: at,
+          updatedAt: at,
+        },
+        evidence: [
+          {
+            id: archiveEntryEvidenceId(
+              `spotify_song_evidence_${parserId}_${segmentHash}_admission`,
+            ),
+            archiveEntryId: entryId,
+            sourceRecordId: recordId,
+            role: 'admission',
+            linkedAt: at,
+          },
+          ...(song.occurredAt === null
+            ? []
+            : [
+                {
+                  id: archiveEntryEvidenceId(
+                    `spotify_song_evidence_${parserId}_${segmentHash}_occurrence_time`,
+                  ),
+                  archiveEntryId: entryId,
+                  sourceRecordId: recordId,
+                  role: 'occurrence_time' as const,
+                  linkedAt: at,
+                },
+              ]),
+        ],
+      })
+      songs.push({
+        id: `spotify_song_observation_${segmentHash}`,
+        sourceRecordId: recordId,
+        connectionId: context.connection.id,
+        mediaItemId: itemId,
+        trackUri: song.trackUri,
+        trackId: song.trackId,
+        occurredAt: song.occurredAt,
+        millisecondsPlayed: song.millisecondsPlayed,
+        sourceKind: 'export',
+        skipped: song.skipped,
+        trackName: song.trackName,
+        artistName: song.artistName,
+        albumName: song.albumName,
+        reasonStart: song.reasonStart,
+        reasonEnd: song.reasonEnd,
+        parserVersion,
+        updatedAt: at,
+      })
+    }
   }
-  const next = offset + records.length
-  const completed = next >= segments.length
+  const next = offset + chunk.length
+  const completed = next >= records.length
   const currentCursor = await context.repository.findSyncCursor(
     context.connection.id,
     context.cursorName,
@@ -435,7 +586,7 @@ async function normalizeChunk(
     id:
       currentCursor?.id ??
       syncCursorId(
-        `spotify_cursor_${await stableHash(`${context.connection.id}:${context.archiveHash}`)}`,
+        `spotify_cursor_${await stableHash(`${context.connection.id}:${context.archiveHash}:${parserVersion}`)}`,
       ),
     connectionId: context.connection.id,
     name: context.cursorName,
@@ -443,11 +594,25 @@ async function normalizeChunk(
       archiveSha256: context.archiveHash,
       completed,
       nextOffset: next,
-      totalRecords: segments.length,
+      totalRecords: records.length,
     },
     committedAt: at,
     syncRunId: context.run.id,
   }
+  await context.repository.commit({
+    rawObjects: [
+      {
+        ...context.raw,
+        processingStatus: 'processing',
+        lastParserVersion: parserVersion,
+      },
+    ],
+    sourceRecords,
+    mediaItems,
+    externalIdentities: identities,
+    archiveEntries,
+  })
+  await context.spotifyRepository.projectHistory({ podcasts, songs, rebuild: completed })
   await context.repository.commit({
     syncRun: {
       ...context.run,
@@ -467,23 +632,42 @@ async function normalizeChunk(
         lastParserVersion: parserVersion,
       },
     ],
-    sourceRecords,
-    mediaItems,
-    externalIdentities: identities,
-    archiveEntries,
     cursor,
   })
   if (completed) await context.repository.saveConnection({ ...context.connection, updatedAt: at })
   return {
     alreadyImported: false,
-    archiveEpisodes: archiveEntries.length,
+    archiveEpisodes: new Set(
+      podcasts
+        .filter((value) => value.millisecondsPlayed > 0 && value.episodeUri !== null)
+        .map((value) => value.episodeUri),
+    ).size,
+    songObservations: songs.length,
     completed,
     importId: context.archiveHash,
     nextOffset: completed ? null : next,
     sourceRecords: sourceRecords.length,
     syncRunId: context.run.id,
-    totalArchiveEpisodes: latest.size,
-    totalPodcastSegments: segments.length,
+    totalArchiveEpisodes: new Set(
+      records
+        .filter(
+          (value): value is Extract<SpotifyHistoryRecord, { kind: 'podcast' }> =>
+            value.kind === 'podcast' &&
+            value.value.millisecondsPlayed > 0 &&
+            value.value.episodeUri !== null,
+        )
+        .map((value) => value.value.episodeUri),
+    ).size,
+    totalPodcastSegments: records.filter((value) => value.kind === 'podcast').length,
+    totalSongSegments: records.filter((value) => value.kind === 'song').length,
+    totalArchiveTracks: new Set(
+      records
+        .filter(
+          (value): value is Extract<SpotifyHistoryRecord, { kind: 'song' }> =>
+            value.kind === 'song',
+        )
+        .map((value) => value.value.trackUri),
+    ).size,
     unresolvedPodcastSegments: unresolved,
   }
 }
@@ -515,35 +699,44 @@ async function markFailed(context: Context, error: unknown) {
 }
 async function processPrepared(
   prepared: Awaited<ReturnType<typeof prepare>>,
-  segments: readonly SpotifyPodcastSegment[],
+  records: readonly SpotifyHistoryRecord[],
   size: number,
 ): Promise<SpotifyImportResponse> {
   try {
-    const latest = latestSegments(segments)
+    const latest = latestSegments(records)
     if (prepared.checkpoint?.completed === true)
       return {
         alreadyImported: true,
         archiveEpisodes: 0,
+        songObservations: 0,
         completed: true,
         importId: prepared.context.archiveHash,
         nextOffset: null,
         sourceRecords: 0,
         syncRunId: prepared.context.run.id,
         totalArchiveEpisodes: latest.size,
-        totalPodcastSegments: segments.length,
+        totalPodcastSegments: records.filter((value) => value.kind === 'podcast').length,
+        totalSongSegments: records.filter((value) => value.kind === 'song').length,
+        totalArchiveTracks: new Set(
+          records
+            .filter(
+              (value): value is Extract<SpotifyHistoryRecord, { kind: 'song' }> =>
+                value.kind === 'song',
+            )
+            .map((value) => value.value.trackUri),
+        ).size,
         unresolvedPodcastSegments: 0,
       }
     if (
       prepared.checkpoint !== null &&
       (prepared.checkpoint.archiveSha256 !== prepared.context.archiveHash ||
-        prepared.checkpoint.totalRecords !== segments.length)
+        prepared.checkpoint.totalRecords !== records.length)
     ) {
       throw new SpotifyImportError('The Spotify import checkpoint does not match its source')
     }
     return await normalizeChunk(
       prepared.context,
-      segments,
-      latest,
+      records,
       prepared.checkpoint?.nextOffset ?? 0,
       size,
     )
@@ -568,7 +761,7 @@ export async function importSpotifyExtendedHistory(
     if (manifestObject !== null) {
       const manifestBytes = new Uint8Array(await manifestObject.arrayBuffer())
       const manifest = parseManifest(JSON.parse(new TextDecoder().decode(manifestBytes)), sum.hex)
-      return processPrepared(prepared, manifest.segments, size)
+      return processPrepared(prepared, manifest.records, size)
     }
   }
   if (!prepared.rawExists) {
@@ -579,12 +772,12 @@ export async function importSpotifyExtendedHistory(
     })
     await prepared.context.repository.commit({ rawObjects: [prepared.context.raw] })
   }
-  let segments: SpotifyPodcastSegment[]
+  let records: SpotifyHistoryRecord[]
   try {
-    segments = await parseArchive(archive)
+    records = await parseArchive(archive)
     await bindings.RAW_BUCKET.put(
       manifestKey(sum.hex),
-      JSON.stringify({ archiveSha256: sum.hex, archiveByteLength: archive.byteLength, segments }),
+      JSON.stringify({ archiveSha256: sum.hex, archiveByteLength: archive.byteLength, records }),
       { httpMetadata: { contentType: 'application/json' } },
     )
   } catch (error) {
@@ -593,7 +786,7 @@ export async function importSpotifyExtendedHistory(
       ? error
       : new SpotifyImportError(error instanceof Error ? error.message : 'Spotify import failed')
   }
-  return processPrepared(prepared, segments, size)
+  return processPrepared(prepared, records, size)
 }
 export async function continueSpotifyExtendedHistoryImport(
   bindings: Bindings,
@@ -607,7 +800,7 @@ export async function continueSpotifyExtendedHistoryImport(
     const manifestBytes = new Uint8Array(await manifestObject.arrayBuffer())
     const manifest = parseManifest(JSON.parse(new TextDecoder().decode(manifestBytes)), importId)
     const prepared = await prepare(bindings, importId, manifest.archiveByteLength)
-    return processPrepared(prepared, manifest.segments, chunkSize(options.chunkSize))
+    return processPrepared(prepared, manifest.records, chunkSize(options.chunkSize))
   }
   const stored = await bindings.RAW_BUCKET.get(
     `raw/spotify/sha256/${importId.slice(0, 2)}/${importId}.zip`,

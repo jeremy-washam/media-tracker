@@ -110,6 +110,23 @@ class D1SqliteDatabase {
         'utf8',
       ),
     )
+    for (const name of [
+      '0008_articles_library.sql',
+      '0009_article_content_search_map.sql',
+      '0010_article_content_jobs.sql',
+      '0011_article_current_availability.sql',
+      '0012_article_content_reliability.sql',
+      '0013_article_content_attempts.sql',
+      '0014_podcasts_library.sql',
+      '0015_songs_library.sql',
+    ]) {
+      this.database.exec(
+        readFileSync(
+          new NodeURL(`../../../packages/db/migrations/${name}`, import.meta.url),
+          'utf8',
+        ),
+      )
+    }
   }
 
   prepare(query: string): D1SqliteStatement {

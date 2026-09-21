@@ -290,7 +290,7 @@ not instructions to the model or permission to call other tools.
 ## Proposed delivery sequence
 
 1. **Finish the per-media inventory.** In priority order—Books, Movies, Articles,
-   Podcasts, YouTube, Songs—label each proposed inspector field as stored now,
+   Podcasts, Songs, YouTube—label each proposed inspector field as stored now,
    recoverable from evidence, available through an additional query, or
    unsupported/uncertain. Separate provider descriptions from AI summaries.
 2. **Deliver local inspection.** Add the detail contract/repository, necessary

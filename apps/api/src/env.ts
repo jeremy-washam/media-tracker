@@ -5,6 +5,7 @@ import {
   SqlBooksRepository,
   SqlCanonicalLedgerRepository,
   SqlMoviesRepository,
+  SqlSpotifyLibraryRepository,
   type CanonicalLedgerRepository,
 } from '@media-tracker/db'
 
@@ -43,4 +44,8 @@ export function createBooksRepository(database: D1Database): SqlBooksRepository 
 
 export function createMoviesRepository(database: D1Database): SqlMoviesRepository {
   return new SqlMoviesRepository(new D1DatabaseClient(database))
+}
+
+export function createSpotifyLibraryRepository(database: D1Database): SqlSpotifyLibraryRepository {
+  return new SqlSpotifyLibraryRepository(new D1DatabaseClient(database))
 }

@@ -7,8 +7,15 @@ const historyRowSchema = z
     episode_name: z.string().nullable().optional(),
     episode_show_name: z.string().nullable().optional(),
     spotify_episode_uri: z.string().nullable().optional(),
+    master_metadata_track_name: z.string().nullable().optional(),
+    master_metadata_album_artist_name: z.string().nullable().optional(),
+    master_metadata_album_album_name: z.string().nullable().optional(),
     spotify_track_uri: z.string().nullable().optional(),
     audiobook_uri: z.string().nullable().optional(),
+    audiobook_chapter_uri: z.string().nullable().optional(),
+    reason_start: z.string().nullable().optional(),
+    reason_end: z.string().nullable().optional(),
+    skipped: z.boolean().nullable().optional(),
   })
   .passthrough()
 
@@ -22,6 +29,25 @@ export interface SpotifyPodcastSegment {
   readonly recordPath: string
   readonly rowIndex: number
   readonly showName: string | null
+  readonly reasonStart: string | null
+  readonly reasonEnd: string | null
+  readonly skipped: boolean | null
+}
+
+export interface SpotifySongSegment {
+  readonly albumName: string | null
+  readonly artistName: string | null
+  readonly memberName: string
+  readonly millisecondsPlayed: number
+  readonly occurredAt: string | null
+  readonly reasonStart: string | null
+  readonly reasonEnd: string | null
+  readonly recordPath: string
+  readonly rowIndex: number
+  readonly skipped: boolean | null
+  readonly trackId: string
+  readonly trackName: string | null
+  readonly trackUri: string
 }
 
 export interface SpotifyHistoryMemberProjection {
@@ -29,6 +55,7 @@ export interface SpotifyHistoryMemberProjection {
   readonly podcastSegments: readonly SpotifyPodcastSegment[]
   readonly rows: number
   readonly songRows: number
+  readonly songSegments: readonly SpotifySongSegment[]
   readonly unidentifiedRows: number
 }
 
@@ -41,6 +68,12 @@ function normalizedInstant(value: string | null | undefined): string | null {
 function episodeId(uri: string | null): string | null {
   if (uri === null) return null
   const match = /^spotify:episode:([A-Za-z0-9]+)$/.exec(uri)
+  return match?.[1] ?? null
+}
+
+function trackId(uri: string | null): string | null {
+  if (uri === null) return null
+  const match = /^spotify:track:([A-Za-z0-9]+)$/.exec(uri)
   return match?.[1] ?? null
 }
 
@@ -61,6 +94,7 @@ export function parseSpotifyHistoryMember(
   if (!Array.isArray(value)) throw new TypeError(`${name} must contain a JSON array`)
 
   const podcastSegments: SpotifyPodcastSegment[] = []
+  const songSegments: SpotifySongSegment[] = []
   let songRows = 0
   let audiobookRows = 0
   let unidentifiedRows = 0
@@ -68,12 +102,18 @@ export function parseSpotifyHistoryMember(
   for (const [index, input] of value.entries()) {
     const row = historyRowSchema.parse(input)
     const episodeUri = row.spotify_episode_uri ?? null
+    const trackUri = row.spotify_track_uri ?? null
     const hasPodcast =
       episodeUri !== null || row.episode_name != null || row.episode_show_name != null
-    const hasSong = row.spotify_track_uri != null
-    const hasAudiobook = row.audiobook_uri != null
+    const hasSong = trackUri !== null || row.master_metadata_track_name != null
+    const hasAudiobook = row.audiobook_uri != null || row.audiobook_chapter_uri != null
+    const classifications = Number(hasPodcast) + Number(hasSong) + Number(hasAudiobook)
 
-    if (hasPodcast) {
+    if (classifications > 1) {
+      unidentifiedRows += 1
+    } else if (hasAudiobook) {
+      audiobookRows += 1
+    } else if (hasPodcast) {
       podcastSegments.push({
         episodeId: episodeId(episodeUri),
         episodeName: row.episode_name ?? null,
@@ -84,11 +124,30 @@ export function parseSpotifyHistoryMember(
         recordPath: recordPath(name, index),
         rowIndex: index,
         showName: row.episode_show_name ?? null,
+        reasonStart: row.reason_start ?? null,
+        reasonEnd: row.reason_end ?? null,
+        skipped: row.skipped ?? null,
       })
     } else if (hasSong) {
       songRows += 1
-    } else if (hasAudiobook) {
-      audiobookRows += 1
+      const id = trackId(trackUri)
+      if (trackUri !== null && id !== null) {
+        songSegments.push({
+          albumName: row.master_metadata_album_album_name ?? null,
+          artistName: row.master_metadata_album_artist_name ?? null,
+          memberName: name,
+          millisecondsPlayed: Math.max(0, row.ms_played ?? 0),
+          occurredAt: normalizedInstant(row.ts),
+          reasonStart: row.reason_start ?? null,
+          reasonEnd: row.reason_end ?? null,
+          recordPath: recordPath(name, index),
+          rowIndex: index,
+          skipped: row.skipped ?? null,
+          trackId: id,
+          trackName: row.master_metadata_track_name ?? null,
+          trackUri,
+        })
+      }
     } else {
       unidentifiedRows += 1
     }
@@ -99,6 +158,7 @@ export function parseSpotifyHistoryMember(
     podcastSegments,
     rows: value.length,
     songRows,
+    songSegments,
     unidentifiedRows,
   }
 }

@@ -396,8 +396,15 @@ export function ConnectionsPage() {
       ) : null}
       {spotifySync.isSuccess ? (
         <p className="checkpoint-note">
-          Reconciled {spotifySync.data.archiveEpisodes} played podcast episodes from Spotify’s
-          saved-episode library.
+          Reconciled {spotifySync.data.archiveEpisodes} consumed saved episodes,{' '}
+          {spotifySync.data.savedShows} followed shows, and {spotifySync.data.recentTracks} recent
+          track observations; enriched {spotifySync.data.catalogTracks} additional tracks.
+        </p>
+      ) : null}
+      {spotifySync.isSuccess && spotifySync.data.partialFailures.length > 0 ? (
+        <p className="checkpoint-note sync-error" role="alert">
+          Some Spotify reads could not be refreshed: {spotifySync.data.partialFailures.join(', ')}.
+          Retained data remains available.
         </p>
       ) : null}
       {spotifySync.isError ? (

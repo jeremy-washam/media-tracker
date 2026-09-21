@@ -27,7 +27,7 @@ The agreed initial interface beyond ingestion has three primary surfaces:
   clickable media references with details for both Library and catalog items.
 - **Library:** browse imported items and full details, first by media type and
   then by Archive or Queue. Priority order: Books, Movies, Articles, Podcasts,
-  YouTube videos, Songs. Show one item with all supported consumption history;
+  Songs, YouTube videos. Show one item with all supported consumption history;
   date filters match any occurrence. Initial Library is read-only. Reading,
   watching, and listening inside the app are not in scope and may never be.
 - **Recaps:** browsable monthly and yearly rollups across media. The name is

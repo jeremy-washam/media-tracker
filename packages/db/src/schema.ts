@@ -1225,6 +1225,249 @@ export const articleContentRawAcquisitions = sqliteTable(
   ],
 )
 
+export const spotifyPodcastEpisodes = sqliteTable(
+  'spotify_podcast_episodes',
+  {
+    mediaItemId: text('media_item_id')
+      .primaryKey()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    spotifyEpisodeUri: text('spotify_episode_uri').notNull(),
+    spotifyEpisodeId: text('spotify_episode_id').notNull(),
+    showId: text('show_id'),
+    showUri: text('show_uri'),
+    currentTitle: text('current_title'),
+    historicalTitle: text('historical_title'),
+    showName: text('show_name'),
+    description: text('description'),
+    imageUrl: text('image_url'),
+    canonicalUrl: text('canonical_url'),
+    publishedAtValue: text('published_at_value'),
+    publishedAtPrecision: text('published_at_precision'),
+    durationMs: integer('duration_ms'),
+    availabilityState: text('availability_state').notNull().default('unknown'),
+    metadataObservedAt: text('metadata_observed_at'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [uniqueIndex('spotify_podcast_episode_uri_unique').on(table.spotifyEpisodeUri)],
+)
+
+export const spotifyPodcastPlaybackObservations = sqliteTable(
+  'spotify_podcast_playback_observations',
+  {
+    id: text('id').primaryKey(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .unique()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    mediaItemId: text('media_item_id').references(() => mediaItems.id, { onDelete: 'restrict' }),
+    spotifyEpisodeUri: text('spotify_episode_uri'),
+    occurredAt: text('occurred_at'),
+    millisecondsPlayed: integer('milliseconds_played').notNull(),
+    positive: integer('positive', { mode: 'boolean' }).notNull(),
+    episodeTitle: text('episode_title'),
+    showName: text('show_name'),
+    reasonStart: text('reason_start'),
+    reasonEnd: text('reason_end'),
+    skipped: integer('skipped', { mode: 'boolean' }),
+    parserVersion: text('parser_version').notNull(),
+  },
+)
+
+export const spotifySavedEpisodes = sqliteTable(
+  'spotify_saved_episodes',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    spotifyEpisodeUri: text('spotify_episode_uri').notNull(),
+    mediaItemId: text('media_item_id').references(() => mediaItems.id, { onDelete: 'restrict' }),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    addedAt: text('added_at'),
+    resumePositionMs: integer('resume_position_ms'),
+    fullyPlayed: integer('fully_played', { mode: 'boolean' }),
+    active: integer('active', { mode: 'boolean' }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredObservedAt: text('retired_observed_at'),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.spotifyEpisodeUri] })],
+)
+
+export const spotifyPodcastShows = sqliteTable('spotify_podcast_shows', {
+  id: text('id').primaryKey(),
+  spotifyShowUri: text('spotify_show_uri').notNull().unique(),
+  spotifyShowId: text('spotify_show_id').notNull(),
+  name: text('name'),
+  publisher: text('publisher'),
+  description: text('description'),
+  imageUrl: text('image_url'),
+  canonicalUrl: text('canonical_url'),
+  languagesJson: text('languages_json').notNull().default('[]'),
+  totalEpisodes: integer('total_episodes'),
+  availabilityState: text('availability_state').notNull().default('unknown'),
+  metadataObservedAt: text('metadata_observed_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const spotifySavedShows = sqliteTable(
+  'spotify_saved_shows',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    showId: text('show_id')
+      .notNull()
+      .references(() => spotifyPodcastShows.id, { onDelete: 'restrict' }),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    addedAt: text('added_at'),
+    active: integer('active', { mode: 'boolean' }).notNull(),
+    firstObservedAt: text('first_observed_at').notNull(),
+    lastObservedAt: text('last_observed_at').notNull(),
+    retiredObservedAt: text('retired_observed_at'),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.showId] })],
+)
+
+export const spotifyPlayerObservations = sqliteTable('spotify_player_observations', {
+  id: text('id').primaryKey(),
+  sourceRecordId: text('source_record_id').references(() => sourceRecords.id, {
+    onDelete: 'restrict',
+  }),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  mediaItemId: text('media_item_id').references(() => mediaItems.id, { onDelete: 'restrict' }),
+  itemType: text('item_type'),
+  itemUri: text('item_uri'),
+  progressMs: integer('progress_ms'),
+  isPlaying: integer('is_playing', { mode: 'boolean' }),
+  sourceTimestamp: text('source_timestamp'),
+  observedAt: text('observed_at').notNull(),
+  empty: integer('empty', { mode: 'boolean' }).notNull(),
+})
+
+export const podcastLibraryProjection = sqliteTable('podcast_library_projection', {
+  mediaItemId: text('media_item_id')
+    .primaryKey()
+    .references(() => mediaItems.id, { onDelete: 'restrict' }),
+  spotifyEpisodeUri: text('spotify_episode_uri'),
+  title: text('title'),
+  showId: text('show_id'),
+  showName: text('show_name'),
+  imageUrl: text('image_url'),
+  publishedAtValue: text('published_at_value'),
+  publishedAtPrecision: text('published_at_precision'),
+  durationMs: integer('duration_ms'),
+  inArchive: integer('in_archive', { mode: 'boolean' }).notNull(),
+  inQueue: integer('in_queue', { mode: 'boolean' }).notNull(),
+  savedEpisode: integer('saved_episode', { mode: 'boolean' }).notNull(),
+  followingShow: integer('following_show', { mode: 'boolean' }).notNull(),
+  latestActivityAt: text('latest_activity_at'),
+  savedAt: text('saved_at'),
+  observedMs: integer('observed_ms').notNull().default(0),
+  playbackObservationCount: integer('playback_observation_count').notNull().default(0),
+  availabilityState: text('availability_state').notNull().default('unknown'),
+  sourceRefreshedAt: text('source_refreshed_at').notNull(),
+  projectionVersion: integer('projection_version').notNull(),
+})
+
+export const spotifySongObservations = sqliteTable('spotify_song_observations', {
+  id: text('id').primaryKey(),
+  sourceRecordId: text('source_record_id')
+    .notNull()
+    .unique()
+    .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => connections.id, { onDelete: 'restrict' }),
+  mediaItemId: text('media_item_id')
+    .notNull()
+    .references(() => mediaItems.id, { onDelete: 'restrict' }),
+  spotifyTrackUri: text('spotify_track_uri').notNull(),
+  sourceKind: text('source_kind').notNull(),
+  occurredAt: text('occurred_at'),
+  millisecondsPlayed: integer('milliseconds_played'),
+  skipped: integer('skipped', { mode: 'boolean' }),
+  trackName: text('track_name'),
+  artistName: text('artist_name'),
+  albumName: text('album_name'),
+  reasonStart: text('reason_start'),
+  reasonEnd: text('reason_end'),
+  parserVersion: text('parser_version').notNull(),
+})
+
+export const spotifySongTracks = sqliteTable('spotify_song_tracks', {
+  mediaItemId: text('media_item_id')
+    .primaryKey()
+    .references(() => mediaItems.id, { onDelete: 'restrict' }),
+  spotifyTrackUri: text('spotify_track_uri').notNull().unique(),
+  spotifyTrackId: text('spotify_track_id').notNull(),
+  title: text('title'),
+  artistText: text('artist_text'),
+  albumId: text('album_id'),
+  albumUri: text('album_uri'),
+  albumName: text('album_name'),
+  imageUrl: text('image_url'),
+  canonicalUrl: text('canonical_url'),
+  durationMs: integer('duration_ms'),
+  explicit: integer('explicit', { mode: 'boolean' }),
+  isrc: text('isrc'),
+  latestPlayedAt: text('latest_played_at'),
+  firstPlayedAt: text('first_played_at'),
+  playbackCount: integer('playback_count').notNull().default(0),
+  observedMs: integer('observed_ms').notNull().default(0),
+  apiOnlyCount: integer('api_only_count').notNull().default(0),
+  metadataState: text('metadata_state').notNull().default('export_only'),
+  metadataObservedAt: text('metadata_observed_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const spotifySongAlbums = sqliteTable('spotify_song_albums', {
+  id: text('id').primaryKey(),
+  spotifyAlbumUri: text('spotify_album_uri').notNull().unique(),
+  spotifyAlbumId: text('spotify_album_id').notNull(),
+  name: text('name'),
+  artistText: text('artist_text'),
+  albumType: text('album_type'),
+  releaseDateValue: text('release_date_value'),
+  releaseDatePrecision: text('release_date_precision'),
+  imageUrl: text('image_url'),
+  canonicalUrl: text('canonical_url'),
+  metadataObservedAt: text('metadata_observed_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const spotifySongArtists = sqliteTable('spotify_song_artists', {
+  id: text('id').primaryKey(),
+  spotifyArtistUri: text('spotify_artist_uri').notNull().unique(),
+  spotifyArtistId: text('spotify_artist_id').notNull(),
+  name: text('name'),
+  canonicalUrl: text('canonical_url'),
+  metadataObservedAt: text('metadata_observed_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const spotifySongTrackArtists = sqliteTable(
+  'spotify_song_track_artists',
+  {
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    artistId: text('artist_id')
+      .notNull()
+      .references(() => spotifySongArtists.id, { onDelete: 'restrict' }),
+    creditOrder: integer('credit_order').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.mediaItemId, table.artistId] })],
+)
+
 export const schema = {
   archiveEntries,
   archiveEntryEvidence,
@@ -1263,6 +1506,18 @@ export const schema = {
   readwiseTags,
   sourceRecords,
   sources,
+  spotifyPlayerObservations,
+  spotifyPodcastEpisodes,
+  spotifyPodcastPlaybackObservations,
+  spotifyPodcastShows,
+  spotifySavedEpisodes,
+  spotifySavedShows,
+  podcastLibraryProjection,
+  spotifySongAlbums,
+  spotifySongArtists,
+  spotifySongObservations,
+  spotifySongTrackArtists,
+  spotifySongTracks,
   syncCursors,
   syncRuns,
 }

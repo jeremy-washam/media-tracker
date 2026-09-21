@@ -19,6 +19,118 @@ const book = {
   supportedReadCount: 1,
 }
 
+test('keeps loaded Podcast pages while changing layout and opening the inspector', async ({
+  page,
+}) => {
+  const requested: string[] = []
+  await page.route('**/api/library/podcasts?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url.search)
+    const second = url.searchParams.has('cursor')
+    await route.fulfill({
+      json: podcastsResponse(
+        [
+          {
+            ...podcast,
+            id: second ? 'podcast-two' : 'podcast-one',
+            title: second ? 'Second Episode' : podcast.title,
+          },
+        ],
+        second ? null : 'next-podcast-page',
+      ),
+    })
+  })
+  await page.route('**/api/library/podcasts/episodes/podcast-one', (route) =>
+    route.fulfill({
+      json: {
+        ...podcast,
+        description: 'Episode description.',
+        publisher: 'Publisher',
+        showDescription: null,
+        showUrl: null,
+        availability: 'available',
+      },
+    }),
+  )
+  await page.route('**/api/library/podcasts/episodes/podcast-one/history*', (route) =>
+    route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
+  )
+  await page.goto('/library/podcasts/archive')
+  await page.getByRole('button', { name: 'Load more' }).click()
+  await expect(page.getByRole('button', { name: /Second Episode/ })).toBeVisible()
+  const afterPaging = requested.length
+  await page.getByRole('button', { name: 'Grid view' }).click()
+  await page.getByRole('button', { name: /A Distant Episode/ }).click()
+  await expect(page.getByText('Episode description.')).toBeVisible()
+  await page.getByRole('button', { name: 'Close inspector' }).click()
+  await expect(page.getByRole('button', { name: /Second Episode/ })).toBeVisible()
+  expect(requested).toHaveLength(afterPaging)
+  expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
+    true,
+  )
+})
+
+test('keeps loaded Music pages while changing layout and opening the inspector', async ({
+  page,
+}) => {
+  const requested: string[] = []
+  await page.route('**/api/library/music?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url.search)
+    const second = url.searchParams.has('cursor')
+    await route.fulfill({
+      json: musicResponse(
+        [
+          {
+            ...track,
+            id: second ? 'track-two' : 'track-one',
+            title: second ? 'Second Track' : track.title,
+          },
+        ],
+        second ? null : 'next-music-page',
+      ),
+    })
+  })
+  await page.route('**/api/library/music/tracks/track-one', (route) =>
+    route.fulfill({
+      json: {
+        id: 'track-one',
+        kind: 'track',
+        title: track.title,
+        subtitle: track.subtitle,
+        album: track.album,
+        imageUrl: null,
+        latestPlayedAt: track.latestPlayedAt,
+        firstPlayedAt: '2026-01-01T00:00:00.000Z',
+        playbackCount: 4,
+        observedMs: 600_000,
+        observedDurationKnown: true,
+        durationMs: 180_000,
+        explicit: false,
+        isrc: null,
+        metadataState: 'current',
+        canonicalUrl: track.canonicalUrl,
+      },
+    }),
+  )
+  await page.route('**/api/library/music/tracks/track-one/history*', (route) =>
+    route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
+  )
+  await page.goto('/library/music/tracks')
+  await page.getByRole('button', { name: 'Load more' }).click()
+  await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
+  const afterPaging = requested.length
+  await page.getByRole('button', { name: 'Grid view' }).click()
+  await page.getByRole('button', { name: /A Distant Track/ }).click()
+  await expect(page.getByRole('heading', { name: 'A Distant Track' })).toBeVisible()
+  await page.getByRole('button', { name: 'Close inspector' }).click()
+  await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
+  expect(requested).toHaveLength(afterPaging)
+  expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
+    true,
+  )
+})
+
 const booksResponse = (data = [book], nextCursor: string | null = null) => ({
   data,
   nextCursor,
@@ -121,6 +233,57 @@ const articlesResponse = (data = [article], nextCursor: string | null = null) =>
     fullTextPolicy: 'archive_queue' as const,
     lastSuccessfulSyncAt: '2026-09-20T10:00:00.000Z',
   },
+})
+
+const podcast = {
+  id: 'podcast-one',
+  kind: 'episode' as const,
+  title: 'A Distant Episode',
+  subtitle: 'A Distant Show',
+  imageUrl: null,
+  date: '2026-09-12T10:00:00.000Z',
+  publishedAt: '2026-09-01',
+  durationMs: 3_600_000,
+  observedMs: 1_800_000,
+  playbackCount: 2,
+  inArchive: true,
+  inQueue: false,
+  following: true,
+  archiveEpisodeCount: 0,
+  queueEpisodeCount: 0,
+  totalEpisodes: null,
+  canonicalUrl: 'https://open.spotify.com/episode/episode-one',
+}
+const podcastsResponse = (data = [podcast], nextCursor: string | null = null) => ({
+  data,
+  nextCursor,
+  totalCount: data.length,
+  filteredCount: data.length,
+  sectionCounts: { archive: 12, queue: 4, following: 3 },
+})
+const track = {
+  id: 'track-one',
+  kind: 'track' as const,
+  title: 'A Distant Track',
+  subtitle: 'Ada Artist',
+  album: 'A Distant Album',
+  imageUrl: null,
+  latestPlayedAt: '2026-09-12T10:00:00.000Z',
+  playbackCount: 4,
+  observedMs: 600_000,
+  observedDurationKnown: true,
+  trackCount: 1,
+  releaseCount: 1,
+  explicit: false,
+  metadataState: 'current',
+  canonicalUrl: 'https://open.spotify.com/track/track-one',
+}
+const musicResponse = (data = [track], nextCursor: string | null = null) => ({
+  data,
+  nextCursor,
+  totalCount: data.length,
+  filteredCount: data.length,
+  sectionCounts: { tracks: 24, albums: 8, artists: 6 },
 })
 
 test.beforeEach(async ({ page }) => {

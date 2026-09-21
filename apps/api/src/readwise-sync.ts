@@ -35,7 +35,11 @@ import {
 import { ulid } from 'ulid'
 
 import type { Bindings } from './env'
-import { createArticlesRepository, createLedgerRepository } from './env'
+import {
+  createArticlesRepository,
+  createLedgerRepository,
+  createSpotifyLibraryRepository,
+} from './env'
 import { withReadwiseRetry } from './readwise-retry'
 
 const parserVersion = 'readwise-documents@5'
@@ -56,6 +60,19 @@ function instantNow(): ReturnType<typeof utcInstant> {
 }
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError'
+}
+
+function exactSpotifyEpisodeUri(value: string | null): string | null {
+  if (value === null) return null
+  try {
+    const url = new URL(value)
+    const match = /^\/episode\/([A-Za-z0-9]+)\/?$/.exec(url.pathname)
+    return url.protocol === 'https:' && url.hostname === 'open.spotify.com' && match
+      ? `spotify:episode:${match[1]}`
+      : null
+  } catch {
+    return null
+  }
 }
 
 function overlappedUpdatedAfter(checkpoint: unknown): string | undefined {
@@ -343,6 +360,18 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
             connection.id,
             `reader-document:${item.documentId}`,
           )
+          const spotifyEpisodeUri =
+            item.archive?.mediaType === 'podcast_episode'
+              ? exactSpotifyEpisodeUri(item.archive.canonicalUrl)
+              : null
+          const spotifyIdentity = spotifyEpisodeUri
+            ? await repository.findExternalIdentity({
+                namespace: 'spotify',
+                externalType: 'episode_uri',
+                externalId: spotifyEpisodeUri,
+                connectionId: null,
+              })
+            : null
           const shouldCanonicalize = item.article !== null || item.archive !== null
           sourceRecords.push({
             id: recordId,
@@ -371,7 +400,8 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
             })
           }
           if (!shouldCanonicalize) continue
-          const itemId = knownIdentity?.mediaItemId ?? mediaItemId(ulid())
+          const itemId =
+            spotifyIdentity?.mediaItemId ?? knownIdentity?.mediaItemId ?? mediaItemId(ulid())
           const identityId = knownIdentity?.id ?? externalIdentityId(ulid())
           const title = item.article?.title ?? item.archive?.title ?? null
           const creator = item.article?.author ?? item.archive?.primaryCreatorName ?? null
@@ -383,20 +413,21 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
           const publishedAt = item.article?.publishedAt ?? item.archive?.publishedAt ?? null
           const mediaType = item.article ? 'article' : item.archive?.mediaType
           if (!mediaType) continue
-          mediaItems.push({
-            id: itemId,
-            type: mediaType,
-            title,
-            subtitle: null,
-            primaryCreatorName: creator,
-            description,
-            canonicalUrl,
-            imageUrl,
-            publishedAt,
-            durationMs: null,
-            createdAt: acquiredAt,
-            updatedAt: acquiredAt,
-          })
+          if (spotifyIdentity === null)
+            mediaItems.push({
+              id: itemId,
+              type: mediaType,
+              title,
+              subtitle: null,
+              primaryCreatorName: creator,
+              description,
+              canonicalUrl,
+              imageUrl,
+              publishedAt,
+              durationMs: null,
+              createdAt: acquiredAt,
+              updatedAt: acquiredAt,
+            })
           externalIdentities.push({
             id: identityId,
             mediaItemId: itemId,
@@ -564,6 +595,9 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
       syncRunId: runId,
       rebuiltAt: finishedAt,
     })
+    const spotifyLibrary = createSpotifyLibraryRepository(bindings.DB)
+    await spotifyLibrary.rebuildPodcastProjection()
+    await spotifyLibrary.rebuildPodcastSearch()
     const contentTargets = await articles.reserveContentTargets(connection.id, runId, finishedAt)
     for (let index = 0; index < contentTargets.length; index += 100) {
       await bindings.SYNC_QUEUE.sendBatch(
