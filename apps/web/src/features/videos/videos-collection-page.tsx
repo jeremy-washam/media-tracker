@@ -470,18 +470,13 @@ function VideoFilters({
             value={search.format?.[0] ?? ''}
             onChange={(event) =>
               update({
-                format: event.target.value
-                  ? [event.target.value as 'youtube' | 'youtube_music' | 'mixed' | 'unknown']
-                  : undefined,
+                format: event.target.value ? [event.target.value as 'youtube_music'] : undefined,
                 item: undefined,
               })
             }
           >
             <option value="">All formats</option>
-            <option value="youtube">YouTube</option>
             <option value="youtube_music">YouTube Music</option>
-            <option value="mixed">Mixed</option>
-            <option value="unknown">Unknown</option>
           </select>
         </label>
       </div>
@@ -539,8 +534,8 @@ function VideoItem({
         <span>{item.channelTitle ?? 'Channel unavailable'}</span>
         <small>
           {view === 'archive'
-            ? `Watched ${date(item.date)} · ${countLabel(item.watchCount, 'watch')}${item.inQueue ? ' · In Queue' : ''}`
-            : `Added ${date(item.date)} · ${countLabel(item.queueAccountCount, 'account')}${item.inArchive ? ` · ${countLabel(item.watchCount, 'watch')}` : ''}`}
+            ? `Watched ${date(item.date)} · ${item.matchingWatchCount === item.watchCount ? countLabel(item.watchCount, 'watch') : `${item.matchingWatchCount.toLocaleString()} of ${countLabel(item.watchCount, 'watch')}`}${item.inQueue ? ' · In Queue' : ''}`
+            : `Added ${date(item.date)} · ${countLabel(item.matchingQueueAccountCount, 'account')}${item.inArchive ? ` · ${countLabel(item.watchCount, 'watch')}` : ''}`}
         </small>
         {item.durationMs !== null || item.publishedAt !== null ? (
           <small className="video-list-extra">
@@ -654,7 +649,11 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                 </div>
                 <div>
                   <dt>Format</dt>
-                  <dd>{detail.data.format?.replace('_', ' ') ?? 'Unknown'}</dd>
+                  <dd>
+                    {detail.data.formats.length
+                      ? detail.data.formats.map((value) => value.replaceAll('_', ' ')).join(', ')
+                      : 'Unknown'}
+                  </dd>
                 </div>
               </dl>
               <p>{detail.data.metadataMessage}</p>

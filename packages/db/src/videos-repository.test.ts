@@ -14,6 +14,8 @@ const migrations = [
   '0001_canonical_ledger.sql',
   '0006_movies_library.sql',
   '0016_videos_takeout_library.sql',
+  '0017_videos_snapshot_safety.sql',
+  '0018_videos_snapshot_head_backfill.sql',
 ]
   .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
   .join('\n')
@@ -49,11 +51,16 @@ class SqliteStatement implements DatabaseStatement {
 }
 
 class SqliteClient implements DatabaseClient {
+  batchCalls = 0
+  failOnBatchCall: number | null = null
+
   constructor(private readonly database: DatabaseSync) {}
   prepare(query: string) {
     return new SqliteStatement(this.database.prepare(query))
   }
   async batch(statements: readonly DatabaseStatement[]) {
+    this.batchCalls += 1
+    if (this.batchCalls === this.failOnBatchCall) throw new Error('synthetic batch failure')
     if (
       statements.reduce((total, value) => total + (value as SqliteStatement).bindCount(), 0) > 900
     )
@@ -77,8 +84,60 @@ function input(overrides: Partial<VideosListInput> = {}): VideosListInput {
   return { view: 'archive', limit: 50, ...overrides }
 }
 
+it('backfills component heads from the newest existing complete snapshots', () => {
+  const existing = new DatabaseSync(':memory:')
+  try {
+    existing.exec(
+      ['0001_canonical_ledger.sql', '0006_movies_library.sql', '0016_videos_takeout_library.sql']
+        .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
+        .join('\n'),
+    )
+    existing.exec(`
+      INSERT INTO connections(id,source,label,status,coverage,created_at,updated_at)
+      VALUES('youtube-1','youtube','YouTube','connected','complete','${now}','${now}');
+      INSERT INTO sync_runs(id,connection_id,kind,status,started_at,finished_at) VALUES
+        ('run-1','youtube-1','import','succeeded','${now}','${now}'),
+        ('run-2','youtube-1','import','succeeded','${later}','${later}');
+      INSERT INTO raw_objects(id,connection_id,sync_run_id,kind,acquisition_key,storage_key,sha256,content_type,byte_length,acquired_at,processing_status,last_parser_version) VALUES
+        ('raw-1','youtube-1','run-1','export','old','old.zip','${'a'.repeat(64)}','application/zip',1,'${now}','processed','youtube-takeout@4'),
+        ('raw-2','youtube-1','run-2','export','new','new.zip','${'b'.repeat(64)}','application/zip',1,'${later}','processed','youtube-takeout@4');
+      INSERT INTO youtube_takeout_components(raw_object_id,connection_id,component_kind,member_name,parser_version,status,expected_record_count,processed_record_count,sync_run_id,completed_at,finalized_at,error_code) VALUES
+        ('raw-1','youtube-1','watch_later','watch-later.csv','youtube-takeout@4','complete',1,1,'run-1','${now}','${now}',NULL),
+        ('raw-2','youtube-1','watch_later','watch-later.csv','youtube-takeout@4','complete',0,0,'run-2','${later}','${later}',NULL),
+        ('raw-1','youtube-1','subscriptions','subscriptions.csv','youtube-takeout@4','complete',1,1,'run-1','${now}','${now}',NULL),
+        ('raw-2','youtube-1','subscriptions','subscriptions.csv','youtube-takeout@4','invalid',0,0,'run-2',NULL,NULL,'invalid_member_row');
+    `)
+    existing.exec(
+      readFileSync(
+        new URL('../migrations/0017_videos_snapshot_safety.sql', import.meta.url),
+        'utf8',
+      ),
+    )
+    existing.exec(
+      readFileSync(
+        new URL('../migrations/0018_videos_snapshot_head_backfill.sql', import.meta.url),
+        'utf8',
+      ),
+    )
+
+    expect(
+      existing
+        .prepare(
+          'SELECT component_kind,raw_object_id FROM youtube_takeout_component_heads ORDER BY component_kind',
+        )
+        .all(),
+    ).toEqual([
+      { component_kind: 'subscriptions', raw_object_id: 'raw-1' },
+      { component_kind: 'watch_later', raw_object_id: 'raw-2' },
+    ])
+  } finally {
+    existing.close()
+  }
+})
+
 describe('SqlVideosRepository', () => {
   let database: DatabaseSync
+  let client: SqliteClient
   let repository: SqlVideosRepository
 
   beforeEach(async () => {
@@ -117,7 +176,8 @@ describe('SqlVideosRepository', () => {
         ('evidence-2','archive-2','watch-2','admission','${now}'),
         ('evidence-3','archive-3','watch-3','admission','${now}');
     `)
-    repository = new SqlVideosRepository(new SqliteClient(database))
+    client = new SqliteClient(database)
+    repository = new SqlVideosRepository(client)
     await repository.projectWatches([
       {
         sourceRecordId: 'watch-1',
@@ -267,10 +327,51 @@ describe('SqlVideosRepository', () => {
       id: 'video-1',
       date: '2024-01-02T01:00:00.000Z',
       watchCount: 2,
-      format: 'mixed',
+      matchingWatchCount: 1,
+      formats: ['youtube_music'],
     })
     expect((await repository.listHistory('video-1', 25)).data).toHaveLength(2)
     expect((await repository.listVideos(input({ q: 'Earlier first' }))).data[0]?.id).toBe('video-1')
+    expect(
+      (await repository.listVideos(input({ watchedTo: '2024-12-31', format: ['youtube_music'] })))
+        .data,
+    ).toHaveLength(0)
+    expect(
+      (await repository.listVideos(input({ format: ['youtube_music'] }))).data[0],
+    ).toMatchObject({ id: 'video-1', matchingWatchCount: 1, watchCount: 2 })
+  })
+
+  it('counts overlapping Takeout evidence once per canonical watch occurrence', async () => {
+    database.exec(`
+      INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,source_record_key,source_recorded_at_value,source_recorded_at_precision,source_recorded_at_basis,observed_at,parser_version,disposition,upstream_state)
+      VALUES('watch-2-overlap','raw-2','youtube-1','activity','history#overlap','watch:2-overlap','2025-01-02T01:00:00.000Z','instant','source_asserted','${later}','youtube-takeout@4','normalized','active')
+    `)
+    await repository.projectWatches([
+      {
+        sourceRecordId: 'watch-2-overlap',
+        archiveEntryId: 'archive-2',
+        connectionId: 'youtube-1',
+        mediaItemId: 'video-1',
+        videoId: 'video-1',
+        historicalTitle: 'Latest first title',
+        sourceVideoUrl: 'https://www.youtube.com/watch?v=video-1',
+        historicalChannelTitle: 'Channel One',
+        sourceChannelUrl: 'https://www.youtube.com/channel/channel-1',
+        channelId: 'channel-1',
+        product: 'youtube_music',
+        fromGoogleAds: false,
+        occurredAt: '2025-01-02T01:00:00.000Z',
+        occurredAtRaw: null,
+        occurrenceRank: 0,
+        parserVersion: 'youtube-takeout@4',
+        observedAt: later,
+      },
+    ])
+    await repository.rebuild(later)
+
+    expect((await repository.listVideos(input())).data[0]?.watchCount).toBe(2)
+    expect(await repository.listHistory('video-1', 25)).toMatchObject({ totalCount: 2 })
+    expect((await repository.listHistory('video-1', 25)).data).toHaveLength(2)
   })
 
   it('paginates collections by stable keys and rejects stale projection generations', async () => {
@@ -286,6 +387,137 @@ describe('SqlVideosRepository', () => {
         input({ limit: 1, sort: 'title', direction: 'asc', cursor: first.nextCursor! }),
       ),
     ).rejects.toThrow('stale')
+  })
+
+  it('keyset-paginates History and channel Library and rejects their stale cursors', async () => {
+    const historyFirst = await repository.listHistory('video-1', 1)
+    expect(historyFirst.data.map((item) => item.id)).toEqual(['archive-2'])
+    expect(historyFirst.nextCursor).not.toBeNull()
+    expect(
+      (await repository.listHistory('video-1', 1, historyFirst.nextCursor!)).data.map(
+        (item) => item.id,
+      ),
+    ).toEqual(['archive-1'])
+
+    await repository.projectWatches([
+      {
+        sourceRecordId: 'watch-3',
+        archiveEntryId: 'archive-3',
+        connectionId: 'youtube-1',
+        mediaItemId: 'video-3',
+        videoId: 'video-3',
+        historicalTitle: 'Label only video',
+        sourceVideoUrl: 'https://www.youtube.com/watch?v=video-3',
+        historicalChannelTitle: 'Channel One',
+        sourceChannelUrl: 'https://www.youtube.com/channel/channel-1',
+        channelId: 'channel-1',
+        product: 'youtube',
+        fromGoogleAds: false,
+        occurredAt: '2023-01-02T01:00:00.000Z',
+        occurredAtRaw: null,
+        occurrenceRank: 0,
+        parserVersion: 'youtube-takeout@4',
+        observedAt: later,
+      },
+    ])
+    await repository.rebuild(later)
+    const channelFirst = await repository.listChannelVideos('channel-1', 'archive', 1)
+    expect(channelFirst.nextCursor).not.toBeNull()
+    const channelSecond = await repository.listChannelVideos(
+      'channel-1',
+      'archive',
+      1,
+      channelFirst.nextCursor!,
+    )
+    expect(channelSecond.data[0]?.id).not.toBe(channelFirst.data[0]?.id)
+
+    database.exec(`
+      INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,source_record_key,source_recorded_at_value,source_recorded_at_precision,source_recorded_at_basis,observed_at,parser_version,disposition,upstream_state)
+      VALUES('watch-history-next-chunk','raw-2','youtube-1','activity','history#next','watch:next','2025-01-02T01:00:00.000Z','instant','source_asserted','${later}','youtube-takeout@4','normalized','active')
+    `)
+    await repository.projectWatches([
+      {
+        sourceRecordId: 'watch-history-next-chunk',
+        archiveEntryId: 'archive-2',
+        connectionId: 'youtube-1',
+        mediaItemId: 'video-1',
+        videoId: 'video-1',
+        historicalTitle: 'Latest first title',
+        sourceVideoUrl: 'https://www.youtube.com/watch?v=video-1',
+        historicalChannelTitle: 'Channel One',
+        sourceChannelUrl: 'https://www.youtube.com/channel/channel-1',
+        channelId: 'channel-1',
+        product: 'youtube_music',
+        fromGoogleAds: false,
+        occurredAt: '2025-01-02T01:00:00.000Z',
+        occurredAtRaw: null,
+        occurrenceRank: 0,
+        parserVersion: 'youtube-takeout@4',
+        observedAt: later,
+      },
+    ])
+
+    await repository.rebuild('2026-09-22T12:00:00.000Z')
+    await expect(repository.listHistory('video-1', 1, historyFirst.nextCursor!)).rejects.toThrow(
+      'stale',
+    )
+    await expect(
+      repository.listChannelVideos('channel-1', 'archive', 1, channelFirst.nextCursor!),
+    ).rejects.toThrow('stale')
+  })
+
+  it('chooses channel titles by defined source freshness rather than write order', async () => {
+    database.exec(`
+      INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,source_record_key,source_recorded_at_value,source_recorded_at_precision,source_recorded_at_basis,observed_at,parser_version,disposition,upstream_state)
+      VALUES('watch-fresh','raw-2','youtube-1','activity','history#fresh','watch:fresh','2025-01-02T01:00:00.000Z','instant','source_asserted','${later}','youtube-takeout@4','normalized','active')
+    `)
+    await repository.projectWatches([
+      {
+        sourceRecordId: 'watch-fresh',
+        archiveEntryId: 'archive-2',
+        connectionId: 'youtube-1',
+        mediaItemId: 'video-1',
+        videoId: 'video-1',
+        historicalTitle: 'Fresh first title',
+        sourceVideoUrl: 'https://www.youtube.com/watch?v=video-1',
+        historicalChannelTitle: 'Fresh Channel Title',
+        sourceChannelUrl: 'https://www.youtube.com/channel/channel-1',
+        channelId: 'channel-1',
+        product: 'youtube_music',
+        fromGoogleAds: false,
+        occurredAt: '2025-01-02T01:00:00.000Z',
+        occurredAtRaw: null,
+        occurrenceRank: 0,
+        parserVersion: 'youtube-takeout@4',
+        observedAt: later,
+      },
+      {
+        sourceRecordId: 'watch-1',
+        archiveEntryId: 'archive-1',
+        connectionId: 'youtube-1',
+        mediaItemId: 'video-1',
+        videoId: 'video-1',
+        historicalTitle: 'Earlier first title',
+        sourceVideoUrl: 'https://www.youtube.com/watch?v=video-1',
+        historicalChannelTitle: 'Stale Channel Title',
+        sourceChannelUrl: 'https://www.youtube.com/channel/channel-1',
+        channelId: 'channel-1',
+        product: 'youtube',
+        fromGoogleAds: false,
+        occurredAt: '2024-01-02T01:00:00.000Z',
+        occurredAtRaw: null,
+        occurrenceRank: 0,
+        parserVersion: 'youtube-takeout@4',
+        observedAt: later,
+      },
+    ])
+    database.exec(
+      "UPDATE youtube_channel_subscriptions SET upstream_state='removed' WHERE channel_id='channel-1'",
+    )
+    await repository.rebuild(later)
+
+    expect((await repository.findChannel('channel-1'))?.title).toBe('Fresh Channel Title')
+    expect((await repository.findVideo('video-1'))?.title).toBe('Fresh first title')
   })
 
   it('does not retire Queue or Following from a newer missing component', async () => {
@@ -339,6 +571,202 @@ describe('SqlVideosRepository', () => {
     expect(queue.data).toHaveLength(1)
     expect(channels.data).toHaveLength(1)
     expect(queue.coverage).toMatchObject({ watchLater: 'missing', subscriptions: 'missing' })
+  })
+
+  it('does not expose staged Queue or Following rows when finalization fails', async () => {
+    const subscriptions = Array.from({ length: 30 }, (_, index) => ({
+      sourceRecordId: `subscription-staged-${index}`,
+      channelId: `channel-staged-${index}`,
+      channelTitle: `Staged Channel ${index}`,
+      channelUrl: `https://www.youtube.com/channel/channel-staged-${index}`,
+    }))
+    const insert = database.prepare(`INSERT INTO source_records(
+      id,raw_object_id,connection_id,record_type,record_path,source_record_key,observed_at,
+      parser_version,disposition,upstream_state) VALUES(?,?,?,?,?,?,?,?,?,?)`)
+    for (const [index, value] of subscriptions.entries())
+      insert.run(
+        value.sourceRecordId,
+        'raw-2',
+        'youtube-1',
+        'subscription',
+        `subscriptions#staged-${index}`,
+        `subscription:${value.channelId}`,
+        later,
+        'youtube-takeout@4',
+        'normalized',
+        'active',
+      )
+
+    client.failOnBatchCall = client.batchCalls + 2
+    await expect(
+      repository.finalizeTakeout({
+        rawObjectId: 'raw-2',
+        connectionId: 'youtube-1',
+        syncRunId: 'run-2',
+        parserVersion: 'youtube-takeout@4',
+        observedAt: later,
+        components: [
+          {
+            kind: 'subscriptions',
+            memberName: 'subscriptions.csv',
+            status: 'complete',
+            recordCount: subscriptions.length,
+            errorCode: null,
+            snapshotSourceRecordId: null,
+          },
+        ],
+        watchLater: [],
+        subscriptions,
+      }),
+    ).rejects.toThrow('synthetic batch failure')
+
+    expect(
+      database
+        .prepare(
+          "SELECT channel_id FROM youtube_channel_subscriptions WHERE upstream_state='active'",
+        )
+        .all(),
+    ).toEqual([{ channel_id: 'channel-1' }])
+    expect(
+      (await repository.listVideos(input({ view: 'channels', following: 'following' }))).data,
+    ).toHaveLength(1)
+  })
+
+  it('does not let an older complete snapshot roll current Queue or Following state backward', async () => {
+    await repository.finalizeTakeout({
+      rawObjectId: 'raw-2',
+      connectionId: 'youtube-1',
+      syncRunId: 'run-2',
+      parserVersion: 'youtube-takeout@4',
+      observedAt: later,
+      components: [
+        {
+          kind: 'watch_later',
+          memberName: 'Watch later-videos.csv',
+          status: 'complete',
+          recordCount: 0,
+          errorCode: null,
+          snapshotSourceRecordId: null,
+        },
+        {
+          kind: 'subscriptions',
+          memberName: 'subscriptions.csv',
+          status: 'complete',
+          recordCount: 0,
+          errorCode: null,
+          snapshotSourceRecordId: null,
+        },
+      ],
+      watchLater: [],
+      subscriptions: [],
+    })
+    expect((await repository.listVideos(input({ view: 'queue' }))).data).toHaveLength(0)
+    database.exec(
+      "UPDATE youtube_channels SET latest_title='Newer Metadata' WHERE channel_id='channel-1'",
+    )
+
+    await repository.finalizeTakeout({
+      rawObjectId: 'raw-1',
+      connectionId: 'youtube-1',
+      syncRunId: 'run-1',
+      parserVersion: 'youtube-takeout@4',
+      observedAt: now,
+      components: [
+        {
+          kind: 'watch_later',
+          memberName: 'Watch later-videos.csv',
+          status: 'complete',
+          recordCount: 1,
+          errorCode: null,
+          snapshotSourceRecordId: 'queue-snapshot',
+        },
+        {
+          kind: 'subscriptions',
+          memberName: 'subscriptions.csv',
+          status: 'complete',
+          recordCount: 1,
+          errorCode: null,
+          snapshotSourceRecordId: null,
+        },
+      ],
+      watchLater: [
+        {
+          sourceRecordId: 'queue-2',
+          mediaItemId: 'video-2',
+          videoId: 'video-2',
+          queueEntryId: 'youtube-queue-2',
+          membershipEvidenceId: 'queue-membership-2',
+          addedEvidenceId: 'queue-added-2',
+          addedAt: '2026-01-02T01:00:00.000Z',
+        },
+      ],
+      subscriptions: [
+        {
+          sourceRecordId: 'subscription-1',
+          channelId: 'channel-1',
+          channelTitle: 'Older Snapshot Title',
+          channelUrl: 'https://www.youtube.com/channel/channel-1',
+        },
+      ],
+    })
+
+    expect((await repository.listVideos(input({ view: 'queue' }))).data).toHaveLength(0)
+    expect(
+      (await repository.listVideos(input({ view: 'channels', following: 'following' }))).data,
+    ).toHaveLength(0)
+    expect(
+      database
+        .prepare(
+          'SELECT component_kind,raw_object_id FROM youtube_takeout_component_heads ORDER BY component_kind',
+        )
+        .all(),
+    ).toEqual([
+      { component_kind: 'subscriptions', raw_object_id: 'raw-2' },
+      { component_kind: 'watch_later', raw_object_id: 'raw-2' },
+    ])
+    expect(
+      database
+        .prepare("SELECT latest_title FROM youtube_channels WHERE channel_id='channel-1'")
+        .get(),
+    ).toEqual({ latest_title: 'Newer Metadata' })
+  })
+
+  it('reports partial component coverage across multiple YouTube connections', async () => {
+    database.exec(`
+      INSERT INTO connections(id,source,label,status,coverage,created_at,updated_at)
+      VALUES('youtube-2','youtube','Secondary YouTube','connected','partial','${now}','${now}')
+    `)
+    expect((await repository.listVideos(input())).coverage).toMatchObject({
+      watchLater: 'partial',
+      subscriptions: 'partial',
+    })
+
+    database.exec(`
+      INSERT INTO sync_runs(id,connection_id,kind,status,started_at,finished_at)
+      VALUES('run-secondary','youtube-2','import','succeeded','${later}','${later}');
+      INSERT INTO raw_objects(id,connection_id,sync_run_id,kind,acquisition_key,storage_key,sha256,content_type,byte_length,acquired_at,processing_status,last_parser_version)
+      VALUES('raw-secondary','youtube-2','run-secondary','export','secondary','secondary.zip','${'c'.repeat(64)}','application/zip',1,'${later}','processed','youtube-takeout@4');
+      INSERT INTO youtube_takeout_components(raw_object_id,connection_id,component_kind,member_name,parser_version,status,expected_record_count,processed_record_count,sync_run_id,error_code) VALUES
+        ('raw-secondary','youtube-2','watch_later','watch-later.csv','youtube-takeout@4','invalid',1,0,'run-secondary','invalid_member_row'),
+        ('raw-secondary','youtube-2','subscriptions','subscriptions.csv','youtube-takeout@4','invalid',1,0,'run-secondary','invalid_member_row');
+    `)
+    expect((await repository.listVideos(input())).coverage).toMatchObject({
+      watchLater: 'partial',
+      subscriptions: 'partial',
+    })
+
+    database.exec(
+      "UPDATE youtube_takeout_components SET status='invalid' WHERE raw_object_id='raw-1' AND component_kind IN ('watch_later','subscriptions')",
+    )
+    expect((await repository.listVideos(input())).coverage).toMatchObject({
+      watchLater: 'invalid',
+      subscriptions: 'invalid',
+    })
+    database.exec("DELETE FROM youtube_takeout_components WHERE raw_object_id='raw-secondary'")
+    expect((await repository.listVideos(input())).coverage).toMatchObject({
+      watchLater: 'partial',
+      subscriptions: 'partial',
+    })
   })
 
   it('finalizes production-sized subscription snapshots in bounded D1 batches', async () => {

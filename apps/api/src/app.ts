@@ -985,7 +985,7 @@ app.openapi(videoHistoryRoute, async (context) => {
     )
     return context.json(VideoHistoryResponseSchema.parse(page), 200)
   } catch (error) {
-    if (error instanceof TypeError && error.message === 'Invalid Videos pagination cursor')
+    if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
       throw new HTTPException(400, { message: error.message })
     throw error
   }
@@ -1019,7 +1019,7 @@ app.openapi(videoChannelLibraryRoute, async (context) => {
     )
     return context.json(VideoChannelLibraryResponseSchema.parse(page), 200)
   } catch (error) {
-    if (error instanceof TypeError && error.message === 'Invalid Videos pagination cursor')
+    if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
       throw new HTTPException(400, { message: error.message })
     throw error
   }

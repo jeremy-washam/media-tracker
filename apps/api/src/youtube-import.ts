@@ -40,8 +40,8 @@ import {
 import type { Bindings } from './env'
 import { createLedgerRepository, createVideosRepository } from './env'
 
-const parserVersion = 'youtube-takeout@4'
-const parserId = 'v4'
+const parserVersion = 'youtube-takeout@5'
+const parserId = 'v5'
 const defaultChunkSize = 100
 const maximumChunkSize = 100
 

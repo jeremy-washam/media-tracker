@@ -25,6 +25,8 @@ const migration = [
   '0014_podcasts_library.sql',
   '0015_songs_library.sql',
   '0016_videos_takeout_library.sql',
+  '0017_videos_snapshot_safety.sql',
+  '0018_videos_snapshot_head_backfill.sql',
 ]
   .map((name) =>
     readFileSync(
@@ -135,12 +137,12 @@ function count(database: DatabaseSync, table: string): number {
 
 const html = `<!doctype html>
 <div class="outer-cell"><div class="content-cell">
-Watched&nbsp;<a href="https://www.youtube.com/watch?v=synthetic-video">Synthetic Video</a><br>
+Watched&nbsp;<a href="https://www.youtube.com/watch?v=synthVideo1">Synthetic Video</a><br>
 <a href="https://www.youtube.com/channel/UC1234567890abcdefghijAB">Synthetic Channel</a><br>
 Jan 1, 2026, 12:00:00 PM PST
 </div></div>
 <div class="outer-cell"><div class="content-cell">
-Watched&nbsp;<a href="https://music.youtube.com/watch?v=synthetic-video">Historical Title</a><br>
+Watched&nbsp;<a href="https://music.youtube.com/watch?v=synthVideo1">Historical Title</a><br>
 <a href="https://www.youtube.com/channel/UC1234567890abcdefghijAB">Synthetic Channel</a><br>
 Jan 2, 2026, 12:00:00 PM PST
 </div></div>
@@ -153,7 +155,7 @@ Jan 4, 2026, 12:00:00 PM PST
 </div></div>`
 
 const watchLater = `Video ID,Playlist Video Creation Timestamp
-future-video,2026-01-05T00:00:00+00:00
+futureVid01,2026-01-05T00:00:00+00:00
 `
 const subscriptions = `Channel Id,Channel Url,Channel Title
 UC1234567890abcdefghijAB,https://www.youtube.com/channel/UC1234567890abcdefghijAB,Synthetic Channel
@@ -228,14 +230,14 @@ describe('YouTube Takeout import', () => {
         .all(),
     ).toEqual([
       {
-        source_occurrence_key: 'watch:synthetic-video:2026-01-01T20:00:00.000Z:0',
+        source_occurrence_key: 'watch:synthVideo1:2026-01-01T20:00:00.000Z:0',
         consumed_at_value: '2026-01-01T20:00:00.000Z',
         consumed_at_precision: 'instant',
         consumed_at_basis: 'source_asserted',
         admission_reason: 'youtube_watched_activity',
       },
       {
-        source_occurrence_key: 'watch:synthetic-video:2026-01-02T20:00:00.000Z:0',
+        source_occurrence_key: 'watch:synthVideo1:2026-01-02T20:00:00.000Z:0',
         consumed_at_value: '2026-01-02T20:00:00.000Z',
         consumed_at_precision: 'instant',
         consumed_at_basis: 'source_asserted',
@@ -274,6 +276,49 @@ describe('YouTube Takeout import', () => {
     expect(count(database.database, 'external_identities')).toBe(2)
     expect(count(database.database, 'archive_entries')).toBe(4)
     expect(count(database.database, 'queue_entries')).toBe(2)
+  })
+
+  it('reprocesses a completed v4 raw object under parser v5', async () => {
+    let bindings = { DB: database, RAW_BUCKET: bucket } as unknown as Bindings
+    await importYoutubeTakeout(bindings, archive)
+    const retained = ['connections', 'sync_runs', 'raw_objects', 'sync_cursors'].map((table) => ({
+      table,
+      rows: database.database.prepare(`SELECT * FROM ${table}`).all(),
+    }))
+    database.database.close()
+    database = new D1SqliteDatabase()
+    bindings = { DB: database, RAW_BUCKET: bucket } as unknown as Bindings
+    for (const { table, rows } of retained)
+      for (const row of rows) {
+        const columns = Object.keys(row)
+        const values = columns.map((column) => {
+          const value = row[column]
+          if (table === 'sync_cursors' && column === 'id') return `${String(value)}_legacy_v4`
+          if (table === 'sync_cursors' && column === 'name')
+            return String(value).replace('youtube-takeout@5', 'youtube-takeout@4')
+          if (table === 'raw_objects' && column === 'last_parser_version')
+            return 'youtube-takeout@4'
+          return value!
+        })
+        database.database
+          .prepare(
+            `INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`,
+          )
+          .run(...values)
+      }
+
+    await expect(importYoutubeTakeout(bindings, archive)).resolves.toMatchObject({
+      alreadyImported: false,
+      completed: true,
+    })
+    expect(database.database.prepare('SELECT last_parser_version FROM raw_objects').get()).toEqual({
+      last_parser_version: 'youtube-takeout@5',
+    })
+    expect(
+      database.database
+        .prepare("SELECT count(*) count FROM sync_cursors WHERE name LIKE '%youtube-takeout@5'")
+        .get(),
+    ).toEqual({ count: 1 })
   })
 
   it('resumes from the last atomic chunk and safely retries a failed chunk', async () => {
@@ -347,7 +392,7 @@ describe('YouTube Takeout import', () => {
     const largeHistory = Array.from(
       { length: 205 },
       (_, index) => `<div class="outer-cell"><div class="content-cell">
-Watched&nbsp;<a href="https://www.youtube.com/watch?v=video-${index}">Video</a><br>
+Watched&nbsp;<a href="https://www.youtube.com/watch?v=v${index.toString().padStart(10, '0')}">Video</a><br>
 Jan 1, 2026, 12:00:00 PM UTC
 </div></div>`,
     ).join('\n')
@@ -366,6 +411,51 @@ Jan 1, 2026, 12:00:00 PM UTC
     expect(database.largestBatch).toBeLessThanOrEqual(703)
   })
 
+  it('retains current Queue and Following state when a newer snapshot has malformed rows', async () => {
+    const bindings = { DB: database, RAW_BUCKET: bucket } as unknown as Bindings
+    await importYoutubeTakeout(bindings, archive)
+    const malformedSnapshot = zipSync({
+      'Takeout/YouTube and YouTube Music/playlists/Watch later-videos.csv': strToU8(
+        `Video ID,Playlist Video Creation Timestamp\ninvalid-id!,2026-02-30T00:00:00+00:00\n`,
+      ),
+      'Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv': strToU8(
+        `Channel Id,Channel Url,Channel Title\nZZ1234567890abcdefghijAB,https://example.com/not-youtube,Broken row\n`,
+      ),
+    })
+
+    await expect(importYoutubeTakeout(bindings, malformedSnapshot)).resolves.toMatchObject({
+      completed: true,
+      queueEntries: 1,
+      channels: 0,
+    })
+    expect(
+      database.database
+        .prepare(
+          "SELECT count(*) count FROM queue_entries WHERE upstream_state='active' AND relationship_type='youtube_watch_later'",
+        )
+        .get(),
+    ).toEqual({ count: 1 })
+    expect(
+      database.database
+        .prepare(
+          "SELECT count(*) count FROM youtube_channel_subscriptions WHERE upstream_state='active'",
+        )
+        .get(),
+    ).toEqual({ count: 1 })
+    expect(
+      database.database
+        .prepare(
+          `SELECT component_kind,status FROM youtube_takeout_components
+           WHERE raw_object_id=(SELECT id FROM raw_objects ORDER BY acquired_at DESC,id DESC LIMIT 1)
+             AND component_kind IN ('watch_later','subscriptions') ORDER BY component_kind`,
+        )
+        .all(),
+    ).toEqual([
+      { component_kind: 'subscriptions', status: 'invalid' },
+      { component_kind: 'watch_later', status: 'invalid' },
+    ])
+  })
+
   it('retains a malformed uploaded ZIP as failed raw evidence', async () => {
     const bindings = { DB: database, RAW_BUCKET: bucket } as unknown as Bindings
     const malformed = strToU8('not a zip')
@@ -379,7 +469,7 @@ Jan 1, 2026, 12:00:00 PM UTC
       database.database
         .prepare('SELECT processing_status, last_parser_version FROM raw_objects')
         .get(),
-    ).toEqual({ processing_status: 'failed', last_parser_version: 'youtube-takeout@4' })
+    ).toEqual({ processing_status: 'failed', last_parser_version: 'youtube-takeout@5' })
     expect(
       database.database.prepare('SELECT status, failed_record_count FROM sync_runs').get(),
     ).toEqual({ status: 'failed', failed_record_count: 1 })

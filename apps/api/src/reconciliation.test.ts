@@ -120,6 +120,8 @@ class D1SqliteDatabase {
       '0014_podcasts_library.sql',
       '0015_songs_library.sql',
       '0016_videos_takeout_library.sql',
+      '0017_videos_snapshot_safety.sql',
+      '0018_videos_snapshot_head_backfill.sql',
     ]) {
       this.database.exec(
         readFileSync(
@@ -280,7 +282,7 @@ afterEach(() => {
 })
 it('reconciles overlapping Takeouts without duplicating watches', async () => {
   const html =
-    '<div class="outer-cell"><div class="content-cell">Watched&nbsp;<a href="https://www.youtube.com/watch?v=video123">Synthetic</a><br>Jan 1, 2026, 12:00:00 PM UTC</div></div>'
+    '<div class="outer-cell"><div class="content-cell">Watched&nbsp;<a href="https://www.youtube.com/watch?v=video123abc">Synthetic</a><br>Jan 1, 2026, 12:00:00 PM UTC</div></div>'
   const archive = (suffix: string) =>
     zipSync({
       'Takeout/YouTube and YouTube Music/history/watch-history.html': strToU8(html + suffix),
@@ -631,7 +633,7 @@ function youtubeArchive(count: number, repeats = false) {
   const html = Array.from(
     { length: count },
     (_, i) =>
-      `<div class="outer-cell"><div class="content-cell">Watched&nbsp;<a href="https://www.youtube.com/watch?v=${repeats ? 'same' : `video-${i}`}">Synthetic</a><br>Jan 1, 2026, 12:00:00 PM UTC</div></div>`,
+      `<div class="outer-cell"><div class="content-cell">Watched&nbsp;<a href="https://www.youtube.com/watch?v=${repeats ? 'sameVideo01' : `v${i.toString().padStart(10, '0')}`}">Synthetic</a><br>Jan 1, 2026, 12:00:00 PM UTC</div></div>`,
   ).join('')
   return zipSync({ 'Takeout/YouTube and YouTube Music/history/watch-history.html': strToU8(html) })
 }

@@ -9,7 +9,7 @@ import {
 
 const html = `<!doctype html>
 <div class="outer-cell"><div class="header-cell">YouTube</div><div class="content-cell">
-Watched&nbsp;<a href="https://www.youtube.com/watch?v=synthetic-video">Synthetic Video</a><br>
+Watched&nbsp;<a href="https://www.youtube.com/watch?v=synthVideo1">Synthetic Video</a><br>
 <a href="https://www.youtube.com/channel/synthetic-channel">Synthetic Channel</a><br>
 Jan 1, 2026, 12:00:00 PM PST
 </div></div>
@@ -18,8 +18,8 @@ Watched a video that has been removed<br>Jan 2, 2026, 12:00:00 PM PST
 </div></div>`
 
 const watchLater = `Video ID,Playlist Video Creation Timestamp
-synthetic-video,2026-01-01T00:00:00+00:00
-future-video,2026-01-02T00:00:00+00:00
+synthVideo1,2026-01-01T00:00:00+00:00
+futureVid01,2026-01-02T00:00:00+00:00
 `
 const subscriptions = `Channel Id,Channel Url,Channel Title
 UC1234567890abcdefghijAB,https://www.youtube.com/channel/UC1234567890abcdefghijAB,Synthetic Channel
@@ -98,6 +98,37 @@ describe('YouTube Takeout inspection', () => {
       expect.objectContaining({ kind: 'playlist_index', status: 'missing', recordCount: 0 }),
       expect.objectContaining({ kind: 'subscriptions', status: 'missing', recordCount: 0 }),
     ])
+  })
+
+  it('marks present snapshot components invalid when any row cannot identify exact state', () => {
+    const result = inspectYoutubeTakeoutBytes(
+      zipSync({
+        'Takeout/YouTube and YouTube Music/playlists/Watch later-videos.csv': strToU8(
+          `Video ID,Playlist Video Creation Timestamp\ninvalid-id!,2026-02-30T00:00:00+00:00\nfutureVid01,2026\n`,
+        ),
+        'Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv': strToU8(
+          `Channel Id,Channel Url,Channel Title\nZZ1234567890abcdefghijAB,https://example.com/not-youtube,Broken row\n`,
+        ),
+      }),
+      'invalid-rows.zip',
+    )
+
+    expect(result.components).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'watch_later',
+          status: 'invalid',
+          recordCount: 2,
+          errorCode: 'invalid_member_row',
+        }),
+        expect.objectContaining({
+          kind: 'subscriptions',
+          status: 'invalid',
+          recordCount: 1,
+          errorCode: 'invalid_member_row',
+        }),
+      ]),
+    )
   })
 
   it('reports an invalid ZIP and an export without supported members with safe messages', () => {

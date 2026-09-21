@@ -230,3 +230,7 @@ reconciliation and recovery policies in [ADR 0010](../decisions/0010-reconciliat
 This implementation update does not represent a new private payload probe or a
 new verification of upstream API capabilities. See the connector README for
 current behavior; earlier reconnaissance questions remain historical evidence.
+Parser `youtube-takeout@5` now requires exact YouTube video/channel identity
+grammar and exact valid Watch Later instants before a present component can be
+authoritative. Retained v4 ZIPs replay under v5 so corrected invalid-component
+semantics cannot be skipped by an already-complete cursor.

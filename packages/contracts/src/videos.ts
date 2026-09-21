@@ -36,7 +36,9 @@ export const VideosQuerySchema = z
           : (Array.isArray(value) ? value : [value])
               .flatMap((item) => String(item).split(','))
               .filter(Boolean),
-      z.array(z.enum(['youtube', 'youtube_music', 'mixed', 'unknown'])).default([]),
+      z
+        .array(z.enum(['live', 'upcoming', 'recorded_live', 'youtube_music', 'shorts', 'premiere']))
+        .default([]),
     ),
     availability: z.preprocess(
       (value) =>
@@ -147,12 +149,18 @@ export const VideoCollectionItemSchema = z.object({
   publishedAt: z.string().nullable(),
   durationMs: z.number().int().nonnegative().nullable(),
   availability: VideoAvailabilitySchema,
-  format: z.enum(['youtube', 'youtube_music', 'mixed', 'unknown']).nullable(),
+  formats: z.array(
+    z.enum(['live', 'upcoming', 'recorded_live', 'youtube_music', 'shorts', 'premiere']),
+  ),
   inArchive: z.boolean(),
   inQueue: z.boolean(),
   watchCount: z.number().int().nonnegative(),
+  matchingWatchCount: z.number().int().nonnegative(),
   watchAccountCount: z.number().int().nonnegative(),
+  matchingWatchAccountCount: z.number().int().nonnegative(),
   queueAccountCount: z.number().int().nonnegative(),
+  matchingQueueCount: z.number().int().nonnegative(),
+  matchingQueueAccountCount: z.number().int().nonnegative(),
   archiveVideoCount: z.number().int().nonnegative(),
   queueVideoCount: z.number().int().nonnegative(),
   following: z.boolean(),
@@ -178,8 +186,8 @@ export const VideosResponseSchema = z.object({
   occurrenceCount: z.number().int().nonnegative(),
   facets: z.object({ accounts: z.array(FacetValueSchema), channels: z.array(FacetValueSchema) }),
   coverage: z.object({
-    watchLater: z.enum(['complete', 'missing', 'invalid', 'unknown']),
-    subscriptions: z.enum(['complete', 'missing', 'invalid', 'unknown']),
+    watchLater: z.enum(['complete', 'partial', 'missing', 'invalid', 'unknown']),
+    subscriptions: z.enum(['complete', 'partial', 'missing', 'invalid', 'unknown']),
     catalog: z.literal('not_configured'),
   }),
 })

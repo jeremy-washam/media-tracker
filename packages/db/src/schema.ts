@@ -1495,6 +1495,69 @@ export const youtubeTakeoutComponents = sqliteTable(
   (table) => [primaryKey({ columns: [table.rawObjectId, table.componentKind] })],
 )
 
+export const youtubeTakeoutComponentHeads = sqliteTable(
+  'youtube_takeout_component_heads',
+  {
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    componentKind: text('component_kind', { enum: ['watch_later', 'subscriptions'] }).notNull(),
+    rawObjectId: text('raw_object_id')
+      .notNull()
+      .references(() => rawObjects.id, { onDelete: 'restrict' }),
+    acquiredAt: text('acquired_at').notNull(),
+    finalizedAt: text('finalized_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.componentKind] })],
+)
+
+export const youtubeWatchLaterSnapshotMembers = sqliteTable(
+  'youtube_watch_later_snapshot_members',
+  {
+    rawObjectId: text('raw_object_id')
+      .notNull()
+      .references(() => rawObjects.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    videoId: text('video_id').notNull(),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    queueEntryId: text('queue_entry_id').notNull(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    membershipEvidenceId: text('membership_evidence_id').notNull(),
+    addedEvidenceId: text('added_evidence_id'),
+    addedAt: text('added_at'),
+    stagedAt: text('staged_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.rawObjectId, table.videoId] })],
+)
+
+export const youtubeSubscriptionSnapshotMembers = sqliteTable(
+  'youtube_subscription_snapshot_members',
+  {
+    rawObjectId: text('raw_object_id')
+      .notNull()
+      .references(() => rawObjects.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => youtubeChannels.channelId, { onDelete: 'restrict' }),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    channelTitle: text('channel_title'),
+    channelUrl: text('channel_url'),
+    stagedAt: text('staged_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.rawObjectId, table.channelId] })],
+)
+
 export const youtubeChannels = sqliteTable('youtube_channels', {
   channelId: text('channel_id').primaryKey(),
   latestTitle: text('latest_title'),
@@ -1684,7 +1747,10 @@ export const schema = {
   youtubeChannelAssertions,
   youtubeChannelSubscriptions,
   youtubeChannels,
+  youtubeSubscriptionSnapshotMembers,
+  youtubeTakeoutComponentHeads,
   youtubeTakeoutComponents,
+  youtubeWatchLaterSnapshotMembers,
   youtubeWatchObservations,
 }
 

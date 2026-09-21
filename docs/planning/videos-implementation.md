@@ -66,8 +66,8 @@ Data API probe and current OAuth Following reconciliation described below.
 
 ### Implemented local slice
 
-The credential-free delivery is now implemented through migration 0016 and
-parser `youtube-takeout@4`. It parses and records component completeness for
+The credential-free delivery is now implemented through migrations 0016–0018
+and parser `youtube-takeout@5`. It parses and records component completeness for
 watch history, Watch Later, playlist index, and subscriptions; projects exact
 watch/channel observations; maintains source-derived Queue and Following
 relationships only from complete snapshots; and exposes Archive, Queue,
@@ -76,9 +76,12 @@ Channels, video History, and bounded channel Library APIs and UI.
 Collection requests use server-side filters, counts, stable generation-bound
 keyset cursors, and presentation-independent query keys. Opening an inspector
 or changing list/grid layout therefore retains loaded collection pages. D1
-snapshot finalization uses bounded idempotent membership batches followed by a
-final completion/retirement commit, which was verified with the owner-sized
-subscription snapshots.
+snapshot finalization stages bounded idempotent membership batches, then
+atomically advances a freshness-ordered component head, activates the complete
+snapshot, retires absences, and records completion. Failed, malformed, partial,
+or older snapshots cannot change visible Queue or Following state. Overlapping
+Takeouts may contribute multiple evidence observations to one canonical watch,
+but collection counts and History count that occurrence once.
 
 Both retained owner Takeouts were replayed through the local HTTP API. Persisted
 aggregate validation produced 23,865 supported watch observations, 20,227
@@ -378,11 +381,10 @@ video-specific repository. The generic media contract exposes only ID, type,
 and title and cannot express Queue-only detail, occurrence-aware filters,
 channel rollups, freshness, or bounded History.
 
-Migrations currently end at `0013_article_content_attempts.sql`, and the
-accepted implementation priority reserves 0014 for Podcasts and 0015 for Music.
-Videos therefore reserves 0016–0018 below. Recheck the actual migration head immediately before
-implementation and renumber these unapplied drafts if parallel work has claimed
-another number; never edit or reuse an applied migration.
+The implemented local slice uses 0016 for the Takeout model and 0017–0018 for
+snapshot-safety state and upgrade backfill. The credentialed catalog and OAuth
+drafts therefore reserve 0019–0020 below. Recheck the migration head before applying
+either draft; never edit or reuse an applied migration.
 
 ### Web application
 
@@ -632,7 +634,7 @@ Add two rebuildable FTS5 indexes:
 The FTS tables are disposable infrastructure and must have deterministic rebuild
 commands because D1 exports do not preserve virtual tables.
 
-### Migration 0017: Refreshable Data API cache
+### Migration 0019: Refreshable Data API cache
 
 Finalize these fields only after the credentialed probe. The logical tables are:
 
@@ -683,7 +685,7 @@ Only a successful request can change requested IDs to available/unavailable.
 Commit its requested/returned outcomes, profile rows, thumbnails, affected read
 models, and FTS updates atomically where D1 is authoritative.
 
-### Migration 0018: OAuth account binding and current subscriptions
+### Migration 0020: OAuth account binding and current subscriptions
 
 Add provider-specific OAuth/account state while reusing the existing encrypted
 credential store and refresh lease:
@@ -793,10 +795,10 @@ only aggregate latest values in a read model.
 
 ## Takeout acquisition and replay plan
 
-### Parser version 4
+### Parser version 5
 
-Bump to `youtube-takeout@4` because normalization semantics and selected ZIP
-members change. Extend ZIP selection to:
+Bump to `youtube-takeout@5` because normalization semantics, strict snapshot
+validation, and selected ZIP members change. Extend ZIP selection to:
 
 - watch-history HTML;
 - Watch Later item CSV;
@@ -823,7 +825,7 @@ component completeness.
 For every chunk:
 
 1. load and verify the stored ZIP checksum;
-2. parse deterministically under parser v4;
+2. parse deterministically under parser v5;
 3. write source records, source-owned projections, identities, watches, Queue
    candidates, subscriptions, and evidence atomically with the next checkpoint;
 4. rebuild only affected video/channel projection and FTS rows; and
@@ -847,7 +849,7 @@ staging table so membership switches atomically after the final batch.
 
 ### Replay and legacy repair
 
-- Reuploading or explicitly replaying retained ZIP bytes under parser v4 must
+- Reuploading or explicitly replaying retained ZIP bytes under parser v5 must
   process them even when parser v3 previously succeeded.
 - Reuse existing global video identities and Archive occurrences according to
   ADR 0010.
@@ -1319,8 +1321,10 @@ packages/db/src/
 
 packages/db/migrations/
   0016_videos_takeout_library.sql
-  0017_youtube_catalog_cache.sql
-  0018_youtube_oauth_subscriptions.sql
+  0017_videos_snapshot_safety.sql
+  0018_videos_snapshot_head_backfill.sql
+  0019_youtube_catalog_cache.sql
+  0020_youtube_oauth_subscriptions.sql
 
 apps/api/src/
   youtube-import.ts
@@ -1393,7 +1397,7 @@ Exit criteria:
 - FTS/read models rebuild from ordinary tables.
 - Invalid view/filter/sort/cursor combinations fail with stable errors.
 
-### Stage 2: Parser v4 and complete Takeout projection
+### Stage 2: Parser v5 and complete Takeout projection
 
 Work:
 
@@ -1404,7 +1408,7 @@ Work:
 4. Project Takeout subscriptions and channel assertions.
 5. Implement component-level completeness and atomic generation finalization.
 6. Preserve bounded chunking, safe retry, cursor atomicity, and raw-before-parse.
-7. Replay retained v3 raw ZIPs under v4 in an isolated environment.
+7. Replay retained pre-v5 raw ZIPs under v5 in an isolated environment.
 
 Exit criteria:
 
@@ -1465,7 +1469,7 @@ Work:
 2. Run the content-redacted live probe above.
 3. Update source/catalog documentation with observed shapes and constraints.
 4. Add and accept the refreshable-provider-cache ADR.
-5. Finalize migration 0017 and typed provider client from observed data.
+5. Finalize migration 0019 and typed provider client from observed data.
 
 Exit criteria:
 
@@ -1717,15 +1721,15 @@ content. Provider error bodies are not passed to the client.
    navigation.
 2. Replay retained Takeouts into an isolated copy and reconcile safe aggregate
    counts.
-3. Apply parser v4 to active local state; verify Queue/subscriptions/projections
+3. Apply parser v5 to active local state; verify Queue/subscriptions/projections
    before enabling local-only Videos.
 4. Enable Archive/Queue/Channels and inspectors together.
 5. After owner key input and live probe, accept the cache ADR and apply the
-   Videos Data API cache migration, expected to be 0017.
+   Videos Data API cache migration, expected to be 0019.
 6. Run resumable metadata backfill; activate dependent fields only after their
    contracts are populated correctly.
 7. After owner OAuth authorization and explicit binding, apply/activate the
-   Videos OAuth subscription migration, expected to be 0018, and current
+   Videos OAuth subscription migration, expected to be 0020, and current
    Following reconciliation.
 8. Run final acceptance, independent review, documentation updates, deployment
    migration/recovery point, and smoke tests.
@@ -1739,7 +1743,7 @@ not merge connections or clear Takeout relationships.
 
 ## Documentation updates required at shipment
 
-- `docs/sources/youtube.md`: parser v4, Watch Later/subscription component
+- `docs/sources/youtube.md`: parser v5, Watch Later/subscription component
   coverage, exact channel projection, real API probe, current limitations, and
   replay behavior.
 - `docs/sources/catalogs.md`: live Data API field/retention/quota/attribution
@@ -1793,7 +1797,7 @@ delivery.
 
 ## End-to-end acceptance checklist
 
-- [ ] Parser v4 safely reads supported watch, Watch Later, playlist, and
+- [ ] Parser v5 safely reads supported watch, Watch Later, playlist, and
       subscription members and distinguishes missing/invalid/complete coverage.
 - [ ] Identical and parser-version replays are idempotent.
 - [ ] All supported watches and same-timestamp multiplicity reconcile without
@@ -1845,7 +1849,7 @@ delivery.
 > `docs/planning/research/videos-phase-2-surfaces.md`. Preserve exact Takeout
 > bytes, source records, channel/account lineage, ADR 0010 occurrence ranks,
 > source date semantics, and independent Archive/Watch Later membership. First
-> deliver the credential-independent parser-v4, Watch Later Queue,
+> deliver the credential-independent parser-v5, Watch Later Queue,
 > Takeout-backed subscriptions, video/channel projections, typed APIs, and
 > Archive/Queue/Channels UI. Then require a restricted backend API key, hit the
 > real YouTube Data API with a content-redacted probe, accept the refreshable-

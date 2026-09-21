@@ -13,7 +13,9 @@ export interface VideosRouteSearch {
   addedTo?: string | undefined
   watchCount?: 'all' | 'once' | 'rewatched' | undefined
   overlap?: 'all' | 'overlap' | 'not_overlap' | undefined
-  format?: Array<'youtube' | 'youtube_music' | 'mixed' | 'unknown'> | undefined
+  format?:
+    | Array<'live' | 'upcoming' | 'recorded_live' | 'youtube_music' | 'shorts' | 'premiere'>
+    | undefined
   availability?: string[] | undefined
   following?: 'all' | 'following' | undefined
 }
@@ -39,7 +41,7 @@ function values(value: unknown) {
 
 export function parseVideosRouteSearch(value: Record<string, unknown>): VideosRouteSearch {
   const format = values(value.format).filter((item) =>
-    ['youtube', 'youtube_music', 'mixed', 'unknown'].includes(item),
+    ['live', 'upcoming', 'recorded_live', 'youtube_music', 'shorts', 'premiere'].includes(item),
   ) as VideosRouteSearch['format']
   return {
     ...(string(value.q) ? { q: string(value.q) } : {}),

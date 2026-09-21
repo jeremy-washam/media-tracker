@@ -39,7 +39,8 @@ next offset advances atomically with each committed chunk. Source records,
 video identities, Archive occurrences, and evidence links use deterministic
 IDs, so retrying an interrupted chunk cannot duplicate a watch.
 
-Parser v4 records per-component completeness, projects Watch Later into the
+Parser v5 records per-component completeness, strictly validates authoritative
+snapshot identities and timestamps, projects Watch Later into the
 generic provenance-bearing Queue, preserves exact Takeout channel IDs and
 historical assertions, and maintains Takeout-backed Following relationships.
 Only a complete Watch Later or subscription component may retire absent
@@ -52,7 +53,7 @@ this connector has no scheduled reconciliation; additional history requires a
 later Takeout import. A future Data API integration may enrich known video IDs
 with current public metadata, but enrichment is not required for admission.
 
-Parser v4 reprocesses a previously imported ZIP when it is uploaded again, adds
+Parser v5 reprocesses a previously imported ZIP when it is uploaded again, adds
 new source evidence, and reuses existing occurrences. This is an explicit
 reconciliation policy, not a claim that Google supplies globally unique activity
 IDs. Changed timestamps remain distinct evidence; never infer deletions from a

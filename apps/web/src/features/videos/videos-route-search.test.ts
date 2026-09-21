@@ -31,7 +31,7 @@ describe('Videos route search', () => {
 
   it('parses repeated and comma-separated filter values without duplicates', () => {
     expect(
-      parseVideosRouteSearch({ format: ['youtube,youtube_music', 'youtube'], account: ['a', 'a'] }),
-    ).toMatchObject({ format: ['youtube', 'youtube_music'], account: ['a'] })
+      parseVideosRouteSearch({ format: ['live,youtube_music', 'live'], account: ['a', 'a'] }),
+    ).toMatchObject({ format: ['live', 'youtube_music'], account: ['a'] })
   })
 })

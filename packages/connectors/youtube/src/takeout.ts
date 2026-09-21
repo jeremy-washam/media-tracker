@@ -80,6 +80,39 @@ function parseOccurredAt(value: string | undefined): string | null {
   return Number.isNaN(milliseconds) ? null : new Date(milliseconds).toISOString()
 }
 
+function isYoutubeVideoId(value: string): boolean {
+  return /^[A-Za-z0-9_-]{11}$/.test(value)
+}
+
+function isYoutubeChannelId(value: string): boolean {
+  return /^UC[A-Za-z0-9_-]{22}$/.test(value)
+}
+
+function isExactInstant(value: string | null): value is string {
+  if (value === null) return false
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(
+      value,
+    )
+  if (match === null) return false
+  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] = match
+  const yearValue = Number(year)
+  const monthValue = Number(month)
+  const dayValue = Number(day)
+  return (
+    monthValue >= 1 &&
+    monthValue <= 12 &&
+    dayValue >= 1 &&
+    dayValue <= new Date(Date.UTC(yearValue, monthValue, 0)).getUTCDate() &&
+    Number(hour) <= 23 &&
+    Number(minute) <= 59 &&
+    Number(second) <= 59 &&
+    (offsetHour === undefined || Number(offsetHour) <= 23) &&
+    (offsetMinute === undefined || Number(offsetMinute) <= 59) &&
+    !Number.isNaN(Date.parse(value))
+  )
+}
+
 function videoIdentity(value: string | null): {
   product: YoutubeWatchEntry['product']
   videoId: string | null
@@ -101,7 +134,7 @@ function videoIdentity(value: string | null): {
       hostname === 'youtu.be'
         ? (url.pathname.split('/').filter(Boolean)[0] ?? null)
         : url.searchParams.get('v')
-    return { product, videoId: videoId?.trim() === '' ? null : videoId }
+    return { product, videoId: videoId !== null && isYoutubeVideoId(videoId) ? videoId : null }
   } catch {
     return { product: 'unknown', videoId: null }
   }
@@ -116,7 +149,7 @@ export function youtubeChannelId(value: string | null): string | null {
     const parts = url.pathname.split('/').filter(Boolean)
     if (parts.length !== 2 || parts[0] !== 'channel') return null
     const id = parts[1] ?? ''
-    return /^[A-Za-z0-9_-]{10,100}$/.test(id) ? id : null
+    return isYoutubeChannelId(id) ? id : null
   } catch {
     return null
   }
@@ -195,7 +228,9 @@ function csvRows(csv: string, expectedHeaders: readonly string[]): Record<string
 
 export function parseYoutubeSubscriptionsCsv(csv: string): YoutubeSubscriptionEntry[] {
   return csvRows(csv, ['Channel Id', 'Channel Url', 'Channel Title']).map((row) => ({
-    channelId: row['Channel Id'] || youtubeChannelId(row['Channel Url'] || null),
+    channelId: isYoutubeChannelId(row['Channel Id'] ?? '')
+      ? row['Channel Id']!
+      : youtubeChannelId(row['Channel Url'] || null),
     channelTitle: row['Channel Title'] || null,
     channelUrl: row['Channel Url'] || null,
   }))
@@ -365,6 +400,7 @@ export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): Yo
     kind: YoutubeTakeoutComponentKind,
     memberName: string | undefined,
     parseMember: (value: string) => T[],
+    validateMember?: (values: T[]) => boolean,
   ): T[] {
     if (memberName === undefined) {
       components.push({
@@ -378,12 +414,13 @@ export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): Yo
     }
     try {
       const values = parseMember(strFromU8(members[memberName]!))
+      const valid = validateMember?.(values) ?? true
       components.push({
         kind,
         memberName,
-        status: 'complete',
+        status: valid ? 'complete' : 'invalid',
         recordCount: values.length,
-        errorCode: null,
+        errorCode: valid ? null : 'invalid_member_row',
       })
       return values
     } catch {
@@ -399,9 +436,32 @@ export function inspectYoutubeTakeoutBytes(bytes: Uint8Array, label: string): Yo
   }
 
   const watchHistory = component('watch_history', watchHistoryName, parseYoutubeWatchHistoryHtml)
-  const watchLater = component('watch_later', watchLaterName, parseYoutubeWatchLaterCsv)
+  const watchLater = component(
+    'watch_later',
+    watchLaterName,
+    parseYoutubeWatchLaterCsv,
+    (values) => {
+      const identities = values.map((value) => value.videoId?.trim() ?? '')
+      return (
+        identities.every(isYoutubeVideoId) &&
+        new Set(identities).size === identities.length &&
+        values.every((value) => isExactInstant(value.addedAt))
+      )
+    },
+  )
   const playlists = component('playlist_index', playlistIndexName, parseYoutubePlaylistsCsv)
-  const subscriptions = component('subscriptions', subscriptionsName, parseYoutubeSubscriptionsCsv)
+  const subscriptions = component(
+    'subscriptions',
+    subscriptionsName,
+    parseYoutubeSubscriptionsCsv,
+    (values) => {
+      const identities = values.map((value) => value.channelId ?? '')
+      return (
+        identities.every((value) => value.length > 0) &&
+        new Set(identities).size === identities.length
+      )
+    },
+  )
 
   return {
     components,
