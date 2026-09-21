@@ -1,8 +1,8 @@
 # YouTube Source Reconnaissance
 
 - Status: Private Takeout history, Watch Later, and subscriptions implemented;
-  public Data API/OAuth probes remain credential-gated
-- Last verified: 2026-09-20
+  public Data API probe complete, with production enrichment pending
+- Last verified: 2026-09-21
 - Priority: Takeout-backed Library shipped; public catalog metadata next
 - Sources: Official Google/YouTube documentation and private aggregate probes
 
@@ -32,6 +32,13 @@ Recommended integration shape:
 5. Import Watch Later independently as current, source-derived Queue evidence.
 6. Enrich known public video IDs through `videos.list` later, without making
    metadata enrichment a prerequisite for preserving history.
+
+The 2026-09-21 credentialed Data API probe validated this enrichment shape
+against 50 real Takeout video identities. Forty-seven returned public metadata
+and three were omitted. Their 40 distinct returned channels all resolved, and
+the US category catalog returned 32 rows. Detailed field presence is recorded in
+[catalog reconnaissance](catalogs.md); no private titles, IDs, descriptions, or
+raw API payloads were committed.
 
 Official references:
 

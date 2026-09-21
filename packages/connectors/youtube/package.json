@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "probe:api": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../../../.env.local src/probe-api.ts",
     "probe:takeout": "node src/probe-takeout.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

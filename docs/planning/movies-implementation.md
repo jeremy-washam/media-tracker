@@ -1,7 +1,8 @@
 # Movies end-to-end implementation plan
 
-Status: Letterboxd-only slice implemented; TMDB stages require an owner credential
-Last updated: 2026-09-20
+Status: Letterboxd-only slice implemented; TMDB credential and live probe
+complete, with catalog-cache ADR and enrichment implementation next
+Last updated: 2026-09-21
 
 ## Purpose
 
@@ -795,9 +796,9 @@ approved inspector with correct date and source semantics.
 
 ### Stage 6: TMDB live probe and architecture record
 
-1. Obtain/configure the owner credential.
-2. Run the required real API probes and matching sample.
-3. Update catalog reconnaissance with exact observed fields and constraints.
+1. [x] Obtain/configure the owner credential.
+2. [x] Run the required real API probes and matching sample.
+3. [x] Update catalog reconnaissance with exact observed fields and constraints.
 4. Finalize and accept the catalog-cache/matching ADR.
 5. Adjust only the provider-specific migration draft if the probe contradicts
    it; do not distort Letterboxd or generic Queue tables.

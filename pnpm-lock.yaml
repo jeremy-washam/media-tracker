@@ -257,6 +257,15 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
+  packages/connectors/tmdb:
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
   packages/connectors/youtube:
     dependencies:
       cheerio:

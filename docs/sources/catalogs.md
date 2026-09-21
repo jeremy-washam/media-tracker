@@ -1,11 +1,12 @@
 # Media catalog reconnaissance
 
-- Status: Research and recommendations; no integration or schema changes
-- Last verified: 2026-09-19
+- Status: Research and recommendations; credentialed TMDB and YouTube Data API
+  probes complete, with production catalog persistence still pending
+- Last verified: 2026-09-21
 - Scope: Coverage across the six existing media types, search and identity matching,
   metadata/artwork, and API constraints
-- Evidence: Official public documentation and existing repository source reports;
-  no authenticated catalog probes or measured coverage benchmark performed
+- Evidence: Official public documentation, existing repository source reports,
+  and content-redacted live probes against samples from the owner's local data
 
 ## Recommendation
 
@@ -56,6 +57,20 @@ There is no SLA. Free API access does not imply ownership of artwork.
 existing export probe found no TMDB/IMDb IDs, so unresolved historical films need
 candidate search followed by an explicit match. Preserve the Letterboxd identity
 and import evidence. See [Letterboxd reconnaissance](letterboxd.md).
+
+**Observed live contract, 2026-09-21.** A credentialed aggregate-only probe used
+one exact RSS-supplied TMDB identity and five owner title/year samples. The exact
+detail request returned `200` with details plus appended credits, external IDs,
+images, and alternative titles. The observed detail payload exposed the expected
+catalog fields, 24 cast rows, 42 crew rows, 33 backdrops, 28 posters, six logos,
+and nine alternative titles for that sample. `belongs_to_collection` was null;
+nullable and empty values remain ordinary outcomes. Configuration returned a
+secure image base URL, seven poster sizes, and four backdrop sizes. All five
+owner title/year searches returned exactly one candidate; a deliberately broad
+control returned four and a fabricated control returned zero, confirming that
+zero/one/many must remain distinct matcher outcomes. Successful responses
+included `Cache-Control` and `ETag`, but no rate-limit headers. These counts
+describe the sample, not provider-wide completeness.
 
 ### OMDb — optional supplement
 
@@ -164,6 +179,28 @@ owner-supplied Takeout evidence; do not put every enrichment response into an
 indefinite immutable archive. This requires a specific retention design before
 enrichment is implemented, not a silent change to existing ledger guarantees.
 [Developer policies, III.E.4](https://developers.google.com/youtube/terms/developer-policies).
+
+**Observed live contract, 2026-09-21.** A credentialed aggregate-only probe sent
+50 known Takeout video IDs through one `videos.list` batch using
+`snippet,contentDetails,status,liveStreamingDetails`. Forty-seven videos were
+returned and three were omitted without per-ID error detail, so requested-item
+outcomes must explicitly record returned versus unavailable. Every returned
+video included title, description, channel identity/title, publication time,
+thumbnails, category, live-broadcast state, duration, definition, caption flag,
+projection, privacy, upload state, license, embeddability, and Made for Kids.
+Tags appeared on 23/47, default audio language on 29/47, and region restrictions
+on 3/47. No sampled row included `liveStreamingDetails`, confirming that an
+absent requested part is normal.
+
+The 47 videos referenced 40 distinct channels; all 40 returned from one
+`channels.list` batch. Every channel included title, description, custom URL,
+creation time, thumbnails, localization, related-playlist data, statistics,
+privacy/link/upload status, and branding channel settings. Country appeared on
+33/40, Made for Kids on 30/40, branding images on 39/40, and default language on
+3/40. The US category request returned 32 categories with ID, title,
+assignability, and channel identity. Successful responses exposed an `etag` in
+the JSON envelope but no useful HTTP caching or quota headers; refresh age and
+quota estimates therefore need application-owned tracking.
 
 ### Other video providers
 
@@ -422,9 +459,10 @@ change them.
 
 The remaining uncertainties are specific rather than blockers to this research:
 
-- Measure catalog hit rate and field/artwork completeness against a small,
-  representative sample: older/obscure films, translated books, removed videos,
-  migrated or exclusive podcasts, newsletters/PDFs, and alternate recordings.
+- Expand catalog hit-rate and field/artwork measurements beyond the initial
+  five-movie and 50-video live samples: older/obscure films, translated books,
+  removed videos, migrated or exclusive podcasts, newsletters/PDFs, and
+  alternate recordings.
 - Record exact-ID coverage separately from text-search candidates and accepted
   matches. No percentage claims about this owner's library are justified yet.
 - Confirm Spotify app-specific endpoint access, Hardcover's current token/quota
@@ -433,5 +471,7 @@ The remaining uncertainties are specific rather than blockers to this research:
 - Resolve retention terms before any provider becomes a permanent enrichment
   source; distinguish metadata licenses from artwork and full-content rights.
 
-No credentials were read, accounts created, subscriptions purchased, or private
-API calls made for this report.
+The live probes read ignored local credentials and sent only provider-native
+movie search facts or exact video identities to their respective APIs. Probe
+output retained aggregate field/count observations only; credentials, titles,
+provider identifiers, descriptions, and raw responses were not committed.

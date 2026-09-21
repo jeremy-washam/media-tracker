@@ -1,9 +1,9 @@
 # Videos end-to-end implementation plan
 
 - Status: Takeout-backed Archive, Queue, Channels, inspectors, and production
-  UI implemented; public metadata and continuously current Following remain
-  gated on owner credentials and live probes
-- Date: 2026-09-20
+  UI implemented; public metadata credential and live probe complete, with
+  production enrichment pending and OAuth Following removed from scope
+- Date: 2026-09-21
 - Scope: YouTube-backed Library > Videos Archive, Watch Later Queue, Channels,
   and video/channel inspectors
 
@@ -636,7 +636,8 @@ commands because D1 exports do not preserve virtual tables.
 
 ### Migration 0019: Refreshable Data API cache
 
-Finalize these fields only after the credentialed probe. The logical tables are:
+The 2026-09-21 credentialed probe confirmed the fields below and normal omission
+behavior. The logical tables are:
 
 #### `youtube_video_catalog_profiles`
 

@@ -1,8 +1,9 @@
 # YouTube connector
 
 Status: Google Takeout watch history, Watch Later, playlist-index coverage, and
-subscriptions are implemented; Data API metadata enrichment and automatic
-history sync are not available.
+subscriptions are implemented; the credentialed Data API probe is available.
+Production Data API metadata enrichment and automatic history sync are not yet
+available.
 
 This package owns Google Takeout parsing, watch-activity normalization, and
 future YouTube Data API metadata enrichment. Google Data Portability remains a
@@ -22,6 +23,25 @@ counts `Viewed`, `Visited`, and `Answered` cards; parses Watch Later; preserves
 repeated watches; and reports overlap across source archives. It never prints
 titles, channels, video IDs, searches, comments, account identifiers, or raw
 HTML. Fixtures and tests are synthetic.
+
+For the public metadata probe, add the restricted server-side key to the ignored
+repository-root `.env.local`:
+
+```dotenv
+YOUTUBE_API_KEY=replace-with-your-youtube-data-api-key
+```
+
+After importing a real Takeout into the local D1 database, run:
+
+```sh
+pnpm --filter @media-tracker/connector-youtube probe:api
+```
+
+The probe batches 50 known video IDs, fetches their distinct channels, and loads
+the US category catalog. It prints only response shapes, field/count coverage,
+safe headers, and requested/returned totals. It never prints video IDs, channel
+IDs, titles, descriptions, or raw payloads. Set `IMLADRIS_LOCAL_DB_PATH` only
+when default Wrangler database discovery does not select the intended database.
 
 The application import preserves the exact ZIP in private raw storage. It keeps
 every watch-history card, Watch Later row, subscription, and supported playlist
