@@ -1,7 +1,7 @@
 # Movies end-to-end implementation plan
 
-Status: Letterboxd-only slice implemented; TMDB credential and live probe
-complete, with catalog-cache ADR and enrichment implementation next
+Status: Letterboxd slice and refreshable TMDB enrichment implemented; local
+backfill, real-data visual acceptance, and final UX iteration remain
 Last updated: 2026-09-21
 
 ## Purpose
@@ -237,11 +237,13 @@ encoded as collection predicates.
   these behaviors. Real-data visual QA covered both collections, both layouts,
   and the Details/History inspector.
 
-### Remaining credential-gated work
+### Implemented TMDB enrichment
 
-- TMDB is researched but has not received the required credentialed live probe,
-  schema decision, matcher, or cache.
-- No TMDB credential is configured in the current local environment.
+- The credentialed live probe, refreshable-cache ADR, typed bearer-token client,
+  conservative exact-ID/IMDb/title-year matcher, migration 0019, bounded durable
+  jobs, normalized profiles/relationships, projection activation, and source
+  disclosure are implemented.
+- Provider failure or ambiguity preserves the complete Letterboxd-only experience.
 
 The retained real export previously measured 363 watched films, 211 Diary
 occurrences across 180 films, 183 watched-only films, 355 current ratings, 288
@@ -799,7 +801,7 @@ approved inspector with correct date and source semantics.
 1. [x] Obtain/configure the owner credential.
 2. [x] Run the required real API probes and matching sample.
 3. [x] Update catalog reconnaissance with exact observed fields and constraints.
-4. Finalize and accept the catalog-cache/matching ADR.
+4. [x] Finalize and accept the catalog-cache/matching ADR.
 5. Adjust only the provider-specific migration draft if the probe contradicts
    it; do not distort Letterboxd or generic Queue tables.
 
@@ -808,15 +810,15 @@ rules are based on real responses rather than documentation alone.
 
 ### Stage 7: TMDB matching and enrichment
 
-1. Implement the typed client, secret configuration, rate limiting, and error
-   taxonomy.
-2. Attach exact RSS TMDB identities.
-3. Run conservative title/year matching for remaining movies and retain
-   unmatched/ambiguous states.
-4. Populate profiles and normalized relationships, then rebuild projections/FTS.
-5. Enable poster, director, cast, genre, runtime, and catalog-dependent UI only
-   from confirmed matches.
-6. Add required TMDB attribution in the inspector/source disclosure.
+1. [x] Implement the typed client, secret configuration, rate limiting, and error
+       taxonomy.
+2. [x] Attach exact RSS TMDB identities.
+3. [x] Run conservative title/year matching for remaining movies and retain
+       unmatched/ambiguous states.
+4. [x] Populate profiles and normalized relationships, then rebuild projections/FTS.
+5. [x] Enable poster, director, cast, genre, runtime, and catalog-dependent UI only
+       from confirmed matches.
+6. [x] Add required TMDB attribution in the inspector/source disclosure.
 
 Exit criterion: enrichment improves confirmed movies, never misrepresents an
 ambiguous candidate, and provider failure leaves local browsing intact.
@@ -964,8 +966,8 @@ the current local checkout already contains a retained ignored export.
 - [x] Selection, inspector, and layout changes preserve loaded pages.
 - [x] Collection switching normalizes incompatible query state.
 - [x] Missing TMDB configuration never hides local facts.
-- [ ] TMDB fields and matching rules are backed by a credentialed live probe.
-- [ ] TMDB attribution and refresh/retention rules are implemented.
+- [x] TMDB fields and matching rules are backed by a credentialed live probe.
+- [x] TMDB attribution and refresh/retention rules are implemented.
 - [ ] Empty and upgrade migrations pass.
 - [ ] `pnpm check`, build, relevant end-to-end tests, and migration checks pass
       after the final edit.

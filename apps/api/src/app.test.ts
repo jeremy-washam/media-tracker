@@ -175,6 +175,19 @@ describe('API', () => {
     expect(payload.error.code).toBe('SERVICE_UNAVAILABLE')
   })
 
+  it('does not start provider catalog jobs without backend credentials', async () => {
+    for (const provider of ['tmdb', 'youtube']) {
+      const response = await app.request(
+        `/api/catalogs/${provider}/sync`,
+        { method: 'POST' },
+        testBindings,
+      )
+      const payload = ApiErrorSchema.parse(await response.json())
+      expect(response.status).toBe(503)
+      expect(payload.error.code).toBe('SERVICE_UNAVAILABLE')
+    }
+  })
+
   it('generates an OpenAPI document for the scaffold routes', async () => {
     const response = await app.request('/api/openapi.json')
     const document = (await response.json()) as { paths?: Record<string, unknown> }
@@ -185,6 +198,8 @@ describe('API', () => {
     expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}')
     expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}/history')
     expect(document.paths).toHaveProperty('/api/library/movies')
+    expect(document.paths).toHaveProperty('/api/catalogs/tmdb/sync')
+    expect(document.paths).toHaveProperty('/api/catalogs/youtube/sync')
     expect(document.paths).toHaveProperty('/api/library/movies/{mediaItemId}')
     expect(document.paths).toHaveProperty('/api/library/movies/{mediaItemId}/history')
     expect(document.paths).toHaveProperty('/api/library/podcasts')

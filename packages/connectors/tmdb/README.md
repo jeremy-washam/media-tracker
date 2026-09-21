@@ -1,7 +1,7 @@
 # TMDB catalog connector
 
-Status: credentialed live probe implemented; production cache and enrichment
-client follow the accepted Movies implementation plan.
+Status: credentialed live probe, typed client, production cache, conservative
+matching, and durable refresh integration implemented.
 
 TMDB is additive catalog metadata. Letterboxd remains authoritative for the
 owner's movie history, Queue, ratings, likes, and reviews.
@@ -11,6 +11,9 @@ Add the application read token to the ignored repository-root `.env.local`:
 ```dotenv
 TMDB_API_READ_TOKEN=replace-with-your-read-access-token
 ```
+
+The local Worker loads repository-root `.env.local`. Production uses a Worker
+secret with the same name.
 
 After importing real Letterboxd data into the local D1 database, run the
 aggregate-only probe from the repository root:

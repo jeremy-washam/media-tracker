@@ -4,6 +4,7 @@ import {
   SqlArticlesRepository,
   SqlBooksRepository,
   SqlCanonicalLedgerRepository,
+  SqlCatalogJobsRepository,
   SqlMoviesRepository,
   SqlSpotifyLibraryRepository,
   SqlVideosRepository,
@@ -12,6 +13,7 @@ import {
 
 export interface Bindings {
   ASSETS: Fetcher
+  CATALOG_AUTO_REFRESH?: string
   DB: D1Database
   HARDCOVER_TOKEN?: string
   LETTERBOXD_USERNAME?: string
@@ -20,7 +22,9 @@ export interface Bindings {
   SPOTIFY_CLIENT_ID?: string
   SPOTIFY_CLIENT_SECRET?: string
   SPOTIFY_REFRESH_TOKEN?: string
+  TMDB_API_READ_TOKEN?: string
   TOKEN_ENCRYPTION_KEY?: string
+  YOUTUBE_API_KEY?: string
   SYNC_QUEUE: Queue<SyncJob>
 }
 
@@ -53,4 +57,8 @@ export function createSpotifyLibraryRepository(database: D1Database): SqlSpotify
 
 export function createVideosRepository(database: D1Database): SqlVideosRepository {
   return new SqlVideosRepository(new D1DatabaseClient(database))
+}
+
+export function createCatalogJobsRepository(database: D1Database): SqlCatalogJobsRepository {
+  return new SqlCatalogJobsRepository(new D1DatabaseClient(database))
 }

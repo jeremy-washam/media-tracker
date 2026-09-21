@@ -984,7 +984,34 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
             ? `Letterboxd history imported ${formatDate(movie.source.lastCompleteExportAt)}`
             : 'Letterboxd export freshness unavailable'}
         </p>
-        <p>TMDB not configured. Catalog artwork and details are unavailable.</p>
+        {movie.source.tmdbUrl ? (
+          <>
+            <a
+              className="tmdb-attribution"
+              href="https://www.themoviedb.org"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="The Movie Database"
+            >
+              <img src="/tmdb-logo.svg" alt="TMDB" />
+            </a>
+            <p>
+              <a href={movie.source.tmdbUrl} target="_blank" rel="noreferrer">
+                Open on TMDB <ExternalLink aria-hidden="true" />
+              </a>
+            </p>
+            <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+          </>
+        ) : (
+          <p>TMDB metadata is {movie.source.metadataStatus.replaceAll('_', ' ')}.</p>
+        )}
+        {movie.source.imdbUrl ? (
+          <p>
+            <a href={movie.source.imdbUrl} target="_blank" rel="noreferrer">
+              Open on IMDb <ExternalLink aria-hidden="true" />
+            </a>
+          </p>
+        ) : null}
       </section>
     </div>
   )

@@ -31,7 +31,37 @@ describe('Videos route search', () => {
 
   it('parses repeated and comma-separated filter values without duplicates', () => {
     expect(
-      parseVideosRouteSearch({ format: ['live,youtube_music', 'live'], account: ['a', 'a'] }),
-    ).toMatchObject({ format: ['live', 'youtube_music'], account: ['a'] })
+      parseVideosRouteSearch({
+        format: ['live,youtube_music', 'live'],
+        account: ['a', 'a'],
+        category: ['22,24', '22'],
+        duration: '20to59',
+        durationUnknown: 'true',
+        availability: 'unchecked',
+      }),
+    ).toMatchObject({
+      format: ['live', 'youtube_music'],
+      account: ['a'],
+      category: ['22', '24'],
+      duration: '20to59',
+      durationUnknown: true,
+      availability: 'unchecked',
+    })
+  })
+
+  it('removes every video-only metadata filter from Channels', () => {
+    expect(
+      normalizeVideoSearch(
+        {
+          published: 'range',
+          publishedFrom: '2020-01-01',
+          duration: 'under5',
+          durationUnknown: true,
+          availability: 'available',
+          category: ['22'],
+        },
+        'channels',
+      ),
+    ).toEqual({})
   })
 })

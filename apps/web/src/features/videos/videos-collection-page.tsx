@@ -77,12 +77,16 @@ export function VideosCollectionPage({ view }: { view: View }) {
           ['watchCount', 'Most watched'],
           ['title', 'Title'],
           ['channel', 'Channel'],
+          ['publishedAt', 'Published'],
+          ['duration', 'Duration'],
         ]
       : view === 'queue'
         ? [
             ['addedAt', 'Recently added'],
             ['title', 'Title'],
             ['channel', 'Channel'],
+            ['publishedAt', 'Published'],
+            ['duration', 'Duration'],
           ]
         : [
             ['watchCount', 'Most viewed'],
@@ -232,12 +236,9 @@ export function VideosCollectionPage({ view }: { view: View }) {
             <small>{countLabel(summary.occurrenceCount, 'supported watch')}</small>
           ) : null}
         </div>
-        {summary &&
-        (summary.coverage.watchLater !== 'complete' ||
-          summary.coverage.subscriptions !== 'complete') ? (
+        {summary && summary.coverage.watchLater !== 'complete' ? (
           <p className="library-coverage-note">
-            Takeout coverage: Watch Later {summary.coverage.watchLater}; subscriptions{' '}
-            {summary.coverage.subscriptions}.
+            Takeout coverage: Watch Later {summary.coverage.watchLater}.
           </p>
         ) : null}
         {result.isError ? (
@@ -306,34 +307,7 @@ function VideoFilters({
   update: (patch: Partial<VideosRouteSearch>) => void
 }) {
   if (view === 'channels') {
-    return (
-      <section className="filter-panel" aria-label="Channel filters">
-        <div className="filter-panel-heading">
-          <strong>Filters</strong>
-          <button
-            type="button"
-            onClick={() => update({ following: undefined, channelItem: undefined })}
-          >
-            Clear
-          </button>
-        </div>
-        <label className="library-inline-filter">
-          <span>Following</span>
-          <select
-            value={search.following ?? 'all'}
-            onChange={(event) =>
-              update({
-                following: event.target.value as VideosRouteSearch['following'],
-                channelItem: undefined,
-              })
-            }
-          >
-            <option value="all">All channels</option>
-            <option value="following">Following only</option>
-          </select>
-        </label>
-      </section>
-    )
+    return null
   }
   return (
     <section className="filter-panel" aria-label="Video filters">
@@ -347,12 +321,20 @@ function VideoFilters({
               channel: undefined,
               watchedFrom: undefined,
               watchedTo: undefined,
+              watchedUnknown: undefined,
               addedFrom: undefined,
               addedTo: undefined,
+              addedUnknown: undefined,
+              published: undefined,
+              publishedFrom: undefined,
+              publishedTo: undefined,
+              duration: undefined,
+              durationUnknown: undefined,
               watchCount: undefined,
               overlap: undefined,
               format: undefined,
               availability: undefined,
+              category: undefined,
               item: undefined,
             })
           }
@@ -390,6 +372,72 @@ function VideoFilters({
                 )
               }
             />
+          </label>
+          <label className="unknown-toggle">
+            <input
+              type="checkbox"
+              checked={
+                view === 'archive'
+                  ? (search.watchedUnknown ?? false)
+                  : (search.addedUnknown ?? false)
+              }
+              onChange={(event) =>
+                update(
+                  view === 'archive'
+                    ? { watchedUnknown: event.target.checked || undefined, item: undefined }
+                    : { addedUnknown: event.target.checked || undefined, item: undefined },
+                )
+              }
+            />
+            Include unknown dates
+          </label>
+        </fieldset>
+        <fieldset className="date-filter">
+          <legend>Published</legend>
+          <label>
+            From
+            <input
+              type="date"
+              disabled={search.published === 'unknown'}
+              value={search.publishedFrom ?? ''}
+              onChange={(event) =>
+                update({
+                  published: event.target.value || search.publishedTo ? 'range' : undefined,
+                  publishedFrom: event.target.value || undefined,
+                  item: undefined,
+                })
+              }
+            />
+          </label>
+          <label>
+            To
+            <input
+              type="date"
+              disabled={search.published === 'unknown'}
+              value={search.publishedTo ?? ''}
+              onChange={(event) =>
+                update({
+                  published: event.target.value || search.publishedFrom ? 'range' : undefined,
+                  publishedTo: event.target.value || undefined,
+                  item: undefined,
+                })
+              }
+            />
+          </label>
+          <label className="unknown-toggle">
+            <input
+              type="checkbox"
+              checked={search.published === 'unknown'}
+              onChange={(event) =>
+                update({
+                  published: event.target.checked ? 'unknown' : undefined,
+                  publishedFrom: undefined,
+                  publishedTo: undefined,
+                  item: undefined,
+                })
+              }
+            />
+            Unknown date only
           </label>
         </fieldset>
         <label className="library-inline-filter">
@@ -465,20 +513,92 @@ function VideoFilters({
           </select>
         </label>
         <label className="library-inline-filter">
+          <span>Duration</span>
+          <select
+            value={search.duration ?? ''}
+            onChange={(event) =>
+              update({
+                duration: (event.target.value || undefined) as VideosRouteSearch['duration'],
+                item: undefined,
+              })
+            }
+          >
+            <option value="">Any duration</option>
+            <option value="under5">Under 5 minutes</option>
+            <option value="5to19">5–19 minutes</option>
+            <option value="20to59">20–59 minutes</option>
+            <option value="60plus">60+ minutes</option>
+          </select>
+          <span className="unknown-toggle">
+            <input
+              type="checkbox"
+              checked={search.durationUnknown ?? false}
+              onChange={(event) =>
+                update({ durationUnknown: event.target.checked || undefined, item: undefined })
+              }
+            />
+            Include unknown
+          </span>
+        </label>
+        <label className="library-inline-filter">
+          <span>Availability</span>
+          <select
+            value={search.availability ?? ''}
+            onChange={(event) =>
+              update({
+                availability: (event.target.value ||
+                  undefined) as VideosRouteSearch['availability'],
+                item: undefined,
+              })
+            }
+          >
+            <option value="">Any state</option>
+            <option value="available">Available</option>
+            <option value="unavailable">Unavailable</option>
+            <option value="unchecked">Unchecked</option>
+          </select>
+        </label>
+        <label className="library-inline-filter">
           <span>Format</span>
           <select
             value={search.format?.[0] ?? ''}
             onChange={(event) =>
               update({
-                format: event.target.value ? [event.target.value as 'youtube_music'] : undefined,
+                format: event.target.value
+                  ? [event.target.value as NonNullable<VideosRouteSearch['format']>[number]]
+                  : undefined,
                 item: undefined,
               })
             }
           >
             <option value="">All formats</option>
+            <option value="live">Live</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="recorded_live">Recorded live</option>
             <option value="youtube_music">YouTube Music</option>
           </select>
         </label>
+        {summary?.facets.categories.length ? (
+          <label className="library-inline-filter">
+            <span>Category</span>
+            <select
+              value={search.category?.[0] ?? ''}
+              onChange={(event) =>
+                update({
+                  category: event.target.value ? [event.target.value] : undefined,
+                  item: undefined,
+                })
+              }
+            >
+              <option value="">All categories</option>
+              {summary.facets.categories.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} ({option.count})
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
     </section>
   )
@@ -508,7 +628,6 @@ function VideoItem({
         <span className="video-result-copy">
           <strong>{item.title}</strong>
           <small>
-            {item.following ? 'Following · ' : ''}
             {countLabel(item.archiveVideoCount, 'archived video')} ·{' '}
             {countLabel(item.watchCount, 'watch')} ·{' '}
             {countLabel(item.queueVideoCount, 'queued video')}
@@ -655,8 +774,27 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                       : 'Unknown'}
                   </dd>
                 </div>
+                <div>
+                  <dt>Published</dt>
+                  <dd>{date(detail.data.publishedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Category</dt>
+                  <dd>{detail.data.categoryTitle ?? 'Unknown'}</dd>
+                </div>
+                <div>
+                  <dt>Captions</dt>
+                  <dd>
+                    {detail.data.captionAvailable === null
+                      ? 'Unknown'
+                      : detail.data.captionAvailable
+                        ? 'Available'
+                        : 'Not reported'}
+                  </dd>
+                </div>
               </dl>
-              <p>{detail.data.metadataMessage}</p>
+              {detail.data.description ? <p>{detail.data.description}</p> : null}
+              {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
               {detail.data.queueRelationships.length ? (
                 <div>
                   <h3>Watch Later</h3>
@@ -718,15 +856,6 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                     {countLabel(channel.data.archiveVideoCount, 'archived video')} ·{' '}
                     {countLabel(channel.data.watchCount, 'watch')}
                   </p>
-                  {channel.data.followingRelationships.length ? (
-                    <p>
-                      Following via{' '}
-                      {channel.data.followingRelationships
-                        .map((relationship) => relationship.connectionLabel)
-                        .join(', ')}
-                      .
-                    </p>
-                  ) : null}
                   <ChannelPreview
                     title="Recently watched"
                     items={channelArchive.data?.data.slice(0, 5) ?? []}
@@ -816,7 +945,7 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
             <div>
               <span className="eyebrow">Channel</span>
               <h2>{detail.data.title}</h2>
-              <p>{detail.data.following ? 'Following' : 'Not followed in imported snapshots'}</p>
+              <p>{countLabel(detail.data.archiveVideoCount, 'archived video')}</p>
             </div>
           </div>
           <nav className="inspector-tabs" aria-label="Channel details">
@@ -858,16 +987,9 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                   <dd>{date(detail.data.date)}</dd>
                 </div>
               </dl>
-              {detail.data.followingRelationships.length ? (
-                <p>
-                  Following via{' '}
-                  {detail.data.followingRelationships
-                    .map((value) => value.connectionLabel)
-                    .join(', ')}
-                  .
-                </p>
-              ) : null}
-              <p>{detail.data.metadataMessage}</p>
+              {detail.data.description ? <p>{detail.data.description}</p> : null}
+              {detail.data.country ? <p>Country: {detail.data.country}</p> : null}
+              {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
               <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
                 Open on YouTube <ExternalLink />
               </a>

@@ -16,6 +16,10 @@ const migrations = [
   '0001_canonical_ledger.sql',
   '0006_movies_library.sql',
   '0007_movies_nullable_source_link.sql',
+  '0016_videos_takeout_library.sql',
+  '0017_videos_snapshot_safety.sql',
+  '0018_videos_snapshot_head_backfill.sql',
+  '0019_provider_catalog_caches.sql',
 ]
   .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
   .join('\n')
@@ -557,5 +561,68 @@ describe('SqlMoviesRepository', () => {
       const page = await repository.listMovies(listInput({ collection: 'queue', q: query }))
       expect(page.data.map((item) => item.id)).toEqual(['movie-2'])
     }
+  })
+
+  it('projects a conservative TMDB match into collection and detail metadata', async () => {
+    await applyFullSnapshot()
+    await repository.applyTmdbCatalogBatch({
+      at: now,
+      configuration: {
+        secureBaseUrl: 'https://image.tmdb.org/t/p/',
+        posterBaseUrl: 'https://image.tmdb.org/t/p/w500',
+        backdropBaseUrl: 'https://image.tmdb.org/t/p/w1280',
+        posterSizes: ['w500'],
+        backdropSizes: ['w1280'],
+        fetchedAt: now,
+        expiresAt: '2026-10-20T12:00:00.000Z',
+        etag: null,
+      },
+      movies: [
+        {
+          mediaItemId: 'movie-1',
+          tmdbMovieId: 101,
+          matchStatus: 'matched',
+          matchMethod: 'exact_title_year',
+          candidateCount: 1,
+          matcherVersion: 'tmdb-conservative@1',
+          attemptedAt: now,
+          safeErrorCode: null,
+          profile: {
+            currentTitle: 'First Movie Restored',
+            originalTitle: 'First Movie',
+            originalLanguage: 'en',
+            overview: 'A restored synopsis.',
+            releaseDate: '2001-03-04',
+            runtimeMinutes: 111,
+            posterPath: '/poster.jpg',
+            backdropPath: '/backdrop.jpg',
+            tagline: 'A tagline',
+            imdbId: 'tt0000101',
+            status: 'Released',
+            voteAverage: 7.5,
+            voteCount: 100,
+            fetchedAt: now,
+            checkedAt: now,
+            expiresAt: '2026-10-20T12:00:00.000Z',
+            etag: null,
+            genres: [{ id: 1, name: 'Drama' }],
+            directors: [{ creditId: 'director-1', personId: 1, name: 'Director One' }],
+            cast: [{ creditId: 'cast-1', personId: 2, name: 'Actor One', character: 'Lead' }],
+            countries: [{ code: 'US', name: 'United States of America' }],
+            alternativeTitles: [{ countryCode: 'US', title: 'First Alternate' }],
+          },
+        },
+      ],
+    })
+    expect(await repository.findMovie('movie-1')).toMatchObject({
+      displayTitle: 'First Movie Restored',
+      posterUrl: 'https://image.tmdb.org/t/p/w500/poster.jpg',
+      directors: ['Director One'],
+      overview: 'A restored synopsis.',
+      genres: ['Drama'],
+      source: { tmdbUrl: 'https://www.themoviedb.org/movie/101', metadataStatus: 'matched' },
+    })
+    expect(await repository.needsTmdbConfigurationRefresh(now)).toBe(false)
+    expect(await repository.needsTmdbConfigurationRefresh('2026-11-01T00:00:00.000Z')).toBe(true)
   })
 })

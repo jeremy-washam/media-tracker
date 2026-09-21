@@ -15,6 +15,10 @@ const stringList = z.preprocess(
   z.array(z.string()).default([]),
 )
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const booleanQuery = z.preprocess(
+  (value) => (value === 'true' ? true : value === 'false' ? false : value),
+  z.boolean(),
+)
 
 export const VideoViewSchema = z.enum(['archive', 'queue', 'channels'])
 export const VideosQuerySchema = z
@@ -25,8 +29,15 @@ export const VideosQuerySchema = z
     channel: stringList,
     watchedFrom: date.optional(),
     watchedTo: date.optional(),
+    watchedUnknown: booleanQuery.default(false),
     addedFrom: date.optional(),
     addedTo: date.optional(),
+    addedUnknown: booleanQuery.default(false),
+    published: z.enum(['all', 'range', 'unknown']).default('all'),
+    publishedFrom: date.optional(),
+    publishedTo: date.optional(),
+    duration: z.enum(['any', 'under5', '5to19', '20to59', '60plus']).default('any'),
+    durationUnknown: booleanQuery.default(false),
     watchCount: z.enum(['all', 'once', 'rewatched']).default('all'),
     overlap: z.enum(['all', 'overlap', 'not_overlap']).default('all'),
     format: z.preprocess(
@@ -40,18 +51,8 @@ export const VideosQuerySchema = z
         .array(z.enum(['live', 'upcoming', 'recorded_live', 'youtube_music', 'shorts', 'premiere']))
         .default([]),
     ),
-    availability: z.preprocess(
-      (value) =>
-        value === undefined
-          ? []
-          : (Array.isArray(value) ? value : [value])
-              .flatMap((item) => String(item).split(','))
-              .filter(Boolean),
-      z
-        .array(z.enum(['not_configured', 'pending', 'available', 'unavailable', 'stale', 'error']))
-        .default([]),
-    ),
-    following: z.enum(['all', 'following']).default('all'),
+    availability: z.enum(['any', 'available', 'unavailable', 'unchecked']).default('any'),
+    category: stringList,
     sort: z
       .enum([
         'watchedAt',
@@ -73,12 +74,19 @@ export const VideosQuerySchema = z
     for (const [from, to, path] of [
       [value.watchedFrom, value.watchedTo, 'watchedTo'],
       [value.addedFrom, value.addedTo, 'addedTo'],
+      [value.publishedFrom, value.publishedTo, 'publishedTo'],
     ] as const) {
       if (from && to && from > to)
         context.addIssue({ code: 'custom', path: [path], message: 'End date precedes start date.' })
     }
     if (value.sort === 'relevance' && !value.q)
       context.addIssue({ code: 'custom', path: ['sort'], message: 'Relevance requires search.' })
+    if (value.published === 'range' && !value.publishedFrom && !value.publishedTo)
+      context.addIssue({
+        code: 'custom',
+        path: ['published'],
+        message: 'A published-date range requires a start or end boundary.',
+      })
     const sorts =
       value.view === 'archive'
         ? ['watchedAt', 'title', 'channel', 'watchCount', 'publishedAt', 'duration', 'relevance']
@@ -97,29 +105,31 @@ export const VideosQuerySchema = z
         value.channel.length > 0 ||
         value.watchedFrom ||
         value.watchedTo ||
+        value.watchedUnknown ||
         value.addedFrom ||
         value.addedTo ||
+        value.addedUnknown ||
+        value.published !== 'all' ||
+        value.publishedFrom ||
+        value.publishedTo ||
+        value.duration !== 'any' ||
+        value.durationUnknown ||
         value.watchCount !== 'all' ||
         value.overlap !== 'all' ||
         value.format.length > 0 ||
-        value.availability.length > 0)
+        value.availability !== 'any' ||
+        value.category.length > 0)
     )
       context.addIssue({
         code: 'custom',
         path: ['view'],
         message: 'Video filters are invalid here.',
       })
-    if (value.view !== 'channels' && value.following !== 'all')
-      context.addIssue({
-        code: 'custom',
-        path: ['following'],
-        message: 'Following is for Channels.',
-      })
-    if (value.view === 'archive' && (value.addedFrom || value.addedTo))
+    if (value.view === 'archive' && (value.addedFrom || value.addedTo || value.addedUnknown))
       context.addIssue({ code: 'custom', path: ['addedFrom'], message: 'Added date is for Queue.' })
     if (
       value.view === 'queue' &&
-      (value.watchedFrom || value.watchedTo || value.watchCount !== 'all')
+      (value.watchedFrom || value.watchedTo || value.watchedUnknown || value.watchCount !== 'all')
     )
       context.addIssue({
         code: 'custom',
@@ -163,8 +173,6 @@ export const VideoCollectionItemSchema = z.object({
   matchingQueueAccountCount: z.number().int().nonnegative(),
   archiveVideoCount: z.number().int().nonnegative(),
   queueVideoCount: z.number().int().nonnegative(),
-  following: z.boolean(),
-  subscriptionCount: z.number().int().nonnegative(),
 })
 
 const FacetValueSchema = z.object({
@@ -184,28 +192,40 @@ export const VideosResponseSchema = z.object({
     channels: z.number().int().nonnegative(),
   }),
   occurrenceCount: z.number().int().nonnegative(),
-  facets: z.object({ accounts: z.array(FacetValueSchema), channels: z.array(FacetValueSchema) }),
+  facets: z.object({
+    accounts: z.array(FacetValueSchema),
+    channels: z.array(FacetValueSchema),
+    categories: z.array(FacetValueSchema),
+  }),
   coverage: z.object({
     watchLater: z.enum(['complete', 'partial', 'missing', 'invalid', 'unknown']),
-    subscriptions: z.enum(['complete', 'partial', 'missing', 'invalid', 'unknown']),
-    catalog: z.literal('not_configured'),
+    catalog: z.enum(['not_configured', 'pending', 'current', 'partial', 'error']),
   }),
 })
 
 export const VideoDetailSchema = VideoCollectionItemSchema.extend({
   kind: z.literal('video'),
   description: z.string().nullable(),
+  categoryId: z.string().nullable(),
+  categoryTitle: z.string().nullable(),
+  captionAvailable: z.boolean().nullable(),
+  definition: z.string().nullable(),
+  projection: z.string().nullable(),
+  catalogCheckedAt: z.string().nullable(),
   historyCount: z.number().int().nonnegative(),
   queueRelationships: z.array(
     z.object({ connectionLabel: z.string(), addedAt: z.string().nullable() }),
   ),
-  metadataMessage: z.string(),
+  metadataMessage: z.string().nullable(),
 })
 
 export const VideoChannelDetailSchema = VideoCollectionItemSchema.extend({
   kind: z.literal('channel'),
-  followingRelationships: z.array(z.object({ connectionLabel: z.string() })),
-  metadataMessage: z.string(),
+  description: z.string().nullable(),
+  customUrl: z.string().nullable(),
+  country: z.string().nullable(),
+  catalogCheckedAt: z.string().nullable(),
+  metadataMessage: z.string().nullable(),
 })
 
 export const VideoHistoryQuerySchema = z.object({

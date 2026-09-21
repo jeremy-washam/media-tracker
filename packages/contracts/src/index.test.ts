@@ -7,6 +7,7 @@ import {
   MovieDetailSchema,
   MoviesQuerySchema,
   SyncJobSchema,
+  VideosQuerySchema,
 } from './index'
 
 describe('API contracts', () => {
@@ -30,6 +31,24 @@ describe('API contracts', () => {
     })
 
     expect(result.success).toBe(false)
+  })
+
+  it('requires provider catalog jobs to name their durable job', () => {
+    expect(
+      SyncJobSchema.safeParse({
+        idempotencyKey: 'catalog:youtube:1',
+        source: 'youtube',
+        operation: 'refresh_youtube_catalog',
+      }).success,
+    ).toBe(false)
+    expect(
+      SyncJobSchema.safeParse({
+        idempotencyKey: 'catalog:tmdb:1',
+        source: 'tmdb',
+        operation: 'refresh_tmdb_catalog',
+        catalogJobId: 'job-1',
+      }).success,
+    ).toBe(true)
   })
 
   it('rejects source records that are not standalone Archive media', () => {
@@ -65,6 +84,25 @@ describe('API contracts', () => {
     expect(MoviesQuerySchema.safeParse({ collection: 'queue', rating: 'range' }).success).toBe(
       false,
     )
+  })
+
+  it('validates Videos metadata filters and collection-specific dates', () => {
+    expect(
+      VideosQuerySchema.safeParse({
+        view: 'archive',
+        published: 'range',
+        publishedFrom: '2020-01-01',
+        duration: '20to59',
+        durationUnknown: 'true',
+        availability: 'unchecked',
+        category: ['22', '24'],
+      }).success,
+    ).toBe(true)
+    expect(VideosQuerySchema.safeParse({ view: 'archive', published: 'range' }).success).toBe(false)
+    expect(VideosQuerySchema.safeParse({ view: 'queue', watchedUnknown: 'true' }).success).toBe(
+      false,
+    )
+    expect(VideosQuerySchema.safeParse({ view: 'channels', category: '22' }).success).toBe(false)
   })
 
   it('requires an occurrence count for reviewed movie details', () => {

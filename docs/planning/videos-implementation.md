@@ -1,8 +1,8 @@
 # Videos end-to-end implementation plan
 
-- Status: Takeout-backed Archive, Queue, Channels, inspectors, and production
-  UI implemented; public metadata credential and live probe complete, with
-  production enrichment pending and OAuth Following removed from scope
+- Status: Takeout-backed Archive, Queue, Channels, inspectors, production UI,
+  and refreshable public metadata integration implemented; OAuth Following removed
+  from scope; final hardening and local backfill remain
 - Date: 2026-09-21
 - Scope: YouTube-backed Library > Videos Archive, Watch Later Queue, Channels,
   and video/channel inspectors
@@ -29,8 +29,8 @@ The central correctness boundary is:
 ```text
 owner Takeout evidence is immutable and authoritative for watches and Watch Later
 public YouTube API data is an expiring, replaceable catalog cache
-OAuth subscriptions are account-scoped current relationships
-none of those layers may manufacture facts owned by another layer
+imported subscription rows remain retained evidence but have no product surface
+neither layer may manufacture facts owned by the other
 ```
 
 ## Outcome
@@ -43,7 +43,6 @@ After this plan is complete, Videos will provide:
   snapshot for each Takeout lineage;
 - Channels as a stable-identity rollup over Archive and Queue activity, sorted
   by personal views by default;
-- a Following-only Channels filter backed by complete subscription snapshots;
 - compact 16:9 list and grid modes for Archive and Queue, with list as the
   default;
 - server-side search, filters, sorts, exact counts, facets, and keyset
@@ -59,10 +58,9 @@ After this plan is complete, Videos will provide:
 - replay-safe import, snapshot retirement, metadata expiry, failure recovery,
   observability, browser coverage, and real-data visual acceptance.
 
-Takeout-only work must not wait for Google credentials. The implementation can
-ship an honest Archive, Queue, Channels rollup, and Takeout-backed subscription
-snapshot first. The complete accepted slice remains gated on the credentialed
-Data API probe and current OAuth Following reconciliation described below.
+Takeout-only work did not wait for Google credentials. The implementation ships
+an honest Archive, Queue, Channels rollup, and retained subscription evidence.
+The accepted product surface requires public Data API enrichment but no OAuth.
 
 ### Implemented local slice
 
@@ -91,11 +89,11 @@ The 45 global Archive/Queue overlaps include cross-lineage identity convergence;
 the earlier probe's 41 figure counted same-lineage overlap only. Owner content
 remains ignored and is not committed.
 
-Stages 5–7 remain intentionally unimplemented until the owner supplies a
-restricted YouTube Data API key and read-only OAuth configuration. Current
-artwork, duration, publication/category/availability/live fields and
-continuously current Following must continue to report `not_configured` or use
-Takeout fallback facts until those credentialed live probes are reviewed.
+The restricted YouTube Data API key and credentialed probe are complete.
+Migration 0019, the typed client, durable refresh jobs, cache-backed projections,
+and metadata UI activation implement Stages 5–6. OAuth and current Following were
+explicitly removed from product scope; imported subscription snapshots remain
+retained evidence only.
 
 ## Scope
 
@@ -108,7 +106,7 @@ Takeout fallback facts until those credentialed live probes are reviewed.
   complete-snapshot retirement, and Queue-only videos.
 - Exact channel identities from validated `/channel/{id}` Takeout links and
   Data API resources.
-- Takeout subscription snapshots and current OAuth subscription reconciliation.
+- Retention and replay of Takeout subscription snapshots as internal evidence only.
 - Current public video/channel metadata for known Library identities only.
 - Current lookup availability and reliable live/upcoming/recorded-live facts.
 - Video and channel browse/search projections, FTS, facets, counts, and cursors.
@@ -150,13 +148,9 @@ should not be reopened unless real API behavior proves a contradiction.
 - Archive and Queue are independent. Watching a video never removes Watch Later
   membership, and a later Queue import never creates a watch.
 - Channels includes every stable channel identity represented by an Archive or
-  Queue video. Following alone does not inject a channel with no Library
-  activity.
-- A global video or channel appears once in a collection, while its watches,
-  Queue memberships, subscriptions, dates, and freshness remain connection-
-  scoped and inspectable.
-- Following never creates Archive or Queue membership and never expands the
-  channel's upload catalog.
+  Queue video. Subscription evidence does not add channels.
+- A global video or channel appears once in a collection, while its watches and
+  Queue memberships, dates, and freshness remain connection-scoped and inspectable.
 
 ### Watch occurrences
 
@@ -196,7 +190,7 @@ should not be reopened unless real API behavior proves a contradiction.
 - Takeout has no source removal time. Record only the app's retirement
   observation time and preserve all membership evidence.
 
-### Channels and Following
+### Channels
 
 - Channel grouping requires a stable exact channel ID.
 - A Takeout URL identifies a channel only when it is a validated YouTube
@@ -206,13 +200,8 @@ should not be reopened unless real API behavior proves a contradiction.
   not enter Channels or exact Channel facets until identity is available.
 - Channels defaults to Most viewed using personal supported watch occurrences,
   not YouTube's public view count.
-- Following-only requires at least one active account-scoped subscription
-  relationship.
-- Takeout subscriptions are snapshot facts with no observed subscribed date.
-  OAuth `subscription.snippet.publishedAt` may supply a relationship instant.
-  Import/acquisition time never fills a missing subscribed date.
-- A failed or partial subscription refresh retains the last successful state
-  and reports stale/error coverage. It never clears relationships.
+- Takeout subscriptions are retained snapshot facts with no observed subscribed
+  date. They do not affect this product surface.
 
 ### Current and historical metadata
 
@@ -259,9 +248,8 @@ remove Archive/Queue history or prevent detail access.
 - Queue shows thumbnail, title, channel, Added to Watch Later, account count,
   Archive overlap/watch count, and list-only Duration/Published where space
   permits.
-- Channels uses one channel list only. Rows show image/title, optional
-  Following, distinct Archive video count, personal watch count, latest watch,
-  and active Queue video count.
+- Channels uses one channel list only. Rows show image/title, distinct Archive
+  video count, personal watch count, latest watch, and active Queue video count.
 - Cards have no autoplay, hover playback, progress, inline action toolbar, or
   transcript excerpt.
 
@@ -289,8 +277,8 @@ Shared video filters are:
 - Category when current metadata coverage exists.
 
 Archive adds Watched date/unknown, Watches once/rewatched, and Queue status.
-Queue adds Added-to-Watch-Later date/unknown and Archive status. Channels adds
-only Following: all channels or Following only.
+Queue adds Added-to-Watch-Later date/unknown and Archive status. Channels has no
+initial filter.
 
 Sorts are:
 
@@ -310,13 +298,12 @@ are rejected by the API and normalized out by the client.
 The video inspector has Details, Watch history, and Channel tabs. Details owns
 current catalog facts, relationship summaries, availability, source links,
 freshness, and compact provenance. Watch history owns every supported watch and
-historical display differences. Channel owns current channel facts, Following
-relationships, and bounded Library-only lists of recently watched and queued
+historical display differences. Channel owns current channel facts and bounded
+Library-only lists of recently watched and queued
 videos; it never loads arbitrary uploads.
 
 The channel inspector has Details and Library tabs. Details owns current channel
-facts, every active Following relationship, source links, freshness, and compact
-provenance. Library shows only Archive or Queue videos already in Imladris for
+facts, source links, freshness, and compact provenance. Library shows only Archive or Queue videos already in Imladris for
 the exact channel, paginated independently.
 
 ## Verified baseline and current gaps
@@ -381,34 +368,27 @@ video-specific repository. The generic media contract exposes only ID, type,
 and title and cannot express Queue-only detail, occurrence-aware filters,
 channel rollups, freshness, or bounded History.
 
-The implemented local slice uses 0016 for the Takeout model and 0017–0018 for
-snapshot-safety state and upgrade backfill. The credentialed catalog and OAuth
-drafts therefore reserve 0019–0020 below. Recheck the migration head before applying
-either draft; never edit or reuse an applied migration.
+The implemented local slice uses 0016 for the Takeout model, 0017–0018 for
+snapshot safety, and 0019 for provider catalog caches and projection fields.
+Never edit or reuse an applied migration.
 
 ### Web application
 
 The production Index shell, Graphite theme, collapsible navigation, responsive
-inspector, URL normalization, TanStack Query page preservation, and Books/
-Movies/Articles patterns are implemented. Videos navigation is disabled and
-there are no production routes or API hooks.
+inspector, URL normalization, TanStack Query page preservation, and Videos
+routes/API hooks are implemented.
 
 The saved `videos-surface-review.tsx` artifact is a visual reference only. It
 uses bounded sample data and client filtering/sorting. Production must follow
 the written surface contract, server semantics, typed APIs, and real imported
 data rather than copy its local-state data layer.
 
-### External credential gaps
+### Provider configuration
 
-No YouTube Data API key, Google OAuth client, OAuth grant, or YouTube-specific
-Worker binding is configured. Therefore the project has not live-called
-`videos.list`, `channels.list`, `videoCategories.list`, `channels.list?mine=true`,
-or `subscriptions.list?mine=true` with project credentials.
-
-This is an explicit provider gate, not a reason to guess fields from docs. A
-restricted backend API key is required before current catalog persistence is
-frozen. A read-only OAuth grant and explicit owner selection are required before
-the Following filter can claim continuously current state.
+The owner configured a restricted YouTube Data API key and the content-redacted
+live probe exercised `videos.list`, `channels.list`, and `videoCategories.list`.
+The Worker reads `YOUTUBE_API_KEY`; local development loads it from ignored
+repository-root `.env.local`. OAuth is not required or implemented.
 
 ## Architecture
 
@@ -421,7 +401,6 @@ Google Takeout ZIP
   -> source-derived Watch Later Queue + subscription relationships
                                       \
 YouTube Data API -> expiring catalog cache -> video/channel/category profiles
-YouTube OAuth    -> current subscription snapshot /
                                       /
         rebuildable video/channel projections + FTS
           -> Videos repository and typed Hono routes
@@ -443,31 +422,30 @@ YouTube OAuth    -> current subscription snapshot /
   owner evidence and do not enter indefinite R2 retention.
 - Rebuildable video/channel projections and FTS exist only to serve bounded
   queries.
-- `packages/connectors/youtube` owns Takeout/Data API/OAuth schemas, parsing,
+- `packages/connectors/youtube` owns Takeout/Data API schemas, parsing,
   normalization, retry hints, and safe provider errors.
 - `packages/db` owns snapshot finalization, projections, search, facets,
   aggregate semantics, cursors, and repositories.
-- `apps/api` owns secrets, OAuth callbacks, provider requests, durable jobs,
+- `apps/api` owns secrets, provider requests, durable jobs,
   scheduled/manual orchestration, quota budgets, and safe errors.
 - `packages/contracts` owns validated Videos HTTP boundaries.
 - `apps/web` owns URL state, query caching, presentation preferences,
   inspectors, focus, and accessibility.
 
-Browse and detail requests never unzip R2, scan raw evidence, call Google, or
-refresh OAuth. Hono handlers remain thin. Cloudflare/D1/HTTP dependencies do not
+Browse and detail requests never unzip R2, scan raw evidence, or call Google.
+Hono handlers remain thin. Cloudflare/D1/HTTP dependencies do not
 enter `packages/domain`.
 
-### Required architecture record
+### Architecture record
 
-Before Data API or OAuth persistence ships, add an ADR for refreshable provider
-data. It should define:
+[ADR 0012](../decisions/0012-refreshable-provider-catalog-cache.md) records the
+refreshable-provider cache decision, including:
 
 - provider API data versus immutable owner-evidence boundaries;
 - acquisition, checked, expiry, refresh, and deletion times;
 - what response data may remain after policy expiry;
 - deterministic removal of expired provider fields from browse and FTS;
 - thumbnail URL handling and required attribution;
-- OAuth snapshot retention and encrypted rotating-token storage;
 - safe request/outcome provenance;
 - stale/error behavior and local-evidence fallback; and
 - a strict exclusion of YouTube API content from transcripts/AI processing in
@@ -493,9 +471,8 @@ Queue local authority.
 - Store stable YouTube channel IDs in a source-owned `youtube_channels` entity;
   channels are creator/grouping entities, not canonical media items.
 - Parse Takeout identity only from a validated `/channel/{id}` URL.
-- Data API `snippet.channelId`, `channel.id`, and subscription
-  `resourceId.channelId` are authoritative exact IDs within their response
-  contracts.
+- Data API `snippet.channelId` and `channel.id` are authoritative exact IDs
+  within their response contracts.
 - Handles/custom URLs remain display/lookup metadata and never merge channels.
 - Current and historical names can change independently while the stable ID
   remains fixed.
@@ -506,12 +483,7 @@ Queue local authority.
   non-secret owner label.
 - Shared videos, channel titles, subscription overlap, filenames, or email
   evidence never merge lineages.
-- After OAuth, call `channels.list?mine=true` and require explicit owner
-  selection of the intended channel or Brand Account.
-- Persist that exact selected channel ID as an account binding to one chosen
-  connection. Reject empty or ambiguous automatic binding.
-- A grant for one lineage cannot retire Watch Later or subscriptions for
-  another.
+- Catalog API-key access is public metadata only and has no account binding.
 
 ### Snapshot completeness
 
@@ -686,25 +658,11 @@ Only a successful request can change requested IDs to available/unavailable.
 Commit its requested/returned outcomes, profile rows, thumbnails, affected read
 models, and FTS updates atomically where D1 is authoritative.
 
-### Migration 0020: OAuth account binding and current subscriptions
+### No OAuth migration
 
-Add provider-specific OAuth/account state while reusing the existing encrypted
-credential store and refresh lease:
-
-- explicit connection-to-selected-channel binding;
-- client/grant version and required scope set, without token values;
-- authorization health, last success/attempt, and safe reauthorization reason;
-- paginated subscription snapshot/checkpoint records;
-- temporary/provider-policy-bounded page cache if required by the accepted ADR;
-  and
-- OAuth subscription evidence/outcomes linked separately from immutable
-  Takeout source records.
-
-The encrypted refresh token remains in `connection_credentials`, protected by
-AES-GCM with connection ID as authenticated data and a fresh IV per write. A
-short lease prevents simultaneous refresh. Persist any rotated replacement
-before fetching account pages. Ordinary YouTube OAuth and any future Data
-Portability grant must use different authorization/storage boundaries.
+The previously proposed OAuth account-binding migration is retired. The public
+metadata integration uses an API key; imported Takeout subscription tables stay
+unchanged as retained source evidence.
 
 ### Projection tables
 
@@ -726,7 +684,7 @@ At full delivery, `video_library_projection` contains one row per global video:
 
 - channel ID, normalized/display title, custom URL, permitted thumbnail;
 - metadata state/refreshed/expiry;
-- Library active, Following active, subscription count/date bounds;
+- Library active;
 - distinct Archive video count, personal watch count, latest watch;
 - active Queue video count; and
 - projection version/update time.
@@ -970,50 +928,11 @@ on quota failures.
 - Profile/FTS/read-model updates become visible atomically.
 - Catalog refresh never changes Archive, Queue, watch time, or Following.
 
-## OAuth and current Following plan
+## OAuth and Following
 
-### Authorization
-
-- Request only `https://www.googleapis.com/auth/youtube.readonly`.
-- Keep client ID/secret in Worker secrets and refresh tokens encrypted in D1.
-- Validate `state`, PKCE where supported by the chosen flow, callback origin,
-  and single-user Cloudflare Access protection.
-- Do not mix ordinary YouTube OAuth with future Data Portability scopes.
-- Never place access/refresh tokens in browser state, URLs, logs, raw evidence,
-  fixtures, or error responses.
-
-### Explicit account selection
-
-After authorization:
-
-1. fetch every `channels.list?part=id,snippet,contentDetails&mine=true`
-   candidate;
-2. show redacted-safe identity choices to the owner in an authenticated
-   connection flow;
-3. require explicit selection of the exact channel/Brand Account;
-4. require explicit binding to one non-secret-labeled YouTube connection; and
-5. persist the selected channel ID before subscription reconciliation.
-
-Do not bind from a matching label, email, filename, shared watched IDs, or
-subscription overlap.
-
-### Complete subscription reconciliation
-
-Fetch
-`subscriptions.list?part=id,snippet,contentDetails&mine=true&maxResults=50`
-through every `nextPageToken`. Store permitted page data under the provider
-cache policy, project provider subscription ID, followed channel ID, source
-`publishedAt`, current display assertion, acquisition time, and outcome
-provenance.
-
-Only a fully successful traversal for the selected account/channel is complete
-and may retire absent OAuth relationships. Expired/revoked consent, partial
-pagination, quota failure, parser failure, selected-channel mismatch, or token
-rotation failure retains the prior successful Following state and sets a
-precise stale/reauthorization status.
-
-OAuth does not provide Watch History or Watch Later. Enabling it must not alter
-Takeout authority for Archive or Queue.
+No OAuth flow or Following surface is planned. The public catalog fields used by
+Videos require only the restricted backend API key. Existing Takeout subscription
+rows remain retained, replayable source evidence and do not affect Channels.
 
 ## Read models, repository, and search
 
@@ -1046,13 +965,12 @@ channel identity. Compute and project:
 - supported active watch occurrences;
 - latest known active watch instant;
 - distinct active Queue videos; and
-- active subscription relationship count.
+- active Queue video count.
 
 Multi-account occurrences and relationships contribute to counts without
 duplicating the channel row. Multi-account video Queue relationships count the
 video once in `queueVideoCount` and separately in relationship counts where
-named. Following-only is an `EXISTS` predicate and does not change activity
-totals.
+named.
 
 ### Search
 
@@ -1133,8 +1051,8 @@ layout's loaded stack independently.
 
 Archive/Queue rows return the approved compact identity, catalog summary,
 formats/availability/cache state, Archive summary, Queue summary, and optional
-bounded excerpt. Channel rows return identity/current display, Following
-summary, activity aggregates, and cache state.
+bounded excerpt. Channel rows return identity/current display, activity
+aggregates, and cache state.
 
 The envelope returns next cursor, filtered counts, membership counts, overlap
 counts, facets, projection generation, and per-connection freshness for history,
@@ -1144,13 +1062,12 @@ tokens, raw source content, or provider cache beyond the visible contract.
 ### `GET /api/library/videos/:id`
 
 Return video summary plus permitted description/thumbnails, category,
-availability/status/live facts, every active Queue relationship, Archive/
-Following summaries, stable channel identity, historical-difference summary,
+availability/status/live facts, every active Queue relationship, Archive
+summary, stable channel identity, historical-difference summary,
 validated source links, metadata/snapshot freshness, capability states, and
 collapsed provenance. Return History count without all History rows.
 
 Authorize by active Archive or Queue membership. A Queue-only video succeeds.
-A Following relationship alone never creates an arbitrary video detail record.
 
 ### `GET /api/library/videos/:id/history`
 
@@ -1163,10 +1080,9 @@ evidence summary. It never reparses R2.
 ### `GET /api/library/video-channels/:id`
 
 Return exact channel identity/current permitted metadata, cache/freshness,
-Archive/Queue aggregates, latest watch, every active Following relationship,
-validated source links, and compact provenance. It succeeds only for a channel
-attached to an active Archive/Queue video; Following alone does not inject it
-into the collection.
+Archive/Queue aggregates, latest watch, validated source links, and compact
+provenance. It succeeds only for a channel attached to an active Archive/Queue
+video.
 
 ### `GET /api/library/video-channels/:id/videos`
 
@@ -1182,9 +1098,6 @@ backend operations for:
 
 - start/resume catalog backfill;
 - refresh selected/stale metadata;
-- begin/callback/inspect/revoke YouTube OAuth;
-- explicitly bind a selected channel candidate to a connection;
-- reconcile subscriptions; and
 - rebuild Video projections/FTS from stored authorities.
 
 Provider-mutating GET routes are prohibited. Every operational route returns
@@ -1209,7 +1122,7 @@ schema. URL state includes query, compatible filters/sort/direction, selected
 
 Switching Archive/Queue preserves compatible query/filter/sort/layout state and
 drops incompatible parameters and direction. Channels retains its own search,
-Following filter, sort, loaded pages, selection, and scroll. Browser Back closes
+sort, loaded pages, selection, and scroll. Browser Back closes
 or reopens inspection before leaving the collection.
 
 ### Collection query preservation
@@ -1245,8 +1158,8 @@ referrer policy where appropriate, and a non-jumping fallback.
 
 ### Channels UI
 
-Render the approved 64-pixel-image channel rows and Following-only filter.
-Default to Most viewed. Do not display uploads, public counts, unread/new state,
+Render the approved 64-pixel-image channel rows. Default to Most viewed. Do not
+display uploads, public counts, unread/new state,
 or channels with no Library activity. Missing exact identity never creates a
 synthetic group.
 
@@ -1273,11 +1186,10 @@ Implement distinct factual states:
 - no Archive versus no matching Archive results;
 - verified empty Queue versus Watch Later not imported;
 - no activity-derived channels versus no matching channels;
-- Following filter empty versus Following coverage unavailable;
 - missing title/channel identity/artwork/catalog fields;
 - unavailable versus unchecked versus stale/error metadata;
 - cached refresh failure versus initial collection failure;
-- partial/failed Takeout or OAuth snapshot retaining prior current state;
+- partial/failed Takeout snapshot retaining prior Queue state;
 - selected item/channel detail failure with summary preserved; and
 - Data API not configured without hiding local evidence.
 
@@ -1287,7 +1199,7 @@ state for semantically different coverage.
 ### Accessibility
 
 - Rows/cards are real buttons or links with discernible video/channel names.
-- Selection, focus, hover, availability, and Following are not communicated by
+- Selection, focus, hover, and availability are not communicated by
   color alone.
 - Layout, section, inspector tabs, filters, and sorts expose selected state.
 - Icon-only controls have accessible names.
@@ -1367,7 +1279,7 @@ Work:
 2. Confirm retained ignored Takeouts remain available without printing content.
 3. Replay parser v3 into an isolated D1/R2 environment and record safe counts.
 4. Turn the approved surface examples into named automated acceptance cases.
-5. Check for a Data API key and OAuth client by variable name only.
+5. Check for a Data API key by variable name only.
 6. Capture the Videos review artifact and current production shell in both
    themes for later comparison.
 
@@ -1458,7 +1370,7 @@ Exit criteria:
 
 - The owner can browse all retained video history, Watch Later, and activity-
   derived Channels without a Google credential.
-- Takeout-backed Following is clearly dated and not described as live.
+- Imported subscription evidence remains internal and is not presented as a live product surface.
 - Real-data visual review finds no obvious density, overflow, layout-shift,
   layering, focus, or contrast defects.
 
@@ -1466,11 +1378,11 @@ Exit criteria:
 
 Work:
 
-1. Configure the restricted backend key.
-2. Run the content-redacted live probe above.
-3. Update source/catalog documentation with observed shapes and constraints.
-4. Add and accept the refreshable-provider-cache ADR.
-5. Finalize migration 0019 and typed provider client from observed data.
+1. [x] Configure the restricted backend key.
+2. [x] Run the content-redacted live probe above.
+3. [x] Update source/catalog documentation with observed shapes and constraints.
+4. [x] Add and accept the refreshable-provider-cache ADR.
+5. [x] Finalize migration 0019 and typed provider client from observed data.
 
 Exit criteria:
 
@@ -1483,12 +1395,12 @@ Exit criteria:
 
 Work:
 
-1. Add durable video/channel/category catalog jobs and Queue consumer handling.
+1. [x] Add durable video/channel/category catalog jobs and Queue consumer handling.
 2. Backfill exact known video IDs in bounded batches.
-3. Fetch channel/category metadata only for Library needs.
-4. Merge current catalog facts into projections/FTS with deterministic expiry.
-5. Enable metadata-dependent fields, filters, sorts, excerpts, artwork, live
-   state, and availability only when supported.
+3. [x] Fetch channel/category metadata only for Library needs.
+4. [x] Merge current catalog facts into projections/FTS with deterministic expiry.
+5. [x] Enable metadata-dependent fields, filters, sorts, excerpts, artwork, live
+       state, and availability only when supported.
 6. Exercise stale reservation, retry, quota pause, expiry, and cache deletion.
 
 Exit criteria:
@@ -1499,23 +1411,12 @@ Exit criteria:
 - Failed/expired enrichment leaves all local Library evidence usable.
 - Only successful omitted-ID outcomes mark unavailable.
 
-### Stage 7: OAuth and current Following
+### Stage 7: Retired OAuth scope
 
-Work:
-
-1. Add OAuth secrets, callback flow, encrypted grant storage, and refresh lease.
-2. Present `mine=true` channel/Brand Account candidates for explicit selection.
-3. Bind each selected grant to one owner-labeled connection.
-4. Traverse all subscription pages and finalize only complete snapshots.
-5. Reconcile current Following into Channels without adding uploads.
-6. Add revoked/expired/mismatch/partial-page recovery and Connections UI.
-
-Exit criteria:
-
-- The owner explicitly approves each channel-to-connection binding.
-- Following-only reflects the latest successful complete snapshot.
-- Failure/revocation retains prior state with precise freshness/error copy.
-- OAuth has no effect on Archive or Watch Later.
+The owner decided not to ship YouTube Following. OAuth, grant storage, account
+binding, current-subscription reconciliation, and Following UI are therefore not
+implementation requirements. Retained Takeout subscription records remain
+source evidence and are not deleted.
 
 ### Stage 8: Hardening and acceptance
 
@@ -1560,9 +1461,9 @@ or recorded manual evidence, and no known correctness issue remains.
 - Finalization retry and generation switch under D1 batch limits.
 - Complete snapshot retirement versus every non-authoritative absence case.
 
-### Data API and OAuth
+### Data API
 
-- Valid/optional/null/malformed video, channel, category, and subscription
+- Valid/optional/null/malformed video, channel, and category
   responses based on redacted live shapes.
 - Returned and omitted IDs in one successful batch.
 - Failed batch preserving availability/profile state.
@@ -1573,10 +1474,6 @@ or recorded manual evidence, and no known correctness issue remains.
 - Cache refresh, expiry, deletion, and Takeout fallback.
 - Job idempotency, duplicate delivery, lease expiry, dead-letter recovery, and
   partial backfill resume.
-- OAuth state/callback validation and encrypted token rotation.
-- Multiple `mine=true` candidates and mandatory explicit binding.
-- Subscription pagination through all tokens and partial-page failure.
-- Cross-account isolation and selected-channel mismatch.
 
 ### Database and repository
 
@@ -1621,7 +1518,6 @@ or recorded manual evidence, and no known correctness issue remains.
 - Missing/broken image, untitled/unavailable video, label-only channel, and
   unconfigured/stale/error metadata.
 - Empty verified Queue versus no Queue coverage.
-- Following-only with current, stale, Takeout-only, and missing coverage.
 - Keyboard-only operation, screen-reader labels, reduced motion, and narrow
   sheet behavior.
 
@@ -1631,7 +1527,7 @@ Review at minimum:
 
 - Graphite light and dark;
 - Archive and Queue list/grid;
-- Channels all/following-only;
+- Channels;
 - default, search excerpt, active filters, loading, no result, initial error,
   and cached-refresh failure;
 - missing title, thumbnail, channel identity, duration, publication, category,
@@ -1687,7 +1583,7 @@ Record safe counts and states for:
 Do not log titles, channels, video IDs, URLs, raw timestamps, ZIP member content,
 or account identifiers.
 
-### Catalog/OAuth observability
+### Catalog observability
 
 Record:
 
@@ -1695,8 +1591,6 @@ Record:
   estimate, and safe error class;
 - profiles refreshed, expired, purged, available/unavailable, and failed;
 - channel/category cache counts and expiry window;
-- OAuth health, selected binding presence, pages completed, relationship counts,
-  last success/attempt, and reauthorization state; and
 - projection generation/freshness.
 
 Structured logs include request/sync/job IDs and redact query/body/credential
@@ -1710,8 +1604,6 @@ content. Provider error bodies are not passed to the client.
 - Partial current-state snapshots retire nothing.
 - Provider request failure preserves previous permitted cache and availability.
 - Cache expiry removes prohibited provider fields but never local evidence.
-- OAuth refresh/page failure preserves prior Following and exposes stale/
-  reauthorization state.
 - Collection API failure preserves shell/query and supports retry.
 - Enrichment failure alone is not a collection failure.
 
@@ -1729,18 +1621,13 @@ content. Provider error bodies are not passed to the client.
    Videos Data API cache migration, expected to be 0019.
 6. Run resumable metadata backfill; activate dependent fields only after their
    contracts are populated correctly.
-7. After owner OAuth authorization and explicit binding, apply/activate the
-   Videos OAuth subscription migration, expected to be 0020, and current
-   Following reconciliation.
-8. Run final acceptance, independent review, documentation updates, deployment
+7. Run final acceptance, independent review, documentation updates, deployment
    migration/recovery point, and smoke tests.
 
 Recovery uses forward fixes, projection/FTS rebuild, or replay from retained
 Takeouts. Never recover by deleting raw objects, source records, identities,
 watches, Queue evidence, or subscription evidence. If provider cache behavior
 is wrong, disable refresh and purge/rebuild only expiring provider projections.
-If OAuth binding is wrong, stop reconciliation and require explicit rebind; do
-not merge connections or clear Takeout relationships.
 
 ## Documentation updates required at shipment
 
@@ -1763,7 +1650,7 @@ not merge connections or clear Takeout relationships.
   proven by Videos.
 - `packages/connectors/youtube/README.md`: authentication, import, Queue,
   subscription, metadata, replay, deletion, rate/quota, and policy behavior.
-- `apps/api/README.md` and environment/deployment examples for API key, OAuth,
+- `apps/api/README.md` and environment/deployment examples for the API key,
   catalog jobs, and recovery commands.
 
 ## Owner input and decisions
@@ -1780,17 +1667,10 @@ Two external inputs are required for the complete accepted surface:
    authorize the content-redacted live probe before Stage 5. Recommendation:
    do this after the local-only surface is usable, so the provider gate cannot
    stall Takeout correctness.
-2. **Read-only YouTube OAuth authorization.** Configure the OAuth client,
-   authorize only `youtube.readonly`, then explicitly choose which returned
-   channel/Brand Account belongs to each owner-labeled Takeout connection.
-   Recommendation: authorize it for the accepted current Following filter;
-   otherwise ship the dated Takeout-backed filter as an explicitly incomplete
-   milestone, not as continuously current.
-
-One conditional clarification may be needed during Stage 0: if the two existing
-connections still use ambiguous/default labels, ask the owner for stable,
-non-secret display labels. Do not ask for email addresses or infer labels from
-private export contents.
+   One conditional clarification may be needed during Stage 0: if the two existing
+   connections still use ambiguous/default labels, ask the owner for stable,
+   non-secret display labels. Do not ask for email addresses or infer labels from
+   private export contents.
 
 No transcript/caption permission is requested. Public metadata access does not
 authorize transcript download, and transcripts are not part of this Library
@@ -1798,48 +1678,45 @@ delivery.
 
 ## End-to-end acceptance checklist
 
-- [ ] Parser v5 safely reads supported watch, Watch Later, playlist, and
+- [x] Parser v5 safely reads supported watch, Watch Later, playlist, and
       subscription members and distinguishes missing/invalid/complete coverage.
-- [ ] Identical and parser-version replays are idempotent.
-- [ ] All supported watches and same-timestamp multiplicity reconcile without
+- [x] Identical and parser-version replays are idempotent.
+- [x] All supported watches and same-timestamp multiplicity reconcile without
       cross-account merging.
-- [ ] Archive/Queue remain independent, including real overlap.
-- [ ] Queue matches the latest successful complete same-connection Watch Later
+- [x] Archive/Queue remain independent, including real overlap.
+- [x] Queue matches the latest successful complete same-connection Watch Later
       snapshot and retains all membership history.
-- [ ] Queue-only videos are inspectable without metadata.
-- [ ] Complete subscription snapshots reconcile Following; partial/failed
-      snapshots retire nothing.
-- [ ] Stable channels group only exact IDs; label-only videos remain visible but
+- [x] Queue-only videos are inspectable without metadata.
+- [x] Complete subscription snapshots retain their evidence; the product exposes no Following state.
+- [x] Stable channels group only exact IDs; label-only videos remain visible but
       ungrouped.
-- [ ] Archive, Queue, and Channels use approved rows/cards, fields, counts,
+- [x] Archive, Queue, and Channels use approved rows/cards, fields, counts,
       filters, sorts, and defaults.
-- [ ] Every search/filter/sort/facet/count executes server-side over the complete
+- [x] Every search/filter/sort/facet/count executes server-side over the complete
       matching set.
-- [ ] Correlated occurrence/relationship filters cannot be satisfied by
+- [x] Correlated occurrence/relationship filters cannot be satisfied by
       different rows.
-- [ ] All inspector History/Library lists are bounded and paginated.
-- [ ] Current metadata and historical Takeout assertions remain separate.
-- [ ] The credentialed real Data API probe backs persisted fields, batching,
+- [x] All inspector History/Library lists are bounded and paginated.
+- [x] Current metadata and historical Takeout assertions remain separate.
+- [x] The credentialed real Data API probe backs persisted fields, batching,
       expiry, attribution, quota, and omission behavior.
-- [ ] Successful omitted-ID responses alone mark unavailable; failures preserve
+- [x] Successful omitted-ID responses alone mark unavailable; failures preserve
       prior state.
-- [ ] Expired provider data leaves browse/FTS and falls back to Takeout without
+- [x] Expired provider data leaves browse/FTS and falls back to Takeout without
       losing history.
-- [ ] OAuth bindings are explicitly selected and current subscriptions traverse
-      every page.
-- [ ] Losing the key/grant leaves local Archive/Queue/Channels usable.
-- [ ] Opening/closing/switching inspectors and layouts preserves loaded pages and
+- [x] No OAuth grant is required; losing the API key leaves local Archive/Queue/Channels usable.
+- [x] Opening/closing/switching inspectors and layouts preserves loaded pages and
       scroll.
-- [ ] Direct links, Back/Forward, focus restoration, rapid selection, and narrow
+- [x] Direct links, Back/Forward, focus restoration, rapid selection, and narrow
       sheet mode work.
-- [ ] Query plans and pagination are validated at or above observed scale.
-- [ ] Fresh and upgrade migrations pass.
+- [x] Query plans and pagination are validated at or above observed scale.
+- [x] Fresh and upgrade migrations pass.
 - [ ] `pnpm check`, `pnpm build`, relevant `pnpm test:e2e`, and migration checks
       pass after the final edit.
 - [ ] Both themes and responsive modes receive real-data visual QA with obvious
       defects fixed.
 - [ ] An independent final review finds no unresolved correctness issue.
-- [ ] No credential, raw export, provider response, or unsanitized owner fixture
+- [x] No credential, raw export, provider response, or unsanitized owner fixture
       is committed.
 - [ ] Owning documentation is updated before commit.
 
@@ -1854,9 +1731,8 @@ delivery.
 > Takeout-backed subscriptions, video/channel projections, typed APIs, and
 > Archive/Queue/Channels UI. Then require a restricted backend API key, hit the
 > real YouTube Data API with a content-redacted probe, accept the refreshable-
-> cache ADR, and implement bounded expiring metadata jobs. Add current Following
-> only through `youtube.readonly` OAuth with explicit channel/Brand Account to
-> connection binding and complete pagination. Never use title matching for
+> cache ADR, and implement bounded expiring metadata jobs. Do not add OAuth or a
+> YouTube Following surface. Never use title matching for
 > identity, infer missing removals, scrape pages, fetch arbitrary uploads, infer
 > Shorts/Premiere, download transcripts, or let provider failure hide local
 > history. Use real owner data only in ignored/isolated environments, commit only

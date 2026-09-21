@@ -27,6 +27,7 @@ const migration = [
   '0016_videos_takeout_library.sql',
   '0017_videos_snapshot_safety.sql',
   '0018_videos_snapshot_head_backfill.sql',
+  '0019_provider_catalog_caches.sql',
 ]
   .map((name) =>
     readFileSync(

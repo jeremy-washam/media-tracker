@@ -28,6 +28,19 @@ const nullableMovieSourceMigration = readFileSync(
   ),
   'utf8',
 )
+const catalogMigrations = [
+  '0016_videos_takeout_library.sql',
+  '0017_videos_snapshot_safety.sql',
+  '0018_videos_snapshot_head_backfill.sql',
+  '0019_provider_catalog_caches.sql',
+]
+  .map((name) =>
+    readFileSync(
+      fileURLToPath(new URL(`../../../packages/db/migrations/${name}`, import.meta.url).href),
+      'utf8',
+    ),
+  )
+  .join('\n')
 
 type SqlValue = ArrayBuffer | null | number | string
 
@@ -72,7 +85,9 @@ class D1SqliteDatabase {
   readonly database = new DatabaseSync(':memory:')
 
   constructor() {
-    this.database.exec(`${migration}\n${moviesMigration}\n${nullableMovieSourceMigration}`)
+    this.database.exec(
+      `${migration}\n${moviesMigration}\n${nullableMovieSourceMigration}\n${catalogMigrations}`,
+    )
   }
 
   prepare(query: string): D1SqliteStatement {

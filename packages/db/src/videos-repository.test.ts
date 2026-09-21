@@ -16,6 +16,7 @@ const migrations = [
   '0016_videos_takeout_library.sql',
   '0017_videos_snapshot_safety.sql',
   '0018_videos_snapshot_head_backfill.sql',
+  '0019_provider_catalog_caches.sql',
 ]
   .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
   .join('\n')
@@ -119,6 +120,12 @@ it('backfills component heads from the newest existing complete snapshots', () =
         'utf8',
       ),
     )
+    existing.exec(
+      readFileSync(
+        new URL('../migrations/0019_provider_catalog_caches.sql', import.meta.url),
+        'utf8',
+      ),
+    )
 
     expect(
       existing
@@ -130,6 +137,13 @@ it('backfills component heads from the newest existing complete snapshots', () =
       { component_kind: 'subscriptions', raw_object_id: 'raw-1' },
       { component_kind: 'watch_later', raw_object_id: 'raw-2' },
     ])
+    expect(
+      existing
+        .prepare(
+          "SELECT name FROM pragma_table_info('video_library_projection') WHERE name='catalog_expires_at'",
+        )
+        .get(),
+    ).toEqual({ name: 'catalog_expires_at' })
   } finally {
     existing.close()
   }
@@ -304,14 +318,12 @@ describe('SqlVideosRepository', () => {
   it('keeps Archive and Queue independent and rolls up only exact channel identities', async () => {
     const archive = await repository.listVideos(input())
     const queue = await repository.listVideos(input({ view: 'queue' }))
-    const channels = await repository.listVideos(
-      input({ view: 'channels', following: 'following' }),
-    )
+    const channels = await repository.listVideos(input({ view: 'channels' }))
     expect(archive.data.map((item) => item.id)).toEqual(['video-1', 'video-3'])
     expect(queue.data).toHaveLength(1)
     expect(queue.data[0]).toMatchObject({ id: 'video-2', inArchive: false, inQueue: true })
     expect(channels.data).toHaveLength(1)
-    expect(channels.data[0]).toMatchObject({ id: 'channel-1', following: true, watchCount: 2 })
+    expect(channels.data[0]).toMatchObject({ id: 'channel-1', watchCount: 2 })
     expect(
       (
         await repository.listVideos(
@@ -565,12 +577,10 @@ describe('SqlVideosRepository', () => {
       subscriptions: [],
     })
     const queue = await repository.listVideos(input({ view: 'queue' }))
-    const channels = await repository.listVideos(
-      input({ view: 'channels', following: 'following' }),
-    )
+    const channels = await repository.listVideos(input({ view: 'channels' }))
     expect(queue.data).toHaveLength(1)
     expect(channels.data).toHaveLength(1)
-    expect(queue.coverage).toMatchObject({ watchLater: 'missing', subscriptions: 'missing' })
+    expect(queue.coverage).toMatchObject({ watchLater: 'missing' })
   })
 
   it('does not expose staged Queue or Following rows when finalization fails', async () => {
@@ -627,9 +637,7 @@ describe('SqlVideosRepository', () => {
         )
         .all(),
     ).toEqual([{ channel_id: 'channel-1' }])
-    expect(
-      (await repository.listVideos(input({ view: 'channels', following: 'following' }))).data,
-    ).toHaveLength(1)
+    expect((await repository.listVideos(input({ view: 'channels' }))).data).toHaveLength(1)
   })
 
   it('does not let an older complete snapshot roll current Queue or Following state backward', async () => {
@@ -711,9 +719,7 @@ describe('SqlVideosRepository', () => {
     })
 
     expect((await repository.listVideos(input({ view: 'queue' }))).data).toHaveLength(0)
-    expect(
-      (await repository.listVideos(input({ view: 'channels', following: 'following' }))).data,
-    ).toHaveLength(0)
+    expect((await repository.listVideos(input({ view: 'channels' }))).data).toHaveLength(1)
     expect(
       database
         .prepare(
@@ -738,7 +744,6 @@ describe('SqlVideosRepository', () => {
     `)
     expect((await repository.listVideos(input())).coverage).toMatchObject({
       watchLater: 'partial',
-      subscriptions: 'partial',
     })
 
     database.exec(`
@@ -752,7 +757,6 @@ describe('SqlVideosRepository', () => {
     `)
     expect((await repository.listVideos(input())).coverage).toMatchObject({
       watchLater: 'partial',
-      subscriptions: 'partial',
     })
 
     database.exec(
@@ -760,12 +764,10 @@ describe('SqlVideosRepository', () => {
     )
     expect((await repository.listVideos(input())).coverage).toMatchObject({
       watchLater: 'invalid',
-      subscriptions: 'invalid',
     })
     database.exec("DELETE FROM youtube_takeout_components WHERE raw_object_id='raw-secondary'")
     expect((await repository.listVideos(input())).coverage).toMatchObject({
       watchLater: 'partial',
-      subscriptions: 'partial',
     })
   })
 
@@ -818,5 +820,124 @@ describe('SqlVideosRepository', () => {
         )
         .get(),
     ).toEqual({ count: 150 })
+  })
+
+  it('projects returned YouTube metadata and records successful omissions as unavailable', async () => {
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
+      VALUES('catalog-1','youtube','running','${now}','${now}')`)
+    await repository.applyYoutubeCatalogBatch({
+      jobId: 'catalog-1',
+      at: now,
+      expiresAt: '2026-10-20T12:00:00.000Z',
+      requested: [
+        { mediaItemId: 'video-1', videoId: 'video-1' },
+        { mediaItemId: 'video-3', videoId: 'video-3' },
+      ],
+      videos: [
+        {
+          mediaItemId: 'video-1',
+          videoId: 'video-1',
+          title: 'Current Video Title',
+          description: 'Current description',
+          channelId: 'channel-1',
+          channelTitle: 'Current Channel',
+          publishedAt: '2020-01-01T00:00:00.000Z',
+          durationMs: 120000,
+          categoryId: '22',
+          tags: ['one', 'two'],
+          captionAvailable: true,
+          definition: 'hd',
+          projection: 'rectangular',
+          privacyStatus: 'public',
+          uploadStatus: 'processed',
+          embeddable: true,
+          madeForKids: false,
+          regionRestriction: null,
+          liveBroadcastContent: 'none',
+          scheduledStartAt: null,
+          actualStartAt: null,
+          actualEndAt: null,
+          thumbnails: { high: { url: 'https://example.com/high.jpg', width: 480, height: 360 } },
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+          etag: 'etag-1',
+        },
+      ],
+      channels: [
+        {
+          channelId: 'channel-1',
+          title: 'Current Channel',
+          description: 'Channel description',
+          customUrl: '@current',
+          publishedAt: '2010-01-01T00:00:00.000Z',
+          country: 'US',
+          thumbnailUrl: 'https://example.com/channel.jpg',
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+          etag: 'channel-etag',
+        },
+      ],
+      categories: [
+        {
+          categoryId: '22',
+          regionCode: 'US',
+          title: 'People & Blogs',
+          assignable: true,
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+        },
+      ],
+    })
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Current Video Title',
+      description: 'Current description',
+      categoryTitle: 'People & Blogs',
+      captionAvailable: true,
+      imageUrl: 'https://example.com/high.jpg',
+      metadataMessage: null,
+    })
+    expect(await repository.findVideo('video-3')).toMatchObject({ availability: 'unavailable' })
+    await expect(
+      repository.listVideos(
+        input({
+          published: 'range',
+          publishedFrom: '2020-01-01',
+          publishedTo: '2020-12-31',
+          duration: 'under5',
+          availability: 'available',
+          category: ['22'],
+        }),
+      ),
+    ).resolves.toMatchObject({
+      data: [expect.objectContaining({ id: 'video-1' })],
+      facets: { categories: [{ value: '22', label: 'People & Blogs', count: 1 }] },
+    })
+    expect(
+      (await repository.listVideos(input({ availability: 'unavailable' }))).data.map(
+        (item) => item.id,
+      ),
+    ).toEqual(['video-3'])
+    expect((await repository.listVideos(input({ durationUnknown: true }))).data).toEqual([
+      expect.objectContaining({ id: 'video-3' }),
+    ])
+    expect(
+      database
+        .prepare("SELECT outcome FROM youtube_catalog_request_outcomes WHERE video_id='video-3'")
+        .get(),
+    ).toEqual({ outcome: 'omitted' })
+    database.exec("UPDATE catalog_refresh_jobs SET state='succeeded' WHERE id='catalog-1'")
+    await expect(repository.purgeExpiredYoutubeCatalog('2026-09-21T00:00:00.000Z')).resolves.toBe(
+      false,
+    )
+    await expect(repository.purgeExpiredYoutubeCatalog('2026-11-01T00:00:00.000Z')).resolves.toBe(
+      true,
+    )
+    expect(
+      database.prepare('SELECT COUNT(*) count FROM youtube_video_catalog_profiles').get(),
+    ).toEqual({ count: 0 })
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Latest first title',
+      availability: 'stale',
+    })
   })
 })

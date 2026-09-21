@@ -52,15 +52,15 @@ accepted decision.
 The ledger and source imports already exist. This is not a frontend-only task,
 and not all illustrative metadata in the specimen is currently available.
 
-| Area        | Current state                                                                                                                                                      | Work needed                                                                              |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Library API | Books has rich list/detail/History contracts; other media remain generic                                                                                           | Repeat the media-specific API pattern for the remaining types                            |
-| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped                                                                                     | Iterate on production feedback without weakening source/provenance semantics             |
-| Movies      | Archive/Queue API and UI shipped from Letterboxd export/RSS data                                                                                                   | Add TMDB catalog enrichment after a credentialed live probe                              |
-| Articles    | Archive/Queue/Feed API and list UI ship with all-location Reader sync, annotations, and 250 eligible documents acquired/indexed under the selective-content policy | Iterate on production feedback without weakening provenance                              |
-| Podcasts    | Archive/Queue/Following, export replay, live saved-state/player reconciliation, Reader Archive routing, APIs, filters, inspectors, and UI are implemented          | Complete the explicit hardening list in the Podcasts implementation plan                 |
-| Videos      | Archive/Watch Later Queue/Channels APIs and UI ship from real Takeout replay, including exact channel rollups and Takeout Following snapshots                      | Add Data API catalog metadata and OAuth-current Following after credentialed live probes |
-| Songs       | All identified export rows plus Recently Played feed Tracks/Albums/Artists APIs, filters, inspectors, UI, and bounded exact-ID catalog enrichment                  | Complete the explicit hardening list in the Music implementation plan                    |
+| Area        | Current state                                                                                                                                                      | Work needed                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Library API | All six media types have media-specific list, detail, History, filter, sort, and inspector contracts                                                               | Harden and iterate against production UX feedback                            |
+| Books       | Full Hardcover library, Books read model/search, Archive/Queue, and UI shipped                                                                                     | Iterate on production feedback without weakening source/provenance semantics |
+| Movies      | Archive/Queue API and UI plus conservative, refreshable TMDB enrichment are implemented                                                                            | Finish hardening, local backfill, and visual acceptance                      |
+| Articles    | Archive/Queue/Feed API and list UI ship with all-location Reader sync, annotations, and 250 eligible documents acquired/indexed under the selective-content policy | Iterate on production feedback without weakening provenance                  |
+| Podcasts    | Archive/Queue/Following, export replay, live saved-state/player reconciliation, Reader Archive routing, APIs, filters, inspectors, and UI are implemented          | Complete the explicit hardening list in the Podcasts implementation plan     |
+| Videos      | Archive/Watch Later Queue/Channels APIs and UI plus refreshable YouTube Data API metadata are implemented; OAuth Following is out of scope                         | Finish hardening, local backfill, and visual acceptance                      |
+| Songs       | All identified export rows plus Recently Played feed Tracks/Albums/Artists APIs, filters, inspectors, UI, and bounded exact-ID catalog enrichment                  | Complete the explicit hardening list in the Music implementation plan        |
 
 Verify this inventory against code before editing; other work may have advanced.
 Relevant entry points are `packages/contracts/src/index.ts`,
@@ -239,8 +239,7 @@ The three remaining slices now have coordinated execution plans:
   admission and high-volume Tracks/Albums/Artists rollups over the shared
   Spotify parser and cache-policy foundation.
 - [Videos](videos-implementation.md) completes the sequence with Takeout-backed
-  Archive, Watch Later Queue, Channels, and credential-gated catalog/Following
-  stages.
+  Archive, Watch Later Queue, Channels, and refreshable public catalog metadata.
 
 The plans reserve migrations in that order and require an implementation-time
 head check. The Spotify plans share one classified export/parser foundation and

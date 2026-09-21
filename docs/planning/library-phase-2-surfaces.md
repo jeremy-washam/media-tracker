@@ -615,11 +615,10 @@ or Queue video activity. It is analogous to Music Albums/Artists: a rollup over
 Library evidence, not a subscription list or upload feed. Each row shows:
 
 1. channel image and title;
-2. **Following** only when a current subscription relationship is known;
-3. distinct Archive video count;
-4. personal view/watch occurrence count;
-5. latest watched date; and
-6. active Queue video count.
+2. distinct Archive video count;
+3. personal view/watch occurrence count;
+4. latest watched date; and
+5. active Queue video count.
 
 It does not add followed channels with no Library activity. It does not show
 uploads, latest upload, new/unread counts, public view/subscriber counts, or
@@ -652,7 +651,7 @@ View-specific filters:
 | -------- | ---------------------------------------------------------- |
 | Archive  | Watched date/unknown; Watches once/rewatched; Queue status |
 | Queue    | Added-to-Watch-Later date/unknown; Archive status          |
-| Channels | Following: all channels/following only                     |
+| Channels | No filters in the initial surface                          |
 
 ### Videos sorts
 
@@ -675,17 +674,16 @@ It has three tabs:
    import/cache freshness, attribution, and compact provenance.
 2. **Watch history:** every watch with time, account, historical title/channel
    differences, YouTube Music source, link, match marker, and evidence.
-3. **Channel:** current channel facts, Following relationships when present, up to five
+3. **Channel:** current channel facts and up to five
    recently watched videos and five queued videos already in Library. It never
    fetches arbitrary uploads.
 
 ### Channel inspector
 
-The header shows channel image/title, custom URL, an optional Following marker,
+The header shows channel image/title, custom URL,
 watched-video/personal-view counts, and queued-video count.
 
-Details contains About, every Following relationship when present with
-account/source/date/freshness, and Source. Library contains only Archive or
+Details contains About and Source. Library contains only Archive or
 Queue videos already in the Library, with bounded pagination. Public subscriber,
 view, and upload counts are omitted.
 
@@ -694,10 +692,8 @@ view, and upload counts are omitted.
 - Public enrichment requires a restricted YouTube Data API key and a live,
   content-redacted probe of videos, channels, categories, missing IDs,
   nullability, batching, quota, caching, attribution, and policy expiry.
-- The optional Following filter requires `youtube.readonly` OAuth for current
-  reconciliation, explicit
-  selection of the account/channel/Brand Account lineage, and complete
-  subscription pagination. Takeout subscriptions can backfill a dated snapshot.
+- OAuth and a Following surface are not required. Imported Takeout subscription
+  rows remain retained source evidence but do not affect the Channels product surface.
 - Likes, arbitrary playlists, Data Portability, transcripts, playback, upload
   feeds, popularity statistics, and heuristic Shorts/Premiere detection remain
   deferred.

@@ -95,6 +95,9 @@ importers:
       '@media-tracker/connector-spotify':
         specifier: workspace:*
         version: link:../../packages/connectors/spotify
+      '@media-tracker/connector-tmdb':
+        specifier: workspace:*
+        version: link:../../packages/connectors/tmdb
       '@media-tracker/connector-youtube':
         specifier: workspace:*
         version: link:../../packages/connectors/youtube
@@ -258,6 +261,10 @@ importers:
         version: 6.0.3
 
   packages/connectors/tmdb:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 26.1.1
@@ -277,6 +284,9 @@ importers:
       fflate:
         specifier: 0.8.3
         version: 0.8.3
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 26.1.1

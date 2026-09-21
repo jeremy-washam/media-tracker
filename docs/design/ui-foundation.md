@@ -107,7 +107,7 @@ are recorded in the owner-approved
 per-media contracts. Books use sparse grid and Readwise-style list modes;
 Articles use restrained and expanded row densities; Podcasts include Following;
 Music includes Tracks, Albums, and Artists; Videos include a Channels activity
-rollup with an optional Following filter. Books and Songs in particular use
+rollup without a subscription/Following surface. Books and Songs in particular use
 substantially different experiences.
 Letterboxd and Hardcover supply personal ratings; do not assume every source
 supports them. Ratings appear only when available and must distinguish personal

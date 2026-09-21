@@ -6,7 +6,11 @@ import { syncLetterboxdRss } from './letterboxd-rss-sync'
 import { syncReadwiseArchive } from './readwise-sync'
 import { acquireReadwiseArticleContent, indexReadwiseArticleContent } from './readwise-content'
 import { syncSpotifySavedEpisodes } from './spotify-sync'
-import { createArticlesRepository } from './env'
+import { createArticlesRepository, createVideosRepository } from './env'
+import { processTmdbCatalogRefresh, startTmdbCatalogRefresh } from './tmdb-catalog'
+import { processYoutubeCatalogRefresh, startYoutubeCatalogRefresh } from './youtube-catalog'
+import { TmdbApiError } from '@media-tracker/connector-tmdb'
+import { YoutubeApiError } from '@media-tracker/connector-youtube'
 
 import type { SyncJob } from '@media-tracker/contracts'
 
@@ -158,6 +162,24 @@ const worker = {
           }),
       )
     }
+    if (env.CATALOG_AUTO_REFRESH === 'true' && env.TMDB_API_READ_TOKEN !== undefined)
+      tasks.push(() => startTmdbCatalogRefresh(env).then(() => undefined))
+    if (env.CATALOG_AUTO_REFRESH === 'true' && env.YOUTUBE_API_KEY !== undefined)
+      tasks.push(() => startYoutubeCatalogRefresh(env).then(() => undefined))
+    tasks.push(() =>
+      createVideosRepository(env.DB)
+        .purgeExpiredYoutubeCatalog(new Date().toISOString())
+        .then(() => undefined)
+        .catch((error: unknown) => {
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              event: 'youtube.catalog_expiry_purge_failed',
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+            }),
+          )
+        }),
+    )
     if (tasks.length > 0) {
       context.waitUntil(tasks.reduce((chain, task) => chain.then(task), Promise.resolve()))
     }
@@ -202,6 +224,35 @@ const worker = {
             }),
           )
           message.retry()
+        }
+        continue
+      }
+
+      if (
+        result.data.operation === 'refresh_tmdb_catalog' ||
+        result.data.operation === 'refresh_youtube_catalog'
+      ) {
+        try {
+          if (result.data.operation === 'refresh_tmdb_catalog')
+            await processTmdbCatalogRefresh(env, result.data)
+          else await processYoutubeCatalogRefresh(env, result.data)
+          message.ack()
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              event: 'catalog.refresh_failed',
+              provider: result.data.source,
+              messageId: message.id,
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+            }),
+          )
+          if (
+            (error instanceof TmdbApiError && error.retryable) ||
+            (error instanceof YoutubeApiError && error.retryable)
+          )
+            message.retry()
+          else message.ack()
         }
         continue
       }

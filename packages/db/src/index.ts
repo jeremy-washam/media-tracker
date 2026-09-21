@@ -52,6 +52,9 @@ export type {
   MovieHistoryRecord,
   MoviesListInput,
   MoviesPageRecord,
+  TmdbConfigurationProjection,
+  TmdbEnrichmentCandidate,
+  TmdbMovieProfileProjection,
 } from './movies-repository'
 export { SqlMoviesRepository } from './movies-repository'
 export type {
@@ -73,6 +76,8 @@ export type {
   YoutubeWatchProjection,
 } from './videos-repository'
 export { SqlVideosRepository } from './videos-repository'
+export type { CatalogJobRecord, CatalogJobState, CatalogProvider } from './catalog-jobs-repository'
+export { SqlCatalogJobsRepository } from './catalog-jobs-repository'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'

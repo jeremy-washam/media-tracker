@@ -154,19 +154,82 @@ export interface VideosListInput {
   channel?: readonly string[]
   watchedFrom?: string
   watchedTo?: string
+  watchedUnknown?: boolean
   addedFrom?: string
   addedTo?: string
+  addedUnknown?: boolean
+  published?: 'all' | 'range' | 'unknown'
+  publishedFrom?: string
+  publishedTo?: string
+  duration?: 'any' | 'under5' | '5to19' | '20to59' | '60plus'
+  durationUnknown?: boolean
   watchCount?: 'all' | 'once' | 'rewatched'
   overlap?: 'all' | 'overlap' | 'not_overlap'
   format?: readonly (
     'live' | 'upcoming' | 'recorded_live' | 'youtube_music' | 'shorts' | 'premiere'
   )[]
-  availability?: readonly string[]
-  following?: 'all' | 'following'
+  availability?: 'any' | 'available' | 'unavailable' | 'unchecked'
+  category?: readonly string[]
   sort?: string
   direction?: 'asc' | 'desc'
   limit: number
   cursor?: string
+}
+
+export interface YoutubeCatalogCandidate {
+  mediaItemId: string
+  videoId: string
+}
+
+export interface YoutubeVideoCatalogProjection {
+  mediaItemId: string
+  videoId: string
+  title: string
+  description: string
+  channelId: string | null
+  channelTitle: string | null
+  publishedAt: string | null
+  durationMs: number | null
+  categoryId: string | null
+  tags: readonly string[]
+  captionAvailable: boolean | null
+  definition: string | null
+  projection: string | null
+  privacyStatus: string | null
+  uploadStatus: string | null
+  embeddable: boolean | null
+  madeForKids: boolean | null
+  regionRestriction: unknown
+  liveBroadcastContent: string | null
+  scheduledStartAt: string | null
+  actualStartAt: string | null
+  actualEndAt: string | null
+  thumbnails: Readonly<Record<string, { url: string; width: number | null; height: number | null }>>
+  fetchedAt: string
+  expiresAt: string
+  etag: string | null
+}
+
+export interface YoutubeChannelCatalogProjection {
+  channelId: string
+  title: string
+  description: string
+  customUrl: string | null
+  publishedAt: string | null
+  country: string | null
+  thumbnailUrl: string | null
+  fetchedAt: string
+  expiresAt: string
+  etag: string | null
+}
+
+export interface YoutubeCategoryProjection {
+  categoryId: string
+  regionCode: string
+  title: string
+  assignable: boolean
+  fetchedAt: string
+  expiresAt: string
 }
 
 type Row = Record<string, null | number | string>
@@ -611,15 +674,32 @@ export class SqlVideosRepository {
            published_at,duration_ms,availability_state,metadata_state,source_format,
            archive_active,watch_occurrence_count,watch_account_count,latest_watched_at,
            queue_active,queue_relationship_count,queue_account_count,latest_queue_added_at,
-           projection_generation,updated_at)
+           projection_generation,updated_at,category_id,category_title,caption_available,
+           definition,projection_kind,live_state,catalog_checked_at,catalog_expires_at)
          SELECT m.id,i.external_id,
-           COALESCE(${latestVideoTitle},m.title,'Untitled video'),
-           LOWER(COALESCE(${latestVideoTitle},m.title,'Untitled video')),
-           ${latestChannelId},
-           ${latestVideoChannelTitle},
-           LOWER(${latestVideoChannelTitle}),
+           COALESCE(vp.current_title,${latestVideoTitle},m.title,'Untitled video'),
+           LOWER(COALESCE(vp.current_title,${latestVideoTitle},m.title,'Untitled video')),
+           COALESCE(vp.channel_id,${latestChannelId}),
+           COALESCE(cp.current_title,vp.channel_title,${latestVideoChannelTitle}),
+           LOWER(COALESCE(cp.current_title,vp.channel_title,${latestVideoChannelTitle})),
            COALESCE(i.canonical_url,'https://www.youtube.com/watch?v='||i.external_id),
-           NULL,NULL,NULL,'not_configured','not_configured',
+           (SELECT t.url FROM youtube_video_thumbnails t WHERE t.video_id=i.external_id
+             ORDER BY COALESCE(t.width,0)*COALESCE(t.height,0) DESC,t.variant LIMIT 1),
+           vp.published_at,vp.duration_ms,
+           CASE WHEN vp.lookup_state='current' THEN 'available'
+             WHEN vp.lookup_state='unavailable' THEN 'unavailable'
+             WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state IN ('pending','running')) THEN 'pending'
+             WHEN EXISTS(SELECT 1 FROM youtube_video_catalog_profiles historical WHERE historical.media_item_id=m.id) THEN 'stale'
+             WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state='succeeded') THEN 'stale'
+             WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state='failed') THEN 'error'
+             ELSE 'not_configured' END,
+           CASE WHEN vp.lookup_state='current' THEN 'current'
+             WHEN vp.lookup_state='error' THEN 'error'
+             WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state IN ('pending','running')) THEN 'missing'
+             WHEN EXISTS(SELECT 1 FROM youtube_video_catalog_profiles historical WHERE historical.media_item_id=m.id) THEN 'stale'
+             WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state='succeeded') THEN 'stale'
+             WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state='failed') THEN 'error'
+             ELSE 'not_configured' END,
            CASE WHEN EXISTS(SELECT 1 FROM youtube_watch_observations w
              WHERE w.media_item_id=m.id AND w.product='youtube_music')
              THEN 'youtube_music' ELSE 'unknown' END,
@@ -635,15 +715,24 @@ export class SqlVideosRepository {
            (SELECT COUNT(*) FROM queue_entries q WHERE q.media_item_id=m.id AND q.relationship_type='youtube_watch_later' AND q.upstream_state='active'),
            (SELECT COUNT(DISTINCT q.connection_id) FROM queue_entries q WHERE q.media_item_id=m.id AND q.relationship_type='youtube_watch_later' AND q.upstream_state='active'),
            (SELECT MAX(q.added_at_value) FROM queue_entries q WHERE q.media_item_id=m.id AND q.relationship_type='youtube_watch_later' AND q.upstream_state='active'),
-           ?,?
+           ?,?,vp.category_id,category.title,vp.caption_available,vp.definition,vp.projection,
+           CASE WHEN vp.live_broadcast_content='live' THEN 'live'
+             WHEN vp.live_broadcast_content='upcoming' THEN 'upcoming'
+             WHEN vp.actual_start_at IS NOT NULL AND vp.actual_end_at IS NOT NULL THEN 'recorded_live'
+             ELSE NULL END,
+           vp.checked_at,vp.expires_at
          FROM media_items m JOIN external_identities i ON i.media_item_id=m.id
+         LEFT JOIN youtube_video_catalog_profiles vp ON vp.media_item_id=m.id AND vp.expires_at>?
+         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=COALESCE(vp.channel_id,${latestChannelId}) AND cp.expires_at>?
+         LEFT JOIN youtube_categories category ON category.category_id=vp.category_id
+           AND category.region_code='US' AND category.expires_at>?
          WHERE m.type='video' AND i.namespace='youtube' AND i.external_type='video_id'
            AND i.scope='global' AND i.retired_at IS NULL
            AND (EXISTS(SELECT 1 FROM archive_entries a WHERE a.media_item_id=m.id AND a.upstream_state='active'
                  AND a.admission_reason='youtube_watched_activity')
              OR EXISTS(SELECT 1 FROM queue_entries q WHERE q.media_item_id=m.id
                  AND q.relationship_type='youtube_watch_later' AND q.upstream_state='active'))`,
-        [generation, at],
+        [generation, at, at, at, at],
       ),
       statement(this.database, 'DELETE FROM video_channel_projection'),
       statement(
@@ -653,10 +742,11 @@ export class SqlVideosRepository {
            following_active,subscription_count,archive_video_count,watch_occurrence_count,
            latest_watched_at,queue_video_count,projection_generation,updated_at)
          SELECT c.channel_id,
-           COALESCE(${latestChannelTitle},c.latest_title,'Channel unavailable'),
-           LOWER(COALESCE(${latestChannelTitle},c.latest_title,'Channel unavailable')),
-           COALESCE(${latestChannelUrl},c.latest_url,
-             'https://www.youtube.com/channel/'||c.channel_id),NULL,1,
+           COALESCE(cp.current_title,${latestChannelTitle},c.latest_title,'Channel unavailable'),
+           LOWER(COALESCE(cp.current_title,${latestChannelTitle},c.latest_title,'Channel unavailable')),
+           COALESCE(CASE WHEN cp.custom_url IS NOT NULL THEN 'https://www.youtube.com/'||cp.custom_url END,
+             ${latestChannelUrl},c.latest_url,'https://www.youtube.com/channel/'||c.channel_id),
+           cp.thumbnail_url,1,
            EXISTS(SELECT 1 FROM youtube_channel_subscriptions s WHERE s.channel_id=c.channel_id AND s.upstream_state='active'),
            (SELECT COUNT(*) FROM youtube_channel_subscriptions s WHERE s.channel_id=c.channel_id AND s.upstream_state='active'),
            (SELECT COUNT(*) FROM video_library_projection p WHERE p.channel_id=c.channel_id AND p.archive_active=1),
@@ -664,9 +754,10 @@ export class SqlVideosRepository {
            (SELECT MAX(p.latest_watched_at) FROM video_library_projection p WHERE p.channel_id=c.channel_id),
            (SELECT COUNT(*) FROM video_library_projection p WHERE p.channel_id=c.channel_id AND p.queue_active=1),
            ?,? FROM youtube_channels c
+         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=c.channel_id AND cp.expires_at>?
          WHERE EXISTS(SELECT 1 FROM video_library_projection p WHERE p.channel_id=c.channel_id
            AND (p.archive_active=1 OR p.queue_active=1))`,
-        [generation, at],
+        [generation, at, at],
       ),
       statement(this.database, 'DELETE FROM video_search'),
       statement(
@@ -674,20 +765,260 @@ export class SqlVideosRepository {
         `INSERT INTO video_search(media_item_id,titles,channel_titles)
          SELECT p.media_item_id,
            COALESCE((SELECT GROUP_CONCAT(DISTINCT w.historical_title) FROM youtube_watch_observations w
-             WHERE w.media_item_id=p.media_item_id),p.display_title),
+             WHERE w.media_item_id=p.media_item_id),p.display_title) || ' ' ||
+             COALESCE(vp.current_title,'') || ' ' || COALESCE(vp.description,'') || ' ' ||
+             COALESCE(vp.tags_json,'') || ' ' || COALESCE(category.title,''),
            COALESCE((SELECT GROUP_CONCAT(DISTINCT w.historical_channel_title) FROM youtube_watch_observations w
-             WHERE w.media_item_id=p.media_item_id),p.display_channel_title)
-         FROM video_library_projection p`,
+             WHERE w.media_item_id=p.media_item_id),p.display_channel_title) || ' ' ||
+             COALESCE(cp.current_title,'') || ' ' || COALESCE(cp.custom_url,'')
+         FROM video_library_projection p
+         LEFT JOIN youtube_video_catalog_profiles vp ON vp.media_item_id=p.media_item_id AND vp.expires_at>?
+         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=p.channel_id AND cp.expires_at>?
+         LEFT JOIN youtube_categories category ON category.category_id=vp.category_id AND category.region_code='US' AND category.expires_at>?`,
+        [at, at, at],
       ),
       statement(this.database, 'DELETE FROM video_channel_search'),
       statement(
         this.database,
         `INSERT INTO video_channel_search(channel_id,titles)
          SELECT p.channel_id,COALESCE((SELECT GROUP_CONCAT(DISTINCT a.title)
-           FROM youtube_channel_assertions a WHERE a.channel_id=p.channel_id),p.display_title)
-         FROM video_channel_projection p`,
+           FROM youtube_channel_assertions a WHERE a.channel_id=p.channel_id),p.display_title) || ' ' ||
+           COALESCE(cp.current_title,'') || ' ' || COALESCE(cp.custom_url,'') || ' ' || COALESCE(cp.description,'')
+         FROM video_channel_projection p
+         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=p.channel_id AND cp.expires_at>?`,
+        [at],
       ),
     ])
+  }
+
+  async listYoutubeCatalogCandidates(input: {
+    afterMediaItemId?: string
+    at: string
+    limit: number
+  }): Promise<YoutubeCatalogCandidate[]> {
+    const rows = await statement(
+      this.database,
+      `SELECT p.media_item_id,p.video_id FROM video_library_projection p
+       LEFT JOIN youtube_video_catalog_profiles profile ON profile.media_item_id=p.media_item_id
+       WHERE p.media_item_id>? AND (profile.media_item_id IS NULL OR profile.expires_at<=?)
+       ORDER BY p.media_item_id LIMIT ?`,
+      [input.afterMediaItemId ?? '', input.at, input.limit],
+    ).all<{ media_item_id: string; video_id: string }>()
+    return rows.results.map((row) => ({ mediaItemId: row.media_item_id, videoId: row.video_id }))
+  }
+
+  async applyYoutubeCatalogBatch(input: {
+    jobId: string
+    at: string
+    expiresAt: string
+    requested: readonly YoutubeCatalogCandidate[]
+    videos: readonly YoutubeVideoCatalogProjection[]
+    channels: readonly YoutubeChannelCatalogProjection[]
+    categories: readonly YoutubeCategoryProjection[]
+  }): Promise<void> {
+    const returned = new Map(input.videos.map((video) => [video.videoId, video]))
+    const writes: DatabaseStatement[] = []
+    for (const channel of input.channels) {
+      writes.push(
+        statement(
+          this.database,
+          `INSERT INTO youtube_channels(channel_id,latest_title,latest_url,first_observed_at,last_observed_at,updated_at)
+           VALUES(?,?,?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET
+             latest_title=excluded.latest_title,last_observed_at=excluded.last_observed_at,
+             updated_at=excluded.updated_at`,
+          [
+            channel.channelId,
+            channel.title,
+            `https://www.youtube.com/channel/${channel.channelId}`,
+            input.at,
+            input.at,
+            input.at,
+          ],
+        ),
+        statement(
+          this.database,
+          `INSERT INTO youtube_channel_catalog_profiles(channel_id,current_title,description,
+             custom_url,published_at,country,thumbnail_url,fetched_at,checked_at,expires_at,etag)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET
+             current_title=excluded.current_title,description=excluded.description,
+             custom_url=excluded.custom_url,published_at=excluded.published_at,country=excluded.country,
+             thumbnail_url=excluded.thumbnail_url,fetched_at=excluded.fetched_at,
+             checked_at=excluded.checked_at,expires_at=excluded.expires_at,etag=excluded.etag`,
+          [
+            channel.channelId,
+            channel.title,
+            channel.description,
+            channel.customUrl,
+            channel.publishedAt,
+            channel.country,
+            channel.thumbnailUrl,
+            channel.fetchedAt,
+            channel.fetchedAt,
+            channel.expiresAt,
+            channel.etag,
+          ],
+        ),
+      )
+    }
+    for (const category of input.categories) {
+      writes.push(
+        statement(
+          this.database,
+          `INSERT INTO youtube_categories(category_id,region_code,title,assignable,fetched_at,expires_at)
+         VALUES(?,?,?,?,?,?) ON CONFLICT(category_id,region_code) DO UPDATE SET
+           title=excluded.title,assignable=excluded.assignable,fetched_at=excluded.fetched_at,
+           expires_at=excluded.expires_at`,
+          [
+            category.categoryId,
+            category.regionCode,
+            category.title,
+            category.assignable ? 1 : 0,
+            category.fetchedAt,
+            category.expiresAt,
+          ],
+        ),
+      )
+    }
+    for (const candidate of input.requested) {
+      const video = returned.get(candidate.videoId)
+      writes.push(
+        statement(
+          this.database,
+          `INSERT INTO youtube_catalog_request_outcomes(job_id,video_id,outcome,checked_at,expires_at)
+         VALUES(?,?,?,?,?) ON CONFLICT(job_id,video_id) DO UPDATE SET
+           outcome=excluded.outcome,checked_at=excluded.checked_at,expires_at=excluded.expires_at`,
+          [
+            input.jobId,
+            candidate.videoId,
+            video === undefined ? 'omitted' : 'returned',
+            input.at,
+            input.expiresAt,
+          ],
+        ),
+      )
+      if (video === undefined) {
+        writes.push(
+          statement(
+            this.database,
+            `INSERT INTO youtube_video_catalog_profiles(media_item_id,video_id,lookup_state,
+             fetched_at,checked_at,expires_at,safe_error_code)
+           VALUES(?,?,'unavailable',?,?,?,NULL) ON CONFLICT(media_item_id) DO UPDATE SET
+             video_id=excluded.video_id,lookup_state='unavailable',checked_at=excluded.checked_at,
+             expires_at=excluded.expires_at,safe_error_code=NULL`,
+            [candidate.mediaItemId, candidate.videoId, input.at, input.at, input.expiresAt],
+          ),
+        )
+        continue
+      }
+      writes.push(
+        statement(
+          this.database,
+          `INSERT INTO youtube_video_catalog_profiles(media_item_id,video_id,lookup_state,current_title,
+           description,channel_id,channel_title,published_at,duration_ms,category_id,tags_json,
+           caption_available,definition,projection,privacy_status,upload_status,embeddable,
+           made_for_kids,region_restriction_json,live_broadcast_content,scheduled_start_at,
+           actual_start_at,actual_end_at,fetched_at,checked_at,expires_at,etag,safe_error_code)
+         VALUES(?,?,'current',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)
+         ON CONFLICT(media_item_id) DO UPDATE SET video_id=excluded.video_id,lookup_state='current',
+           current_title=excluded.current_title,description=excluded.description,
+           channel_id=excluded.channel_id,channel_title=excluded.channel_title,
+           published_at=excluded.published_at,duration_ms=excluded.duration_ms,
+           category_id=excluded.category_id,tags_json=excluded.tags_json,
+           caption_available=excluded.caption_available,definition=excluded.definition,
+           projection=excluded.projection,privacy_status=excluded.privacy_status,
+           upload_status=excluded.upload_status,embeddable=excluded.embeddable,
+           made_for_kids=excluded.made_for_kids,region_restriction_json=excluded.region_restriction_json,
+           live_broadcast_content=excluded.live_broadcast_content,
+           scheduled_start_at=excluded.scheduled_start_at,actual_start_at=excluded.actual_start_at,
+           actual_end_at=excluded.actual_end_at,fetched_at=excluded.fetched_at,
+           checked_at=excluded.checked_at,expires_at=excluded.expires_at,etag=excluded.etag,
+           safe_error_code=NULL`,
+          [
+            candidate.mediaItemId,
+            video.videoId,
+            video.title,
+            video.description,
+            video.channelId,
+            video.channelTitle,
+            video.publishedAt,
+            video.durationMs,
+            video.categoryId,
+            JSON.stringify(video.tags),
+            video.captionAvailable === null ? null : video.captionAvailable ? 1 : 0,
+            video.definition,
+            video.projection,
+            video.privacyStatus,
+            video.uploadStatus,
+            video.embeddable === null ? null : video.embeddable ? 1 : 0,
+            video.madeForKids === null ? null : video.madeForKids ? 1 : 0,
+            video.regionRestriction === null ? null : JSON.stringify(video.regionRestriction),
+            video.liveBroadcastContent,
+            video.scheduledStartAt,
+            video.actualStartAt,
+            video.actualEndAt,
+            video.fetchedAt,
+            input.at,
+            video.expiresAt,
+            video.etag,
+          ],
+        ),
+      )
+      writes.push(
+        statement(this.database, 'DELETE FROM youtube_video_thumbnails WHERE video_id=?', [
+          video.videoId,
+        ]),
+      )
+      for (const [variant, thumbnail] of Object.entries(video.thumbnails)) {
+        writes.push(
+          statement(
+            this.database,
+            `INSERT INTO youtube_video_thumbnails(video_id,variant,url,width,height,fetched_at,expires_at)
+           VALUES(?,?,?,?,?,?,?)`,
+            [
+              video.videoId,
+              variant,
+              thumbnail.url,
+              thumbnail.width,
+              thumbnail.height,
+              video.fetchedAt,
+              video.expiresAt,
+            ],
+          ),
+        )
+      }
+    }
+    for (let offset = 0; offset < writes.length; offset += 50)
+      await this.database.batch(writes.slice(offset, offset + 50))
+    await this.rebuild(input.at)
+  }
+
+  async purgeExpiredYoutubeCatalog(at: string): Promise<boolean> {
+    const expired = await statement(
+      this.database,
+      `SELECT EXISTS(
+         SELECT 1 FROM youtube_video_catalog_profiles WHERE expires_at<=?
+         UNION ALL SELECT 1 FROM youtube_channel_catalog_profiles WHERE expires_at<=?
+         UNION ALL SELECT 1 FROM youtube_categories WHERE expires_at<=?
+         UNION ALL SELECT 1 FROM youtube_catalog_request_outcomes WHERE expires_at<=?
+       ) value`,
+      [at, at, at, at],
+    ).first<{ value: number }>()
+    if (expired?.value !== 1) return false
+    await this.database.batch([
+      statement(this.database, 'DELETE FROM youtube_catalog_request_outcomes WHERE expires_at<=?', [
+        at,
+      ]),
+      statement(this.database, 'DELETE FROM youtube_video_thumbnails WHERE expires_at<=?', [at]),
+      statement(this.database, 'DELETE FROM youtube_video_catalog_profiles WHERE expires_at<=?', [
+        at,
+      ]),
+      statement(this.database, 'DELETE FROM youtube_channel_catalog_profiles WHERE expires_at<=?', [
+        at,
+      ]),
+      statement(this.database, 'DELETE FROM youtube_categories WHERE expires_at<=?', [at]),
+    ])
+    await this.rebuild(at)
+    return true
   }
 
   private videoClauses(input: VideosListInput) {
@@ -721,9 +1052,40 @@ export class SqlVideosRepository {
       )
       values.push(...known)
     }
-    if (input.availability?.length) {
-      clauses.push(`p.availability_state IN (${placeholders(input.availability)})`)
-      values.push(...input.availability)
+    if (input.published === 'unknown') clauses.push('p.published_at IS NULL')
+    if (input.published === 'range') {
+      clauses.push('p.published_at IS NOT NULL')
+      if (input.publishedFrom) {
+        clauses.push('SUBSTR(p.published_at,1,10)>=?')
+        values.push(input.publishedFrom)
+      }
+      if (input.publishedTo) {
+        clauses.push('SUBSTR(p.published_at,1,10)<=?')
+        values.push(input.publishedTo)
+      }
+    }
+    if (input.duration && input.duration !== 'any') {
+      const bucket = {
+        under5: 'p.duration_ms<300000',
+        '5to19': 'p.duration_ms>=300000 AND p.duration_ms<1200000',
+        '20to59': 'p.duration_ms>=1200000 AND p.duration_ms<3600000',
+        '60plus': 'p.duration_ms>=3600000',
+      }[input.duration]
+      clauses.push(
+        input.durationUnknown
+          ? `((${bucket}) OR p.duration_ms IS NULL)`
+          : `p.duration_ms IS NOT NULL AND ${bucket}`,
+      )
+    } else if (input.durationUnknown) clauses.push('p.duration_ms IS NULL')
+    if (input.availability && input.availability !== 'any') {
+      if (input.availability === 'available') clauses.push("p.availability_state='available'")
+      if (input.availability === 'unavailable') clauses.push("p.availability_state='unavailable'")
+      if (input.availability === 'unchecked')
+        clauses.push("p.availability_state IN ('not_configured','pending','stale','error')")
+    }
+    if (input.category?.length) {
+      clauses.push(`p.category_id IN (${placeholders(input.category)})`)
+      values.push(...input.category)
     }
     if (input.overlap === 'overlap')
       clauses.push(input.view === 'archive' ? 'p.queue_active=1' : 'p.archive_active=1')
@@ -739,23 +1101,60 @@ export class SqlVideosRepository {
           WHERE ${occurrence.sql})`,
       )
       values.push(...occurrence.values)
+      const formats = this.formatClauses(input, occurrence)
+      if (formats.sql) {
+        clauses.push(formats.sql)
+        values.push(...formats.values)
+      }
     }
     if (input.view === 'queue') {
       const relationship = this.queuePredicate(input, true)
       clauses.push(`EXISTS(SELECT 1 FROM queue_entries q WHERE ${relationship.sql})`)
       values.push(...relationship.values)
       if (input.format?.length) {
+        const alternatives: string[] = []
         if (input.format.includes('youtube_music'))
-          clauses.push(
+          alternatives.push(
             `EXISTS(SELECT 1 FROM youtube_watch_observations fw
               JOIN archive_entries fa ON fa.id=fw.archive_entry_id
               WHERE fw.media_item_id=p.media_item_id AND fa.upstream_state='active'
                 AND fw.product='youtube_music')`,
           )
-        else clauses.push('1=0')
+        const live = input.format.filter((value) =>
+          ['live', 'upcoming', 'recorded_live'].includes(value),
+        )
+        if (live.length) alternatives.push(`p.live_state IN (${placeholders(live)})`)
+        clauses.push(`(${alternatives.length ? alternatives.join(' OR ') : '1=0'})`)
+        values.push(...live)
       }
     }
     return { where: clauses.join(' AND '), values }
+  }
+
+  private formatClauses(
+    input: VideosListInput,
+    occurrence: { sql: string; values: DatabaseValue[] },
+  ) {
+    if (!input.format?.length) return { sql: '', values: [] as DatabaseValue[] }
+    const alternatives: string[] = []
+    const values: DatabaseValue[] = []
+    if (input.format.includes('youtube_music')) {
+      alternatives.push(
+        `EXISTS(SELECT 1 FROM youtube_watch_observations fw
+          JOIN archive_entries fa ON fa.id=fw.archive_entry_id
+          WHERE ${occurrence.sql.replaceAll('w.', 'fw.').replaceAll('a.', 'fa.')}
+            AND fw.product='youtube_music')`,
+      )
+      values.push(...occurrence.values)
+    }
+    const live = input.format.filter((value) =>
+      ['live', 'upcoming', 'recorded_live'].includes(value),
+    )
+    if (live.length) {
+      alternatives.push(`p.live_state IN (${placeholders(live)})`)
+      values.push(...live)
+    }
+    return { sql: `(${alternatives.length ? alternatives.join(' OR ') : '1=0'})`, values }
   }
 
   private watchPredicate(input: VideosListInput, correlateMedia: boolean) {
@@ -766,17 +1165,28 @@ export class SqlVideosRepository {
       clauses.push(`w.connection_id IN (${placeholders(input.account)})`)
       values.push(...input.account)
     }
+    const dates: string[] = []
     if (input.watchedFrom) {
-      clauses.push('w.occurred_at>=?')
+      dates.push('w.occurred_at>=?')
       values.push(input.watchedFrom)
     }
     if (input.watchedTo) {
-      clauses.push('w.occurred_at<=?')
+      dates.push('w.occurred_at<=?')
       values.push(`${input.watchedTo}T23:59:59.999Z`)
     }
-    if (input.format?.length) {
-      if (input.format.includes('youtube_music')) clauses.push("w.product='youtube_music'")
-      else clauses.push('1=0')
+    if (dates.length || input.watchedUnknown) {
+      clauses.push(
+        `(${[
+          dates.length ? `(${dates.join(' AND ')})` : null,
+          input.watchedUnknown ? 'w.occurred_at IS NULL' : null,
+        ]
+          .filter(Boolean)
+          .join(' OR ')})`,
+      )
+    }
+    const liveFormats = input.format?.filter((value) => value !== 'youtube_music') ?? []
+    if (input.format?.includes('youtube_music') && liveFormats.length === 0) {
+      clauses.push("w.product='youtube_music'")
     }
     return { sql: clauses.join(' AND '), values }
   }
@@ -789,13 +1199,24 @@ export class SqlVideosRepository {
       clauses.push(`q.connection_id IN (${placeholders(input.account)})`)
       values.push(...input.account)
     }
+    const dates: string[] = []
     if (input.addedFrom) {
-      clauses.push('q.added_at_value>=?')
+      dates.push('q.added_at_value>=?')
       values.push(input.addedFrom)
     }
     if (input.addedTo) {
-      clauses.push('q.added_at_value<=?')
+      dates.push('q.added_at_value<=?')
       values.push(`${input.addedTo}T23:59:59.999Z`)
+    }
+    if (dates.length || input.addedUnknown) {
+      clauses.push(
+        `(${[
+          dates.length ? `(${dates.join(' AND ')})` : null,
+          input.addedUnknown ? 'q.added_at_value IS NULL' : null,
+        ]
+          .filter(Boolean)
+          .join(' OR ')})`,
+      )
     }
     return { sql: clauses.join(' AND '), values }
   }
@@ -929,7 +1350,6 @@ export class SqlVideosRepository {
       values.push(input.q)
       if (match.length > 0) values.push(match)
     }
-    if (input.following === 'following') clauses.push('p.following_active=1')
     const where = clauses.join(' AND ')
     const sort = input.sort ?? 'watchCount'
     const direction = input.direction ?? (['channel', 'relevance'].includes(sort) ? 'asc' : 'desc')
@@ -1036,6 +1456,16 @@ export class SqlVideosRepository {
              GROUP BY COALESCE(p.channel_id,'__unknown__') ORDER BY label LIMIT 500`,
             values,
           ).all<{ value: string; label: string; count: number }>()
+    const categories =
+      view === 'channels'
+        ? { results: [] as { value: string; label: string; count: number }[] }
+        : await statement(
+            this.database,
+            `SELECT p.category_id value,MAX(p.category_title) label,COUNT(*) count
+             FROM video_library_projection p WHERE ${where} AND p.category_id IS NOT NULL
+             GROUP BY p.category_id ORDER BY label LIMIT 100`,
+            values,
+          ).all<{ value: string; label: string; count: number }>()
     const coverage = await this.coverage()
     return {
       sectionCounts: {
@@ -1044,7 +1474,11 @@ export class SqlVideosRepository {
         channels: counts?.channels ?? 0,
       },
       occurrenceCount: filteredOccurrences?.value ?? counts?.occurrences ?? 0,
-      facets: { accounts: [...accounts.results], channels: [...channels.results] },
+      facets: {
+        accounts: [...accounts.results],
+        channels: [...channels.results],
+        categories: [...categories.results],
+      },
       coverage,
     }
   }
@@ -1052,13 +1486,13 @@ export class SqlVideosRepository {
   private async coverage() {
     const rows = await statement(
       this.database,
-      `WITH kinds(component_kind) AS (VALUES ('watch_later'),('subscriptions')),
+      `WITH kinds(component_kind) AS (VALUES ('watch_later')),
        ranked AS (
          SELECT c.connection_id,c.component_kind,c.status,
            ROW_NUMBER() OVER(PARTITION BY c.connection_id,c.component_kind
              ORDER BY r.acquired_at DESC,r.id DESC) position
          FROM youtube_takeout_components c JOIN raw_objects r ON r.id=c.raw_object_id
-         WHERE c.component_kind IN ('watch_later','subscriptions')
+         WHERE c.component_kind='watch_later'
        ) SELECT connections.id connection_id,kinds.component_kind,
          COALESCE(ranked.status,'unknown') status
        FROM connections CROSS JOIN kinds
@@ -1075,11 +1509,26 @@ export class SqlVideosRepository {
       if (matches.every((row) => row.status === 'unknown')) return 'unknown' as const
       return 'partial' as const
     }
-    return {
-      watchLater: state('watch_later'),
-      subscriptions: state('subscriptions'),
-      catalog: 'not_configured' as const,
-    }
+    const catalog = await statement(
+      this.database,
+      `SELECT
+         (SELECT COUNT(*) FROM video_library_projection) total_count,
+         (SELECT COUNT(*) FROM youtube_video_catalog_profiles
+           WHERE expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) cached_count,
+         EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state IN ('pending','running')) active_job,
+         EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state='failed') failed_job`,
+    ).first<{ total_count: number; cached_count: number; active_job: number; failed_job: number }>()
+    const catalogState =
+      catalog?.active_job === 1
+        ? ('pending' as const)
+        : (catalog?.total_count ?? 0) > 0 && catalog?.cached_count === catalog?.total_count
+          ? ('current' as const)
+          : (catalog?.cached_count ?? 0) > 0
+            ? ('partial' as const)
+            : catalog?.failed_job === 1
+              ? ('error' as const)
+              : ('not_configured' as const)
+    return { watchLater: state('watch_later'), catalog: catalogState }
   }
 
   private videoRow(row: Row, view: 'archive' | 'queue') {
@@ -1096,7 +1545,14 @@ export class SqlVideosRepository {
       publishedAt: row.published_at as string | null,
       durationMs: row.duration_ms as number | null,
       availability: String(row.availability_state),
-      formats: row.source_format === 'youtube_music' ? ['youtube_music' as const] : [],
+      formats: [
+        ...(row.source_format === 'youtube_music' ? ['youtube_music' as const] : []),
+        ...(row.live_state === 'live' ||
+        row.live_state === 'upcoming' ||
+        row.live_state === 'recorded_live'
+          ? [row.live_state]
+          : []),
+      ],
       inArchive: Number(row.archive_active) === 1,
       inQueue: Number(row.queue_active) === 1,
       watchCount: Number(row.watch_occurrence_count),
@@ -1112,8 +1568,6 @@ export class SqlVideosRepository {
       ),
       archiveVideoCount: 0,
       queueVideoCount: 0,
-      following: false,
-      subscriptionCount: 0,
     }
   }
 
@@ -1142,16 +1596,20 @@ export class SqlVideosRepository {
       matchingQueueAccountCount: 0,
       archiveVideoCount: Number(row.archive_video_count),
       queueVideoCount: Number(row.queue_video_count),
-      following: Number(row.following_active) === 1,
-      subscriptionCount: Number(row.subscription_count),
     }
   }
 
   async findVideo(id: string) {
+    const at = new Date().toISOString()
     const row = await statement(
       this.database,
-      'SELECT * FROM video_library_projection WHERE media_item_id=?',
-      [id],
+      `SELECT p.*,vp.description,vp.category_id catalog_category_id,
+         vp.caption_available catalog_caption_available,vp.definition catalog_definition,
+         vp.projection catalog_projection,vp.checked_at catalog_checked_at
+       FROM video_library_projection p
+       LEFT JOIN youtube_video_catalog_profiles vp ON vp.media_item_id=p.media_item_id AND vp.expires_at>?
+       WHERE p.media_item_id=?`,
+      [at, id],
     ).first<Row>()
     if (row === null) return null
     const relationships = await statement(
@@ -1165,37 +1623,46 @@ export class SqlVideosRepository {
     return {
       ...this.videoRow(row, Number(row.archive_active) === 1 ? 'archive' : 'queue'),
       kind: 'video' as const,
-      description: null,
+      description: row.description as string | null,
+      categoryId: (row.catalog_category_id ?? row.category_id) as string | null,
+      categoryTitle: row.category_title as string | null,
+      captionAvailable:
+        row.catalog_caption_available === null ? null : Number(row.catalog_caption_available) === 1,
+      definition: row.catalog_definition as string | null,
+      projection: row.catalog_projection as string | null,
+      catalogCheckedAt: row.catalog_checked_at as string | null,
       historyCount: Number(row.watch_occurrence_count),
       queueRelationships: relationships.results.map((value) => ({
         connectionLabel: value.connection_label,
         addedAt: value.added_at,
       })),
-      metadataMessage: 'YouTube Data API metadata is not configured.',
+      metadataMessage:
+        row.metadata_state === 'current'
+          ? null
+          : `YouTube metadata is ${String(row.metadata_state).replaceAll('_', ' ')}.`,
     }
   }
 
   async findChannel(id: string) {
+    const at = new Date().toISOString()
     const row = await statement(
       this.database,
-      'SELECT * FROM video_channel_projection WHERE channel_id=? AND library_active=1',
-      [id],
+      `SELECT p.*,cp.description,cp.custom_url,cp.country,cp.checked_at catalog_checked_at
+       FROM video_channel_projection p
+       LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=p.channel_id AND cp.expires_at>?
+       WHERE p.channel_id=? AND p.library_active=1`,
+      [at, id],
     ).first<Row>()
     if (row === null) return null
-    const following = await statement(
-      this.database,
-      `SELECT c.label connection_label FROM youtube_channel_subscriptions s
-       JOIN connections c ON c.id=s.connection_id WHERE s.channel_id=? AND s.upstream_state='active'
-       ORDER BY c.label`,
-      [id],
-    ).all<{ connection_label: string }>()
     return {
       ...this.channelRow(row),
       kind: 'channel' as const,
-      followingRelationships: following.results.map((value) => ({
-        connectionLabel: value.connection_label,
-      })),
-      metadataMessage: 'YouTube Data API metadata is not configured.',
+      description: row.description as string | null,
+      customUrl: row.custom_url as string | null,
+      country: row.country as string | null,
+      catalogCheckedAt: row.catalog_checked_at as string | null,
+      metadataMessage:
+        row.catalog_checked_at === null ? 'YouTube channel metadata is not available.' : null,
     }
   }
 

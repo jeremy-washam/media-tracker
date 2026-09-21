@@ -81,7 +81,11 @@ export interface MovieCollectionRecord {
     hasUnknownWatchedDate: boolean
   }
   queue: { active: boolean; addedOn: string | null }
-  enrichment: { provider: null; status: 'not_configured'; refreshedAt: null }
+  enrichment: {
+    provider: 'tmdb' | null
+    status: 'not_configured' | 'pending' | 'matched' | 'unmatched' | 'ambiguous' | 'error'
+    refreshedAt: string | null
+  }
 }
 
 export interface MoviesPageRecord {
@@ -106,26 +110,85 @@ export interface MoviesPageRecord {
 
 export interface MovieDetailRecord extends MovieCollectionRecord {
   personal: MovieCollectionRecord['personal'] & { reviewedOccurrenceCount: number }
-  overview: null
-  originalTitle: null
-  originalLanguage: null
+  overview: string | null
+  originalTitle: string | null
+  originalLanguage: string | null
   releaseDate: string | null
-  tagline: null
-  backdropUrl: null
+  tagline: string | null
+  backdropUrl: string | null
   genres: string[]
   cast: Array<{ name: string; character: string | null }>
   countries: string[]
-  tmdbRating: null
-  tmdbVoteCount: null
+  tmdbRating: number | null
+  tmdbVoteCount: number | null
   source: {
     letterboxdUrl: string | null
-    tmdbUrl: null
-    imdbUrl: null
+    tmdbUrl: string | null
+    imdbUrl: string | null
     connectionLabel: string
     coverage: 'complete' | 'partial' | 'best_effort'
     lastCompleteExportAt: string | null
     lastRssSuccessAt: string | null
-    metadataStatus: 'not_configured'
+    metadataStatus: MovieCollectionRecord['enrichment']['status']
+  }
+}
+
+export interface TmdbEnrichmentCandidate {
+  mediaItemId: string
+  importedTitle: string
+  releaseYear: string | null
+  exactTmdbMovieId: number | null
+  exactImdbId: string | null
+}
+
+export interface TmdbConfigurationProjection {
+  secureBaseUrl: string
+  posterBaseUrl: string
+  backdropBaseUrl: string
+  posterSizes: readonly string[]
+  backdropSizes: readonly string[]
+  fetchedAt: string
+  expiresAt: string
+  etag: string | null
+}
+
+export interface TmdbMovieProfileProjection {
+  mediaItemId: string
+  tmdbMovieId: number | null
+  matchStatus: 'matched' | 'unmatched' | 'ambiguous' | 'error'
+  matchMethod: 'exact_tmdb_id' | 'exact_imdb_id' | 'exact_title_year' | null
+  candidateCount: number
+  matcherVersion: string
+  attemptedAt: string
+  safeErrorCode: string | null
+  profile: null | {
+    currentTitle: string
+    originalTitle: string
+    originalLanguage: string | null
+    overview: string | null
+    releaseDate: string | null
+    runtimeMinutes: number | null
+    posterPath: string | null
+    backdropPath: string | null
+    tagline: string | null
+    imdbId: string | null
+    status: string | null
+    voteAverage: number | null
+    voteCount: number | null
+    fetchedAt: string
+    checkedAt: string
+    expiresAt: string
+    etag: string | null
+    genres: readonly { id: number; name: string }[]
+    directors: readonly { creditId: string; personId: number; name: string }[]
+    cast: readonly {
+      creditId: string
+      personId: number
+      name: string
+      character: string | null
+    }[]
+    countries: readonly { code: string; name: string }[]
+    alternativeTitles: readonly { countryCode: string; title: string }[]
   }
 }
 
@@ -376,7 +439,7 @@ function filterSql(input: MoviesListInput): { sql: string; values: DatabaseValue
   return { sql: clauses.join(' AND '), values }
 }
 
-function movieProjectionStatements(database: DatabaseClient): DatabaseStatement[] {
+function movieProjectionStatements(database: DatabaseClient, at: string): DatabaseStatement[] {
   return [
     statement(database, 'DELETE FROM movie_search'),
     statement(database, 'DELETE FROM movie_library_projection'),
@@ -387,7 +450,8 @@ function movieProjectionStatements(database: DatabaseClient): DatabaseStatement[
         normalized_title, release_year, poster_url, director_names, runtime_minutes,
         current_rating_value, liked, reviewed, in_archive, in_queue, queue_added_on,
         latest_known_watched_on, active_watch_count, has_unknown_watched_date,
-        source_refreshed_at, projection_version
+        source_refreshed_at, projection_version, tmdb_movie_id, enrichment_status,
+        enrichment_refreshed_at, catalog_expires_at
       )
       SELECT m.id,
         COALESCE(s.connection_id,
@@ -399,10 +463,14 @@ function movieProjectionStatements(database: DatabaseClient): DatabaseStatement[
           ORDER BY CASE e.external_type WHEN 'film_uri' THEN 0 ELSE 1 END LIMIT 1),
           m.canonical_url),
         COALESCE(s.imported_title, m.title, 'Untitled movie'),
-        COALESCE(s.imported_title, m.title, 'Untitled movie'),
-        lower(COALESCE(s.imported_title, m.title, 'Untitled movie')),
-        COALESCE(s.release_year, substr(m.published_at_value, 1, 4)),
-        NULL, NULL, NULL, s.current_rating_value, COALESCE(s.liked, 0),
+        COALESCE(tp.current_title,s.imported_title,m.title,'Untitled movie'),
+        lower(COALESCE(tp.current_title,s.imported_title,m.title,'Untitled movie')),
+        COALESCE(substr(tp.release_date,1,4),s.release_year,substr(m.published_at_value,1,4)),
+        CASE WHEN tp.poster_path IS NOT NULL THEN tc.poster_base_url||tp.poster_path END,
+        (SELECT group_concat(name,'|') FROM (SELECT name FROM tmdb_movie_credits credit
+          WHERE credit.tmdb_movie_id=tp.tmdb_movie_id AND credit.credit_kind='director'
+          ORDER BY credit.position)),
+        tp.runtime_minutes, s.current_rating_value, COALESCE(s.liked, 0),
         CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
           WHERE a.media_item_id=m.id AND a.upstream_state='active'
             AND a.review_text IS NOT NULL AND trim(a.review_text)<>'') THEN 1 ELSE 0 END,
@@ -419,9 +487,17 @@ function movieProjectionStatements(database: DatabaseClient): DatabaseStatement[
         CASE WHEN EXISTS (SELECT 1 FROM archive_entries a
           WHERE a.media_item_id=m.id AND a.upstream_state='active'
             AND a.consumed_at_value IS NULL) THEN 1 ELSE 0 END,
-        COALESCE(s.last_observed_at, m.updated_at), 1
+        COALESCE(tp.fetched_at,s.last_observed_at,m.updated_at), 2,
+        tm.tmdb_movie_id,
+        CASE WHEN tm.media_item_id IS NULL THEN 'not_configured'
+          WHEN tm.match_status='matched' AND tp.tmdb_movie_id IS NULL THEN 'pending'
+          ELSE tm.match_status END,
+        tp.fetched_at,tp.expires_at
       FROM media_items m
       LEFT JOIN letterboxd_movie_state s ON s.media_item_id=m.id
+      LEFT JOIN tmdb_movie_matches tm ON tm.media_item_id=m.id
+      LEFT JOIN tmdb_movie_profiles tp ON tp.tmdb_movie_id=tm.tmdb_movie_id AND tp.expires_at>?
+      LEFT JOIN tmdb_configuration tc ON tc.singleton_id=1 AND tc.expires_at>?
       WHERE m.type='movie' AND (
         s.media_item_id IS NOT NULL
         OR EXISTS (SELECT 1 FROM archive_entries a
@@ -429,11 +505,15 @@ function movieProjectionStatements(database: DatabaseClient): DatabaseStatement[
         OR EXISTS (SELECT 1 FROM queue_entries q
           WHERE q.media_item_id=m.id AND q.upstream_state='active')
       )`,
+      [at, at],
     ),
     statement(
       database,
       `INSERT INTO movie_search(media_item_id, title, reviews)
-       SELECT p.media_item_id, p.display_title || ' ' || p.imported_title || ' ' || COALESCE(p.release_year,''),
+       SELECT p.media_item_id, trim(p.display_title || ' ' || p.imported_title || ' ' || COALESCE(p.release_year,'') || ' ' ||
+         COALESCE((SELECT group_concat(title,' ') FROM tmdb_movie_alternative_titles alt WHERE alt.tmdb_movie_id=p.tmdb_movie_id),'') || ' ' ||
+         COALESCE((SELECT group_concat(name,' ') FROM tmdb_movie_credits credit WHERE credit.tmdb_movie_id=p.tmdb_movie_id),'') || ' ' ||
+         COALESCE((SELECT group_concat(name,' ') FROM tmdb_movie_genres genre WHERE genre.tmdb_movie_id=p.tmdb_movie_id),'')),
          COALESCE((SELECT group_concat(a.review_text, ' ') FROM archive_entries a
            WHERE a.media_item_id=p.media_item_id AND a.upstream_state='active'
              AND a.review_text IS NOT NULL), '')
@@ -734,7 +814,7 @@ export class SqlMoviesRepository {
         ),
       )
     }
-    statements.push(...movieProjectionStatements(this.#database))
+    statements.push(...movieProjectionStatements(this.#database, input.observedAt))
     const results = await this.#database.batch(statements)
     if (results.length !== statements.length || results.some((result) => !result.success)) {
       throw new Error('Letterboxd movie snapshot projection did not complete successfully')
@@ -772,11 +852,240 @@ export class SqlMoviesRepository {
         ],
       ),
     )
-    statements.push(...movieProjectionStatements(this.#database))
+    statements.push(...movieProjectionStatements(this.#database, input.observedAt))
     const results = await this.#database.batch(statements)
     if (results.length !== statements.length || results.some((result) => !result.success)) {
       throw new Error('Letterboxd activity projection did not complete successfully')
     }
+  }
+
+  async listTmdbEnrichmentCandidates(input: {
+    afterMediaItemId?: string
+    retryBefore: string
+    at: string
+    limit: number
+  }): Promise<TmdbEnrichmentCandidate[]> {
+    const rows = await statement(
+      this.#database,
+      `SELECT p.media_item_id,p.imported_title,p.release_year,
+         (SELECT CAST(e.external_id AS INTEGER) FROM external_identities e
+          WHERE e.media_item_id=p.media_item_id AND e.namespace='tmdb'
+            AND e.external_type='movie_id' AND e.scope='global' AND e.retired_at IS NULL
+          ORDER BY e.id LIMIT 1) exact_tmdb_movie_id,
+         (SELECT e.external_id FROM external_identities e
+          WHERE e.media_item_id=p.media_item_id AND e.namespace='imdb'
+            AND e.scope='global' AND e.retired_at IS NULL ORDER BY e.id LIMIT 1) exact_imdb_id
+       FROM movie_library_projection p
+       LEFT JOIN tmdb_movie_matches match ON match.media_item_id=p.media_item_id
+       LEFT JOIN tmdb_movie_profiles profile ON profile.tmdb_movie_id=match.tmdb_movie_id
+       WHERE (p.in_archive=1 OR p.in_queue=1) AND p.media_item_id>?
+         AND (match.media_item_id IS NULL OR match.match_status IN ('pending','error')
+           OR (match.match_status IN ('unmatched','ambiguous') AND match.last_attempted_at<=?)
+           OR (match.match_status='matched' AND (profile.tmdb_movie_id IS NULL OR profile.expires_at<=?))
+           OR EXISTS(SELECT 1 FROM external_identities exact_identity
+             WHERE exact_identity.media_item_id=p.media_item_id
+               AND exact_identity.namespace='tmdb' AND exact_identity.external_type='movie_id'
+               AND exact_identity.scope='global' AND exact_identity.retired_at IS NULL
+               AND (match.tmdb_movie_id IS NULL OR CAST(exact_identity.external_id AS INTEGER)<>match.tmdb_movie_id)))
+       ORDER BY p.media_item_id LIMIT ?`,
+      [input.afterMediaItemId ?? '', input.retryBefore, input.at, input.limit],
+    ).all<{
+      media_item_id: string
+      imported_title: string
+      release_year: string | null
+      exact_tmdb_movie_id: number | null
+      exact_imdb_id: string | null
+    }>()
+    return rows.results.map((row) => ({
+      mediaItemId: row.media_item_id,
+      importedTitle: row.imported_title,
+      releaseYear: row.release_year,
+      exactTmdbMovieId: row.exact_tmdb_movie_id,
+      exactImdbId: row.exact_imdb_id,
+    }))
+  }
+
+  async needsTmdbConfigurationRefresh(at: string): Promise<boolean> {
+    const row = await statement(
+      this.#database,
+      'SELECT EXISTS(SELECT 1 FROM tmdb_configuration WHERE expires_at>?) current',
+      [at],
+    ).first<{ current: number }>()
+    return row?.current !== 1
+  }
+
+  async applyTmdbCatalogBatch(input: {
+    at: string
+    configuration?: TmdbConfigurationProjection
+    movies: readonly TmdbMovieProfileProjection[]
+  }): Promise<void> {
+    if (input.configuration !== undefined) await this.saveTmdbConfiguration(input.configuration)
+    for (const movie of input.movies) await this.saveTmdbMovie(movie)
+    await this.#database.batch(movieProjectionStatements(this.#database, input.at))
+  }
+
+  async rebuild(at: string): Promise<void> {
+    await this.#database.batch(movieProjectionStatements(this.#database, at))
+  }
+
+  private async saveTmdbConfiguration(configuration: TmdbConfigurationProjection): Promise<void> {
+    await statement(
+      this.#database,
+      `INSERT INTO tmdb_configuration(singleton_id,secure_base_url,poster_base_url,
+         backdrop_base_url,poster_sizes_json,backdrop_sizes_json,fetched_at,expires_at,etag)
+       VALUES(1,?,?,?,?,?,?,?,?) ON CONFLICT(singleton_id) DO UPDATE SET
+         secure_base_url=excluded.secure_base_url,poster_base_url=excluded.poster_base_url,
+         backdrop_base_url=excluded.backdrop_base_url,poster_sizes_json=excluded.poster_sizes_json,
+         backdrop_sizes_json=excluded.backdrop_sizes_json,fetched_at=excluded.fetched_at,
+         expires_at=excluded.expires_at,etag=excluded.etag`,
+      [
+        configuration.secureBaseUrl,
+        configuration.posterBaseUrl,
+        configuration.backdropBaseUrl,
+        JSON.stringify(configuration.posterSizes),
+        JSON.stringify(configuration.backdropSizes),
+        configuration.fetchedAt,
+        configuration.expiresAt,
+        configuration.etag,
+      ],
+    ).run()
+  }
+
+  private async saveTmdbMovie(movie: TmdbMovieProfileProjection): Promise<void> {
+    const writes: DatabaseStatement[] = [
+      statement(
+        this.#database,
+        `INSERT INTO tmdb_movie_matches(media_item_id,tmdb_movie_id,match_status,match_method,
+           candidate_count,matcher_version,last_attempted_at,matched_at,safe_error_code,updated_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(media_item_id) DO UPDATE SET
+           tmdb_movie_id=excluded.tmdb_movie_id,match_status=excluded.match_status,
+           match_method=excluded.match_method,candidate_count=excluded.candidate_count,
+           matcher_version=excluded.matcher_version,last_attempted_at=excluded.last_attempted_at,
+           matched_at=excluded.matched_at,safe_error_code=excluded.safe_error_code,
+           updated_at=excluded.updated_at`,
+        [
+          movie.mediaItemId,
+          movie.tmdbMovieId,
+          movie.matchStatus,
+          movie.matchMethod,
+          movie.candidateCount,
+          movie.matcherVersion,
+          movie.attemptedAt,
+          movie.matchStatus === 'matched' ? movie.attemptedAt : null,
+          movie.safeErrorCode,
+          movie.attemptedAt,
+        ],
+      ),
+    ]
+    const profile = movie.profile
+    if (profile !== null && movie.tmdbMovieId !== null) {
+      writes.push(
+        statement(
+          this.#database,
+          `INSERT INTO tmdb_movie_profiles(tmdb_movie_id,current_title,original_title,
+             original_language,overview,release_date,runtime_minutes,poster_path,backdrop_path,
+             tagline,imdb_id,status,vote_average,vote_count,fetched_at,checked_at,expires_at,etag)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tmdb_movie_id) DO UPDATE SET
+             current_title=excluded.current_title,original_title=excluded.original_title,
+             original_language=excluded.original_language,overview=excluded.overview,
+             release_date=excluded.release_date,runtime_minutes=excluded.runtime_minutes,
+             poster_path=excluded.poster_path,backdrop_path=excluded.backdrop_path,
+             tagline=excluded.tagline,imdb_id=excluded.imdb_id,status=excluded.status,
+             vote_average=excluded.vote_average,vote_count=excluded.vote_count,
+             fetched_at=excluded.fetched_at,checked_at=excluded.checked_at,
+             expires_at=excluded.expires_at,etag=excluded.etag`,
+          [
+            movie.tmdbMovieId,
+            profile.currentTitle,
+            profile.originalTitle,
+            profile.originalLanguage,
+            profile.overview,
+            profile.releaseDate,
+            profile.runtimeMinutes,
+            profile.posterPath,
+            profile.backdropPath,
+            profile.tagline,
+            profile.imdbId,
+            profile.status,
+            profile.voteAverage,
+            profile.voteCount,
+            profile.fetchedAt,
+            profile.checkedAt,
+            profile.expiresAt,
+            profile.etag,
+          ],
+        ),
+        statement(this.#database, 'DELETE FROM tmdb_movie_genres WHERE tmdb_movie_id=?', [
+          movie.tmdbMovieId,
+        ]),
+        statement(this.#database, 'DELETE FROM tmdb_movie_credits WHERE tmdb_movie_id=?', [
+          movie.tmdbMovieId,
+        ]),
+        statement(this.#database, 'DELETE FROM tmdb_movie_countries WHERE tmdb_movie_id=?', [
+          movie.tmdbMovieId,
+        ]),
+        statement(
+          this.#database,
+          'DELETE FROM tmdb_movie_alternative_titles WHERE tmdb_movie_id=?',
+          [movie.tmdbMovieId],
+        ),
+      )
+      profile.genres.forEach((genre, position) =>
+        writes.push(
+          statement(
+            this.#database,
+            'INSERT INTO tmdb_movie_genres(tmdb_movie_id,genre_id,name,position) VALUES(?,?,?,?)',
+            [movie.tmdbMovieId!, genre.id, genre.name, position],
+          ),
+        ),
+      )
+      profile.directors.forEach((credit, position) =>
+        writes.push(
+          statement(
+            this.#database,
+            `INSERT INTO tmdb_movie_credits(tmdb_movie_id,credit_id,person_id,name,credit_kind,character_name,position) VALUES(?,?,?,?,'director',NULL,?)`,
+            [movie.tmdbMovieId!, credit.creditId, credit.personId, credit.name, position],
+          ),
+        ),
+      )
+      profile.cast
+        .slice(0, 20)
+        .forEach((credit, position) =>
+          writes.push(
+            statement(
+              this.#database,
+              `INSERT INTO tmdb_movie_credits(tmdb_movie_id,credit_id,person_id,name,credit_kind,character_name,position) VALUES(?,?,?,?,'cast',?,?)`,
+              [
+                movie.tmdbMovieId!,
+                credit.creditId,
+                credit.personId,
+                credit.name,
+                credit.character,
+                position,
+              ],
+            ),
+          ),
+        )
+      profile.countries.forEach((country, position) =>
+        writes.push(
+          statement(
+            this.#database,
+            'INSERT INTO tmdb_movie_countries(tmdb_movie_id,country_code,name,position) VALUES(?,?,?,?)',
+            [movie.tmdbMovieId!, country.code, country.name, position],
+          ),
+        ),
+      )
+      profile.alternativeTitles.forEach((title, position) =>
+        writes.push(
+          statement(
+            this.#database,
+            'INSERT INTO tmdb_movie_alternative_titles(tmdb_movie_id,country_code,title,position) VALUES(?,?,?,?)',
+            [movie.tmdbMovieId!, title.countryCode, title.title, position],
+          ),
+        ),
+      )
+    }
+    await this.#database.batch(writes)
   }
 
   async listMovies(input: MoviesListInput): Promise<MoviesPageRecord> {
@@ -931,6 +1240,7 @@ export class SqlMoviesRepository {
   }
 
   async findMovie(id: string): Promise<MovieDetailRecord | null> {
+    const at = new Date().toISOString()
     const row = await statement(
       this.#database,
       `SELECT p.*, p.latest_known_watched_on reference_watched_on,
@@ -942,10 +1252,17 @@ export class SqlMoviesRepository {
         (SELECT MAX(CASE WHEN r.kind='export' AND r.processing_status='processed' THEN r.acquired_at END)
           FROM raw_objects r WHERE r.connection_id=p.connection_id) export_at,
         (SELECT MAX(CASE WHEN r.kind='rss' AND r.processing_status='processed' THEN r.acquired_at END)
-          FROM raw_objects r WHERE r.connection_id=p.connection_id) rss_at
+          FROM raw_objects r WHERE r.connection_id=p.connection_id) rss_at,
+        tp.overview tmdb_overview,tp.original_title tmdb_original_title,
+        tp.original_language tmdb_original_language,tp.release_date tmdb_release_date,
+        tp.tagline tmdb_tagline,
+        CASE WHEN tp.backdrop_path IS NOT NULL THEN tc.backdrop_base_url||tp.backdrop_path END tmdb_backdrop_url,
+        tp.vote_average tmdb_rating,tp.vote_count tmdb_vote_count,tp.imdb_id tmdb_imdb_id
        FROM movie_library_projection p JOIN connections c ON c.id=p.connection_id
+       LEFT JOIN tmdb_movie_profiles tp ON tp.tmdb_movie_id=p.tmdb_movie_id AND tp.expires_at>?
+       LEFT JOIN tmdb_configuration tc ON tc.singleton_id=1 AND tc.expires_at>?
        WHERE p.media_item_id=? AND (p.in_archive=1 OR p.in_queue=1)`,
-      [id],
+      [at, at, id],
     ).first<
       MovieRow & {
         connection_label: string
@@ -953,35 +1270,73 @@ export class SqlMoviesRepository {
         export_at: string | null
         rss_at: string | null
         reviewed_count: number
+        tmdb_overview: string | null
+        tmdb_original_title: string | null
+        tmdb_original_language: string | null
+        tmdb_release_date: string | null
+        tmdb_tagline: string | null
+        tmdb_backdrop_url: string | null
+        tmdb_rating: number | null
+        tmdb_vote_count: number | null
+        tmdb_imdb_id: string | null
       }
     >()
     if (row === null) return null
+    const genres =
+      row.tmdb_movie_id === null
+        ? { results: [] as { name: string }[] }
+        : await statement(
+            this.#database,
+            'SELECT name FROM tmdb_movie_genres WHERE tmdb_movie_id=? ORDER BY position',
+            [row.tmdb_movie_id],
+          ).all<{ name: string }>()
+    const cast =
+      row.tmdb_movie_id === null
+        ? { results: [] as { name: string; character_name: string | null }[] }
+        : await statement(
+            this.#database,
+            `SELECT name,character_name FROM tmdb_movie_credits
+             WHERE tmdb_movie_id=? AND credit_kind='cast' ORDER BY position LIMIT 5`,
+            [row.tmdb_movie_id],
+          ).all<{ name: string; character_name: string | null }>()
+    const countries =
+      row.tmdb_movie_id === null
+        ? { results: [] as { name: string }[] }
+        : await statement(
+            this.#database,
+            'SELECT name FROM tmdb_movie_countries WHERE tmdb_movie_id=? ORDER BY position',
+            [row.tmdb_movie_id],
+          ).all<{ name: string }>()
     return {
       ...movieRow(row),
       personal: {
         ...movieRow(row).personal,
         reviewedOccurrenceCount: row.reviewed_count,
       },
-      overview: null,
-      originalTitle: null,
-      originalLanguage: null,
-      releaseDate: row.release_year,
-      tagline: null,
-      backdropUrl: null,
-      genres: [],
-      cast: [],
-      countries: [],
-      tmdbRating: null,
-      tmdbVoteCount: null,
+      overview: row.tmdb_overview,
+      originalTitle: row.tmdb_original_title,
+      originalLanguage: row.tmdb_original_language,
+      releaseDate: row.tmdb_release_date ?? row.release_year,
+      tagline: row.tmdb_tagline,
+      backdropUrl: row.tmdb_backdrop_url,
+      genres: genres.results.map((value) => value.name),
+      cast: cast.results.map((value) => ({ name: value.name, character: value.character_name })),
+      countries: countries.results.map((value) => value.name),
+      tmdbRating: row.tmdb_rating,
+      tmdbVoteCount: row.tmdb_vote_count,
       source: {
         letterboxdUrl: row.film_uri,
-        tmdbUrl: null,
-        imdbUrl: null,
+        tmdbUrl:
+          row.tmdb_movie_id === null
+            ? null
+            : `https://www.themoviedb.org/movie/${row.tmdb_movie_id}`,
+        imdbUrl:
+          row.tmdb_imdb_id === null ? null : `https://www.imdb.com/title/${row.tmdb_imdb_id}/`,
         connectionLabel: row.connection_label,
         coverage: row.coverage,
         lastCompleteExportAt: row.export_at,
         lastRssSuccessAt: row.rss_at,
-        metadataStatus: 'not_configured',
+        metadataStatus: row.enrichment_status,
       },
     }
   }
@@ -1143,6 +1498,10 @@ interface MovieRow {
   has_unknown_watched_date: number
   sort_null_rank: number
   sort_value: string | number | null
+  tmdb_movie_id: number | null
+  enrichment_status: MovieCollectionRecord['enrichment']['status']
+  enrichment_refreshed_at: string | null
+  catalog_expires_at: string | null
 }
 
 function movieRow(row: MovieRow): MovieCollectionRecord {
@@ -1168,7 +1527,11 @@ function movieRow(row: MovieRow): MovieCollectionRecord {
       hasUnknownWatchedDate: row.has_unknown_watched_date === 1,
     },
     queue: { active: row.in_queue === 1, addedOn: row.queue_added_on },
-    enrichment: { provider: null, status: 'not_configured', refreshedAt: null },
+    enrichment: {
+      provider: row.enrichment_status === 'not_configured' ? null : 'tmdb',
+      status: row.enrichment_status,
+      refreshedAt: row.enrichment_refreshed_at,
+    },
   }
 }
 

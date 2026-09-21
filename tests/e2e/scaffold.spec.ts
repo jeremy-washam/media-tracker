@@ -157,6 +157,12 @@ test('keeps loaded Video pages while changing layout and opening the inspector',
       json: {
         ...video,
         description: null,
+        categoryId: null,
+        categoryTitle: null,
+        captionAvailable: null,
+        definition: null,
+        projection: null,
+        catalogCheckedAt: null,
         historyCount: 2,
         queueRelationships: [],
         metadataMessage: 'YouTube Data API metadata is not configured.',
@@ -359,8 +365,6 @@ const video = {
   matchingQueueAccountCount: 0,
   archiveVideoCount: 0,
   queueVideoCount: 0,
-  following: false,
-  subscriptionCount: 0,
 }
 const videosResponse = (data = [video], nextCursor: string | null = null) => ({
   data,
@@ -369,10 +373,9 @@ const videosResponse = (data = [video], nextCursor: string | null = null) => ({
   filteredCount: data.length,
   sectionCounts: { archive: 20_227, queue: 110, channels: 2_400 },
   occurrenceCount: 23_865,
-  facets: { accounts: [], channels: [] },
+  facets: { accounts: [], channels: [], categories: [] },
   coverage: {
     watchLater: 'complete' as const,
-    subscriptions: 'complete' as const,
     catalog: 'not_configured' as const,
   },
 })
@@ -641,7 +644,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
   await page.getByRole('button', { name: /A Distant Movie/ }).click()
   await expect(page).toHaveURL(/item=movie-one/)
-  await expect(page.getByText('TMDB not configured.')).toBeVisible()
+  await expect(page.getByText('TMDB metadata is not configured.')).toBeVisible()
   await expect(
     page.getByText('Reviewed occurrences').locator('xpath=following-sibling::dd[1]'),
   ).toHaveText('1')

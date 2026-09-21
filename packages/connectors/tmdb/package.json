@@ -10,6 +10,9 @@
     "probe": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../../../.env.local src/probe.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
   "devDependencies": {
     "@types/node": "26.1.1",
     "typescript": "catalog:"

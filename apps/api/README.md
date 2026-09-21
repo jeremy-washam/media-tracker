@@ -74,6 +74,14 @@ always supplies an explicit account for continued imports. Overlapping snapshots
 match by account, video, UTC timestamp, and within-snapshot multiplicity. Absence
 from a later snapshot never removes a watch.
 
+Set `TMDB_API_READ_TOKEN` and `YOUTUBE_API_KEY` in ignored repository-root
+`.env.local` to enable
+the refreshable movie and video catalog caches. Manual refreshes are available
+at `POST /api/catalogs/tmdb/sync` and
+`POST /api/catalogs/youtube/sync`. Browse requests never call either provider.
+Set `CATALOG_AUTO_REFRESH=true` only after approving full-Library provider
+disclosure and automatic refresh; it defaults off.
+
 ## Browsing and operations
 
 - `GET /api/media?limit=100&type=book&cursor=...` returns at most 100 items,

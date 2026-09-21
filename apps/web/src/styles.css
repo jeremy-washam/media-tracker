@@ -2192,6 +2192,17 @@ a:focus-visible {
   vertical-align: -1px;
 }
 
+.inspector-section .tmdb-attribution {
+  display: block;
+  width: min(8.5rem, 45%);
+}
+
+.inspector-section .tmdb-attribution img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .detail-list {
   display: grid;
   grid-template-columns: minmax(80px, auto) 1fr;

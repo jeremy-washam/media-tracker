@@ -1,9 +1,9 @@
 # YouTube connector
 
 Status: Google Takeout watch history, Watch Later, playlist-index coverage, and
-subscriptions are implemented; the credentialed Data API probe is available.
-Production Data API metadata enrichment and automatic history sync are not yet
-available.
+subscriptions are implemented; the credentialed Data API probe, typed client,
+production cache, and durable public-metadata refresh are implemented. Automatic
+history sync is not available.
 
 This package owns Google Takeout parsing, watch-activity normalization, and
 future YouTube Data API metadata enrichment. Google Data Portability remains a
@@ -30,6 +30,9 @@ repository-root `.env.local`:
 ```dotenv
 YOUTUBE_API_KEY=replace-with-your-youtube-data-api-key
 ```
+
+The local Worker loads repository-root `.env.local`. Production uses a Worker
+secret with the same name.
 
 After importing a real Takeout into the local D1 database, run:
 
@@ -69,9 +72,9 @@ component completion and absence retirement happen only after all current rows
 are durable.
 
 Ordinary YouTube OAuth and the Data API cannot read watch history. Consequently
-this connector has no scheduled reconciliation; additional history requires a
-later Takeout import. A future Data API integration may enrich known video IDs
-with current public metadata, but enrichment is not required for admission.
+additional history requires a later Takeout import. Scheduled Data API jobs enrich
+known video IDs with current public metadata, but enrichment is not required for
+admission. The app exposes no YouTube Following surface and needs no OAuth.
 
 Parser v5 reprocesses a previously imported ZIP when it is uploaded again, adds
 new source evidence, and reuses existing occurrences. This is an explicit

@@ -196,18 +196,22 @@ export const SyncRunsResponseSchema = z.object({
 export const SyncJobSchema = z
   .object({
     idempotencyKey: z.string().min(1),
-    source: ConnectionSummarySchema.shape.source,
+    source: z.enum(['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube', 'tmdb']),
     operation: z.enum([
       'backfill',
       'reconcile',
       'process_raw_object',
       'acquire_article_content',
       'index_article_content',
+      'refresh_tmdb_catalog',
+      'refresh_youtube_catalog',
     ]),
     connectionId: z.string().optional(),
     documentId: z.string().optional(),
     manifestId: z.string().optional(),
     nextOrdinal: z.number().int().nonnegative().optional(),
+    catalogJobId: z.string().optional(),
+    catalogCursor: z.string().optional(),
   })
   .superRefine((job, context) => {
     if (
@@ -228,7 +232,25 @@ export const SyncJobSchema = z
         message: 'Article indexing jobs require a Readwise manifest and next ordinal.',
       })
     }
+    if (
+      (job.operation === 'refresh_tmdb_catalog' || job.operation === 'refresh_youtube_catalog') &&
+      job.catalogJobId === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Catalog refresh jobs require a catalog job id.',
+      })
+    }
   })
+
+export const CatalogSyncResponseSchema = z.object({
+  jobId: z.string(),
+  provider: z.enum(['tmdb', 'youtube']),
+  state: z.enum(['pending', 'running', 'succeeded', 'failed']),
+  requestedCount: z.number().int().nonnegative(),
+  returnedCount: z.number().int().nonnegative(),
+  omittedCount: z.number().int().nonnegative(),
+})
 
 export type ApiError = z.infer<typeof ApiErrorSchema>
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>
@@ -243,4 +265,5 @@ export type ReadwiseSyncResponse = z.infer<typeof ReadwiseSyncResponseSchema>
 export type SpotifyImportResponse = z.infer<typeof SpotifyImportResponseSchema>
 export type SpotifySyncResponse = z.infer<typeof SpotifySyncResponseSchema>
 export type SyncJob = z.infer<typeof SyncJobSchema>
+export type CatalogSyncResponse = z.infer<typeof CatalogSyncResponseSchema>
 export type YoutubeImportResponse = z.infer<typeof YoutubeImportResponseSchema>

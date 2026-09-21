@@ -14,3 +14,12 @@ export {
   type YoutubeWatchEntry,
   type YoutubeWatchLaterEntry,
 } from './takeout'
+export {
+  YoutubeApiError,
+  YoutubeDataApiClient,
+  bestYoutubeThumbnail,
+  youtubeDurationMilliseconds,
+  type YoutubeApiCategory,
+  type YoutubeApiChannel,
+  type YoutubeApiVideo,
+} from './api'

@@ -9,15 +9,22 @@ export interface VideosRouteSearch {
   channel?: string[] | undefined
   watchedFrom?: string | undefined
   watchedTo?: string | undefined
+  watchedUnknown?: boolean | undefined
   addedFrom?: string | undefined
   addedTo?: string | undefined
+  addedUnknown?: boolean | undefined
+  published?: 'range' | 'unknown' | undefined
+  publishedFrom?: string | undefined
+  publishedTo?: string | undefined
+  duration?: 'under5' | '5to19' | '20to59' | '60plus' | undefined
+  durationUnknown?: boolean | undefined
   watchCount?: 'all' | 'once' | 'rewatched' | undefined
   overlap?: 'all' | 'overlap' | 'not_overlap' | undefined
   format?:
     | Array<'live' | 'upcoming' | 'recorded_live' | 'youtube_music' | 'shorts' | 'premiere'>
     | undefined
-  availability?: string[] | undefined
-  following?: 'all' | 'following' | undefined
+  availability?: 'available' | 'unavailable' | 'unchecked' | undefined
+  category?: string[] | undefined
 }
 
 function string(value: unknown) {
@@ -39,6 +46,10 @@ function values(value: unknown) {
   ]
 }
 
+function flag(value: unknown) {
+  return value === true || value === 'true' ? true : undefined
+}
+
 export function parseVideosRouteSearch(value: Record<string, unknown>): VideosRouteSearch {
   const format = values(value.format).filter((item) =>
     ['live', 'upcoming', 'recorded_live', 'youtube_music', 'shorts', 'premiere'].includes(item),
@@ -58,8 +69,19 @@ export function parseVideosRouteSearch(value: Record<string, unknown>): VideosRo
     ...(values(value.channel).length ? { channel: values(value.channel) } : {}),
     ...(string(value.watchedFrom) ? { watchedFrom: string(value.watchedFrom) } : {}),
     ...(string(value.watchedTo) ? { watchedTo: string(value.watchedTo) } : {}),
+    ...(flag(value.watchedUnknown) ? { watchedUnknown: true } : {}),
     ...(string(value.addedFrom) ? { addedFrom: string(value.addedFrom) } : {}),
     ...(string(value.addedTo) ? { addedTo: string(value.addedTo) } : {}),
+    ...(flag(value.addedUnknown) ? { addedUnknown: true } : {}),
+    ...(oneOf(value.published, ['range', 'unknown'] as const)
+      ? { published: oneOf(value.published, ['range', 'unknown'] as const) }
+      : {}),
+    ...(string(value.publishedFrom) ? { publishedFrom: string(value.publishedFrom) } : {}),
+    ...(string(value.publishedTo) ? { publishedTo: string(value.publishedTo) } : {}),
+    ...(oneOf(value.duration, ['under5', '5to19', '20to59', '60plus'] as const)
+      ? { duration: oneOf(value.duration, ['under5', '5to19', '20to59', '60plus'] as const) }
+      : {}),
+    ...(flag(value.durationUnknown) ? { durationUnknown: true } : {}),
     ...(oneOf(value.watchCount, ['all', 'once', 'rewatched'] as const)
       ? { watchCount: oneOf(value.watchCount, ['all', 'once', 'rewatched'] as const) }
       : {}),
@@ -67,10 +89,16 @@ export function parseVideosRouteSearch(value: Record<string, unknown>): VideosRo
       ? { overlap: oneOf(value.overlap, ['all', 'overlap', 'not_overlap'] as const) }
       : {}),
     ...(format?.length ? { format } : {}),
-    ...(values(value.availability).length ? { availability: values(value.availability) } : {}),
-    ...(oneOf(value.following, ['all', 'following'] as const)
-      ? { following: oneOf(value.following, ['all', 'following'] as const) }
+    ...(oneOf(value.availability, ['available', 'unavailable', 'unchecked'] as const)
+      ? {
+          availability: oneOf(value.availability, [
+            'available',
+            'unavailable',
+            'unchecked',
+          ] as const),
+        }
       : {}),
+    ...(values(value.category).length ? { category: values(value.category) } : {}),
   }
 }
 
@@ -108,22 +136,31 @@ export function normalizeVideoSearch(
     delete result.channel
     delete result.watchedFrom
     delete result.watchedTo
+    delete result.watchedUnknown
     delete result.addedFrom
     delete result.addedTo
+    delete result.addedUnknown
+    delete result.published
+    delete result.publishedFrom
+    delete result.publishedTo
+    delete result.duration
+    delete result.durationUnknown
     delete result.watchCount
     delete result.overlap
     delete result.format
     delete result.availability
+    delete result.category
     delete result.layout
   } else {
     delete result.channelItem
-    delete result.following
     if (view === 'archive') {
       delete result.addedFrom
       delete result.addedTo
+      delete result.addedUnknown
     } else {
       delete result.watchedFrom
       delete result.watchedTo
+      delete result.watchedUnknown
       delete result.watchCount
     }
   }

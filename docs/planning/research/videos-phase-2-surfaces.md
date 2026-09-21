@@ -1,10 +1,14 @@
 # Videos Phase 2 surface specification
 
 - Date: 2026-09-20
-- Status: Owner-approved implementation baseline; no behavior described here is shipped
+- Status: Historical owner-approved baseline; production implementation shipped.
+  The 2026-09-21 owner decision removes OAuth, current subscriptions, and every
+  Following marker/filter/relationship from the Videos product surface. Any
+  older Following language below is superseded; imported subscription rows remain
+  retained source evidence only.
 - Scope: Library > Videos Archive, Watch Later Queue, and Channels activity rollup
 - Sources: owner-supplied Google Takeout for history and Watch Later; YouTube
-  Data API for refreshable public metadata and current subscriptions
+  Data API for refreshable public metadata
 
 ## Outcome
 
@@ -15,12 +19,11 @@ Videos has three independent local views:
 2. **Queue** contains current Watch Later membership from the latest successful
    complete Takeout snapshot for each connection.
 3. **Channels** contains one rollup for every stable channel represented by a
-   video in Archive or Queue, with optional current Following state.
+   video in Archive or Queue.
 
 Archive and Queue do not imply one another. Watching a video never removes it
-from Queue, and Following a channel never adds uploads to either collection. A
-channel enters Channels through owner activity already in Archive or Queue, not
-through Following alone. A video or channel shared by two owner accounts appears
+from Queue. A channel enters Channels through owner activity already in Archive
+or Queue. A video or channel shared by two owner accounts appears
 once in its collection, while every account-scoped occurrence or relationship
 remains separate and inspectable.
 

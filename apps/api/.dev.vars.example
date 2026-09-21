@@ -1,11 +1,11 @@
-# Copy this file to .dev.vars and replace the placeholders locally.
-# Never commit the real token or local configuration.
-READWISE_TOKEN=replace-with-your-readwise-token
-HARDCOVER_TOKEN=replace-with-your-hardcover-token
-LETTERBOXD_USERNAME=replace-with-your-letterboxd-username
-SPOTIFY_CLIENT_ID=replace-with-your-spotify-client-id
-SPOTIFY_REFRESH_TOKEN=replace-with-your-spotify-refresh-token
-# SPOTIFY_CLIENT_SECRET is only needed for a confidential-client Spotify app.
-
-# Base64-encoded random 32-byte AES key; required for encrypted Spotify token rotation.
+# Copy to apps/api/.dev.vars for local Worker development. Never commit the real file.
+TMDB_API_READ_TOKEN=
+YOUTUBE_API_KEY=
+CATALOG_AUTO_REFRESH=false
+READWISE_TOKEN=
+HARDCOVER_TOKEN=
+LETTERBOXD_USERNAME=
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
+SPOTIFY_REFRESH_TOKEN=
 TOKEN_ENCRYPTION_KEY=

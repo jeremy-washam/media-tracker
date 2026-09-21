@@ -12,6 +12,7 @@ import {
   BookHistoryResponseSchema,
   BooksQuerySchema,
   BooksResponseSchema,
+  CatalogSyncResponseSchema,
   ConnectionsResponseSchema,
   HardcoverSyncResponseSchema,
   HealthResponseSchema,
@@ -83,6 +84,8 @@ import {
   importYoutubeTakeout,
   YoutubeTakeoutImportError,
 } from './youtube-import'
+import { startTmdbCatalogRefresh } from './tmdb-catalog'
+import { startYoutubeCatalogRefresh } from './youtube-catalog'
 
 const apiVersion = '0.0.0'
 
@@ -249,6 +252,16 @@ const movieHistoryRoute = createRoute({
   },
 })
 
+const tmdbCatalogSyncRoute = createRoute({
+  method: 'post',
+  path: '/api/catalogs/tmdb/sync',
+  tags: ['Catalogs', 'Movies'],
+  responses: {
+    202: jsonContent(CatalogSyncResponseSchema, 'TMDB catalog refresh accepted'),
+    503: jsonContent(ApiErrorSchema, 'TMDB is not configured'),
+  },
+})
+
 const podcastsRoute = createRoute({
   method: 'get',
   path: '/api/library/podcasts',
@@ -375,6 +388,16 @@ const videoChannelLibraryRoute = createRoute({
   responses: {
     200: jsonContent(VideoChannelLibraryResponseSchema, 'Videos for one Library channel'),
     400: jsonContent(ApiErrorSchema, 'Invalid channel Library cursor'),
+  },
+})
+
+const youtubeCatalogSyncRoute = createRoute({
+  method: 'post',
+  path: '/api/catalogs/youtube/sync',
+  tags: ['Catalogs', 'Videos'],
+  responses: {
+    202: jsonContent(CatalogSyncResponseSchema, 'YouTube catalog refresh accepted'),
+    503: jsonContent(ApiErrorSchema, 'YouTube Data API is not configured'),
   },
 })
 
@@ -797,6 +820,32 @@ app.openapi(movieHistoryRoute, async (context) => {
   }
 })
 
+app.openapi(tmdbCatalogSyncRoute, async (context) => {
+  if (context.env.TMDB_API_READ_TOKEN === undefined)
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'TMDB is not configured.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
+  const job = await startTmdbCatalogRefresh(context.env)
+  return context.json(
+    CatalogSyncResponseSchema.parse({
+      jobId: job.id,
+      provider: job.provider,
+      state: job.state,
+      requestedCount: job.requestedCount,
+      returnedCount: job.returnedCount,
+      omittedCount: job.omittedCount,
+    }),
+    202,
+  )
+})
+
 app.openapi(podcastsRoute, async (context) => {
   const query = context.req.valid('query')
   try {
@@ -938,13 +987,20 @@ app.openapi(videosRoute, async (context) => {
       channel: query.channel,
       ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
       ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
+      watchedUnknown: query.watchedUnknown,
       ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
       ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+      addedUnknown: query.addedUnknown,
+      published: query.published,
+      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+      duration: query.duration,
+      durationUnknown: query.durationUnknown,
       watchCount: query.watchCount,
       overlap: query.overlap,
       format: query.format,
       availability: query.availability,
-      following: query.following,
+      category: query.category,
       ...(query.sort === undefined ? {} : { sort: query.sort }),
       ...(query.direction === undefined ? {} : { direction: query.direction }),
       limit: query.limit,
@@ -1023,6 +1079,32 @@ app.openapi(videoChannelLibraryRoute, async (context) => {
       throw new HTTPException(400, { message: error.message })
     throw error
   }
+})
+
+app.openapi(youtubeCatalogSyncRoute, async (context) => {
+  if (context.env.YOUTUBE_API_KEY === undefined)
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'YouTube Data API is not configured.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
+  const job = await startYoutubeCatalogRefresh(context.env)
+  return context.json(
+    CatalogSyncResponseSchema.parse({
+      jobId: job.id,
+      provider: job.provider,
+      state: job.state,
+      requestedCount: job.requestedCount,
+      returnedCount: job.returnedCount,
+      omittedCount: job.omittedCount,
+    }),
+    202,
+  )
 })
 
 app.openapi(readwiseSyncRoute, async (context) => {
