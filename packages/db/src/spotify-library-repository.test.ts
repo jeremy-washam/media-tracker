@@ -105,6 +105,23 @@ describe('Spotify library repository', () => {
   })
   afterEach(() => database.close())
 
+  it('reports durable Spotify poll coverage without treating a gap as confirmed missing plays', async () => {
+    database.exec(`
+      UPDATE sync_runs SET status='succeeded',finished_at='2026-01-02T00:00:00Z' WHERE id='run';
+      INSERT INTO sync_cursors(id,connection_id,name,checkpoint_json,committed_at,sync_run_id)
+      VALUES
+        ('saved-cursor','spotify','saved-episodes','{"lastFullSyncAt":"2026-01-02T00:00:00Z"}','2026-01-02T00:00:00Z','run'),
+        ('recent-cursor','spotify','recent-tracks','{"possibleGap":true}','2026-01-02T01:00:00Z','run');
+    `)
+    await expect(repository.coverage()).resolves.toEqual({
+      savedEpisodesAt: '2026-01-02T00:00:00Z',
+      savedShowsAt: null,
+      playerAt: null,
+      recentPollAt: '2026-01-02T01:00:00Z',
+      possibleRecentGap: true,
+    })
+  })
+
   it('keeps a saved episode out of Queue when Archive already proves consumption', async () => {
     database.exec(
       `INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,admission_reason,upstream_state,created_at,updated_at) VALUES('archive','episode','spotify','episode:1','spotify_positive_playback','active','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`,
@@ -193,11 +210,46 @@ describe('Spotify library repository', () => {
       data: [expect.objectContaining({ following: true })],
     })
     await expect(
+      repository.listPodcasts({ view: 'following', q: 'Sho', sort: 'relevance', limit: 10 }),
+    ).resolves.toMatchObject({
+      filteredCount: 1,
+      data: [expect.objectContaining({ title: 'Show' })],
+    })
+    await expect(
       repository.listPodcasts({ view: 'queue', duration: ['over2hours'], limit: 10 }),
     ).resolves.toMatchObject({ filteredCount: 0 })
     await expect(repository.listPodcasts({ view: 'following', limit: 10 })).resolves.toMatchObject({
       data: [expect.objectContaining({ queueEpisodeCount: 1 })],
     })
+    await expect(
+      repository.listPodcastFilterOptions(
+        { view: 'queue', show: ['different-show'], duration: ['under30'], limit: 10 },
+        'show',
+        'Sho',
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'spotify_show_show1', label: 'Show', count: 1 }] })
+    await expect(
+      repository.listPodcastFilterOptions(
+        { view: 'following', publisher: ['different-publisher'], language: ['en'], limit: 10 },
+        'publisher',
+        undefined,
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'Publisher', count: 1 }] })
+    await expect(
+      repository.listPodcastFilterOptions(
+        {
+          view: 'following',
+          publisher: ['Publisher'],
+          language: ['different-language'],
+          limit: 10,
+        },
+        'language',
+        undefined,
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'en', count: 1 }] })
   })
 
   it('includes independent Reader podcast Archive items without putting them in Queue', async () => {
@@ -405,6 +457,12 @@ describe('Spotify library repository', () => {
     })
     expect(albums.data[0]).toMatchObject({ playbackCount: 1, observedMs: 500 })
     await expect(
+      repository.listMusic({ view: 'albums', q: 'Alb', sort: 'relevance', limit: 10 }),
+    ).resolves.toMatchObject({
+      filteredCount: 1,
+      data: [expect.objectContaining({ title: 'Album' })],
+    })
+    await expect(
       repository.listMusic({
         view: 'albums',
         albumType: 'album',
@@ -415,5 +473,150 @@ describe('Spotify library repository', () => {
     ).resolves.toMatchObject({ filteredCount: 0 })
     const artists = await repository.listMusic({ view: 'artists', source: 'recent_api', limit: 10 })
     expect(artists.data[0]).toMatchObject({ playbackCount: 1, observedDurationKnown: false })
+    await expect(
+      repository.listMusic({ view: 'artists', q: 'Art', sort: 'relevance', limit: 10 }),
+    ).resolves.toMatchObject({
+      filteredCount: 1,
+      data: [expect.objectContaining({ title: 'Artist' })],
+    })
+    await expect(
+      repository.listMusicFilterOptions(
+        { view: 'tracks', artist: ['not-selected'], album: ['album'], limit: 10 },
+        'artist',
+        'Art',
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'artist', label: 'Artist', count: 1 }] })
+    await expect(
+      repository.listMusicFilterOptions(
+        { view: 'tracks', artist: ['artist'], album: ['not-selected'], limit: 10 },
+        'album',
+        undefined,
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'album', label: 'Album', count: 1 }] })
+    await expect(
+      repository.listMusicFilterOptions(
+        { view: 'albums', playbackCount: '2to9', limit: 10 },
+        'artist',
+        undefined,
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'artist', count: 1 }] })
+    const albumHistory = await repository.listMusicHistory('album', 'album', 1)
+    expect(albumHistory).toMatchObject({ totalCount: 2, data: [{ trackId: 'song' }] })
+    expect(albumHistory.nextCursor).not.toBeNull()
+    const nextAlbumHistory = await repository.listMusicHistory(
+      'album',
+      'album',
+      1,
+      albumHistory.nextCursor!,
+    )
+    expect(nextAlbumHistory).toMatchObject({ totalCount: 2, nextCursor: null })
+    await expect(repository.listMusicHistory('artist', 'artist', 10)).resolves.toMatchObject({
+      totalCount: 2,
+    })
+  })
+
+  it('uses query-bound value cursors for Podcast and Music pages', async () => {
+    for (const [id, title] of [
+      ['episode-a', 'Alpha'],
+      ['episode-b', 'Beta'],
+      ['episode-c', 'Gamma'],
+    ] as const) {
+      database
+        .prepare(
+          `INSERT INTO media_items(id,type,title,created_at,updated_at)
+           VALUES(?,'podcast_episode',?,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`,
+        )
+        .run(id, title)
+      database
+        .prepare(
+          `INSERT INTO podcast_library_projection(media_item_id,title,in_archive,in_queue,
+             saved_episode,following_show,source_refreshed_at,projection_version)
+           VALUES(?,?,1,0,0,0,'2026-01-01T00:00:00Z',1)`,
+        )
+        .run(id, title)
+    }
+    const firstPodcasts = await repository.listPodcasts({
+      view: 'archive',
+      sort: 'title',
+      limit: 1,
+    })
+    expect(firstPodcasts.data.map((item) => item.id)).toEqual(['episode-a'])
+    expect(firstPodcasts.nextCursor).not.toBeNull()
+    const secondPodcasts = await repository.listPodcasts({
+      view: 'archive',
+      sort: 'title',
+      limit: 1,
+      cursor: firstPodcasts.nextCursor!,
+    })
+    expect(secondPodcasts.data.map((item) => item.id)).toEqual(['episode-b'])
+    await repository.rebuildPodcastSearch()
+    await expect(
+      repository.listPodcasts({ view: 'archive', q: 'Al', sort: 'relevance', limit: 1 }),
+    ).resolves.toMatchObject({
+      filteredCount: 1,
+      data: [expect.objectContaining({ id: 'episode-a' })],
+    })
+    await expect(
+      repository.listPodcasts({
+        view: 'archive',
+        sort: 'title',
+        direction: 'desc',
+        limit: 1,
+        cursor: firstPodcasts.nextCursor!,
+      }),
+    ).rejects.toThrow('Invalid Spotify Library pagination cursor')
+
+    for (const [id, title] of [
+      ['song-a', 'Alpha'],
+      ['song-b', 'Beta'],
+      ['song-c', 'Gamma'],
+    ] as const) {
+      database
+        .prepare(
+          `INSERT INTO media_items(id,type,title,created_at,updated_at)
+           VALUES(?,'song',?,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`,
+        )
+        .run(id, title)
+      database
+        .prepare(
+          `INSERT INTO spotify_song_tracks(media_item_id,spotify_track_uri,spotify_track_id,
+             title,updated_at) VALUES(?,?,?,?,?)`,
+        )
+        .run(id, `spotify:track:${id}`, id, title, '2026-01-01T00:00:00Z')
+      database
+        .prepare(
+          `INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,
+             observed_at,parser_version,disposition,upstream_state)
+           VALUES(?,'raw','spotify','history',?,'2026-01-01T00:00:00Z','test','normalized','active')`,
+        )
+        .run(`${id}-record`, `$[${id}]`)
+      database
+        .prepare(
+          `INSERT INTO spotify_song_observations(id,source_record_id,connection_id,media_item_id,
+             spotify_track_uri,source_kind,occurred_at,milliseconds_played,parser_version)
+           VALUES(?,?,'spotify',?,?,'export','2026-01-01T00:00:00Z',1000,'test')`,
+        )
+        .run(`${id}-observation`, `${id}-record`, id, `spotify:track:${id}`)
+    }
+    const firstMusic = await repository.listMusic({ view: 'tracks', sort: 'title', limit: 1 })
+    expect(firstMusic.data.map((item) => item.id)).toEqual(['song-a'])
+    const secondMusic = await repository.listMusic({
+      view: 'tracks',
+      sort: 'title',
+      limit: 1,
+      cursor: firstMusic.nextCursor!,
+    })
+    expect(secondMusic.data.map((item) => item.id)).toEqual(['song-b'])
+    await repository.rebuildMusicSearch()
+    await expect(
+      repository.listMusic({ view: 'tracks', q: 'Al', sort: 'relevance', limit: 1 }),
+    ).resolves.toMatchObject({
+      filteredCount: 1,
+      data: [expect.objectContaining({ id: 'song-a' })],
+    })
+    expect(JSON.parse(decodeURIComponent(firstMusic.nextCursor!))).not.toHaveProperty('offset')
   })
 })

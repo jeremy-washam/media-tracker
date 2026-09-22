@@ -1,9 +1,11 @@
 import {
   PodcastDetailSchema,
   PodcastHistoryResponseSchema,
+  PodcastFilterOptionsResponseSchema,
   PodcastsResponseSchema,
   type PodcastDetail,
   type PodcastHistoryResponse,
+  type PodcastFilterOptionsResponse,
   type PodcastsResponse,
 } from '@media-tracker/contracts'
 import type { PodcastsRouteSearch } from './podcasts-route-search'
@@ -28,6 +30,24 @@ export function fetchPodcasts(
   return fetch(`/api/library/podcasts?${query(request)}`, signal ? { signal } : undefined)
     .then(body)
     .then((value) => PodcastsResponseSchema.parse(value))
+}
+
+export function fetchPodcastFilterOptions(
+  request: PodcastsRouteSearch & {
+    view: 'archive' | 'queue' | 'following'
+    facet: 'show' | 'publisher' | 'language'
+    optionQ?: string
+    optionLimit: number
+    optionCursor?: string
+  },
+  signal?: AbortSignal,
+): Promise<PodcastFilterOptionsResponse> {
+  return fetch(
+    `/api/library/podcasts/filter-options?${query(request)}`,
+    signal ? { signal } : undefined,
+  )
+    .then(body)
+    .then((value) => PodcastFilterOptionsResponseSchema.parse(value))
 }
 
 export function fetchPodcast(

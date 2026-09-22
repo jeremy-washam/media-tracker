@@ -5,6 +5,11 @@
 - Scope: Spotify- and Reader-backed Library > Podcasts Archive, Queue, Following,
   episode/show inspectors, and best-effort current-player evidence
 
+The catalog-expiry design language retained later in this historical plan is
+superseded for the private deployment by [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md).
+The owner chose indefinite Spotify API catalog retention despite the documented
+terms risk. The current exact-ID backfill runs as a bounded, resumable queue job.
+
 ## Purpose
 
 This document turns the owner-approved
@@ -27,7 +32,7 @@ and the shipped Books, Movies, and Articles patterns. A fresh provider-policy
 and endpoint smoke check is still required immediately before implementation
 because Spotify access and retention rules are time-sensitive.
 
-## Implementation status (2026-09-20)
+## Implementation status (2026-09-21)
 
 The current change set ships the usable end-to-end Podcasts slice: replay-safe
 Extended Streaming History projection, live saved-episode and saved-show
@@ -44,20 +49,30 @@ Spotify episode URL merges onto an already-known Spotify episode during a
 Reader sync; a Reader-first record is repaired on the next Reader sync after the
 Spotify identity becomes known.
 
-The following hardening remains beyond this initial production slice:
+The 2026-09-21 hardening pass added query-bound value/keyset pagination,
+ranked FTS for episode search, independent durable saved-show/player checkpoints,
+full Details/History tabs, show cross-links, focus restoration, and visible
+checkpoint coverage when a saved-library scan has not completed. A regression
+test caught and fixed a first implementation of the checkpoints that tried to
+commit them while their sync run was still running; optional cursors now commit
+only after the parent run succeeds. Publication display preserves year/month
+precision rather than inventing a day.
+The same pass now exposes counted, searchable, self-excluding Show facets for
+Archive/Queue and Publisher/Language facets for Following. Their multi-select
+choices are URL-backed and their options are paginated over the full matching
+collection, not just loaded rows. The existing Following and Library-episodes
+predicates remain available alongside them.
 
-- return counted, searchable Show/Publisher/Language facet payloads and expose
-  their multi-select pickers; the collection predicates already support exact
-  show, publisher, language, Following, publication, duration, and Library-state
-  filtering;
-- replace query-bound offset cursors with true value/keyset cursors and switch
-  broad text search from indexed projection data to ranked FTS queries;
-- give saved shows, player polling, and recent activity independent durable
-  checkpoints in addition to their current independent failure reporting;
-- add expiring episode/show metadata refresh jobs and provider-availability
-  transitions; and
-- finish the full accepted Details/History tab treatment, bounded observation
-  diagnostics, virtualized long lists, focus restoration, and coverage banners.
+The following hardening still remains beyond the current slice:
+
+- add scheduled, rate-aware episode/show metadata refresh and
+  provider-availability transitions, replacing or removing superseded Spotify
+  API content under a documented finite cache lifecycle without removing owner
+  listening evidence; and
+- finish bounded show-observation diagnostics, virtualized long lists, richer
+  export/player coverage banners, and provider-policy retention/attribution
+  enforcement. Following search remains a small-set LIKE query; episode search
+  uses ranked FTS.
 
 These are explicit follow-ups, not silently claimed shipped behavior. The raw
 evidence, canonical membership, Queue rule, real collection routes, and current
@@ -1874,10 +1889,10 @@ decisions:
 4. Ship the core local surface before optional catalog coverage is complete.
 5. Record the current token's reauthorization deadline as unknown until the next
    known authorization rather than inventing a date.
-6. Adopt a provider-cache ADR based on freshly verified Spotify policy; this is
-   required compliance/architecture work, not a request to expand the visible
-   product. Music must later reuse or explicitly extend that shared boundary,
-   not duplicate it.
+6. The interim provider-retention decision is recorded in
+   [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md). It records
+   the owner's indefinite-retention preference and the known policy risk; it
+   does not claim compliance. Music shares this boundary.
 
 If the owner accepts this plan, these recommendations are accepted for the
 initial Podcasts implementation. A fresh provider-policy check can force a
@@ -1888,8 +1903,8 @@ provenance or broaden Spotify content use.
 
 - [ ] Current Spotify saved-episode, saved-show, and player endpoints/scopes are
       smoke-checked without exposing private content.
-- [ ] The provider-cache ADR and current attribution/retention implementation
-      agree with verified Spotify policy.
+- [x] The provider-retention ADR records the owner's choice and the verified
+      Spotify policy conflict without claiming compliance.
 - [ ] Every retained export Podcast segment is queryable with stable lineage.
 - [ ] Export replay is idempotent, resumable, and monotonic for latest activity.
 - [ ] Archive admits every approved positive Spotify/Reader source and no zero-
@@ -1935,7 +1950,7 @@ provenance or broaden Spotify content use.
 > Extended Streaming History observations and aggregates, one Spotify Archive
 > relationship per episode, saved-episode Queue with a global positive-evidence
 > anti-join, saved-show Following, best-effort current-player admission, exact
-> Reader/Spotify identity reconciliation, provider-policy-compliant catalog
+> Reader/Spotify identity reconciliation, owner-approved interim catalog
 > caching, server-side collection/detail/history APIs, compact episode rows,
 > show cards, and typed episode/show inspectors. Preserve raw owner evidence,
 > source date precision, account isolation, complete-snapshot retirement,

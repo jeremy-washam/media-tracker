@@ -2192,6 +2192,13 @@ a:focus-visible {
   vertical-align: -1px;
 }
 
+.inspector-section p a:not(.tmdb-attribution) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
 .inspector-section .tmdb-attribution {
   display: block;
   width: min(8.5rem, 45%);
@@ -2502,6 +2509,21 @@ a:focus-visible {
   grid-template-columns: minmax(200px, 1fr) repeat(5, auto);
 }
 
+@media (min-width: 561px) and (max-width: 1000px) {
+  .books-toolbar {
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  }
+
+  .spotify-library-page .books-toolbar {
+    grid-template-columns: minmax(0, 1fr) repeat(4, auto);
+  }
+
+  .books-toolbar > .books-search {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}
+
 .spotify-library-page .date-filter label:has(input[type='checkbox']) {
   display: flex;
   align-items: center;
@@ -2535,6 +2557,70 @@ a:focus-visible {
   background: var(--surface);
   color: var(--ink);
   padding: 0 30px 0 10px;
+}
+
+.library-facet-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.library-facet-picker legend {
+  margin-bottom: 8px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.library-facet-picker > input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.library-facet-options {
+  display: grid;
+  max-height: 160px;
+  margin-top: 8px;
+  overflow-y: auto;
+  gap: 4px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.library-facet-options label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.library-facet-options label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-facet-options small {
+  color: var(--ink-muted);
+}
+
+.library-facet-picker > button {
+  margin-top: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
 }
 
 .spotify-result-grid {
@@ -2644,6 +2730,21 @@ a:focus-visible {
   cursor: pointer;
 }
 
+.media-inspector > .spotify-inspector-topbar {
+  justify-content: space-between;
+  min-height: 32px;
+  border-bottom: 1px solid var(--line);
+}
+
+.spotify-history-list li {
+  align-items: flex-start;
+}
+
+.spotify-history-list li span {
+  flex-basis: 52%;
+  white-space: normal;
+}
+
 .inspector-hero {
   display: grid;
   grid-template-columns: 92px 1fr;
@@ -2715,6 +2816,51 @@ a:focus-visible {
 
 .media-inspector a svg {
   width: 14px;
+}
+
+.inspector-related-link {
+  display: inline-flex;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.inspector-related-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0 0;
+}
+
+.inspector-related-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.inspector-related-list a {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block: 5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-related-list a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-related-list a small {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
 }
 
 /* Videos collection */
@@ -2889,6 +3035,13 @@ a:focus-visible {
     grid-template-columns: 1fr auto;
   }
 
+  .video-channel-row .video-result-copy small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.4;
+  }
+
   .video-result-date,
   .video-list-extra {
     display: none;
@@ -2909,5 +3062,41 @@ a:focus-visible {
     width: min(100vw, 420px);
     z-index: 20;
     box-shadow: -16px 0 36px rgb(0 0 0 / 0.16);
+  }
+}
+
+@media (max-width: 560px) {
+  .spotify-library-page .books-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .spotify-library-page .books-toolbar > :nth-child(1) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .spotify-library-page .books-toolbar > :nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .spotify-library-page .books-toolbar > .toolbar-button[aria-expanded] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .spotify-library-page .books-toolbar > .books-sort {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .spotify-library-page .books-toolbar > .toolbar-button[aria-label^='Reverse'] {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
+  .spotify-library-page .books-toolbar > .layout-toggle {
+    grid-column: 3;
+    grid-row: 4;
   }
 }

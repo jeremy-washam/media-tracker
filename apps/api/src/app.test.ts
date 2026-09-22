@@ -176,7 +176,7 @@ describe('API', () => {
   })
 
   it('does not start provider catalog jobs without backend credentials', async () => {
-    for (const provider of ['tmdb', 'youtube']) {
+    for (const provider of ['tmdb', 'youtube', 'spotify']) {
       const response = await app.request(
         `/api/catalogs/${provider}/sync`,
         { method: 'POST' },
@@ -199,15 +199,19 @@ describe('API', () => {
     expect(document.paths).toHaveProperty('/api/library/books/{mediaItemId}/history')
     expect(document.paths).toHaveProperty('/api/library/movies')
     expect(document.paths).toHaveProperty('/api/catalogs/tmdb/sync')
+    expect(document.paths).toHaveProperty('/api/catalogs/spotify/sync')
+    expect(document.paths).toHaveProperty('/api/catalogs/spotify/jobs/{jobId}')
     expect(document.paths).toHaveProperty('/api/catalogs/youtube/sync')
     expect(document.paths).toHaveProperty('/api/library/movies/{mediaItemId}')
     expect(document.paths).toHaveProperty('/api/library/movies/{mediaItemId}/history')
     expect(document.paths).toHaveProperty('/api/library/podcasts')
+    expect(document.paths).toHaveProperty('/api/library/podcasts/filter-options')
     expect(document.paths).toHaveProperty('/api/library/podcasts/{kind}/{id}')
     expect(document.paths).toHaveProperty('/api/library/podcasts/episodes/{id}/history')
     expect(document.paths).toHaveProperty('/api/library/music')
+    expect(document.paths).toHaveProperty('/api/library/music/filter-options')
     expect(document.paths).toHaveProperty('/api/library/music/{kind}/{id}')
-    expect(document.paths).toHaveProperty('/api/library/music/tracks/{id}/history')
+    expect(document.paths).toHaveProperty('/api/library/music/{kind}/{id}/history')
     expect(document.paths).toHaveProperty('/api/connections')
     expect(document.paths).toHaveProperty('/api/connections/readwise/sync')
     expect(document.paths).toHaveProperty('/api/connections/hardcover/sync')

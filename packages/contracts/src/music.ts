@@ -135,6 +135,40 @@ export const MusicResponseSchema = z.object({
     albums: z.number().int().nonnegative(),
     artists: z.number().int().nonnegative(),
   }),
+  coverage: z
+    .object({
+      savedEpisodesAt: z.string().nullable(),
+      savedShowsAt: z.string().nullable(),
+      playerAt: z.string().nullable(),
+      recentPollAt: z.string().nullable(),
+      possibleRecentGap: z.boolean(),
+    })
+    .optional(),
+})
+
+export const MusicFilterOptionsQuerySchema = MusicQuerySchema.safeExtend({
+  facet: z.enum(['artist', 'album']),
+  optionQ: optionalString,
+  optionLimit: z.coerce.number().int().min(1).max(50).default(30),
+  optionCursor: z.string().max(4000).optional(),
+}).superRefine((value, context) => {
+  if (value.view === 'artists' || (value.view === 'albums' && value.facet === 'album'))
+    context.addIssue({
+      code: 'custom',
+      path: ['facet'],
+      message: 'Facet is not valid for this view.',
+    })
+})
+
+export const MusicFilterOptionsResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      value: z.string(),
+      label: z.string(),
+      count: z.number().int().nonnegative(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
 })
 
 export const MusicDetailSchema = z.object({
@@ -143,6 +177,28 @@ export const MusicDetailSchema = z.object({
   title: z.string(),
   subtitle: z.string().nullable(),
   album: z.string().nullable(),
+  albumId: z.string().nullable().optional(),
+  albumType: z.string().nullable().optional(),
+  releaseDate: z.string().nullable().optional(),
+  artists: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
+  relatedTracks: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        playbackCount: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
+  relatedAlbums: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        playbackCount: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
   imageUrl: z.string().nullable(),
   latestPlayedAt: z.string().nullable(),
   firstPlayedAt: z.string().nullable(),
@@ -170,6 +226,9 @@ export const MusicHistoryResponseSchema = z.object({
       skipped: z.boolean().nullable(),
       reasonStart: z.string().nullable(),
       reasonEnd: z.string().nullable(),
+      trackId: z.string(),
+      trackTitle: z.string(),
+      artistText: z.string().nullable(),
     }),
   ),
   nextCursor: z.string().nullable(),
@@ -179,4 +238,5 @@ export const MusicHistoryResponseSchema = z.object({
 export type MusicCollectionItem = z.infer<typeof MusicCollectionItemSchema>
 export type MusicDetail = z.infer<typeof MusicDetailSchema>
 export type MusicResponse = z.infer<typeof MusicResponseSchema>
+export type MusicFilterOptionsResponse = z.infer<typeof MusicFilterOptionsResponseSchema>
 export type MusicHistoryResponse = z.infer<typeof MusicHistoryResponseSchema>

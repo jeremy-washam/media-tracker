@@ -699,7 +699,10 @@ export class SqlVideosRepository {
            LOWER(COALESCE(cp.current_title,vp.channel_title,${latestVideoChannelTitle})),
            COALESCE(i.canonical_url,'https://www.youtube.com/watch?v='||i.external_id),
            (SELECT t.url FROM youtube_video_thumbnails t WHERE t.video_id=i.external_id
-             ORDER BY COALESCE(t.width,0)*COALESCE(t.height,0) DESC,t.variant LIMIT 1),
+             ORDER BY CASE t.variant
+               WHEN 'medium' THEN 0 WHEN 'high' THEN 1 WHEN 'standard' THEN 2
+               WHEN 'maxres' THEN 3 WHEN 'default' THEN 4 ELSE 5 END,
+               COALESCE(t.width,0)*COALESCE(t.height,0) DESC LIMIT 1),
            vp.published_at,vp.duration_ms,
            CASE WHEN vp.lookup_state='current' THEN 'available'
              WHEN vp.lookup_state='unavailable' THEN 'unavailable'

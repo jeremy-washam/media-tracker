@@ -67,6 +67,8 @@ export type {
   TrackMetadataProjection,
 } from './spotify-library-repository'
 export { SqlSpotifyLibraryRepository } from './spotify-library-repository'
+export { SqlSpotifyCatalogJobsRepository } from './spotify-catalog-jobs-repository'
+export type { SpotifyCatalogJob } from './spotify-catalog-jobs-repository'
 export type {
   VideosListInput,
   YoutubeComponentProjection,

@@ -19,6 +19,47 @@ const book = {
   supportedReadCount: 1,
 }
 
+test('keeps Podcast facet choices URL-backed and self-excluding', async ({ page }) => {
+  await page.route('**/api/library/podcasts?*', (route) =>
+    route.fulfill({ json: podcastsResponse() }),
+  )
+  await page.route('**/api/library/podcasts/filter-options?*', (route) => {
+    const url = new URL(route.request().url())
+    expect(url.searchParams.get('facet')).toBe('show')
+    return route.fulfill({
+      json: { data: [{ value: 'show-one', label: 'A Distant Show', count: 2 }], nextCursor: null },
+    })
+  })
+  await page.goto('/library/podcasts/archive')
+  await page.getByRole('button', { name: 'Filters' }).click()
+  await page.getByRole('checkbox', { name: 'A Distant Show 2' }).check()
+  await expect(page).toHaveURL(/show=%5B%22show-one%22%5D/)
+  await expect(page.getByRole('group', { name: /Shows \(1 selected\)/ })).toBeVisible()
+})
+
+test('searches and applies complete Music artist facet options', async ({ page }) => {
+  await page.route('**/api/library/music?*', (route) => route.fulfill({ json: musicResponse() }))
+  await page.route('**/api/library/music/filter-options?*', (route) => {
+    const url = new URL(route.request().url())
+    const facet = url.searchParams.get('facet')
+    return route.fulfill({
+      json: {
+        data:
+          facet === 'artist' && url.searchParams.get('optionQ') === 'Ada'
+            ? [{ value: 'artist-one', label: 'Ada Artist', count: 4 }]
+            : [],
+        nextCursor: null,
+      },
+    })
+  })
+  await page.goto('/library/music/tracks')
+  await page.getByRole('button', { name: 'Filters' }).click()
+  await page.getByRole('searchbox', { name: 'Search artists options' }).fill('Ada')
+  await page.getByRole('checkbox', { name: 'Ada Artist 4' }).check()
+  await expect(page).toHaveURL(/artist=%5B%22artist-one%22%5D/)
+  await expect(page.getByRole('group', { name: /Artists \(1 selected\)/ })).toBeVisible()
+})
+
 test('keeps loaded Podcast pages while changing layout and opening the inspector', async ({
   page,
 }) => {
@@ -44,6 +85,7 @@ test('keeps loaded Podcast pages while changing layout and opening the inspector
     route.fulfill({
       json: {
         ...podcast,
+        publishedAt: '1969',
         description: 'Episode description.',
         publisher: 'Publisher',
         showDescription: null,
@@ -62,7 +104,9 @@ test('keeps loaded Podcast pages while changing layout and opening the inspector
   await page.getByRole('button', { name: 'Grid view' }).click()
   await page.getByRole('button', { name: /A Distant Episode/ }).click()
   await expect(page.getByText('Episode description.')).toBeVisible()
+  await expect(page.getByText('1969', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).click()
+  await expect(page.getByRole('button', { name: /A Distant Episode/ })).toBeFocused()
   await expect(page.getByRole('button', { name: /Second Episode/ })).toBeVisible()
   expect(requested).toHaveLength(afterPaging)
   expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
@@ -85,6 +129,7 @@ test('keeps loaded Music pages while changing layout and opening the inspector',
             ...track,
             id: second ? 'track-two' : 'track-one',
             title: second ? 'Second Track' : track.title,
+            playbackCount: url.searchParams.has('from') ? 2 : track.playbackCount,
           },
         ],
         second ? null : 'next-music-page',
@@ -124,11 +169,80 @@ test('keeps loaded Music pages while changing layout and opening the inspector',
   await page.getByRole('button', { name: /A Distant Track/ }).click()
   await expect(page.getByRole('heading', { name: 'A Distant Track' })).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).click()
+  await expect(page.getByRole('button', { name: /A Distant Track/ })).toBeFocused()
   await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
   expect(requested).toHaveLength(afterPaging)
   expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
     true,
   )
+  await page.goto('/library/music/tracks?from=2026-01-01')
+  await page.getByRole('button', { name: /A Distant Track/ }).click()
+  await expect(page.getByText('Matching observations')).toBeVisible()
+  await expect(page.getByText('Lifetime observations')).toBeVisible()
+})
+
+test('opens bounded Album history and links back to its heard Track', async ({ page }) => {
+  await page.route('**/api/library/music?*', (route) =>
+    route.fulfill({
+      json: musicResponse([
+        {
+          ...track,
+          id: 'album-one',
+          kind: 'album',
+          title: 'A Distant Album',
+          album: null,
+          trackCount: 1,
+        },
+      ]),
+    }),
+  )
+  await page.route('**/api/library/music/albums/album-one', (route) =>
+    route.fulfill({
+      json: {
+        id: 'album-one',
+        kind: 'album',
+        title: 'A Distant Album',
+        subtitle: 'Ada Artist',
+        album: null,
+        imageUrl: null,
+        latestPlayedAt: '2026-09-12T00:00:00.000Z',
+        firstPlayedAt: '2026-01-01T00:00:00.000Z',
+        playbackCount: 2,
+        observedMs: 180_000,
+        observedDurationKnown: true,
+        durationMs: null,
+        explicit: null,
+        isrc: null,
+        metadataState: 'current',
+        canonicalUrl: 'https://open.spotify.com/album/album-one',
+      },
+    }),
+  )
+  await page.route('**/api/library/music/albums/album-one/history*', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            occurredAt: '2026-09-12T00:00:00.000Z',
+            source: 'export',
+            observedMs: 180_000,
+            skipped: false,
+            reasonStart: null,
+            reasonEnd: null,
+            trackId: 'track-one',
+            trackTitle: 'A Distant Track',
+            artistText: 'Ada Artist',
+          },
+        ],
+        nextCursor: null,
+        totalCount: 1,
+      },
+    }),
+  )
+  await page.goto('/library/music/albums')
+  await page.getByRole('button', { name: /A Distant Album/ }).click()
+  await page.getByRole('tab', { name: /History/ }).click()
+  await expect(page.getByRole('link', { name: 'A Distant Track' })).toBeVisible()
 })
 
 test('keeps loaded Video pages while changing layout and opening the inspector', async ({
@@ -294,6 +408,30 @@ const articlesResponse = (data = [article], nextCursor: string | null = null) =>
     fullTextPolicy: 'archive_queue' as const,
     lastSuccessfulSyncAt: '2026-09-20T10:00:00.000Z',
   },
+})
+
+test('keeps every Article toolbar control visible at intermediate desktop width', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 853, height: 900 })
+  await page.route('**/api/library/articles?*', (route) =>
+    route.fulfill({ json: articlesResponse() }),
+  )
+  await page.goto('/library/articles/archive')
+  await expect(page.getByRole('button', { name: 'Expanded' })).toBeVisible()
+  const box = await page.getByRole('button', { name: 'Expanded' }).boundingBox()
+  expect(box).not.toBeNull()
+  expect(box!.x + box!.width).toBeLessThanOrEqual(853)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(853)
+})
+
+test('uses the dense Music Artist list by default', async ({ page }) => {
+  await page.route('**/api/library/music?*', (route) => route.fulfill({ json: musicResponse([]) }))
+  await page.goto('/library/music/artists')
+  await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
 })
 
 const podcast = {

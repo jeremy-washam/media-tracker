@@ -5,6 +5,15 @@
 - Scope: Spotify-backed Songs Library vertical slice, including Tracks, Albums, Artists, ingestion, replay, browsing, and inspection
 - Primary sources: owner-provided Spotify Extended Streaming History plus the authorized Spotify Web API
 
+## Current catalog-backfill decision (2026-09-21)
+
+The accepted interim retention decision is [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md):
+Spotify API catalog responses and projected metadata are retained indefinitely
+for this private deployment at the owner's request, with a documented terms
+risk. Earlier cache-expiry language below describes the original proposal, not
+the current implementation. Exact-ID track and episode backfill is a shared,
+bounded queue job; it does not alter owner listening evidence.
+
 ## Purpose
 
 Implement Music immediately after Podcasts and before Videos so the two Spotify
@@ -36,7 +45,7 @@ There is deliberately no minimum listening threshold. The UI says **playback
 observations** and **observed time**, not completed listens, full plays, or times
 played.
 
-## Implementation status (2026-09-20)
+## Implementation status (2026-09-21)
 
 The current change set ships the usable end-to-end Music slice: every identified
 song export row is projected without a playback threshold, Recently Played is
@@ -54,20 +63,27 @@ fills Albums and Artists without making a normal sync unbounded. Recent-API-only
 activity is counted while remaining honest about missing observed duration; a
 mixed aggregate reports how many observations lack duration.
 
-The following hardening remains beyond this initial production slice:
+The 2026-09-21 pass added value/keyset collection and History cursors, ranked
+FTS for Tracks, a durable Recently Played checkpoint with possible-gap
+diagnostics, complete Track/Album/Artist History tabs, exact inspector
+cross-links, focus restoration, and matching-period versus lifetime facts for
+items opened from the current collection. Artists now default to the accepted
+dense list layout. A checkpoint regression verifies cursors are written only
+after their parent sync run succeeds.
+Tracks now has counted, searchable Artist and Album facet pickers; Albums has
+the same Artist picker. Options use exact Spotify identities, self-exclude their
+own selected values, page across the full filtered result, and remain URL-backed.
 
-- move the catalog backlog from one bounded inline batch per sync to a durable,
-  rate-aware asynchronous job with expiry and refresh policy;
-- return counted, searchable exact Artist/Album facet payloads and expose their
-  multi-select pickers; the repository already supports exact-identity
-  predicates;
-- replace query-bound offset cursors with true value/keyset cursors, use ranked
-  FTS search, and virtualize very long loaded Track/Artist stacks;
-- add a durable Recently Played checkpoint and explicit overlap/gap coverage
-  diagnostics rather than relying only on idempotent event keys and partial-
-  failure reporting; and
-- complete the full accepted album/artist cross-link inspector treatment and
-  lifetime-versus-selected-period secondary values.
+The following hardening still remains beyond the current slice:
+
+- finish operational recovery of the durable exact-ID catalog backfill and add
+  scheduled, rate-aware refresh of Spotify track, album, and artist metadata;
+- add explicit export/API overlap diagnostics and virtualize long Track/Artist
+  stacks;
+- replace or remove superseded Spotify API metadata, artwork, search terms, and
+  raw catalog snapshots under a documented finite cache lifecycle, while
+  preserving owner history and source identities. Refresh by itself would not
+  resolve the interim retention risk recorded in ADR 0014.
 
 These follow-ups do not change the shipped admission rule: all supported song
 observations count immediately, API-only observations never fabricate duration,

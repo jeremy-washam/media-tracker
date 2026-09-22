@@ -6,6 +6,7 @@ export interface PodcastsRouteSearch {
   sort?: string | undefined
   direction?: 'asc' | 'desc' | undefined
   following?: 'all' | 'following' | 'not_following' | undefined
+  show?: string[] | undefined
   dateFrom?: string | undefined
   dateTo?: string | undefined
   dateUnknown?: boolean | undefined
@@ -58,6 +59,7 @@ export function parsePodcastsRouteSearch(value: Record<string, unknown>): Podcas
     ...(oneOf(value.following, ['all', 'following', 'not_following'] as const)
       ? { following: oneOf(value.following, ['all', 'following', 'not_following'] as const) }
       : {}),
+    ...(values(value.show).length ? { show: values(value.show) } : {}),
     ...(string(value.dateFrom) ? { dateFrom: string(value.dateFrom) } : {}),
     ...(string(value.dateTo) ? { dateTo: string(value.dateTo) } : {}),
     ...(flag(value.dateUnknown) ? { dateUnknown: true } : {}),
@@ -112,6 +114,7 @@ export function normalizePodcastSearch(
     delete result.direction
   }
   if (view === 'following') {
+    delete result.show
     delete result.following
     delete result.duration
     delete result.publishedFrom

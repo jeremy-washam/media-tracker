@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -12,7 +12,13 @@ import {
   X,
 } from 'lucide-react'
 import type { PodcastCollectionItem } from '@media-tracker/contracts'
-import { fetchPodcast, fetchPodcastHistory, fetchPodcasts } from './podcasts-api'
+import {
+  fetchPodcast,
+  fetchPodcastFilterOptions,
+  fetchPodcastHistory,
+  fetchPodcasts,
+} from './podcasts-api'
+import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
 import {
   normalizePodcastSearch,
   podcastQuerySearch,
@@ -20,9 +26,16 @@ import {
 } from './podcasts-route-search'
 
 function date(value: string | null | undefined) {
-  return value
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value))
-    : 'Date unknown'
+  if (!value) return 'Date unknown'
+  if (/^\d{4}$/.test(value)) return value
+  if (/^\d{4}-\d{2}$/.test(value))
+    return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short' }).format(
+      new Date(`${value}-01T12:00:00`),
+    )
+  const parsed = new Date(value.length === 10 ? `${value}T12:00:00` : value)
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(parsed)
 }
 function duration(value: number | null) {
   if (value === null) return null
@@ -36,6 +49,8 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
   const navigate = useNavigate()
   const [draft, setDraft] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const selectedResultRef = useRef<HTMLButtonElement | null>(null)
+  const headingRef = useRef<HTMLHeadingElement | null>(null)
   const layout = search.layout ?? (view === 'following' ? 'grid' : 'list')
   const update = (patch: Partial<PodcastsRouteSearch>) => {
     const next = { ...search, ...patch }
@@ -43,10 +58,14 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
       if (next[key] === undefined || next[key] === '') delete next[key]
     void navigate({ to: `/library/podcasts/${view}`, search: next })
   }
-  const request = useMemo(
-    () => ({ view, ...podcastQuerySearch(search), limit: 50 }),
-    [view, search],
-  )
+  const closeInspector = () => {
+    const target = selectedResultRef.current?.isConnected
+      ? selectedResultRef.current
+      : headingRef.current
+    update({ item: undefined, kind: undefined })
+    requestAnimationFrame(() => target?.focus())
+  }
+  const request = { view, ...podcastQuerySearch(search), limit: 50 }
   const result = useInfiniteQuery({
     queryKey: ['podcasts', request],
     initialPageParam: undefined as string | undefined,
@@ -80,16 +99,20 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             ['title', 'Episode'],
             ['show', 'Show'],
           ]
+  if (search.q) sorts.unshift(['relevance', 'Relevance'])
   const selectedSort = search.sort ?? String(sorts[0]![0])
   const selectedDirection =
-    search.direction ?? (['title', 'show', 'publisher'].includes(selectedSort) ? 'asc' : 'desc')
+    search.direction ??
+    (['title', 'show', 'publisher', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
   return (
     <section className={`books-page spotify-library-page podcasts-page podcasts-${layout}`}>
       <div className="books-collection">
         <header className="books-header">
           <div>
             <span className="eyebrow">Library</span>
-            <h1>Podcasts</h1>
+            <h1 ref={headingRef} tabIndex={-1}>
+              Podcasts
+            </h1>
           </div>
           <nav className="books-tabs" aria-label="Podcast sections">
             {(['archive', 'queue', 'following'] as const).map((target) => (
@@ -231,6 +254,10 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                     publishedUnknown: undefined,
                     duration: undefined,
                     libraryEpisodes: undefined,
+                    following: undefined,
+                    show: undefined,
+                    publisher: undefined,
+                    language: undefined,
                     item: undefined,
                   })
                 }
@@ -338,31 +365,60 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                       <option value="unknown">Duration unavailable</option>
                     </select>
                   </label>
+                  <PodcastFacetPicker
+                    view={view}
+                    facet="show"
+                    search={search}
+                    selected={search.show ?? []}
+                    onChange={(value) =>
+                      update({ show: toggleValue(search.show, value), item: undefined })
+                    }
+                  />
                 </>
               ) : (
-                <label className="library-inline-filter">
-                  <span>Library episodes</span>
-                  <select
-                    value={search.libraryEpisodes?.[0] ?? ''}
-                    onChange={(event) =>
-                      update({
-                        libraryEpisodes: event.target.value
-                          ? [
-                              event.target.value as NonNullable<
-                                PodcastsRouteSearch['libraryEpisodes']
-                              >[number],
-                            ]
-                          : undefined,
-                        item: undefined,
-                      })
+                <>
+                  <label className="library-inline-filter">
+                    <span>Library episodes</span>
+                    <select
+                      value={search.libraryEpisodes?.[0] ?? ''}
+                      onChange={(event) =>
+                        update({
+                          libraryEpisodes: event.target.value
+                            ? [
+                                event.target.value as NonNullable<
+                                  PodcastsRouteSearch['libraryEpisodes']
+                                >[number],
+                              ]
+                            : undefined,
+                          item: undefined,
+                        })
+                      }
+                    >
+                      <option value="">Any</option>
+                      <option value="archive">Has Archive episodes</option>
+                      <option value="queue">Has Queue episodes</option>
+                      <option value="none">No Library episodes</option>
+                    </select>
+                  </label>
+                  <PodcastFacetPicker
+                    view="following"
+                    facet="publisher"
+                    search={search}
+                    selected={search.publisher ?? []}
+                    onChange={(value) =>
+                      update({ publisher: toggleValue(search.publisher, value), item: undefined })
                     }
-                  >
-                    <option value="">Any</option>
-                    <option value="archive">Has Archive episodes</option>
-                    <option value="queue">Has Queue episodes</option>
-                    <option value="none">No Library episodes</option>
-                  </select>
-                </label>
+                  />
+                  <PodcastFacetPicker
+                    view="following"
+                    facet="language"
+                    search={search}
+                    selected={search.language ?? []}
+                    onChange={(value) =>
+                      update({ language: toggleValue(search.language, value), item: undefined })
+                    }
+                  />
+                </>
               )}
             </div>
           </section>
@@ -374,6 +430,17 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? 'shows' : 'episodes'}`}
           </span>
         </div>
+        {!result.isPending &&
+        summary?.coverage &&
+        (view === 'following'
+          ? !summary.coverage.savedShowsAt
+          : !summary.coverage.savedEpisodesAt) ? (
+          <p className="library-coverage-note">
+            {view === 'following'
+              ? 'Following has not completed a checkpointed Spotify show sync.'
+              : 'Saved episodes have not completed a checkpointed Spotify sync; Queue may be incomplete.'}
+          </p>
+        ) : null}
         {result.isError ? (
           <div className="books-state books-state-error" role="alert">
             <h2>Podcasts could not be loaded</h2>
@@ -394,7 +461,10 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 key={`${item.kind}:${item.id}`}
                 item={item}
                 selected={search.item === item.id}
-                onSelect={() => update({ item: item.id, kind: item.kind })}
+                onSelect={(element) => {
+                  selectedResultRef.current = element
+                  update({ item: item.id, kind: item.kind })
+                }}
               />
             ))}
           </div>
@@ -414,10 +484,88 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
         <PodcastInspector
           id={search.item}
           kind={search.kind ?? (view === 'following' ? 'show' : 'episode')}
-          onClose={() => update({ item: undefined, kind: undefined })}
+          onClose={closeInspector}
+          onOpenShow={(id) => update({ item: id, kind: 'show' })}
         />
       ) : null}
     </section>
+  )
+}
+
+function toggleValue(selected: string[] | undefined, value: string): string[] | undefined {
+  const next = (selected ?? []).includes(value)
+    ? (selected ?? []).filter((item) => item !== value)
+    : [...(selected ?? []), value]
+  return next.length ? next : undefined
+}
+
+function PodcastFacetPicker({
+  view,
+  facet,
+  search,
+  selected,
+  onChange,
+}: {
+  view: 'archive' | 'queue' | 'following'
+  facet: 'show' | 'publisher' | 'language'
+  search: PodcastsRouteSearch
+  selected: string[]
+  onChange: (value: string) => void
+}) {
+  const [optionQ, setOptionQ] = useState('')
+  const request = { ...podcastQuerySearch(search), view, facet, optionQ, optionLimit: 30 }
+  const options = useInfiniteQuery({
+    queryKey: ['podcast-filter-options', request],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      fetchPodcastFilterOptions(
+        { ...request, ...(pageParam ? { optionCursor: pageParam } : {}) },
+        signal,
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+  const label = facet === 'show' ? 'Shows' : facet === 'publisher' ? 'Publishers' : 'Languages'
+  return (
+    <fieldset className="library-facet-picker">
+      <legend>
+        {label}
+        {selected.length ? ` (${selected.length} selected)` : ''}
+      </legend>
+      <input
+        aria-label={`Search ${label.toLowerCase()} options`}
+        type="search"
+        placeholder={`Find ${facet}`}
+        value={optionQ}
+        onChange={(event) => setOptionQ(event.target.value)}
+      />
+      <div className="library-facet-options">
+        {options.isPending ? <span>Loading options…</span> : null}
+        {options.isError ? <span role="alert">Options unavailable</span> : null}
+        {options.data?.pages
+          .flatMap((page) => page.data)
+          .map((option) => (
+            <label key={option.value}>
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={() => onChange(option.value)}
+              />
+              <span>{option.label}</span>
+              <small>{option.count.toLocaleString()}</small>
+            </label>
+          ))}
+        {options.data?.pages[0]?.data.length === 0 ? <span>No matching options</span> : null}
+      </div>
+      {options.hasNextPage ? (
+        <button
+          type="button"
+          disabled={options.isFetchingNextPage}
+          onClick={() => void options.fetchNextPage()}
+        >
+          {options.isFetchingNextPage ? 'Loading…' : 'More options'}
+        </button>
+      ) : null}
+    </fieldset>
   )
 }
 
@@ -428,13 +576,13 @@ function PodcastItem({
 }: {
   item: PodcastCollectionItem
   selected: boolean
-  onSelect: () => void
+  onSelect: (element: HTMLButtonElement) => void
 }) {
   return (
     <button
       type="button"
       className={`spotify-result ${selected ? 'selected' : ''}`}
-      onClick={onSelect}
+      onClick={(event) => onSelect(event.currentTarget)}
     >
       {item.imageUrl ? (
         <img src={item.imageUrl} alt="" loading="lazy" />
@@ -462,25 +610,47 @@ function PodcastInspector({
   id,
   kind,
   onClose,
+  onOpenShow,
 }: {
   id: string
   kind: 'episode' | 'show'
   onClose: () => void
+  onOpenShow: (id: string) => void
 }) {
+  const [tab, setTab] = useState<'details' | 'history'>('details')
+  const inspectorRef = useSpotifyInspectorFocus(onClose, id)
   const detail = useQuery({
     queryKey: ['podcast', kind, id],
     queryFn: ({ signal }) => fetchPodcast(id, kind, signal),
   })
   const history = useInfiniteQuery({
     queryKey: ['podcast-history', id],
-    enabled: kind === 'episode',
+    enabled: kind === 'episode' && tab === 'history',
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) => fetchPodcastHistory(id, pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside className="media-inspector" aria-label="Podcast inspector">
-      <header>
+    <aside ref={inspectorRef} className="media-inspector" aria-label="Podcast inspector">
+      <header className="spotify-inspector-topbar">
+        <div className="inspector-tabs" role="tablist" aria-label="Podcast information">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'details'}
+            onClick={() => setTab('details')}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'history'}
+            onClick={() => setTab('history')}
+          >
+            History{kind === 'episode' && detail.data ? ` (${detail.data.playbackCount})` : ''}
+          </button>
+        </div>
         <button type="button" onClick={onClose} aria-label="Close inspector">
           <X />
         </button>
@@ -505,34 +675,71 @@ function PodcastInspector({
               <p>{detail.data.subtitle}</p>
             </div>
           </div>
-          <section>
-            <h3>Details</h3>
-            {detail.data.description ? <p>{detail.data.description}</p> : null}
-            <dl>
-              <div>
-                <dt>{kind === 'show' ? 'Episodes in Archive' : 'Observed time'}</dt>
-                <dd>
-                  {kind === 'show'
-                    ? detail.data.archiveEpisodeCount
-                    : duration(detail.data.observedMs)}
-                </dd>
-              </div>
-              <div>
-                <dt>{kind === 'show' ? 'Episodes queued' : 'Published'}</dt>
-                <dd>
-                  {kind === 'show' ? detail.data.queueEpisodeCount : date(detail.data.publishedAt)}
-                </dd>
-              </div>
-            </dl>
-            {detail.data.canonicalUrl ? (
-              <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                Open in Spotify <ExternalLink />
-              </a>
-            ) : null}
-          </section>
-          {kind === 'episode' ? (
+          {tab === 'details' ? (
+            <section>
+              <h3>Details</h3>
+              {detail.data.description ? <p>{detail.data.description}</p> : null}
+              <dl>
+                <div>
+                  <dt>{kind === 'show' ? 'Episodes in Archive' : 'Observed time'}</dt>
+                  <dd>
+                    {kind === 'show'
+                      ? detail.data.archiveEpisodeCount
+                      : duration(detail.data.observedMs)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{kind === 'show' ? 'Episodes queued' : 'Published'}</dt>
+                  <dd>
+                    {kind === 'show'
+                      ? detail.data.queueEpisodeCount
+                      : date(detail.data.publishedAt)}
+                  </dd>
+                </div>
+                {kind === 'episode' && detail.data.durationMs !== null ? (
+                  <div>
+                    <dt>Duration</dt>
+                    <dd>{duration(detail.data.durationMs)}</dd>
+                  </div>
+                ) : null}
+                {kind === 'show' && detail.data.totalEpisodes !== null ? (
+                  <div>
+                    <dt>Catalog episodes</dt>
+                    <dd>{detail.data.totalEpisodes}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {kind === 'episode' && detail.data.showId ? (
+                <button
+                  type="button"
+                  className="inspector-related-link"
+                  onClick={() => onOpenShow(detail.data!.showId!)}
+                >
+                  Show details: {detail.data.subtitle ?? 'Show'}
+                </button>
+              ) : null}
+              {kind === 'show' ? (
+                <div className="inspector-related-links">
+                  <Link to="/library/podcasts/archive" search={{ show: [id] }}>
+                    Archive episodes
+                  </Link>
+                  <Link to="/library/podcasts/queue" search={{ show: [id] }}>
+                    Queued episodes
+                  </Link>
+                </div>
+              ) : null}
+              {detail.data.canonicalUrl ? (
+                <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                  Open in Spotify <ExternalLink />
+                </a>
+              ) : null}
+            </section>
+          ) : kind === 'episode' ? (
             <section>
               <h3>History</h3>
+              {history.isPending ? <p>Loading history…</p> : null}
+              {history.isError ? <p role="alert">{history.error.message}</p> : null}
+              {history.data?.pages[0]?.totalCount === 0 ? <p>No supported history.</p> : null}
               <ol className="history-list">
                 {history.data?.pages
                   .flatMap((page) => page.data)
@@ -549,8 +756,40 @@ function PodcastInspector({
                     </li>
                   ))}
               </ol>
+              {history.hasNextPage ? (
+                <button
+                  type="button"
+                  className="load-more"
+                  disabled={history.isFetchingNextPage}
+                  onClick={() => void history.fetchNextPage()}
+                >
+                  {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
+                </button>
+              ) : null}
             </section>
-          ) : null}
+          ) : (
+            <section>
+              <h3>Following</h3>
+              <dl>
+                <div>
+                  <dt>Saved in Spotify</dt>
+                  <dd>{date(detail.data.date)}</dd>
+                </div>
+                <div>
+                  <dt>First observed</dt>
+                  <dd>{date(detail.data.firstObservedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Last observed</dt>
+                  <dd>{date(detail.data.lastObservedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Current state</dt>
+                  <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
+                </div>
+              </dl>
+            </section>
+          )}
         </>
       ) : null}
     </aside>

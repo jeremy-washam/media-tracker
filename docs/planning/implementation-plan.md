@@ -1,15 +1,17 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-09-20
+Last updated: 2026-09-21
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
 Section 20 records the subsequent interface decisions and next design work.
+Section 21 tracks the shared Spotify catalog refresh follow-up.
 The [Library implementation handoff](library-implementation.md) specifies the
 next production UI delivery, including source-derived Queue and Songs.
 The [Podcasts](podcasts-implementation.md) and
 [Music](music-implementation.md) plans now record their initial production
-implementations and the remaining explicit hardening work. The
+implementations, the first 2026-09-21 hardening pass, and the remaining
+explicit work. The
 [Videos](videos-implementation.md) plan records the shipped Takeout-backed
 Archive, Watch Later Queue, Channels, and UI plus the credential-gated Data API
 and OAuth stages.
@@ -803,3 +805,15 @@ loads a bounded owner-data sample from an ignored local file and has a safe
 missing-fixture state. Neither artifact marks production services as shipped.
 Lists, the future cross-media Feed, and Explorations remain outside the initial
 interface; the Reader-specific Articles Feed is explicitly in scope.
+
+## 21. Shared Spotify catalog follow-up
+
+- [ ] Add scheduled, rate-aware refresh of exact-ID Spotify track, album, artist,
+      episode, and show metadata and artwork. Replace stale display/search data,
+      handle upstream unavailability, and remove superseded Spotify API content
+      (including retained raw catalog snapshots) without deleting the owner's
+      independent listening history or source identities. Set and document a
+      finite cache lifecycle when implementing this; Spotify does not publish a
+      numeric cache lifetime, but its Developer Terms require temporary caching
+      and prohibit indefinite storage of Spotify Content. Refresh alone does
+      not resolve the interim retention risk in ADR 0014.

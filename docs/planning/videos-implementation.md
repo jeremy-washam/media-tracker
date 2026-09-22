@@ -2,7 +2,7 @@
 
 - Status: Takeout-backed Archive, Queue, Channels, inspectors, production UI,
   and refreshable public metadata integration implemented; OAuth Following removed
-  from scope; full local backfill completed; final visual acceptance remains
+  from scope; full local backfill completed; real-data visual acceptance complete
 - Date: 2026-09-21
 - Scope: YouTube-backed Library > Videos Archive, Watch Later Queue, Channels,
   and video/channel inspectors
@@ -61,6 +61,13 @@ After this plan is complete, Videos will provide:
 Takeout-only work did not wait for Google credentials. The implementation ships
 an honest Archive, Queue, Channels rollup, and retained subscription evidence.
 The accepted product surface requires public Data API enrichment but no OAuth.
+
+The 2026-09-21 visual pass checked Archive, Queue, Channels, and inspectors in
+both themes and narrow/desktop layouts. A forward migration prefers the medium
+YouTube thumbnail variant in existing projections because several higher
+variants displayed placeholder images in the owner's local data. It was applied
+to the local D1 after a backup; some source thumbnails can still be unavailable
+or show a provider placeholder.
 
 ### Implemented local slice
 
@@ -1728,7 +1735,7 @@ delivery.
 - [x] Fresh and upgrade migrations pass.
 - [x] `pnpm check`, `pnpm build`, relevant `pnpm test:e2e`, and migration checks
       pass after the final edit.
-- [ ] Both themes and responsive modes receive real-data visual QA with obvious
+- [x] Both themes and responsive modes receive real-data visual QA with obvious
       defects fixed.
 - [ ] An independent final review finds no unresolved correctness issue.
 - [x] No credential, raw export, provider response, or unsanitized owner fixture

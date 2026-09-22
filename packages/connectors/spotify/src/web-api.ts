@@ -132,6 +132,7 @@ export interface SpotifySavedEpisodeObservation {
   readonly showUri: string | null
   readonly title: string | null
 }
+export type SpotifyEpisodeCatalogObservation = Omit<SpotifySavedEpisodeObservation, 'addedAt'>
 
 export interface SpotifySavedEpisodesPage {
   readonly bytes: Uint8Array
@@ -222,11 +223,13 @@ export interface SpotifyPlayerObservation {
 
 export class SpotifyApiError extends Error {
   readonly status: number
+  readonly retryAfterSeconds: number | null
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, retryAfterSeconds: number | null = null) {
     super(message)
     this.name = 'SpotifyApiError'
     this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -332,12 +335,73 @@ async function spotifyResponse(input: {
     headers: { Authorization: `Bearer ${input.accessToken}` },
   })
   if (!response.ok && !(input.allowEmpty && response.status === 204)) {
-    throw new SpotifyApiError(`Spotify API returned ${response.status}`, response.status)
+    const retryAfter = Number(response.headers.get('retry-after'))
+    throw new SpotifyApiError(
+      `Spotify API returned ${response.status}`,
+      response.status,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+    )
   }
   return {
     bytes: new Uint8Array(await response.arrayBuffer()),
     contentType: response.headers.get('content-type'),
     status: response.status,
+  }
+}
+
+export async function fetchSpotifyTrackResponse(input: {
+  accessToken: string
+  id: string
+  fetch?: typeof fetch
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
+  if (!/^[A-Za-z0-9]+$/.test(input.id)) throw new TypeError('Invalid Spotify track ID')
+  const url = new URL(`https://api.spotify.com/v1/tracks/${input.id}`)
+  const response = await spotifyResponse({ ...input, url })
+  return {
+    bytes: response.bytes,
+    contentType: response.contentType ?? 'application/json',
+  }
+}
+
+export function parseSpotifyTrackResponse(response: {
+  bytes: Uint8Array
+}): SpotifyTrackObservation {
+  return track(trackSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes))))
+}
+
+export async function fetchSpotifyEpisodeResponse(input: {
+  accessToken: string
+  id: string
+  fetch?: typeof fetch
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
+  if (!/^[A-Za-z0-9]+$/.test(input.id)) throw new TypeError('Invalid Spotify episode ID')
+  const url = new URL(`https://api.spotify.com/v1/episodes/${input.id}`)
+  const response = await spotifyResponse({ ...input, url })
+  return {
+    bytes: response.bytes,
+    contentType: response.contentType ?? 'application/json',
+  }
+}
+
+export function parseSpotifyEpisodeResponse(response: {
+  bytes: Uint8Array
+}): SpotifyEpisodeCatalogObservation {
+  const value = episodeSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes)))
+  return {
+    canonicalUrl: value.external_urls?.spotify ?? null,
+    description: value.description ?? null,
+    durationMs: value.duration_ms,
+    episodeId: value.id,
+    episodeUri: value.uri,
+    fullyPlayed: value.resume_point?.fully_played ?? null,
+    imageUrl: value.images?.[0]?.url ?? null,
+    releaseDate: value.release_date ?? null,
+    releaseDatePrecision: value.release_date_precision ?? null,
+    resumePositionMs: value.resume_point?.resume_position_ms ?? null,
+    showId: value.show?.id ?? null,
+    showName: value.show?.name ?? null,
+    showUri: value.show?.uri ?? null,
+    title: value.name,
   }
 }
 

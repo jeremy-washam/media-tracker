@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -13,7 +13,13 @@ import {
   X,
 } from 'lucide-react'
 import type { MusicCollectionItem } from '@media-tracker/contracts'
-import { fetchMusic, fetchMusicDetail, fetchMusicHistory } from './music-api'
+import {
+  fetchMusic,
+  fetchMusicDetail,
+  fetchMusicFilterOptions,
+  fetchMusicHistory,
+} from './music-api'
+import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
 import { musicQuerySearch, normalizeMusicSearch, type MusicRouteSearch } from './music-route-search'
 
 function date(value: string | null | undefined) {
@@ -22,6 +28,10 @@ function date(value: string | null | undefined) {
     : 'Date unknown'
 }
 function listened(value: number) {
+  if (value < 60_000) {
+    if (value > 0 && value < 1000) return '<1 sec'
+    return `${Math.round(value / 1000)} sec`
+  }
   const hours = value / 3_600_000
   return hours < 1
     ? `${Math.round(value / 60_000)} min`
@@ -34,14 +44,23 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
   const navigate = useNavigate()
   const [draft, setDraft] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const layout = search.layout ?? (view === 'tracks' ? 'list' : 'grid')
+  const selectedResultRef = useRef<HTMLButtonElement | null>(null)
+  const headingRef = useRef<HTMLHeadingElement | null>(null)
+  const layout = search.layout ?? (view === 'albums' ? 'grid' : 'list')
   const update = (patch: Partial<MusicRouteSearch>) => {
     const next = { ...search, ...patch }
     for (const key of Object.keys(next) as (keyof MusicRouteSearch)[])
       if (next[key] === undefined || next[key] === '') delete next[key]
     void navigate({ to: `/library/music/${view}`, search: next })
   }
-  const request = useMemo(() => ({ view, ...musicQuerySearch(search), limit: 50 }), [view, search])
+  const closeInspector = () => {
+    const target = selectedResultRef.current?.isConnected
+      ? selectedResultRef.current
+      : headingRef.current
+    update({ item: undefined })
+    requestAnimationFrame(() => target?.focus())
+  }
+  const request = { view, ...musicQuerySearch(search), limit: 50 }
   const result = useInfiniteQuery({
     queryKey: ['music', request],
     initialPageParam: undefined as string | undefined,
@@ -79,16 +98,20 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
             ['releaseCount', 'Release count'],
             ['observedTime', 'Observed time'],
           ]
+  if (search.q) sorts.unshift(['relevance', 'Relevance'])
   const selectedSort = search.sort ?? String(sorts[0]![0])
   const selectedDirection =
-    search.direction ?? (['title', 'artist', 'album'].includes(selectedSort) ? 'asc' : 'desc')
+    search.direction ??
+    (['title', 'artist', 'album', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
   return (
     <section className={`books-page spotify-library-page music-page music-${layout}`}>
       <div className="books-collection">
         <header className="books-header">
           <div>
             <span className="eyebrow">Library</span>
-            <h1>Music</h1>
+            <h1 ref={headingRef} tabIndex={-1}>
+              Music
+            </h1>
           </div>
           <nav className="books-tabs" aria-label="Music sections">
             {(['tracks', 'albums', 'artists'] as const).map((target) => (
@@ -332,6 +355,34 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                   </select>
                 </label>
               ) : null}
+              {view !== 'artists' ? (
+                <MusicFacetPicker
+                  view={view}
+                  facet="artist"
+                  search={search}
+                  selected={search.artist ?? []}
+                  onChange={(value) =>
+                    update({
+                      artist: toggleValue(search.artist, value),
+                      item: undefined,
+                    })
+                  }
+                />
+              ) : null}
+              {view === 'tracks' ? (
+                <MusicFacetPicker
+                  view="tracks"
+                  facet="album"
+                  search={search}
+                  selected={search.album ?? []}
+                  onChange={(value) =>
+                    update({
+                      album: toggleValue(search.album, value),
+                      item: undefined,
+                    })
+                  }
+                />
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -342,6 +393,17 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
           </span>
         </div>
+        {summary?.coverage?.possibleRecentGap ? (
+          <p className="library-coverage-note" role="status">
+            Recent playback coverage may have a gap between Spotify polls. Imported history is
+            retained.
+          </p>
+        ) : !summary?.coverage?.recentPollAt && !result.isPending ? (
+          <p className="library-coverage-note">
+            Recently Played has not completed a checkpointed poll; imported listening history
+            remains available.
+          </p>
+        ) : null}
         {result.isError ? (
           <div className="books-state books-state-error" role="alert">
             <h2>Music could not be loaded</h2>
@@ -362,7 +424,10 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 key={`${item.kind}:${item.id}`}
                 item={item}
                 selected={search.item === item.id}
-                onSelect={() => update({ item: item.id })}
+                onSelect={(element) => {
+                  selectedResultRef.current = element
+                  update({ item: item.id })
+                }}
               />
             ))}
           </div>
@@ -379,9 +444,95 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
         ) : null}
       </div>
       {search.item ? (
-        <MusicInspector id={search.item} view={view} onClose={() => update({ item: undefined })} />
+        <MusicInspector
+          id={search.item}
+          view={view}
+          onClose={closeInspector}
+          matchingItem={
+            search.from || search.to || (search.source && search.source !== 'all')
+              ? (items.find((item) => item.id === search.item) ?? null)
+              : null
+          }
+        />
       ) : null}
     </section>
+  )
+}
+
+function toggleValue(selected: string[] | undefined, value: string): string[] | undefined {
+  const next = (selected ?? []).includes(value)
+    ? (selected ?? []).filter((item) => item !== value)
+    : [...(selected ?? []), value]
+  return next.length ? next : undefined
+}
+
+function MusicFacetPicker({
+  view,
+  facet,
+  search,
+  selected,
+  onChange,
+}: {
+  view: 'tracks' | 'albums'
+  facet: 'artist' | 'album'
+  search: MusicRouteSearch
+  selected: string[]
+  onChange: (value: string) => void
+}) {
+  const [optionQ, setOptionQ] = useState('')
+  const request = { ...musicQuerySearch(search), view, facet, optionQ, optionLimit: 30 }
+  const options = useInfiniteQuery({
+    queryKey: ['music-filter-options', request],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      fetchMusicFilterOptions(
+        { ...request, ...(pageParam ? { optionCursor: pageParam } : {}) },
+        signal,
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+  const label = facet === 'artist' ? 'Artists' : 'Albums'
+  return (
+    <fieldset className="library-facet-picker">
+      <legend>
+        {label}
+        {selected.length ? ` (${selected.length} selected)` : ''}
+      </legend>
+      <input
+        aria-label={`Search ${label.toLowerCase()} options`}
+        type="search"
+        placeholder={`Find ${facet}`}
+        value={optionQ}
+        onChange={(event) => setOptionQ(event.target.value)}
+      />
+      <div className="library-facet-options">
+        {options.isPending ? <span>Loading options…</span> : null}
+        {options.isError ? <span role="alert">Options unavailable</span> : null}
+        {options.data?.pages
+          .flatMap((page) => page.data)
+          .map((option) => (
+            <label key={option.value}>
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={() => onChange(option.value)}
+              />
+              <span>{option.label}</span>
+              <small>{option.count.toLocaleString()}</small>
+            </label>
+          ))}
+        {options.data?.pages[0]?.data.length === 0 ? <span>No matching options</span> : null}
+      </div>
+      {options.hasNextPage ? (
+        <button
+          type="button"
+          disabled={options.isFetchingNextPage}
+          onClick={() => void options.fetchNextPage()}
+        >
+          {options.isFetchingNextPage ? 'Loading…' : 'More options'}
+        </button>
+      ) : null}
+    </fieldset>
   )
 }
 
@@ -392,13 +543,13 @@ function MusicItem({
 }: {
   item: MusicCollectionItem
   selected: boolean
-  onSelect: () => void
+  onSelect: (element: HTMLButtonElement) => void
 }) {
   return (
     <button
       type="button"
       className={`spotify-result ${selected ? 'selected' : ''}`}
-      onClick={onSelect}
+      onClick={(event) => onSelect(event.currentTarget)}
     >
       {item.imageUrl ? (
         <img src={item.imageUrl} alt="" loading="lazy" />
@@ -419,7 +570,9 @@ function MusicItem({
           {item.observedDurationKnown && item.durationUnknownCount > 0
             ? ` · ${item.durationUnknownCount.toLocaleString()} without duration`
             : ''}
-          {item.kind !== 'track' ? ` · ${item.trackCount} tracks` : ''}
+          {item.kind !== 'track'
+            ? ` · ${item.trackCount} ${item.trackCount === 1 ? 'track' : 'tracks'}`
+            : ''}
         </small>
       </span>
     </button>
@@ -430,25 +583,47 @@ function MusicInspector({
   id,
   view,
   onClose,
+  matchingItem,
 }: {
   id: string
   view: 'tracks' | 'albums' | 'artists'
   onClose: () => void
+  matchingItem: MusicCollectionItem | null
 }) {
+  const [tab, setTab] = useState<'details' | 'history'>('details')
+  const inspectorRef = useSpotifyInspectorFocus(onClose, id)
   const detail = useQuery({
     queryKey: ['music-detail', view, id],
     queryFn: ({ signal }) => fetchMusicDetail(id, view, signal),
   })
   const history = useInfiniteQuery({
-    queryKey: ['music-history', id],
-    enabled: view === 'tracks',
+    queryKey: ['music-history', view, id],
+    enabled: tab === 'history',
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) => fetchMusicHistory(id, pageParam, signal),
+    queryFn: ({ pageParam, signal }) => fetchMusicHistory(id, view, pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside className="media-inspector" aria-label="Music inspector">
-      <header>
+    <aside ref={inspectorRef} className="media-inspector" aria-label="Music inspector">
+      <header className="spotify-inspector-topbar">
+        <div className="inspector-tabs" role="tablist" aria-label="Music information">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'details'}
+            onClick={() => setTab('details')}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'history'}
+            onClick={() => setTab('history')}
+          >
+            History{detail.data ? ` (${detail.data.playbackCount.toLocaleString()})` : ''}
+          </button>
+        </div>
         <button type="button" onClick={onClose} aria-label="Close inspector">
           <X />
         </button>
@@ -473,54 +648,165 @@ function MusicInspector({
               <p>{detail.data.subtitle}</p>
             </div>
           </div>
-          <section>
-            <h3>Listening</h3>
-            <dl>
-              <div>
-                <dt>Playback observations</dt>
-                <dd>{detail.data.playbackCount.toLocaleString()}</dd>
-              </div>
-              <div>
-                <dt>Observed time</dt>
-                <dd>
-                  {detail.data.observedDurationKnown
-                    ? listened(detail.data.observedMs)
-                    : 'Unavailable'}
-                  {detail.data.observedDurationKnown && detail.data.durationUnknownCount > 0
-                    ? ` · ${detail.data.durationUnknownCount.toLocaleString()} without duration`
-                    : ''}
-                </dd>
-              </div>
-              <div>
-                <dt>Latest activity</dt>
-                <dd>{date(detail.data.latestPlayedAt)}</dd>
-              </div>
-            </dl>
-            {detail.data.canonicalUrl ? (
-              <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                Open in Spotify <ExternalLink />
-              </a>
-            ) : null}
-          </section>
-          {view === 'tracks' ? (
+          {tab === 'details' ? (
+            <section>
+              <h3>Details</h3>
+              <dl>
+                {matchingItem ? (
+                  <>
+                    <div>
+                      <dt>Matching observations</dt>
+                      <dd>{matchingItem.playbackCount.toLocaleString()}</dd>
+                    </div>
+                    <div>
+                      <dt>Matching observed time</dt>
+                      <dd>
+                        {matchingItem.observedDurationKnown
+                          ? listened(matchingItem.observedMs)
+                          : 'Unavailable'}
+                      </dd>
+                    </div>
+                  </>
+                ) : null}
+                <div>
+                  <dt>{matchingItem ? 'Lifetime observations' : 'Playback observations'}</dt>
+                  <dd>{detail.data.playbackCount.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>{matchingItem ? 'Lifetime observed time' : 'Observed time'}</dt>
+                  <dd>
+                    {detail.data.observedDurationKnown
+                      ? listened(detail.data.observedMs)
+                      : 'Unavailable'}
+                    {detail.data.observedDurationKnown && detail.data.durationUnknownCount > 0
+                      ? ` · ${detail.data.durationUnknownCount.toLocaleString()} without duration`
+                      : ''}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Latest activity</dt>
+                  <dd>{date(detail.data.latestPlayedAt)}</dd>
+                </div>
+                <div>
+                  <dt>First activity</dt>
+                  <dd>{date(detail.data.firstPlayedAt)}</dd>
+                </div>
+                {detail.data.album ? (
+                  <div>
+                    <dt>Album</dt>
+                    <dd>
+                      {detail.data.albumId ? (
+                        <Link to="/library/music/albums" search={{ item: detail.data.albumId }}>
+                          {detail.data.album}
+                        </Link>
+                      ) : (
+                        detail.data.album
+                      )}
+                    </dd>
+                  </div>
+                ) : null}
+                {detail.data.albumType ? (
+                  <div>
+                    <dt>Album type</dt>
+                    <dd>{detail.data.albumType}</dd>
+                  </div>
+                ) : null}
+                {detail.data.releaseDate ? (
+                  <div>
+                    <dt>Released</dt>
+                    <dd>{detail.data.releaseDate}</dd>
+                  </div>
+                ) : null}
+                {detail.data.durationMs !== null ? (
+                  <div>
+                    <dt>Track length</dt>
+                    <dd>{listened(detail.data.durationMs)}</dd>
+                  </div>
+                ) : null}
+                {detail.data.isrc ? (
+                  <div>
+                    <dt>ISRC</dt>
+                    <dd>{detail.data.isrc}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {detail.data.artists?.length ? (
+                <div className="inspector-related-links">
+                  {detail.data.artists.map((artist) => (
+                    <Link key={artist.id} to="/library/music/artists" search={{ item: artist.id }}>
+                      {artist.name}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              {detail.data.relatedTracks?.length ? (
+                <div className="inspector-related-list">
+                  <h3>Heard tracks</h3>
+                  {detail.data.relatedTracks.map((track) => (
+                    <Link key={track.id} to="/library/music/tracks" search={{ item: track.id }}>
+                      <span>{track.title}</span>
+                      <small>{track.playbackCount.toLocaleString()} observations</small>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              {detail.data.relatedAlbums?.length ? (
+                <div className="inspector-related-list">
+                  <h3>Albums</h3>
+                  {detail.data.relatedAlbums.map((album) => (
+                    <Link key={album.id} to="/library/music/albums" search={{ item: album.id }}>
+                      <span>{album.title}</span>
+                      <small>{album.playbackCount.toLocaleString()} observations</small>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              {detail.data.canonicalUrl ? (
+                <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                  Open in Spotify <ExternalLink />
+                </a>
+              ) : null}
+            </section>
+          ) : (
             <section>
               <h3>History</h3>
-              <ol className="history-list">
+              {history.isPending ? <p>Loading history…</p> : null}
+              {history.isError ? <p role="alert">{history.error.message}</p> : null}
+              {history.data?.pages[0]?.totalCount === 0 ? <p>No playback observations.</p> : null}
+              <ol className="history-list spotify-history-list">
                 {history.data?.pages
                   .flatMap((page) => page.data)
                   .map((entry, index) => (
                     <li key={`${entry.occurredAt}:${index}`}>
-                      <strong>{date(entry.occurredAt)}</strong>
+                      <strong>
+                        {view === 'tracks' ? (
+                          date(entry.occurredAt)
+                        ) : (
+                          <Link to="/library/music/tracks" search={{ item: entry.trackId }}>
+                            {entry.trackTitle}
+                          </Link>
+                        )}
+                      </strong>
                       <span>
                         {entry.source === 'export' && entry.observedMs !== null
-                          ? `${listened(entry.observedMs)} listened`
-                          : 'Recent playback'}
+                          ? `${view === 'tracks' ? '' : `${date(entry.occurredAt)} · `}${listened(entry.observedMs)} observed`
+                          : `${view === 'tracks' ? '' : `${date(entry.occurredAt)} · `}Recent API`}
                       </span>
                     </li>
                   ))}
               </ol>
+              {history.hasNextPage ? (
+                <button
+                  type="button"
+                  className="load-more"
+                  disabled={history.isFetchingNextPage}
+                  onClick={() => void history.fetchNextPage()}
+                >
+                  {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
+                </button>
+              ) : null}
             </section>
-          ) : null}
+          )}
         </>
       ) : null}
     </aside>

@@ -11,6 +11,7 @@ import { processTmdbCatalogRefresh, startTmdbCatalogRefresh } from './tmdb-catal
 import { processYoutubeCatalogRefresh, startYoutubeCatalogRefresh } from './youtube-catalog'
 import { TmdbApiError } from '@media-tracker/connector-tmdb'
 import { YoutubeApiError } from '@media-tracker/connector-youtube'
+import { processSpotifyCatalogBackfill, resumeSpotifyCatalogBackfill } from './spotify-catalog'
 
 import type { SyncJob } from '@media-tracker/contracts'
 
@@ -166,6 +167,7 @@ const worker = {
       tasks.push(() => startTmdbCatalogRefresh(env).then(() => undefined))
     if (env.CATALOG_AUTO_REFRESH === 'true' && env.YOUTUBE_API_KEY !== undefined)
       tasks.push(() => startYoutubeCatalogRefresh(env).then(() => undefined))
+    tasks.push(() => resumeSpotifyCatalogBackfill(env))
     tasks.push(() =>
       createVideosRepository(env.DB)
         .purgeExpiredYoutubeCatalog(new Date().toISOString())
@@ -253,6 +255,24 @@ const worker = {
           )
             message.retry()
           else message.ack()
+        }
+        continue
+      }
+
+      if (result.data.operation === 'refresh_spotify_catalog') {
+        try {
+          await processSpotifyCatalogBackfill(env, result.data)
+          message.ack()
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              event: 'spotify.catalog_queue_failed',
+              messageId: message.id,
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+            }),
+          )
+          message.retry()
         }
         continue
       }

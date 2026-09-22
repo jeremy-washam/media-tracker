@@ -28,6 +28,10 @@ import {
 
 type Section = 'archive' | 'queue' | 'feed'
 
+function displayPublication(value: string | null): string | null {
+  return value === 'readwise-upload-pdf' ? 'PDF upload' : value
+}
+
 function formatDate(value: string | null): string | null {
   if (!value) return null
   if (/^\d{4}$/.test(value)) return value
@@ -360,7 +364,8 @@ function ArticleRow({
       <span className="article-row-copy">
         <strong>{item.title}</strong>
         <small>
-          {[item.author, item.publication].filter(Boolean).join(' · ') || 'Source unavailable'}
+          {[item.author, displayPublication(item.publication)].filter(Boolean).join(' · ') ||
+            'Source unavailable'}
         </small>
         {expanded ? (
           <em>
@@ -902,8 +907,9 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
         <div>
           <h2>{article.title}</h2>
           <p>
-            {[article.author, article.publication].filter(Boolean).join(' · ') ||
-              'Source unavailable'}
+            {[article.author, displayPublication(article.publication)]
+              .filter(Boolean)
+              .join(' · ') || 'Source unavailable'}
           </p>
           <span>
             {[
@@ -931,7 +937,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
           <dt>Author</dt>
           <dd>{article.author ?? 'Unknown'}</dd>
           <dt>Publication</dt>
-          <dd>{article.publication ?? 'Unknown'}</dd>
+          <dd>{displayPublication(article.publication) ?? 'Unknown'}</dd>
           <dt>Published</dt>
           <dd>{article.publishedAt ? formatDate(article.publishedAt.value) : 'Unknown'}</dd>
           <dt>Reading time</dt>

@@ -18,6 +18,7 @@ const migrations = [
   '0018_videos_snapshot_head_backfill.sql',
   '0019_provider_catalog_caches.sql',
   '0020_tmdb_match_evidence.sql',
+  '0021_video_thumbnail_preference.sql',
 ]
   .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
   .join('\n')
@@ -862,7 +863,11 @@ describe('SqlVideosRepository', () => {
           scheduledStartAt: null,
           actualStartAt: null,
           actualEndAt: null,
-          thumbnails: { high: { url: 'https://example.com/high.jpg', width: 480, height: 360 } },
+          thumbnails: {
+            high: { url: 'https://example.com/high.jpg', width: 480, height: 360 },
+            medium: { url: 'https://example.com/medium.jpg', width: 320, height: 180 },
+            maxres: { url: 'https://example.com/maxres.jpg', width: 1280, height: 720 },
+          },
           fetchedAt: now,
           expiresAt: '2026-10-20T12:00:00.000Z',
           etag: 'etag-1',
@@ -928,8 +933,22 @@ describe('SqlVideosRepository', () => {
       description: 'Current description',
       categoryTitle: 'People & Blogs',
       captionAvailable: true,
-      imageUrl: 'https://example.com/high.jpg',
+      imageUrl: 'https://example.com/medium.jpg',
       metadataMessage: null,
+    })
+    database
+      .prepare(
+        "UPDATE video_library_projection SET image_url='https://example.com/high.jpg' WHERE video_id='video-1'",
+      )
+      .run()
+    database.exec(
+      readFileSync(
+        new URL('../migrations/0021_video_thumbnail_preference.sql', import.meta.url),
+        'utf8',
+      ),
+    )
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      imageUrl: 'https://example.com/medium.jpg',
     })
     expect(await repository.findVideo('video-2')).toMatchObject({ availability: 'unavailable' })
     expect(await repository.findVideo('video-3')).toMatchObject({

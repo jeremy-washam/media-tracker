@@ -32,6 +32,7 @@ import {
   utcInstant,
   type ExternalIdentity,
   type MediaItem,
+  type JsonObject,
   type RawObject,
   type SourceConnection,
   type SourceRecord,
@@ -41,7 +42,11 @@ import {
 import { ulid } from 'ulid'
 
 import type { Bindings } from './env'
-import { createLedgerRepository, createSpotifyLibraryRepository } from './env'
+import {
+  createLedgerRepository,
+  createSpotifyCatalogJobsRepository,
+  createSpotifyLibraryRepository,
+} from './env'
 import { refreshStoredSpotifyToken } from './spotify-credentials'
 
 const parserVersion = 'spotify-saved-episodes@2'
@@ -193,7 +198,7 @@ function podcastShowProjectionId(showId: string | null): string | null {
   return showId === null ? null : `spotify_show_${showId}`
 }
 
-function trackMetadata(
+export function trackMetadata(
   value: SpotifyTrackObservation & { id: string; uri: string },
   mediaItemId: string,
   observedAt: string,
@@ -329,8 +334,13 @@ async function syncAdditionalSpotifyLibrary(input: {
   recentTracks: number
   catalogTracks: number
   partialFailures: string[]
+  checkpoints: { name: string; value: JsonObject; at: ReturnType<typeof now> }[]
 }> {
   const partialFailures: string[] = []
+  const checkpoints: { name: string; value: JsonObject; at: ReturnType<typeof now> }[] = []
+  const checkpoint = (name: string, value: JsonObject, at: ReturnType<typeof now>) => {
+    checkpoints.push({ name, value, at })
+  }
   let savedShows = 0
   try {
     const showIds: string[] = []
@@ -399,7 +409,13 @@ async function syncAdditionalSpotifyLibrary(input: {
       await input.spotifyRepository.upsertSavedShows(projections)
       showOffset = page.nextOffset
     } while (showOffset !== null)
-    await input.spotifyRepository.finalizeSavedShows(input.connection.id, showIds, now())
+    const completedAt = now()
+    await input.spotifyRepository.finalizeSavedShows(input.connection.id, showIds, completedAt)
+    checkpoint(
+      'saved-shows',
+      { lastFullSyncAt: completedAt, showCount: showIds.length },
+      completedAt,
+    )
   } catch (error) {
     savedShows = 0
     partialFailures.push('saved_shows')
@@ -563,6 +579,11 @@ async function syncAdditionalSpotifyLibrary(input: {
       ...(playerEpisode ? { episode: playerEpisode } : {}),
     })
     playerObserved = !player.empty
+    checkpoint(
+      'current-player',
+      { lastPollAt: playerAt, itemType: player.itemType, empty: player.empty },
+      playerAt,
+    )
   } catch (error) {
     partialFailures.push('player')
     console.warn(
@@ -577,6 +598,10 @@ async function syncAdditionalSpotifyLibrary(input: {
   let recentTracks = 0
   try {
     const recentAt = now()
+    const previousRecent = await input.repository.findSyncCursor(
+      input.connection.id,
+      'recent-tracks',
+    )
     const recent = await fetchSpotifyRecentlyPlayed({ accessToken: input.accessToken })
     const recentRaw = await persistApiPage({
       ...input,
@@ -725,6 +750,25 @@ async function syncAdditionalSpotifyLibrary(input: {
       await input.spotifyRepository.applyTrackMetadata(value, { rebuildSearch: false })
     await input.spotifyRepository.rebuildMusicSearch()
     recentTracks = songProjections.length
+    const observedTimes = recent.items.map((item) => item.playedAt).sort()
+    const oldestAt = observedTimes[0] ?? null
+    const newestAt = observedTimes.at(-1) ?? null
+    const previousNewestAt =
+      typeof previousRecent?.checkpoint.newestAt === 'string'
+        ? previousRecent.checkpoint.newestAt
+        : null
+    checkpoint(
+      'recent-tracks',
+      {
+        lastPollAt: recentAt,
+        oldestAt,
+        newestAt,
+        previousNewestAt,
+        possibleGap: Boolean(previousNewestAt && oldestAt && oldestAt > previousNewestAt),
+        observedItems: recent.items.length,
+      },
+      recentAt,
+    )
   } catch (error) {
     partialFailures.push('recent_tracks')
     console.warn(
@@ -737,7 +781,10 @@ async function syncAdditionalSpotifyLibrary(input: {
   }
   let catalogTracks = 0
   try {
-    catalogTracks = await syncTrackCatalog(input)
+    // A durable exact-ID backfill owns the backlog while active. The older
+    // opportunistic batch path remains for integrations with batch access.
+    if ((await createSpotifyCatalogJobsRepository(input.bindings.DB).findActive()) === null)
+      catalogTracks = await syncTrackCatalog(input)
   } catch (error) {
     partialFailures.push('track_catalog')
     console.warn(
@@ -754,6 +801,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     recentTracks,
     catalogTracks,
     partialFailures,
+    checkpoints,
   }
 }
 
@@ -1004,6 +1052,7 @@ export async function syncSpotifySavedEpisodes(
       recentTracks: 0,
       catalogTracks: 0,
       partialFailures: [] as string[],
+      checkpoints: [] as { name: string; value: JsonObject; at: ReturnType<typeof now> }[],
     }
     try {
       extended = await syncAdditionalSpotifyLibrary({
@@ -1054,6 +1103,31 @@ export async function syncSpotifySavedEpisodes(
         syncRunId: runId,
       },
     })
+    for (const pending of extended.checkpoints) {
+      try {
+        const previous = await repository.findSyncCursor(connection.id, pending.name)
+        await repository.commit({
+          cursor: {
+            id: previous?.id ?? syncCursorId(ulid()),
+            connectionId: connection.id,
+            name: pending.name,
+            checkpoint: pending.value,
+            committedAt: pending.at,
+            syncRunId: runId,
+          },
+        })
+      } catch (error) {
+        extended.partialFailures.push(`${pending.name}_checkpoint`)
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            event: 'spotify.optional_checkpoint_failed',
+            name: pending.name,
+            errorName: errorName(error),
+          }),
+        )
+      }
+    }
     await repository.saveConnection({ ...connection, updatedAt: finishedAt })
     return {
       archiveEpisodes,

@@ -6,6 +6,10 @@ import {
   fetchSpotifySavedEpisodesPage,
   fetchSpotifySavedShowsPage,
   fetchSpotifyTracks,
+  fetchSpotifyTrackResponse,
+  fetchSpotifyEpisodeResponse,
+  parseSpotifyTrackResponse,
+  parseSpotifyEpisodeResponse,
   SpotifyApiError,
 } from './web-api.ts'
 
@@ -60,6 +64,65 @@ describe('Spotify saved episodes API', () => {
 })
 
 describe('Spotify Podcasts and Music APIs', () => {
+  it('fetches exact catalog IDs, preserving response bytes and publication precision', async () => {
+    const episodeBody = JSON.stringify({
+      id: 'episode123',
+      uri: 'spotify:episode:episode123',
+      name: 'Episode',
+      release_date: '2020',
+      release_date_precision: 'year',
+      duration_ms: 1234,
+      show: { id: 'show123', uri: 'spotify:show:show123', name: 'Show' },
+    })
+    const episodeFetch = vi.fn(async (input: string | URL | Request) => {
+      void input
+      return new Response(episodeBody)
+    })
+    const episode = await fetchSpotifyEpisodeResponse({
+      accessToken: 'secret',
+      id: 'episode123',
+      fetch: episodeFetch,
+    })
+    expect(new TextDecoder().decode(episode.bytes)).toBe(episodeBody)
+    expect(String(episodeFetch.mock.calls[0]?.[0])).toBe(
+      'https://api.spotify.com/v1/episodes/episode123',
+    )
+    expect(parseSpotifyEpisodeResponse(episode)).toMatchObject({
+      episodeId: 'episode123',
+      releaseDatePrecision: 'year',
+    })
+
+    const trackBody = JSON.stringify({
+      id: 'track123',
+      uri: 'spotify:track:track123',
+      name: 'Track',
+      artists: [],
+      duration_ms: 4321,
+    })
+    const trackFetch = vi.fn(async (input: string | URL | Request) => {
+      void input
+      return new Response(trackBody)
+    })
+    const track = await fetchSpotifyTrackResponse({
+      accessToken: 'secret',
+      id: 'track123',
+      fetch: trackFetch,
+    })
+    expect(new TextDecoder().decode(track.bytes)).toBe(trackBody)
+    expect(String(trackFetch.mock.calls[0]?.[0])).toBe('https://api.spotify.com/v1/tracks/track123')
+    expect(parseSpotifyTrackResponse(track)).toMatchObject({ id: 'track123', durationMs: 4321 })
+  })
+
+  it('passes exact-ID rate-limit retry timing without exposing credentials', async () => {
+    const request = fetchSpotifyTrackResponse({
+      accessToken: 'do-not-print',
+      id: 'track123',
+      fetch: async () => new Response('', { status: 429, headers: { 'retry-after': '17' } }),
+    })
+    await expect(request).rejects.toMatchObject({ status: 429, retryAfterSeconds: 17 })
+    await expect(request).rejects.not.toThrow('do-not-print')
+  })
+
   it('retains saved-show fields and raw response bytes', async () => {
     const body = JSON.stringify({
       items: [

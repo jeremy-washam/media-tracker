@@ -205,6 +205,7 @@ export const SyncJobSchema = z
       'index_article_content',
       'refresh_tmdb_catalog',
       'refresh_youtube_catalog',
+      'refresh_spotify_catalog',
     ]),
     connectionId: z.string().optional(),
     documentId: z.string().optional(),
@@ -233,13 +234,18 @@ export const SyncJobSchema = z
       })
     }
     if (
-      (job.operation === 'refresh_tmdb_catalog' || job.operation === 'refresh_youtube_catalog') &&
+      (job.operation === 'refresh_tmdb_catalog' ||
+        job.operation === 'refresh_youtube_catalog' ||
+        job.operation === 'refresh_spotify_catalog') &&
       job.catalogJobId === undefined
     ) {
       context.addIssue({
         code: 'custom',
         message: 'Catalog refresh jobs require a catalog job id.',
       })
+    }
+    if (job.operation === 'refresh_spotify_catalog' && job.source !== 'spotify') {
+      context.addIssue({ code: 'custom', message: 'Spotify catalog jobs require Spotify source.' })
     }
   })
 
@@ -250,6 +256,20 @@ export const CatalogSyncResponseSchema = z.object({
   requestedCount: z.number().int().nonnegative(),
   returnedCount: z.number().int().nonnegative(),
   omittedCount: z.number().int().nonnegative(),
+})
+
+export const SpotifyCatalogJobResponseSchema = z.object({
+  jobId: z.string(),
+  provider: z.literal('spotify'),
+  state: z.enum(['pending', 'running', 'succeeded', 'failed']),
+  phase: z.enum(['tracks', 'episodes']),
+  requestedCount: z.number().int().nonnegative(),
+  returnedCount: z.number().int().nonnegative(),
+  unavailableCount: z.number().int().nonnegative(),
+  remainingTracks: z.number().int().nonnegative(),
+  remainingEpisodes: z.number().int().nonnegative(),
+  nextAttemptAt: z.string().nullable(),
+  safeErrorCode: z.string().nullable(),
 })
 
 export type ApiError = z.infer<typeof ApiErrorSchema>

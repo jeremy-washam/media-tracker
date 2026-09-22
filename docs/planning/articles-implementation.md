@@ -50,6 +50,11 @@ or detail availability.
 
 ## Implementation result
 
+The 2026-09-21 cross-media visual pass fixed the shared toolbar at intermediate
+desktop widths and displays Reader's raw `readwise-upload-pdf` publication
+slug as "PDF upload" in the row and inspector. The stored source value remains
+unchanged.
+
 The production slice implements the all-location v3 document reconciliation,
 retained Archive and source-derived Queue semantics, separate Feed, tag and
 deletion-aware v2 highlight projections, article-specific HTTP contracts,

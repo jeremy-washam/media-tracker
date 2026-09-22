@@ -122,6 +122,28 @@ export const PodcastsQuerySchema = z
       })
   })
 
+export const PodcastFilterOptionsQuerySchema = PodcastsQuerySchema.safeExtend({
+  facet: z.enum(['show', 'publisher', 'language']),
+  optionQ: optionalString,
+  optionLimit: z.coerce.number().int().min(1).max(100).default(30),
+  optionCursor: z.string().max(4000).optional(),
+}).superRefine((value, context) => {
+  if ((value.view === 'following') !== (value.facet !== 'show'))
+    context.addIssue({
+      code: 'custom',
+      path: ['facet'],
+      message: 'Facet is not valid for this view.',
+    })
+})
+
+export const PodcastFilterOptionsResponseSchema = z.object({
+  data: z.array(
+    z.object({ value: z.string(), label: z.string(), count: z.number().int().nonnegative() }),
+  ),
+  nextCursor: z.string().nullable(),
+})
+export type PodcastFilterOptionsResponse = z.infer<typeof PodcastFilterOptionsResponseSchema>
+
 export const PodcastCollectionItemSchema = z.object({
   id: z.string(),
   kind: z.enum(['episode', 'show']),
@@ -152,9 +174,21 @@ export const PodcastsResponseSchema = z.object({
     queue: z.number().int().nonnegative(),
     following: z.number().int().nonnegative(),
   }),
+  coverage: z
+    .object({
+      savedEpisodesAt: z.string().nullable(),
+      savedShowsAt: z.string().nullable(),
+      playerAt: z.string().nullable(),
+      recentPollAt: z.string().nullable(),
+      possibleRecentGap: z.boolean(),
+    })
+    .optional(),
 })
 
 export const PodcastDetailSchema = PodcastCollectionItemSchema.extend({
+  showId: z.string().nullable().optional(),
+  firstObservedAt: z.string().nullable().optional(),
+  lastObservedAt: z.string().nullable().optional(),
   description: z.string().nullable(),
   publisher: z.string().nullable(),
   showDescription: z.string().nullable(),

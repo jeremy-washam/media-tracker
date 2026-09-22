@@ -18,6 +18,7 @@ Accepted decisions:
 11. [Source-derived Queue relationships](./0011-source-derived-queue.md)
 12. [Refreshable provider catalog caches](./0012-refreshable-provider-catalog-cache.md)
 13. [TMDB matching for Letterboxd title collisions and series](./0013-tmdb-letterboxd-match-evidence.md)
+14. [Interim Spotify catalog retention](./0014-spotify-catalog-retention-interim.md)
 
 ADRs are append-only records of consequential technical choices. If a decision
 changes, add a new ADR that supersedes the old one rather than rewriting history.

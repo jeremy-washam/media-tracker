@@ -1,7 +1,7 @@
 # Movies end-to-end implementation plan
 
 Status: Letterboxd slice, refreshable TMDB enrichment, and full local catalog
-backfill implemented; real-data visual acceptance and final UX iteration remain
+backfill implemented; real-data visual acceptance complete; final UX iteration remains
 Last updated: 2026-09-21
 
 The evidence-aware follow-up backfill resolved all seven local export/RSS
@@ -11,7 +11,8 @@ projection has 673 items: 669 matched, zero ambiguous, and four unmatched;
 Archive has 371 and Queue has 309. The revised acceptance rule is recorded in
 [ADR 0013](../decisions/0013-tmdb-letterboxd-match-evidence.md). The four
 remaining unmatched entries need item-level review rather than a generic
-search-score fallback.
+search-score fallback. The owner has chosen to leave those four unmatched for
+now; this hardening pass does not attempt to force a match.
 
 ## Purpose
 
@@ -987,7 +988,7 @@ the current local checkout already contains a retained ignored export.
 - [x] Empty and upgrade migrations pass.
 - [x] `pnpm check`, build, relevant end-to-end tests, and migration checks pass
       after the final edit.
-- [ ] Both themes and responsive inspector modes receive visual QA with real
+- [x] Both themes and responsive inspector modes receive visual QA with real
       data, and obvious defects are fixed.
 - [x] No credential, raw export, or unsanitized owner fixture is committed.
 

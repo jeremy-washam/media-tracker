@@ -28,6 +28,10 @@ import {
   MoviesQuerySchema,
   MoviesResponseSchema,
   MusicDetailSchema,
+  MusicFilterOptionsQuerySchema,
+  MusicFilterOptionsResponseSchema,
+  PodcastFilterOptionsQuerySchema,
+  PodcastFilterOptionsResponseSchema,
   MusicHistoryQuerySchema,
   MusicHistoryResponseSchema,
   MusicQuerySchema,
@@ -39,6 +43,7 @@ import {
   PodcastsResponseSchema,
   ReadwiseSyncResponseSchema,
   SpotifyImportResponseSchema,
+  SpotifyCatalogJobResponseSchema,
   SpotifySyncResponseSchema,
   SyncRunsResponseSchema,
   VideoChannelDetailSchema,
@@ -79,6 +84,7 @@ import {
   SpotifyImportError,
 } from './spotify-import'
 import { SpotifyCredentialsMissingError, syncSpotifySavedEpisodes } from './spotify-sync'
+import { startSpotifyCatalogBackfill, spotifyCatalogJobStatus } from './spotify-catalog'
 import {
   continueYoutubeTakeoutImport,
   importYoutubeTakeout,
@@ -273,6 +279,17 @@ const podcastsRoute = createRoute({
   },
 })
 
+const podcastFilterOptionsRoute = createRoute({
+  method: 'get',
+  path: '/api/library/podcasts/filter-options',
+  tags: ['Library', 'Podcasts'],
+  request: { query: PodcastFilterOptionsQuerySchema },
+  responses: {
+    200: jsonContent(PodcastFilterOptionsResponseSchema, 'Podcast facet options'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Podcast facet query'),
+  },
+})
+
 const podcastDetailRoute = createRoute({
   method: 'get',
   path: '/api/library/podcasts/{kind}/{id}',
@@ -309,6 +326,17 @@ const musicRoute = createRoute({
   },
 })
 
+const musicFilterOptionsRoute = createRoute({
+  method: 'get',
+  path: '/api/library/music/filter-options',
+  tags: ['Library', 'Music'],
+  request: { query: MusicFilterOptionsQuerySchema },
+  responses: {
+    200: jsonContent(MusicFilterOptionsResponseSchema, 'Music facet options'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Music facet query'),
+  },
+})
+
 const musicDetailRoute = createRoute({
   method: 'get',
   path: '/api/library/music/{kind}/{id}',
@@ -324,11 +352,14 @@ const musicDetailRoute = createRoute({
 
 const musicHistoryRoute = createRoute({
   method: 'get',
-  path: '/api/library/music/tracks/{id}/history',
+  path: '/api/library/music/{kind}/{id}/history',
   tags: ['Library', 'Music'],
-  request: { params: z.object({ id: z.string().min(1) }), query: MusicHistoryQuerySchema },
+  request: {
+    params: z.object({ kind: z.enum(['tracks', 'albums', 'artists']), id: z.string().min(1) }),
+    query: MusicHistoryQuerySchema,
+  },
   responses: {
-    200: jsonContent(MusicHistoryResponseSchema, 'Track playback history'),
+    200: jsonContent(MusicHistoryResponseSchema, 'Music playback history'),
     400: jsonContent(ApiErrorSchema, 'Invalid Music history cursor'),
   },
 })
@@ -471,6 +502,27 @@ const spotifySyncRoute = createRoute({
   responses: {
     200: jsonContent(SpotifySyncResponseSchema, 'Completed Spotify saved-episode sync'),
     503: jsonContent(ApiErrorSchema, 'Spotify is not configured or unavailable'),
+  },
+})
+
+const spotifyCatalogSyncRoute = createRoute({
+  method: 'post',
+  path: '/api/catalogs/spotify/sync',
+  tags: ['Catalogs', 'Music', 'Podcasts'],
+  responses: {
+    202: jsonContent(SpotifyCatalogJobResponseSchema, 'Spotify catalog backfill accepted'),
+    503: jsonContent(ApiErrorSchema, 'Spotify catalog credentials are not configured'),
+  },
+})
+
+const spotifyCatalogJobRoute = createRoute({
+  method: 'get',
+  path: '/api/catalogs/spotify/jobs/{jobId}',
+  tags: ['Catalogs', 'Music', 'Podcasts'],
+  request: { params: z.object({ jobId: z.string().min(1) }) },
+  responses: {
+    200: jsonContent(SpotifyCatalogJobResponseSchema, 'Spotify catalog backfill status'),
+    404: jsonContent(ApiErrorSchema, 'Catalog job not found'),
   },
 })
 
@@ -849,7 +901,8 @@ app.openapi(tmdbCatalogSyncRoute, async (context) => {
 app.openapi(podcastsRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createSpotifyLibraryRepository(context.env.DB).listPodcasts({
+    const repository = createSpotifyLibraryRepository(context.env.DB)
+    const page = await repository.listPodcasts({
       view: query.view,
       ...(query.q === undefined ? {} : { q: query.q }),
       show: query.show,
@@ -869,7 +922,44 @@ app.openapi(podcastsRoute, async (context) => {
       limit: query.limit,
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
     })
-    return context.json(PodcastsResponseSchema.parse(page), 200)
+    return context.json(
+      PodcastsResponseSchema.parse({ ...page, coverage: await repository.coverage() }),
+      200,
+    )
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(podcastFilterOptionsRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createSpotifyLibraryRepository(context.env.DB).listPodcastFilterOptions(
+      {
+        view: query.view,
+        ...(query.q === undefined ? {} : { q: query.q }),
+        show: query.show,
+        following: query.following,
+        ...(query.dateFrom === undefined ? {} : { dateFrom: query.dateFrom }),
+        ...(query.dateTo === undefined ? {} : { dateTo: query.dateTo }),
+        dateUnknown: query.dateUnknown,
+        ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+        ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+        publishedUnknown: query.publishedUnknown,
+        publisher: query.publisher,
+        language: query.language,
+        libraryEpisodes: query.libraryEpisodes,
+        duration: query.duration,
+        limit: query.limit,
+      },
+      query.facet,
+      query.optionQ,
+      query.optionLimit,
+      query.optionCursor,
+    )
+    return context.json(PodcastFilterOptionsResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
       throw new HTTPException(400, { message: error.message })
@@ -915,7 +1005,8 @@ app.openapi(podcastHistoryRoute, async (context) => {
 app.openapi(musicRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createSpotifyLibraryRepository(context.env.DB).listMusic({
+    const repository = createSpotifyLibraryRepository(context.env.DB)
+    const page = await repository.listMusic({
       view: query.view,
       ...(query.q === undefined ? {} : { q: query.q }),
       ...(query.from === undefined ? {} : { from: query.from }),
@@ -933,7 +1024,42 @@ app.openapi(musicRoute, async (context) => {
       limit: query.limit,
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
     })
-    return context.json(MusicResponseSchema.parse(page), 200)
+    return context.json(
+      MusicResponseSchema.parse({ ...page, coverage: await repository.coverage() }),
+      200,
+    )
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
+app.openapi(musicFilterOptionsRoute, async (context) => {
+  const query = context.req.valid('query')
+  try {
+    const page = await createSpotifyLibraryRepository(context.env.DB).listMusicFilterOptions(
+      {
+        view: query.view,
+        ...(query.q === undefined ? {} : { q: query.q }),
+        ...(query.from === undefined ? {} : { from: query.from }),
+        ...(query.to === undefined ? {} : { to: query.to }),
+        source: query.source,
+        ...(query.minPlaybacks === undefined ? {} : { minPlaybacks: query.minPlaybacks }),
+        playbackCount: query.playbackCount,
+        metadata: query.metadata,
+        artist: query.artist,
+        album: query.album,
+        explicit: query.explicit,
+        albumType: query.albumType,
+        limit: query.limit,
+      },
+      query.facet,
+      query.optionQ,
+      query.optionLimit,
+      query.optionCursor,
+    )
+    return context.json(MusicFilterOptionsResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
       throw new HTTPException(400, { message: error.message })
@@ -961,11 +1087,12 @@ app.openapi(musicDetailRoute, async (context) => {
 })
 
 app.openapi(musicHistoryRoute, async (context) => {
-  const { id } = context.req.valid('param')
+  const { kind, id } = context.req.valid('param')
   const query = context.req.valid('query')
   try {
     const page = await createSpotifyLibraryRepository(context.env.DB).listMusicHistory(
       id,
+      kind === 'tracks' ? 'track' : kind === 'albums' ? 'album' : 'artist',
       query.limit,
       query.cursor,
     )
@@ -1290,6 +1417,44 @@ app.openapi(spotifySyncRoute, async (context) => {
       503,
     )
   }
+})
+
+app.openapi(spotifyCatalogSyncRoute, async (context) => {
+  if (
+    !context.env.SPOTIFY_CLIENT_ID ||
+    !context.env.SPOTIFY_REFRESH_TOKEN ||
+    !context.env.TOKEN_ENCRYPTION_KEY
+  )
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Spotify catalog credentials are not configured.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
+  const id = await startSpotifyCatalogBackfill(context.env)
+  const status = await spotifyCatalogJobStatus(context.env, id)
+  if (status === null) throw new Error('Created Spotify catalog job was not found')
+  return context.json(SpotifyCatalogJobResponseSchema.parse(status), 202)
+})
+
+app.openapi(spotifyCatalogJobRoute, async (context) => {
+  const status = await spotifyCatalogJobStatus(context.env, context.req.valid('param').jobId)
+  if (status === null)
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Spotify catalog job not found.',
+          requestId: context.get('requestId'),
+        },
+      }),
+      404,
+    )
+  return context.json(SpotifyCatalogJobResponseSchema.parse(status), 200)
 })
 
 app.openapi(youtubeImportRoute, async (context) => {

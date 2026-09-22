@@ -345,13 +345,19 @@ describe('Spotify Extended Streaming History import', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string | URL | Request) => {
-        if (String(input).includes('accounts.spotify.com/api/token')) {
+        const url = String(input)
+        if (url.includes('accounts.spotify.com/api/token')) {
           return Response.json({
             access_token: 'synthetic-access',
             expires_in: 3600,
             token_type: 'Bearer',
           })
         }
+        if (url.includes('/me/shows'))
+          return Response.json({ items: [], limit: 50, next: null, offset: 0, total: 0 })
+        if (url.includes('/me/player/recently-played'))
+          return Response.json({ items: [], next: null, cursors: { after: null } })
+        if (url.includes('/me/player')) return new Response(null, { status: 204 })
         return Response.json({
           items: [
             {
@@ -384,6 +390,15 @@ describe('Spotify Extended Streaming History import', () => {
       pages: 1,
       sourceRecords: 1,
     })
+    const cursors = database.database
+      .prepare('SELECT name,checkpoint_json FROM sync_cursors ORDER BY name')
+      .all() as { name: string; checkpoint_json: string }[]
+    expect(cursors.map((cursor) => cursor.name)).toEqual(
+      expect.arrayContaining(['current-player', 'recent-tracks', 'saved-episodes', 'saved-shows']),
+    )
+    expect(
+      JSON.parse(cursors.find((cursor) => cursor.name === 'recent-tracks')!.checkpoint_json),
+    ).toMatchObject({ observedItems: 0, possibleGap: false })
     expect(count(database.database, 'connections')).toBe(1)
     expect(count(database.database, 'media_items')).toBe(3)
     expect(count(database.database, 'external_identities')).toBe(3)

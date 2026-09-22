@@ -1,11 +1,31 @@
 # Spotify Source Reconnaissance
 
 - Status: Feasible as a hybrid import, with important podcast sync gaps
-- Last verified: 2026-07-19
+- Last verified: 2026-09-21 for exact-ID catalog endpoints and retention terms
 - Priority: Podcasts first; songs are secondary
 - Sources: Official Spotify documentation and private aggregate probes
 
 ## Executive assessment
+
+### Current catalog-backfill implementation
+
+Exact-ID enrichment of export-derived tracks and episodes now uses
+`GET /tracks/{id}` and `GET /episodes/{id}` in a durable, bounded queue job.
+Start or resume it with `POST /api/catalogs/spotify/sync`; inspect progress with
+`GET /api/catalogs/spotify/jobs/{jobId}`. Each batch handles at most 25 IDs,
+alternates track and episode work, normally waits 60 seconds before the next
+batch, and respects a longer 429
+backoff. The job reuses saved raw responses on retry and never treats a catalog
+response as evidence of a listen. A 404 records current catalog unavailability,
+not removal of a historical listen. The hourly Spotify scan retains its older
+opportunistic track-only batch enrichment only when no durable job is active.
+
+The owner elected indefinite catalog-response retention for this private app
+in [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md). Spotify's
+[Developer Terms](https://developer.spotify.com/terms) still say metadata and
+artwork caching must be temporary; this implementation does not claim a
+personal-use exception or policy compliance. Revisit retention before
+broadening access or distribution.
 
 Spotify can support a strong historical podcast backfill, but not a complete,
 seamless podcast-history sync.

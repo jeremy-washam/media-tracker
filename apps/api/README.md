@@ -67,6 +67,14 @@ Spotify accepts Extended Streaming History ZIPs and polls saved episodes. Set
 encrypted before library acquisition; a short database lease serializes refreshes.
 A new bootstrap refresh token replaces the previous stored authorization.
 
+For exact-ID track and episode metadata, `POST /api/catalogs/spotify/sync`
+starts or resumes a bounded background backfill. `GET
+/api/catalogs/spotify/jobs/{jobId}` reports counts, remaining backlog, and
+retry state. It preserves API response bytes in private R2 before projection;
+Spotify metadata does not create listening evidence. The private deployment
+currently retains catalog responses indefinitely at the owner's request, with
+the Spotify terms risk recorded in ADR 0014.
+
 YouTube accepts manual Takeout ZIPs. Pass `connectionId` to import or continue
 into an existing account, or `connectionKey` and `connectionLabel` to establish
 a new account lineage. Omitted options use the legacy default account. The UI

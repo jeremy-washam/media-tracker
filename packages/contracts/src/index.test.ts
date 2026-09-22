@@ -49,6 +49,21 @@ describe('API contracts', () => {
         catalogJobId: 'job-1',
       }).success,
     ).toBe(true)
+    expect(
+      SyncJobSchema.safeParse({
+        idempotencyKey: 'catalog:spotify:1',
+        source: 'spotify',
+        operation: 'refresh_spotify_catalog',
+        catalogJobId: 'job-1',
+      }).success,
+    ).toBe(true)
+    expect(
+      SyncJobSchema.safeParse({
+        idempotencyKey: 'catalog:spotify:1',
+        source: 'spotify',
+        operation: 'refresh_spotify_catalog',
+      }).success,
+    ).toBe(false)
   })
 
   it('rejects source records that are not standalone Archive media', () => {
