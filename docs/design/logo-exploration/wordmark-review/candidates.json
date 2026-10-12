@@ -1,0 +1,50 @@
+[
+  {
+    "id": "A",
+    "slug": "cormorantgaramond",
+    "name": "Cormorant Garamond",
+    "weight": 600,
+    "range": "300 700",
+    "description": "Fine, expressive serif. Literary and closest to the roof’s elegance."
+  },
+  {
+    "id": "B",
+    "slug": "instrumentserif",
+    "name": "Instrument Serif",
+    "weight": 400,
+    "range": "400",
+    "description": "Narrow editorial serif. Quiet lettering with a distinctive silhouette."
+  },
+  {
+    "id": "C",
+    "slug": "fraunces",
+    "name": "Fraunces",
+    "weight": 500,
+    "range": "100 900",
+    "description": "Rounder, softer serif. More warmth and visual weight."
+  },
+  {
+    "id": "D",
+    "slug": "alegreya",
+    "name": "Alegreya",
+    "weight": 500,
+    "range": "400 900",
+    "description": "Sturdy literary serif. More informal rhythm and clearer small lettering."
+  },
+  {
+    "id": "E",
+    "slug": "cinzel",
+    "name": "Cinzel",
+    "weight": 500,
+    "range": "400 900",
+    "description": "Engraved Roman lettering. The most overtly historic direction."
+  },
+  {
+    "id": "F",
+    "slug": "manrope",
+    "name": "Manrope",
+    "weight": 500,
+    "range": "200 800",
+    "description": "Modern sans serif. A restrained counterpart to the detailed symbol."
+  }
+]

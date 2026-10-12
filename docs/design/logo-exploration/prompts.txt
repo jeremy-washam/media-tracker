@@ -1,0 +1,40 @@
+Built-in image_gen tool; monochrome raster concept explorations, not final vector assets.
+
+ROUND 1
+
+Use case: logo-brand.
+Asset type: one polished logo exploration comparison sheet for the private desktop app Imladris.
+Product brief: Imladris is a personal home for books, movies, articles, podcasts, music and videos, with trustworthy media history, reflection, intentional learning and discovery. The name evokes Rivendell as a sheltered place preserving stories and knowledge. The owner also likes the feeling of navigating an awe-inspiring vast world. The actual app uses quiet graphite surfaces, system typography and media artwork. User specifically requests waterfall (Rivendell) and Rivendell house imagery in addition to valley/path, library threshold and maze.
+Canvas: landscape editorial design board, clean white background, solid near-black emblems, generous margins and disciplined spacing. Flat vector-like graphic design, crisp contours, no gradients or texture.
+Layout: exactly 12 separate emblem concepts arranged in 3 columns and 4 rows. Each tile contains a compact centered emblem and a small clean sans-serif identifier underneath. Header at top reads exactly "Imladris" with tiny subtitle "Logo exploration". No other explanatory text.
+Row 1, columns 1-3:
+"A1 · Valley": enclosed valley with a winding path in negative space, use broad sculptural enclosing shapes, not a generic mountain summit logo.
+"B1 · Threshold": a simple arched opening suggesting entrance to a quiet library, strong positive and negative shapes, avoid church shape.
+"C1 · Thread": short navigable labyrinth with a clear path and only a few broad geometric turns, cohesive compact silhouette.
+Row 2, columns 1-3:
+"A2 · Valley": a distinct softer, literary variation of the valley and path, evocative shelter enclosing open space.
+"B2 · Threshold": a distinct arch/page hybrid, abstract pages form an inviting threshold, no literal clip-art open book.
+"C2 · Thread": a distinct compact path/maze suggesting an I monogram, retain openness and mystery, not a circuit board or QR code.
+Row 3, columns 1-3:
+"D1 · Waterfall": bold cliff form with one elegant waterfall cut through it using negative space, a recognizably descending cascade, compact emblem.
+"E1 · House": simplified Rivendell-inspired elven house silhouette with graceful sloping roof and one arched opening, peaceful residential refuge, not castle or cathedral, no tiny windows.
+"F1 · House + falls": one tiny graceful Rivendell-inspired house above/beside a waterfall, fuse roof, cliff and cascade into one coherent bold silhouette with very few elements.
+Row 4, columns 1-3:
+"D2 · Waterfall": distinct waterfall interpretation, two offset rock ledges framing a falling ribbon of water, graceful broad curves, restrained and memorable.
+"E2 · House": distinct asymmetrical Rivendell-inspired pavilion with low sweeping roof, elegant broad arch and sheltered terrace, simplified to app-logo scale.
+"F2 · House + falls": distinct abstract shelter-and-water emblem, low elven roof canopy above a vertical cascade, architecture and water create a unified compact logo.
+Visual constraints: these are serious logo concepts, not scenery illustrations or fantasy game badges. Keep each mark readable at 24-32 pixels with weighty clean shapes, minimal detail and balanced negative space; architecture may be slightly more evocative but never intricate. Same optical size across tiles. Distinct creative explorations; do not just repeat the same mark. No mockup objects, color, ornamental borders, rune text, film reels, headphones, stars, realistic landscapes, mountains with sun circles, trees, decorative vines, watermarks, gradients, shadows or 3D. Typography stays modest; do not attempt ornamental fantasy lettering. Exact label text as specified.
+
+ROUND 2
+
+Use case: logo-brand. Create one refined logo comparison sheet for Imladris, a private personal media library named after Rivendell. The owner likes waterfall and Rivendell house imagery. This is a refinement round: house concepts in an earlier round looked too much like East Asian pagodas; correct that by using unmistakably Rivendell-like elven European architecture with steep asymmetrical gables, graceful peaked rooflines, slender arched openings, art-nouveau influence, a sheltered house on a rocky terrace. Absolutely no pagoda roofs, Buddhist temples, torii, Asian pavilions or wide upturned roof tips. Still a compact logo, not a drawing of a building.
+One landscape sheet, white background, near-black monochrome marks, flat vector-like crisp contours, polished graphic design, generous whitespace. Exactly 6 equal tiles in three columns and two rows. Title exactly "Imladris"; subtitle "Waterfall + house refinements". Each emblem has a short identifier beneath in a small sans serif. Symbols optically comparable in size. Minimal detail, broad negative-space openings, convincing silhouette, suitable for simplified small app icons.
+Top row:
+"G1 · Falling water": abstract waterfall between two sculptural cliff masses, one broad white water ribbon falls over a ledge and forms a quiet pool. No house. Make the water negative space very legible, no many tiny stripes.
+"H1 · Elven house": asymmetrical Rivendell-inspired house with one steep sweeping peaked gable and a lower side gable, one tall arched entrance, curved architectural support on a solid low terrace. Compact graceful silhouette, European elven character, no tiny windows, no chimney.
+"J1 · House + falls": steep asymmetrical elven house on one rock mass, waterfall beside it cuts through a second rock mass in broad negative space. Fuse into one compact balanced emblem. House remains recognizably a house, no pagoda.
+Bottom row:
+"G2 · Falling water": distinct compact waterfall mark with a broad descending white ribbon between offset cliffs, slightly more abstract, strong graphic weight, two rock masses rather than a mountain summit.
+"H2 · Elven house": distinct simplified Rivendell house with two slender pointed overlapping gables, one arched open entrance and integrated arched terrace underneath, inviting literary elegance. No pagoda roof or castle turrets.
+"J2 · House + falls": a very simple Rivendell shelter silhouette with one tall flowing steep gable and arched opening sitting above a waterfall that descends through dark cliff. Unity of architecture and water, vertically compact, broad clean shapes. No extra decorative details.
+Avoid literal book icons, mountains with sun circles, trees, vines, ornamental borders, runes, badges, text inside emblems, gradients, texture, thin hatching, intricate windows, 3D, realistic illustration, promotional mockups, watermarks. Labels verbatim. Marks should express protected knowledge, stories and a personal refuge.

@@ -1,0 +1,34 @@
+Imladris wordmark references, round two
+
+The owner requested another set of options before changing the app wordmark.
+The reference round was produced while the app used Cormorant Garamond 600.
+The owner subsequently selected H, Fondamento 400. The app now uses Fondamento
+with the retained compact J2; the baseline and review screenshots remain history.
+
+Style reference: user-provided screenshot, saved unchanged as reference.png.
+The six NEW candidates are separate from A-F in the earlier comparison:
+G: Almendra 400 — irregular medieval serif.
+H: Fondamento 400 — calligraphic strokes and angled terminals.
+I: Metamorphous 400 — broad carved fantasy forms.
+J: IM Fell English 400 — antique printed lettering.
+K: MedievalSharp 400 — angular handwritten lettering.
+L: Uncial Antiqua 400 — rounded manuscript lettering.
+
+All are actual fonts rendered in Chromium, not image-generated approximations.
+Fonts, original licenses, source URLs, and SHA-256 hashes are in fonts/.
+The current-font baseline uses the app's 600-weight name-only WOFF2, copied
+without modification; its original license is current-cormorant-OFL.txt.
+
+preview.html works offline and includes the supplied reference, the current
+font baseline, large lockups, light/dark sidebar samples, an appearance toggle,
+and a wordmark-size slider. Sidebar labels retain system typography. Wordmark
+sizes in the small samples are 20 px, except 18 px Metamorphous and 17 px Uncial
+Antiqua for optical balance. The symbol remains 30 px in every small sample.
+
+Verification: all seven font faces (six candidates and one baseline) loaded;
+no clipped lockups at the default size; appearance and size controls worked.
+comparison-light.png and comparison-dark.png were captured after fonts loaded.
+Selected replacement: H, Fondamento 400.
+
+Final direction: the owner removed the wordmark. The app uses compact J2 alone;
+no brand font is bundled or loaded. Prior comparisons remain as history.

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "G",
+    "slug": "almendra",
+    "name": "Almendra",
+    "weight": 400,
+    "range": "400",
+    "description": "Sharp, irregular serifs. A handwritten medieval direction."
+  },
+  {
+    "id": "H",
+    "slug": "fondamento",
+    "name": "Fondamento",
+    "weight": 400,
+    "range": "400",
+    "description": "Calligraphic lettering with curved strokes and angled terminals."
+  },
+  {
+    "id": "I",
+    "slug": "metamorphous",
+    "name": "Metamorphous",
+    "weight": 400,
+    "range": "400",
+    "description": "Broad, carved fantasy lettering. More pronounced wedge shapes."
+  },
+  {
+    "id": "J",
+    "slug": "imfellenglish",
+    "name": "IM Fell English",
+    "weight": 400,
+    "range": "400",
+    "description": "Antique book lettering with an uneven printed texture."
+  },
+  {
+    "id": "K",
+    "slug": "medievalsharp",
+    "name": "MedievalSharp",
+    "weight": 400,
+    "range": "400",
+    "description": "Angular handwritten lettering. Simpler, with a medieval rhythm."
+  },
+  {
+    "id": "L",
+    "slug": "uncialantiqua",
+    "name": "Uncial Antiqua",
+    "weight": 400,
+    "range": "400",
+    "description": "Rounded manuscript lettering. The most decorative direction."
+  }
+]

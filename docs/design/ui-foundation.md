@@ -256,6 +256,51 @@ components to its files. See the [web README](../../apps/web/README.md#shared-co
 for imports, adding components, and theme integration. The initial setup supplies
 Button, Input, and Textarea; add other primitives when features need them.
 
+## Brand identity: compact J2 symbol
+
+On 2026-10-12, the owner selected **J2**, the house-and-waterfall concept, as
+the working logo. The owner prefers the **compact** treatment. Retain
+**J2, J3, J7, G1, and G8** as the preferred shortlist;
+later explorations do not replace those preferences. The owner subsequently
+approved **Cormorant Garamond 600**, candidate A in the wordmark review, and
+requested implementation in the web client.
+
+The [J2 vector review](logo-exploration/j2-vector/preview.html) compares a
+faithful SVG with the refined compact variant at 16–64 px, in light/dark contexts and
+sidebar previews. Both use transparent backgrounds and `currentColor`; fixed
+dark/light ink exports, a system-appearance-aware SVG favicon, and PNG exports
+are also saved beside the review. Preserve the selected house, sweeping roof,
+arched openings, and waterfall. The initial vector review's system-font name
+treatment is historical; the later wordmark review owns the chosen lettering.
+The refined compact SVG
+removes the remaining rock cut and smooths the roof, cliffs, and single pool.
+The first compact export remains saved as history.
+
+The [wordmark review](logo-exploration/wordmark-review/preview.html) compares
+Cormorant Garamond, Instrument Serif, Fraunces, Alegreya, Cinzel, and Manrope
+beside the refined compact mark, including small sidebar samples and light/dark
+appearance. Font files and original licenses are bundled locally for an offline
+comparison. Candidate A was initially selected, then superseded by candidate H
+from the next reference set. The owner subsequently removed the wordmark. The web client now uses a 30 px
+compact symbol alone in its sidebar, following the active foreground color.
+The brand link retains its accessible Imladris name. No custom brand font is
+bundled or loaded. The HTML includes
+an SVG favicon with system light/dark ink, plus PNG and touch-icon exports.
+Source imports include these assets in both normal and deployment-mode Vite
+builds. Production interface typography remains the platform system font. Historical studies and
+comparison artifacts remain available.
+
+The owner then reopened the wordmark choice after comparing the app against a
+more handwritten, Tolkien-like lettering reference. The
+[second wordmark reference set](logo-exploration/reference-wordmark-review/preview.html)
+compares Almendra, Fondamento, Metamorphous, IM Fell English, MedievalSharp,
+and Uncial Antiqua (G–L) with that screenshot and the current Cormorant baseline.
+The owner requested these references before another change, then selected
+**H — Fondamento 400**. Its calligraphic strokes and angled terminals fit the
+provided lettering reference. After checking the wordmark in the app, the owner
+chose to remove it entirely and retain only the symbol. Both font rounds remain
+saved as historical references.
+
 ## Provisional theme: Graphite
 
 On 2026-09-19, the owner selected **tweakcn's Graphite** as the working theme,

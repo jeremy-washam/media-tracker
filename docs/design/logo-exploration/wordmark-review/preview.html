@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Imladris — wordmark review</title>
+    <style>
+      @font-face {
+        font-family: 'Cormorant Garamond';
+        src: url('fonts/cormorantgaramond.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: block;
+      }
+      .font-cormorantgaramond {
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 600;
+      }
+      @font-face {
+        font-family: 'Instrument Serif';
+        src: url('fonts/instrumentserif.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+      }
+      .font-instrumentserif {
+        font-family: 'Instrument Serif', serif;
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: 'Fraunces';
+        src: url('fonts/fraunces.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+      }
+      .font-fraunces {
+        font-family: 'Fraunces', serif;
+        font-weight: 500;
+        font-variation-settings:
+          'SOFT' 35,
+          'WONK' 1,
+          'opsz' 48;
+      }
+      @font-face {
+        font-family: 'Alegreya';
+        src: url('fonts/alegreya.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 400 900;
+        font-display: block;
+      }
+      .font-alegreya {
+        font-family: 'Alegreya', serif;
+        font-weight: 500;
+      }
+      @font-face {
+        font-family: 'Cinzel';
+        src: url('fonts/cinzel.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 400 900;
+        font-display: block;
+      }
+      .font-cinzel {
+        font-family: 'Cinzel', serif;
+        font-weight: 500;
+      }
+      @font-face {
+        font-family: 'Manrope';
+        src: url('fonts/manrope.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 200 800;
+        font-display: block;
+      }
+      .font-manrope {
+        font-family: 'Manrope', serif;
+        font-weight: 500;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f3f3f1;
+        color: #262626;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --wordmark-size: 54px;
+      }
+      body.review-dark {
+        background: #1d1d1d;
+        color: #ededed;
+      }
+      main {
+        max-width: 1240px;
+        padding: 36px 36px 26px;
+        margin: auto;
+      }
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 26px;
+      }
+      h1 {
+        font-size: 28px;
+        margin: 0 0 8px;
+        letter-spacing: -0.035em;
+      }
+      header p {
+        font-size: 14px;
+        line-height: 1.55;
+        color: #6b6b67;
+        margin: 0;
+      }
+      body.review-dark header p {
+        color: #b0b0ac;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        white-space: nowrap;
+      }
+      button {
+        font: inherit;
+        font-size: 12px;
+        color: inherit;
+        background: transparent;
+        border: 1px solid #aaa;
+        border-radius: 6px;
+        padding: 8px 12px;
+        cursor: default;
+      }
+      .scale-control {
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      input {
+        width: 85px;
+        accent-color: #666;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dfdfda;
+        border-radius: 10px;
+        padding: 22px 24px;
+      }
+      .review-dark .card {
+        background: #272727;
+        border-color: #424242;
+      }
+      .card-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: center;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 0;
+      }
+      .card-title > span {
+        font-size: 11px;
+        color: #7b7b75;
+      }
+      .card > p {
+        color: #73736f;
+        font-size: 12px;
+        margin: 9px 0 0;
+        line-height: 1.5;
+      }
+      .review-dark .card > p {
+        color: #b9b9b2;
+      }
+      .lockup {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        min-height: 154px;
+      }
+      .wordmark {
+        font-size: var(--wordmark-size);
+        line-height: 1;
+        font-synthesis: none;
+        font-kerning: normal;
+        letter-spacing: -0.018em;
+        white-space: nowrap;
+      }
+      .font-cinzel {
+        letter-spacing: 0.008em;
+      }
+      .sample-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .sidebar-sample {
+        border-radius: 7px;
+        padding: 12px 14px;
+      }
+      .light {
+        background: #eeeeea;
+        color: #303030;
+      }
+      .dark {
+        background: #262626;
+        color: #ededed;
+      }
+      .review-dark .dark {
+        background: #161616;
+      }
+      .sample-heading {
+        font-size: 9px;
+        color: #84847e;
+        margin-bottom: 12px;
+      }
+      .small-lockup {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 32px;
+      }
+      .small-wordmark {
+        font-size: 20px;
+        font-synthesis: none;
+        white-space: nowrap;
+        font-kerning: normal;
+        letter-spacing: -0.015em;
+      }
+      .small-wordmark.font-instrumentserif {
+        font-size: 23px;
+      }
+      .small-wordmark.font-cinzel {
+        font-size: 17px;
+        letter-spacing: 0.005em;
+      }
+      .sample-nav {
+        font-size: 11px;
+        margin-top: 16px;
+        border-top: 1px solid #d3d3ce;
+        padding-top: 10px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .dark .sample-nav {
+        border-color: #454545;
+      }
+      .sample-nav span {
+        opacity: 0.6;
+      }
+      .card > a {
+        display: inline-block;
+        margin-top: 14px;
+        font-size: 10px;
+        color: #888;
+        text-underline-offset: 3px;
+      }
+      .review-dark .card > a {
+        color: #aaa;
+      }
+      svg {
+        display: block;
+        flex-shrink: 0;
+      }
+      footer {
+        color: #787872;
+        font-size: 11px;
+        line-height: 1.6;
+        margin-top: 22px;
+      }
+      .review-dark footer {
+        color: #aaa;
+      }
+      @media (max-width: 900px) {
+        header {
+          display: block;
+        }
+        .controls {
+          margin-top: 20px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        main {
+          padding: 24px 16px;
+        }
+        .wordmark {
+          font-size: min(var(--wordmark-size), 12vw);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Imladris · wordmark</h1>
+          <p>
+            Six typefaces with the refined compact J2.<br />Compare the lettering at logo scale and
+            beside a 30 px sidebar mark.
+          </p>
+        </div>
+        <div class="controls">
+          <label class="scale-control"
+            >Size
+            <input
+              id="scale"
+              type="range"
+              min="40"
+              max="64"
+              value="54"
+              aria-label="Wordmark preview size"
+            /><output id="scale-value">54</output></label
+          ><button id="appearance" type="button" aria-pressed="false">Dark preview</button>
+        </div>
+      </header>
+      <div class="grid">
+        <article class="card" data-font="Cormorant Garamond">
+          <div class="card-title">
+            <h2>A · Cormorant Garamond</h2>
+            <span>600</span>
+          </div>
+          <p>Fine, expressive serif. Literary and closest to the roof’s elegance.</p>
+          <div class="lockup">
+            <svg
+              width="76"
+              height="76"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-11.5 2 364 364"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+              />
+            </svg>
+            <span class="wordmark font-cormorantgaramond">Imladris</span>
+          </div>
+          <div class="sample-pair">
+            <div class="sidebar-sample light">
+              <div class="sample-heading">Sidebar · light</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-cormorantgaramond">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+            <div class="sidebar-sample dark">
+              <div class="sample-heading">Sidebar · dark</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-cormorantgaramond">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+          </div>
+          <a
+            href="https://github.com/google/fonts/tree/main/ofl/cormorantgaramond"
+            target="_blank"
+            rel="noreferrer"
+            >Font source</a
+          >
+        </article>
+        <article class="card" data-font="Instrument Serif">
+          <div class="card-title">
+            <h2>B · Instrument Serif</h2>
+            <span>400</span>
+          </div>
+          <p>Narrow editorial serif. Quiet lettering with a distinctive silhouette.</p>
+          <div class="lockup">
+            <svg
+              width="76"
+              height="76"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-11.5 2 364 364"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+              />
+            </svg>
+            <span class="wordmark font-instrumentserif">Imladris</span>
+          </div>
+          <div class="sample-pair">
+            <div class="sidebar-sample light">
+              <div class="sample-heading">Sidebar · light</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-instrumentserif">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+            <div class="sidebar-sample dark">
+              <div class="sample-heading">Sidebar · dark</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-instrumentserif">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+          </div>
+          <a
+            href="https://github.com/google/fonts/tree/main/ofl/instrumentserif"
+            target="_blank"
+            rel="noreferrer"
+            >Font source</a
+          >
+        </article>
+        <article class="card" data-font="Fraunces">
+          <div class="card-title">
+            <h2>C · Fraunces</h2>
+            <span>500</span>
+          </div>
+          <p>Rounder, softer serif. More warmth and visual weight.</p>
+          <div class="lockup">
+            <svg
+              width="76"
+              height="76"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-11.5 2 364 364"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+              />
+            </svg>
+            <span class="wordmark font-fraunces">Imladris</span>
+          </div>
+          <div class="sample-pair">
+            <div class="sidebar-sample light">
+              <div class="sample-heading">Sidebar · light</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-fraunces">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+            <div class="sidebar-sample dark">
+              <div class="sample-heading">Sidebar · dark</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-fraunces">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+          </div>
+          <a
+            href="https://github.com/google/fonts/tree/main/ofl/fraunces"
+            target="_blank"
+            rel="noreferrer"
+            >Font source</a
+          >
+        </article>
+        <article class="card" data-font="Alegreya">
+          <div class="card-title">
+            <h2>D · Alegreya</h2>
+            <span>500</span>
+          </div>
+          <p>Sturdy literary serif. More informal rhythm and clearer small lettering.</p>
+          <div class="lockup">
+            <svg
+              width="76"
+              height="76"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-11.5 2 364 364"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+              />
+            </svg>
+            <span class="wordmark font-alegreya">Imladris</span>
+          </div>
+          <div class="sample-pair">
+            <div class="sidebar-sample light">
+              <div class="sample-heading">Sidebar · light</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-alegreya">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+            <div class="sidebar-sample dark">
+              <div class="sample-heading">Sidebar · dark</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-alegreya">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+          </div>
+          <a
+            href="https://github.com/google/fonts/tree/main/ofl/alegreya"
+            target="_blank"
+            rel="noreferrer"
+            >Font source</a
+          >
+        </article>
+        <article class="card" data-font="Cinzel">
+          <div class="card-title">
+            <h2>E · Cinzel</h2>
+            <span>500</span>
+          </div>
+          <p>Engraved Roman lettering. The most overtly historic direction.</p>
+          <div class="lockup">
+            <svg
+              width="76"
+              height="76"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-11.5 2 364 364"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+              />
+            </svg>
+            <span class="wordmark font-cinzel">Imladris</span>
+          </div>
+          <div class="sample-pair">
+            <div class="sidebar-sample light">
+              <div class="sample-heading">Sidebar · light</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-cinzel">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+            <div class="sidebar-sample dark">
+              <div class="sample-heading">Sidebar · dark</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-cinzel">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+          </div>
+          <a
+            href="https://github.com/google/fonts/tree/main/ofl/cinzel"
+            target="_blank"
+            rel="noreferrer"
+            >Font source</a
+          >
+        </article>
+        <article class="card" data-font="Manrope">
+          <div class="card-title">
+            <h2>F · Manrope</h2>
+            <span>500</span>
+          </div>
+          <p>Modern sans serif. A restrained counterpart to the detailed symbol.</p>
+          <div class="lockup">
+            <svg
+              width="76"
+              height="76"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-11.5 2 364 364"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+              />
+            </svg>
+            <span class="wordmark font-manrope">Imladris</span>
+          </div>
+          <div class="sample-pair">
+            <div class="sidebar-sample light">
+              <div class="sample-heading">Sidebar · light</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-manrope">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+            <div class="sidebar-sample dark">
+              <div class="sample-heading">Sidebar · dark</div>
+              <div class="small-lockup">
+                <svg
+                  width="30"
+                  height="30"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="-11.5 2 364 364"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M165 8C176 78 215 129 279 153Q272 156 274 176L295 176C311 176 319 198 320 222L326 320H220Q212 320 208 316L193 312C192 268 190 224 211 205Q225 201 243 198L244 171C245 161 239 151 232 155C221 160 220 173 221 193L209 192V156C209 141 202 128 193 121L175 101Q171 96 169 101C158 115 147 133 146 144V195H161V149C161 136 167 129 174 125C186 136 185 147 185 195L203 196C178 198 157 205 142 217C128 229 125 259 119 307Q118 313 116 312L94 317L15 320C14 292 19 285 30 280C35 275 33 265 44 260C53 255 54 235 62 223C71 213 81 219 87 216C91 207 89 201 95 198C103 194 120 195 130 195V145Q130 135 122 138L108 139C136 120 153 75 165 8ZM258 162C253 163 252 172 253 194L263 196Q267 193 266 172C266 165 263 161 258 162ZM86 321C128 331 218 331 260 321C222 339 124 339 86 321Z"
+                  />
+                </svg>
+                <span class="small-wordmark font-manrope">Imladris</span>
+              </div>
+              <div class="sample-nav">Library <span>Books</span></div>
+            </div>
+          </div>
+          <a
+            href="https://github.com/google/fonts/tree/main/ofl/manrope"
+            target="_blank"
+            rel="noreferrer"
+            >Font source</a
+          >
+        </article>
+      </div>
+      <footer>
+        Fonts are bundled locally with their original licenses and sources. The comparison works
+        offline. Sidebar labels retain system typography. No typeface is selected yet; application
+        branding is unchanged.
+      </footer>
+    </main>
+    <script>
+      document.querySelector('#appearance').addEventListener('click', (e) => {
+        const dark = document.body.classList.toggle('review-dark')
+        e.currentTarget.setAttribute('aria-pressed', String(dark))
+        e.currentTarget.textContent = dark ? 'Light preview' : 'Dark preview'
+      })
+      document.querySelector('#scale').addEventListener('input', (e) => {
+        document.body.style.setProperty('--wordmark-size', e.target.value + 'px')
+        document.querySelector('#scale-value').value = e.target.value
+      })
+    </script>
+  </body>
+</html>

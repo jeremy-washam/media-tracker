@@ -1,0 +1,40 @@
+Imladris J2 vector review
+
+Working choice: J2, selected by the owner on 2026-10-12.
+Owner preference: compact treatment.
+Retained favorites: J2, J3, J7, G1, G8.
+Source: ../02-waterfall-house-refinements.png, bottom-right concept.
+The web client now uses refined compact J2 with Fondamento 400.
+
+Assets
+- imladris-j2.svg: faithful curved-path reconstruction of the selected raster.
+- imladris-j2-compact.svg: reduced fine cuts, waterfall detail, and pool ripples.
+- imladris-j2-compact-v2.svg: preferred refined compact, manually simplified
+  to smooth curves with no rock crack and one curved pool. Under 1 KB.
+- *-v2-dark.svg / *-v2-light.svg: fixed-ink refined exports.
+- favicon-v2.svg and icon-v2-*.png: refined compact exports.
+- *-dark.svg: fixed dark ink for light backgrounds.
+- *-light.svg: fixed light ink for dark backgrounds.
+- favicon.svg: compact mark with CSS for system light/dark appearance.
+- icon-16.png, icon-32.png, icon-180.png, icon-512.png: compact transparent PNGs.
+- preview.html: editable local vector, size, and sidebar comparison.
+- comparison-preview.png: browser-rendered snapshot of that comparison.
+
+The base SVGs use currentColor and transparent negative space. Inline them to
+inherit the UI text color; external img elements should use fixed-ink variants.
+Keep decorative sidebar marks hidden from assistive technology when the link
+already has an accessible name. Standalone images should have appropriate alt text.
+
+The original concept was reconstructed from its pixel contours and reduced to
+native cubic vector paths, without embedding a raster image or adding a font.
+The owner prefers compact as the working treatment. The faithful mark remains
+saved as a reference. The current vector review shows the refined v2 compact;
+the first compact files remain saved unchanged. Wordmark exploration is in
+../wordmark-review/preview.html; candidate H in the second reference set, Fondamento 400, is selected.
+
+Verification: browser-rendered SVGs at 16, 24, 30, 32, 48, and 64 px, in light and
+dark contexts. SVG XML parsed without errors and contains paths, not image nodes.
+All previous concept sheets remain unchanged.
+
+Final direction: the owner removed the wordmark. The app uses compact J2 alone;
+no brand font is bundled or loaded. Prior comparisons remain as history.

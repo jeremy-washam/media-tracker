@@ -1,0 +1,56 @@
+[
+  {
+    "family": "Instrument Serif",
+    "file": "instrumentserif.ttf",
+    "upstream_file": "InstrumentSerif-Regular.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/instrumentserif/InstrumentSerif-Regular.ttf",
+    "family_source": "https://github.com/google/fonts/tree/main/ofl/instrumentserif",
+    "license": "instrumentserif-OFL.txt",
+    "sha256": "498efd461f6ddfcb7a111bf9a565709d2085d48201d501ead960d93e84ffbb88"
+  },
+  {
+    "family": "Cormorant Garamond",
+    "file": "cormorantgaramond.ttf",
+    "upstream_file": "CormorantGaramond[wght].ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/CormorantGaramond%5Bwght%5D.ttf",
+    "family_source": "https://github.com/google/fonts/tree/main/ofl/cormorantgaramond",
+    "license": "cormorantgaramond-OFL.txt",
+    "sha256": "b20b7d9626dd956b2c5e558692ad328b1f19e3275e2782db4fa07670d83f35e0"
+  },
+  {
+    "family": "Fraunces",
+    "file": "fraunces.ttf",
+    "upstream_file": "Fraunces[SOFT,WONK,opsz,wght].ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf",
+    "family_source": "https://github.com/google/fonts/tree/main/ofl/fraunces",
+    "license": "fraunces-OFL.txt",
+    "sha256": "177ff6c0f14e5550a3c624247cd1189611d4eb65d000b14944c63d967958abbb"
+  },
+  {
+    "family": "Cinzel",
+    "file": "cinzel.ttf",
+    "upstream_file": "Cinzel[wght].ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel%5Bwght%5D.ttf",
+    "family_source": "https://github.com/google/fonts/tree/main/ofl/cinzel",
+    "license": "cinzel-OFL.txt",
+    "sha256": "f4d83d34d1f6c741193e4acf4b3dff9531e5a67b6aa65228d00a7db72a4e0f34"
+  },
+  {
+    "family": "Alegreya",
+    "file": "alegreya.ttf",
+    "upstream_file": "Alegreya[wght].ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/alegreya/Alegreya%5Bwght%5D.ttf",
+    "family_source": "https://github.com/google/fonts/tree/main/ofl/alegreya",
+    "license": "alegreya-OFL.txt",
+    "sha256": "ba5564634b93a8f8ba57b48cd4f1ae7417d2b4656fbac779028679b00de3cf12"
+  },
+  {
+    "family": "Manrope",
+    "file": "manrope.ttf",
+    "upstream_file": "Manrope[wght].ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf",
+    "family_source": "https://github.com/google/fonts/tree/main/ofl/manrope",
+    "license": "manrope-OFL.txt",
+    "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6"
+  }
+]

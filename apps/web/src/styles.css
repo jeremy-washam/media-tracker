@@ -738,25 +738,13 @@ a:focus-visible {
   gap: 10px;
 }
 
-.app-brand strong {
-  overflow: hidden;
-  font-size: 14px;
-  letter-spacing: -0.02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .app-brand-mark {
   width: 30px;
   height: 30px;
   flex: 0 0 30px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius);
-  color: var(--primary-foreground);
-  background: var(--primary);
-  font-family: inherit;
-  font-size: 14px;
+  display: block;
+  background: currentColor;
+  mask: url('./assets/brand/imladris-symbol.svg') center / contain no-repeat;
 }
 
 .sidebar-collapse,

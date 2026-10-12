@@ -10,6 +10,14 @@ During local development Vite serves `http://127.0.0.1:5173` and proxies `/api`
 to the local Worker at `http://127.0.0.1:8787`. Import chunks are driven by the
 browser; reopening Connections offers Resume import if a previous run stopped.
 
+## Branding
+
+The sidebar uses the compact J2 house-and-waterfall symbol without a wordmark.
+Interface text keeps system typography; no brand font is loaded.
+The symbol follows the active light/dark text color; the SVG favicon follows
+system appearance. Brand assets are in [the brand asset notes](src/assets/brand/README.md).
+These imported source assets are included in both Vite build modes.
+
 ## Design studies
 
 With `pnpm dev:web` running, open `http://127.0.0.1:5173/design.html`.

@@ -79,10 +79,7 @@ export function AppShell() {
             aria-label="Imladris Books"
             onClick={() => setMobileOpen(false)}
           >
-            <span className="app-brand-mark" aria-hidden="true">
-              I
-            </span>
-            {!collapsed ? <strong>Imladris</strong> : null}
+            <span className="app-brand-mark" aria-hidden="true" />
           </Link>
           <button
             className="sidebar-collapse"

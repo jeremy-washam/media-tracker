@@ -1,0 +1,27 @@
+Imladris logo shortlist
+Working choice: J2.
+Preferred treatment: compact; refined native SVG is j2-vector/imladris-j2-compact-v2.svg.
+Current branding: compact J2 symbol alone, with no wordmark or brand font.
+The owner removed the wordmark after trying Fondamento (H). Both reference
+rounds and font sources remain saved as history. The app uses the symbol and
+favicon assets, and retains an accessible Imladris name on the brand link.
+
+
+Historical K/L round picks: K5 and K6 only.
+K5: 05-simple-waterfall-directions.png, bottom-middle tile.
+K6: 05-simple-waterfall-directions.png, bottom-right tile.
+These informed another exploration; J2 is now the working choice.
+
+Earlier owner selection: J2, J3, J7, G1, G8.
+
+Keep the original concepts unchanged:
+J2: 02-waterfall-house-refinements.png, bottom-right tile.
+J3: 04-house-waterfall-variations.png, top-left tile.
+J7: 04-house-waterfall-variations.png, bottom-middle tile.
+G1: 02-waterfall-house-refinements.png, top-left tile.
+G8: 03-waterfall-variations.png, bottom-right tile.
+
+Next exploration: much greater variety of silhouette, composition, and graphic
+construction, with substantially fewer details. Prior variations were too alike.
+Aim for a few broad shapes and generous negative space suitable for small icons
+and manually constructed SVG. Preserve all previous sheets as history.

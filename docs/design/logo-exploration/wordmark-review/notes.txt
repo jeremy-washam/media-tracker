@@ -1,0 +1,33 @@
+Imladris wordmark review
+
+Uses the owner-preferred compact J2, refined as imladris-j2-compact-v2.svg.
+Initially selected: A, Cormorant Garamond 600. The owner later selected
+H, Fondamento 400, from the second reference set; that is now implemented.
+
+Candidates
+A: Cormorant Garamond 600 — expressive literary serif.
+B: Instrument Serif 400 — narrow editorial serif.
+C: Fraunces 500 — rounded serif, with SOFT 35, WONK 1, and optical size 48.
+D: Alegreya 500 — sturdy literary serif.
+E: Cinzel 500 — engraved Roman capitals/small capitals.
+F: Manrope 500 — modern sans serif.
+
+preview.html is standalone and works offline with six locally bundled fonts.
+The top controls switch preview appearance and change large wordmark size.
+Small sidebar samples show both appearances and use a 30 px symbol. Type is
+optically adjusted in those samples: 20 px for most, 23 px Instrument Serif,
+and 17 px Cinzel. Body/navigation labels retain the platform system font.
+
+Font sources and SHA-256 hashes are recorded in fonts/sources.json. Original
+OFL licenses are stored beside each unmodified TTF. The application now bundles a
+name-only WOFF2 subset of Fondamento at weight 400 with its license.
+Review HTML and screenshots retain the initial comparison as history.
+
+Verification: all six FontFace objects loaded in Chromium from local files;
+no clipping in logo or sidebar samples; appearance toggle and size control
+work. comparison-light.png and comparison-dark.png were rendered only after
+document.fonts.ready. The refined SVG parsed without errors and contains a
+native path, not an embedded raster image.
+
+Final direction: the owner removed the wordmark. The app uses compact J2 alone;
+no brand font is bundled or loaded. Prior comparisons remain as history.
