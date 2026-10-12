@@ -25,6 +25,13 @@
 /* Approved Graphite production tokens. */
 :root {
   --radius: 0.35rem;
+  --library-row-height: 101px;
+  --library-row-cover-width: 60px;
+  --library-row-cover-height: 90px;
+  --library-row-art-size: 80px;
+  --library-row-title-size: 16px;
+  --library-row-subtitle-size: 13px;
+  --library-row-metadata-size: 13px;
   --background: oklch(0.9551 0 0);
   --foreground: oklch(0.3211 0 0);
   --card: oklch(0.9702 0 0);

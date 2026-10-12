@@ -79,6 +79,14 @@ Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
 and personal Rating; formats do not appear in those rows.
+All Library media lists, including Video and Channel lists, share a 101px row baseline,
+matching the taller Article/Podcast/Music presentation. Shared list typography
+uses 16px titles and 13px subtitles/metadata. Additional search excerpts or metadata can expand
+a row to preserve that context. List artwork uses 60×90px Book/Movie covers,
+80px square Article/Podcast/Music artwork and channel avatars, and 160×90px Video
+thumbnails. Grid cards retain their independent sizing.
+Collection list rows are transparent at rest and share the same separators,
+horizontal spacing, muted hover background, and selection treatment.
 
 Search updates after a short typing pause and has an explicit clear control.
 As of October 12, sort dropdowns use native selects throughout the app while
