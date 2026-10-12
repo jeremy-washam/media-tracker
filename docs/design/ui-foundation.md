@@ -67,6 +67,7 @@ including half stars; it does not prescribe poster density, colors, or metadata.
 
 Collections default to list. A single local preference remembers grid/list across
 supported pages and browser sessions; explicit layout in a URL takes precedence.
+List appears first in the view controls.
 Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
@@ -76,9 +77,10 @@ Search updates after a short typing pause and has an explicit clear control.
 Shared Base UI selects provide accessible custom sort menus. Book/Movie cards
 share fixed artwork dimensions; inspector opening changes column count, never
 card dimensions. The application contains scrolling within collections and
-inspectors. The inspector fills the viewport height and animates in and out,
-with reduced-motion support. New styling issues may be resolved iteratively
-without waiting for a comprehensive redesign.
+inspectors. The inspector fills the viewport height. Its entrance/exit and the
+collection width share one 180 ms easing timeline, including immediate collection
+expansion when closing begins, with reduced-motion support. New styling issues may
+be resolved iteratively without waiting for a comprehensive redesign.
 
 ## Visual and writing principles
 

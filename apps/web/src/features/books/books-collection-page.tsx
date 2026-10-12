@@ -305,19 +305,19 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           <div className="layout-toggle" aria-label="Result layout">
             <button
               type="button"
-              aria-label="Grid view"
-              aria-pressed={layout === 'grid'}
-              onClick={() => updateSearch({ layout: 'grid' })}
-            >
-              <Grid2X2 aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               aria-label="List view"
               aria-pressed={layout === 'list'}
               onClick={() => updateSearch({ layout: 'list' })}
             >
               <List aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label="Grid view"
+              aria-pressed={layout === 'grid'}
+              onClick={() => updateSearch({ layout: 'grid' })}
+            >
+              <Grid2X2 aria-hidden="true" />
             </button>
           </div>
         </div>

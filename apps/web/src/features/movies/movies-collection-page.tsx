@@ -303,19 +303,19 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           <div className="layout-toggle" aria-label="Result layout">
             <button
               type="button"
-              aria-label="Grid view"
-              aria-pressed={view === 'grid'}
-              onClick={() => updateSearch({ view: 'grid' })}
-            >
-              <Grid2X2 aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               aria-label="List view"
               aria-pressed={view === 'list'}
               onClick={() => updateSearch({ view: 'list' })}
             >
               <List aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label="Grid view"
+              aria-pressed={view === 'grid'}
+              onClick={() => updateSearch({ view: 'grid' })}
+            >
+              <Grid2X2 aria-hidden="true" />
             </button>
           </div>
         </div>

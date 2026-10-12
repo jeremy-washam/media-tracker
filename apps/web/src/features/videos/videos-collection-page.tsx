@@ -227,19 +227,19 @@ export function VideosCollectionPage({ view }: { view: View }) {
             <div className="layout-toggle" aria-label="Result layout">
               <button
                 type="button"
-                aria-label="Grid view"
-                aria-pressed={layout === 'grid'}
-                onClick={() => update({ layout: 'grid' })}
-              >
-                <Grid2X2 />
-              </button>
-              <button
-                type="button"
                 aria-label="List view"
                 aria-pressed={layout === 'list'}
                 onClick={() => update({ layout: 'list' })}
               >
                 <List />
+              </button>
+              <button
+                type="button"
+                aria-label="Grid view"
+                aria-pressed={layout === 'grid'}
+                onClick={() => update({ layout: 'grid' })}
+              >
+                <Grid2X2 />
               </button>
             </div>
           ) : null}
