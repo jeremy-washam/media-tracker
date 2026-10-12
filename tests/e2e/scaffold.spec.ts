@@ -535,6 +535,115 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
 })
 
+for (const scenario of [
+  {
+    media: 'books',
+    start: 'archive',
+    next: 'Queue',
+    nav: 'Book collections',
+    response: booksResponse,
+  },
+  {
+    media: 'movies',
+    start: 'archive',
+    next: 'Queue',
+    nav: 'Movie collections',
+    response: moviesResponse,
+  },
+  {
+    media: 'articles',
+    start: 'archive',
+    next: 'Queue',
+    nav: 'Article sections',
+    response: articlesResponse,
+  },
+  {
+    media: 'podcasts',
+    start: 'archive',
+    next: 'Queue',
+    nav: 'Podcast sections',
+    response: podcastsResponse,
+  },
+  {
+    media: 'music',
+    start: 'tracks',
+    next: 'Albums',
+    nav: 'Music sections',
+    response: musicResponse,
+  },
+  {
+    media: 'videos',
+    start: 'archive',
+    next: 'Queue',
+    nav: 'Video sections',
+    response: videosResponse,
+  },
+]) {
+  test(`holds section counts and tab geometry while switching ${scenario.media}`, async ({
+    page,
+  }) => {
+    let hold = false
+    let release = () => {}
+    let markRequested = () => {}
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const requested = new Promise<void>((resolve) => {
+      markRequested = resolve
+    })
+    await page.route(`**/api/library/${scenario.media}?*`, async (route) => {
+      if (hold) {
+        markRequested()
+        await pending
+      }
+      const response = scenario.response()
+      // Fresh totals must also survive returning to an older cached section.
+      if (hold && 'sectionCounts' in response && 'channels' in response.sectionCounts) {
+        response.sectionCounts.queue = 111
+      }
+      await route.fulfill({ json: response })
+    })
+    await page.goto(`/library/${scenario.media}/${scenario.start}`)
+    const nav = page.getByRole('navigation', { name: scenario.nav })
+    await expect(nav.locator('span').first()).not.toHaveText('—')
+    const geometry = () =>
+      nav.locator('a').evaluateAll((links) =>
+        links.map((link) => {
+          const rect = link.getBoundingClientRect()
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        }),
+      )
+    const before = await geometry()
+    const counts = await nav.locator('span').allTextContents()
+    hold = true
+    try {
+      await nav.getByRole('link', { name: new RegExp(`^${scenario.next} `) }).click()
+      await requested
+      await expect(nav.locator('a[aria-current="page"]')).toContainText(scenario.next)
+      expect(await geometry()).toEqual(before)
+      await expect(nav.locator('span')).toHaveText(counts)
+      const results = page.locator(
+        '.book-row, .movie-row, .article-row, .spotify-result, .video-result',
+      )
+      await expect(results).toHaveCount(0)
+      release()
+      await expect(results).toHaveCount(1)
+      const freshCounts = scenario.media === 'videos' ? [counts[0]!, '111', counts[2]!] : counts
+      expect(await geometry()).toEqual(before)
+      await expect(nav.locator('span')).toHaveText(freshCounts)
+      await nav
+        .getByRole('link', {
+          name: new RegExp(`^${scenario.start === 'tracks' ? 'Tracks' : 'Archive'} `),
+        })
+        .click()
+      await expect(nav.locator('span')).toHaveText(freshCounts)
+      expect(await geometry()).toEqual(before)
+    } finally {
+      release()
+    }
+  })
+}
+
 test('shows the production Books shell and preserves Connections', async ({ page }) => {
   await page.goto('/')
 

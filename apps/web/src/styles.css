@@ -1059,6 +1059,8 @@ a:focus-visible {
 }
 
 .books-tabs span {
+  min-width: 6ch;
+  text-align: right;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -3323,11 +3325,6 @@ select {
 .library-inline-filter select,
 .date-filter select {
   padding-right: 26px;
-}
-.music-page .books-tabs span {
-  min-width: 4ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .media-inspector .history-list .channel-library-video {
   display: grid;

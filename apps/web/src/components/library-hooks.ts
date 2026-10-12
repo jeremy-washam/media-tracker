@@ -1,4 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
+
+/** Section totals are unfiltered library facts, shared across collection queries. */
+export function useLibrarySectionCounts<TPage, TCounts>(
+  media: string,
+  page: TPage | undefined,
+  select: (page: TPage) => TCounts,
+): TCounts | undefined {
+  const queryClient = useQueryClient()
+  const cached = queryClient
+    .getQueryCache()
+    .findAll({ queryKey: [media] })
+    .filter((query) => (query.state.data as InfiniteData<TPage> | undefined)?.pages[0])
+    .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)[0]
+  const previousPage = (cached?.state.data as InfiniteData<TPage> | undefined)?.pages[0]
+  return previousPage ? select(previousPage) : page ? select(page) : undefined
+}
 
 const layoutKey = 'media-tracker:library-layout'
 export function useLibraryLayout(explicit: 'grid' | 'list' | undefined, supported = true) {

@@ -3,6 +3,7 @@ import {
   useLiveSearch,
   useLibraryLayout,
   useInspectorPresence,
+  useLibrarySectionCounts,
 } from '../../components/library-hooks'
 import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
@@ -87,6 +88,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
   })
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const summary = result.data?.pages[0]
+  const sectionCounts = useLibrarySectionCounts('videos', summary, (page) => page.sectionCounts)
   const sorts =
     view === 'archive'
       ? [
@@ -136,7 +138,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
                 activeProps={{ className: 'active', 'aria-current': 'page' }}
               >
                 {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{summary?.sectionCounts[target] ?? '—'}</span>
+                <span>{sectionCounts?.[target] ?? '—'}</span>
               </Link>
             ))}
           </nav>

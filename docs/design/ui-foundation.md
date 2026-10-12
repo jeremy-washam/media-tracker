@@ -61,8 +61,9 @@ and do not restart the collection query.
 
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
 presentation details where they conflict. Use the platform system font throughout
-production UI. A global base-layer rule gives buttons, native selects, and links
-(including collection tabs and sidebar navigation) the default cursor. Text inputs
+production UI. A global base-layer rule gives buttons, native selects, and app navigation
+(including collection tabs and sidebar navigation) the default cursor. Ordinary links
+use a pointer. Text inputs
 retain their text cursor; disabled and busy controls retain their specific cursors.
 The current Letterboxd reference
 applies only to small, muted personal-rating stars below Book and Movie artwork,
@@ -71,6 +72,9 @@ including half stars; it does not prescribe poster density, colors, or metadata.
 Collections default to list. A single local preference remembers grid/list across
 supported pages and browser sessions; explicit layout in a URL takes precedence.
 List appears first in the view controls.
+Section tabs retain known library totals while the next collection request loads,
+without retaining the previous section's results. Count labels reserve space to
+keep tab geometry stable through loading and use fresh response totals when available.
 Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),

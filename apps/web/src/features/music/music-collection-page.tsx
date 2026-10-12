@@ -3,9 +3,10 @@ import {
   useLiveSearch,
   useLibraryLayout,
   useInspectorPresence,
+  useLibrarySectionCounts,
 } from '../../components/library-hooks'
 import { useRef, useState } from 'react'
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Disc3,
@@ -46,7 +47,6 @@ function listened(value: number) {
 }
 
 export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'artists' }) {
-  const queryClient = useQueryClient()
   const raw = useSearch({ strict: false }) as MusicRouteSearch
   const search = normalizeMusicSearch(raw, view)
   const navigate = useNavigate()
@@ -86,13 +86,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
   })
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const summary = result.data?.pages[0]
-  const previousCounts = queryClient
-    .getQueriesData<{
-      pages: Array<{ sectionCounts: NonNullable<typeof summary>['sectionCounts'] }>
-    }>({ queryKey: ['music'] })
-    .flatMap(([, data]) => data?.pages ?? [])
-    .at(-1)?.sectionCounts
-  const sectionCounts = summary?.sectionCounts ?? previousCounts
+  const sectionCounts = useLibrarySectionCounts('music', summary, (page) => page.sectionCounts)
   const sorts =
     view === 'tracks'
       ? [

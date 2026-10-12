@@ -1,5 +1,9 @@
 import { LibrarySelect } from '../../components/library-controls'
-import { useLiveSearch, useInspectorPresence } from '../../components/library-hooks'
+import {
+  useLiveSearch,
+  useInspectorPresence,
+  useLibrarySectionCounts,
+} from '../../components/library-hooks'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
@@ -113,6 +117,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
   const pages = articles.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
   const summary = pages[0]
+  const sectionCounts = useLibrarySectionCounts('articles', summary, (page) => page.sectionCounts)
   const sort = defaultSort(section, search),
     direction = defaultDirection(sort, search.direction)
   const activeFilters = [
@@ -160,7 +165,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                 activeProps={{ 'aria-current': 'page', className: 'active' }}
               >
                 {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{summary?.sectionCounts[target] ?? '—'}</span>
+                <span>{sectionCounts?.[target] ?? '—'}</span>
               </Link>
             ))}
           </nav>

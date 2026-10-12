@@ -3,6 +3,7 @@ import {
   useLiveSearch,
   useLibraryLayout,
   useInspectorPresence,
+  useLibrarySectionCounts,
 } from '../../components/library-hooks'
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
@@ -175,6 +176,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
   const pages = movies.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
   const summary = pages[0]
+  const sectionCounts = useLibrarySectionCounts('movies', summary, (page) => page.membershipCounts)
   const count = summary?.filteredCount ?? 0
   const filters = activeFilters(search, collection)
   const selectedSort = defaultSort(collection, search)
@@ -198,14 +200,14 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
               search={normalizedForMovieCollection(search, 'archive')}
               activeProps={{ 'aria-current': 'page', className: 'active' }}
             >
-              Archive <span>{summary?.membershipCounts.archiveItems ?? '—'}</span>
+              Archive <span>{sectionCounts?.archiveItems ?? '—'}</span>
             </Link>
             <Link
               to="/library/movies/queue"
               search={normalizedForMovieCollection(search, 'queue')}
               activeProps={{ 'aria-current': 'page', className: 'active' }}
             >
-              Queue <span>{summary?.membershipCounts.queueItems ?? '—'}</span>
+              Queue <span>{sectionCounts?.queueItems ?? '—'}</span>
             </Link>
           </nav>
         </header>

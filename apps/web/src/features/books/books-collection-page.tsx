@@ -3,6 +3,7 @@ import {
   useLiveSearch,
   useLibraryLayout,
   useInspectorPresence,
+  useLibrarySectionCounts,
 } from '../../components/library-hooks'
 import {
   useEffect,
@@ -185,6 +186,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
   const pages = books.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
   const summary = pages[0]
+  const sectionCounts = useLibrarySectionCounts('books', summary, (page) => page.counts)
   const count = summary?.counts.filteredBooks ?? 0
   const filters = activeFilterCount(search, collection)
   const selectedSort = search.sort ?? (collection === 'archive' ? 'recent_read' : 'added')
@@ -218,14 +220,14 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
               search={normalizedForCollection(search, 'archive')}
               activeProps={{ 'aria-current': 'page', className: 'active' }}
             >
-              Archive <span>{summary?.counts.archive ?? '—'}</span>
+              Archive <span>{sectionCounts?.archive ?? '—'}</span>
             </Link>
             <Link
               to="/library/books/queue"
               search={normalizedForCollection(search, 'queue')}
               activeProps={{ 'aria-current': 'page', className: 'active' }}
             >
-              Queue <span>{summary?.counts.queue ?? '—'}</span>
+              Queue <span>{sectionCounts?.queue ?? '—'}</span>
             </Link>
           </nav>
         </header>

@@ -2,13 +2,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* App controls use the native arrow, including links rendered as tabs/navigation. */
+/* Controls and app navigation use the native arrow; ordinary links use a pointer. */
 @layer base {
   button,
   [role='button'],
   [role='option'],
-  select,
+  select {
+    cursor: default;
+  }
   a {
+    cursor: pointer;
+  }
+  .app-brand a,
+  .global-navigation a,
+  .media-navigation a,
+  .sidebar-secondary a,
+  .books-tabs a {
     cursor: default;
   }
 }

@@ -3,6 +3,7 @@ import {
   useLiveSearch,
   useLibraryLayout,
   useInspectorPresence,
+  useLibrarySectionCounts,
 } from '../../components/library-hooks'
 import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
@@ -90,6 +91,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
   })
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const summary = result.data?.pages[0]
+  const sectionCounts = useLibrarySectionCounts('podcasts', summary, (page) => page.sectionCounts)
   const sorts =
     view === 'following'
       ? [
@@ -141,7 +143,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 activeProps={{ className: 'active', 'aria-current': 'page' }}
               >
                 {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{summary?.sectionCounts[target] ?? '—'}</span>
+                <span>{sectionCounts?.[target] ?? '—'}</span>
               </Link>
             ))}
           </nav>
