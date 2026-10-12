@@ -1069,7 +1069,7 @@ export class SqlVideosRepository {
           'p.video_id=?',
           'p.canonical_url=?',
           match.length > 0
-            ? 'EXISTS(SELECT 1 FROM video_search s WHERE s.media_item_id=p.media_item_id AND video_search MATCH ?)'
+            ? 'p.media_item_id IN (SELECT s.media_item_id FROM video_search s WHERE video_search MATCH ?)'
             : null,
         ]
           .filter(Boolean)
@@ -1379,7 +1379,7 @@ export class SqlVideosRepository {
         `(${[
           'p.channel_id=?',
           match.length > 0
-            ? 'EXISTS(SELECT 1 FROM video_channel_search s WHERE s.channel_id=p.channel_id AND video_channel_search MATCH ?)'
+            ? 'p.channel_id IN (SELECT s.channel_id FROM video_channel_search s WHERE video_channel_search MATCH ?)'
             : null,
         ]
           .filter(Boolean)

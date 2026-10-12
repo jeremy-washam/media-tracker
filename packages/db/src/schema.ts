@@ -331,6 +331,11 @@ export const archiveEntries = sqliteTable(
     ),
     index('archive_entries_media_consumed_idx').on(table.mediaItemId, table.consumedAtValue),
     index('archive_entries_state_id_idx').on(table.upstreamState, table.id),
+    index('archive_entries_media_state_consumed_idx').on(
+      table.mediaItemId,
+      table.upstreamState,
+      table.consumedAtValue,
+    ),
     check(
       'archive_entries_admission_reason_valid',
       sql.raw(`admission_reason IN (${inList(ARCHIVE_ADMISSION_REASONS)})`),

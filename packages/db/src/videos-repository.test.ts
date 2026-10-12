@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DatabaseAllResult,
   DatabaseClient,
@@ -349,6 +349,36 @@ describe('SqlVideosRepository', () => {
     expect(
       (await repository.listVideos(input({ format: ['youtube_music'] }))).data[0],
     ).toMatchObject({ id: 'video-1', matchingWatchCount: 1, watchCount: 2 })
+  })
+
+  it('evaluates Video and Channel text matches once rather than once per Library row', async () => {
+    const prepare = vi.spyOn(client, 'prepare')
+    for (const [view, q, expectedId, table, params] of [
+      ['archive', 'Earlier', 'video-1', 'video_search', ['Earlier', 'Earlier', '"Earlier"*']],
+      ['queue', 'Queued', 'video-2', 'video_search', ['Queued', 'Queued', '"Queued"*']],
+      ['channels', 'Channel', 'channel-1', 'video_channel_search', ['Channel', '"Channel"*']],
+    ] as const) {
+      prepare.mockClear()
+      const page = await repository.listVideos(input({ view, q }))
+      expect(page.data.map((item) => item.id)).toEqual([expectedId])
+      const sql = prepare.mock.calls
+        .map(([query]) => query)
+        .find((query) => query.startsWith('SELECT COUNT(*) value') && query.includes(table))!
+      const plan = database
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all(...params)
+        .map((row) => row.detail)
+        .join('\n')
+      expect(plan).toContain('LIST SUBQUERY')
+      expect(sql).not.toMatch(/s\.(?:media_item_id|channel_id)=p\./)
+    }
+    expect((await repository.listVideos(input({ q: 'video-1' }))).data[0]?.id).toBe('video-1')
+    expect(
+      (await repository.listVideos(input({ q: 'https://www.youtube.com/watch?v=video-1' }))).data[0]
+        ?.id,
+    ).toBe('video-1')
+    expect((await repository.listVideos(input({ q: 'no match anywhere' }))).data).toEqual([])
+    prepare.mockRestore()
   })
 
   it('counts overlapping Takeout evidence once per canonical watch occurrence', async () => {

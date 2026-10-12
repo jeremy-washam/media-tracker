@@ -1432,7 +1432,7 @@ export class SqlMoviesRepository {
             (b.normalized_title=? AND b.media_item_id>?))) OR
           (?=0 AND (${sortColumn} ${comparison} ? OR
             (${sortColumn}=? AND (b.normalized_title > ? OR
-              (b.normalized_title=? AND b.media_item_id>?)))))))`
+              (b.normalized_title=? AND b.media_item_id>?))))))))`
     const cursorValues: DatabaseValue[] =
       cursor === null
         ? []

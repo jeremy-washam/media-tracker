@@ -126,11 +126,25 @@ and failed or stale reservations remain recoverable.
 
 Music section counts use set membership rather than a correlated track scan per
 album. Migration 0023 adds the album lookup and covering Music/YouTube observation
-indexes; 0024 covers canonical Archive membership checks. The Videos occurrence
+indexes; 0024 covers canonical Archive membership checks. Migration 0025 adds a
+covering `(media_item_id, upstream_state, consumed_at_value)` index for per-media
+Archive occurrence counts and date bounds. Without it, SQLite can choose the
+0024 state/ID index for Movies counts and scan the entire active Archive once per
+movie, blocking the local Worker and its background queue. The new index bounds
+those lookups by media identity and state while retaining the Videos membership
+index. The Videos occurrence
 rollup explicitly selects its covering index so SQLite does not prefer the narrower
 chronological index and fetch source rows for every aggregate. Filtering, exact
 counts, distinct occurrences, unknown duration/date semantics, and keyset cursors
 are unchanged. Apply these additive migrations before serving the updated API.
+
+Video and Channel text filters compute FTS match membership once per statement,
+rather than repeating a correlated FTS search for every Library row. Exact
+video/channel IDs, canonical video URLs, and historical title matches remain
+supported. Movie keyset pages apply the complete cursor predicate, including
+null sort values, so loading subsequent Archive and Queue pages does not fail.
+See the [live loading and performance verification](../planning/library-performance-acceptance.md)
+for route coverage, measured timings, regression coverage, and validation results.
 
 Connections presents durable Spotify catalog-backfill progress separately from
 canonical import failures. Sync summaries include optional `catalogProgress` with

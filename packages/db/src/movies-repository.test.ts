@@ -322,6 +322,40 @@ describe('SqlMoviesRepository', () => {
     ).rejects.toThrow('Invalid Movies pagination cursor')
   })
 
+  it('loads subsequent Movie pages across dated and null sort boundaries', async () => {
+    await applyFullSnapshot()
+    database.exec(`
+      INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,
+        admission_reason,upstream_state,created_at,updated_at)
+      VALUES('archive-queue','movie-2','letterboxd-1','watched:queue',
+        'letterboxd_watched_state','active','${now}','${now}');
+    `)
+    await repository.rebuild(now)
+    for (const collection of ['archive', 'queue'] as const) {
+      for (const sort of [
+        collection === 'archive' ? 'watchedAt' : 'addedAt',
+        'title',
+        'personalRating',
+      ] as const) {
+        for (const direction of ['asc', 'desc'] as const) {
+          const query = listInput({ collection, sort, direction })
+          const full = await repository.listMovies(query)
+          const first = await repository.listMovies({ ...query, limit: 1 })
+          expect(first.nextCursor).not.toBeNull()
+          const second = await repository.listMovies({
+            ...query,
+            limit: 1,
+            cursor: first.nextCursor!,
+          })
+          expect([...first.data, ...second.data].map((item) => item.id)).toEqual(
+            full.data.map((item) => item.id),
+          )
+          expect(second.nextCursor).toBeNull()
+        }
+      }
+    }
+  })
+
   it('repairs RSS movies created from nested HTML entities when the export identifies them', async () => {
     database.exec(`
       INSERT INTO raw_objects(id, connection_id, sync_run_id, kind, acquisition_key, storage_key,
