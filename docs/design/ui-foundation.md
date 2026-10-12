@@ -84,6 +84,9 @@ inspectors. The inspector fills the viewport height. Its entrance/exit and the
 collection width share one 180 ms easing timeline, including immediate collection
 expansion when closing begins, with reduced-motion support. New styling issues may
 be resolved iteratively without waiting for a comprehensive redesign.
+Workspace and inspector headers share one height so their horizontal dividers align.
+Sidebar navigation hover uses a stronger neutral background in both appearance modes;
+selected navigation retains its selection background while hovered.
 
 ## Visual and writing principles
 

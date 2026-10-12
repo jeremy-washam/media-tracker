@@ -846,7 +846,7 @@ a:focus-visible {
 .sidebar-secondary a:hover,
 .sidebar-secondary button:hover {
   color: var(--foreground);
-  background: var(--surface-hover);
+  background: color-mix(in srgb, var(--sidebar), var(--sidebar-foreground) 10%);
 }
 
 .global-navigation svg,
@@ -941,7 +941,7 @@ a:focus-visible {
 }
 
 .workspace-header {
-  min-height: 54px;
+  min-height: var(--workspace-header-height);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2053,7 +2053,8 @@ a:focus-visible {
 }
 
 .inspector-topbar {
-  min-height: 48px;
+  min-height: var(--workspace-header-height);
+  flex: 0 0 var(--workspace-header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3119,8 +3120,8 @@ body,
   overflow: hidden;
 }
 .workspace-header {
-  height: 54px;
-  flex: 0 0 54px;
+  height: var(--workspace-header-height);
+  flex: 0 0 var(--workspace-header-height);
 }
 .workspace-content {
   overflow: hidden;
