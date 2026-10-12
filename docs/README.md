@@ -23,6 +23,8 @@
   and connector sequencing
 - [October UI polish](planning/ui-polish.md): approved iterative fixes, browser
   baseline evidence, parallel ownership, and acceptance checks
+- [UI polish follow-up](planning/ui-polish-followup.md): owner-reviewed QA fixes,
+  native menus, selection behavior, and page-by-page verification
 - [Library implementation handoff](planning/library-implementation.md): per-media
   specification, source-derived Queue rules, Songs, and production delivery steps
 - [Books implementation plan](planning/books-implementation.md): end-to-end

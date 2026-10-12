@@ -31,6 +31,7 @@ test('keeps Podcast facet choices URL-backed and self-excluding', async ({ page 
     })
   })
   await page.goto('/library/podcasts/archive')
+  await expect(page.getByText('1 episode', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Filters' }).click()
   await page.getByRole('checkbox', { name: 'A Distant Show 2' }).check()
   await expect(page).toHaveURL(/show=%5B%22show-one%22%5D/)
@@ -215,6 +216,7 @@ test('opens bounded Album history and links back to its heard Track', async ({ p
         isrc: null,
         metadataState: 'current',
         canonicalUrl: 'https://open.spotify.com/album/album-one',
+        relatedTracks: [{ id: 'track-one', title: 'A Distant Track', playbackCount: 1 }],
       },
     }),
   )
@@ -241,8 +243,13 @@ test('opens bounded Album history and links back to its heard Track', async ({ p
   )
   await page.goto('/library/music/albums')
   await page.getByRole('button', { name: /A Distant Album/ }).click()
+  await expect(page.getByText('1 observation', { exact: true })).toBeVisible()
   await page.getByRole('tab', { name: /History/ }).click()
   await expect(page.getByRole('link', { name: 'A Distant Track' })).toBeVisible()
+  await page.getByRole('link', { name: /^Artists / }).click()
+  await expect(page).toHaveURL(/\/library\/music\/artists/)
+  await expect(page).not.toHaveURL(/[?&]item=/)
+  await expect(page.getByRole('complementary', { name: 'Music inspector' })).toHaveCount(0)
 })
 
 test('keeps loaded Video pages while changing layout and opening the inspector', async ({
@@ -621,6 +628,60 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
   await expect(page).toHaveURL(/direction=asc/)
   expect(requested.some((value) => value.includes('cursor=next-page'))).toBe(true)
   expect(requested.some((value) => value.includes('q=Ada'))).toBe(true)
+})
+
+test('keeps Books range drafts valid until a boundary is entered', async ({ page }) => {
+  const invalid: string[] = []
+  const requested: URL[] = []
+  await page.route('**/api/library/books?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url)
+    const bad = ['finished', 'published', 'added'].some(
+      (prefix) =>
+        url.searchParams.get(`${prefix}Mode`) === 'range' &&
+        !url.searchParams.get(`${prefix}From`) &&
+        !url.searchParams.get(`${prefix}To`),
+    )
+    if (bad) invalid.push(url.search)
+    await route.fulfill({
+      status: bad ? 400 : 200,
+      json: bad ? { error: { message: 'Invalid range' } } : booksResponse(),
+    })
+  })
+  await page.goto('/library/books/archive')
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  for (const label of ['Finished', 'Published']) {
+    await page.getByRole('combobox', { name: label, exact: true }).selectOption('range')
+    await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+    await page.getByRole('textbox', { name: `${label} from`, exact: true }).fill('2020-01-01')
+    await expect
+      .poll(() =>
+        requested.some(
+          (url) =>
+            url.searchParams.get(`${label === 'Finished' ? 'finished' : 'published'}From`) ===
+            '2020-01-01',
+        ),
+      )
+      .toBe(true)
+    await page.getByRole('textbox', { name: `${label} from`, exact: true }).fill('')
+    await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  }
+  expect(invalid).toEqual([])
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('deselects a selected Book by clicking it again', async ({ page }) => {
+  await page.route('**/api/library/books/book-one', (route) =>
+    route.fulfill({ status: 404, json: { error: { message: 'Synthetic detail unavailable' } } }),
+  )
+  await page.goto('/library/books/archive')
+  const card = page.getByRole('button', { name: /A Distant Book/ })
+  await card.click()
+  await expect(page).toHaveURL(/item=book-one/)
+  await card.click()
+  await expect(page).not.toHaveURL(/[?&]item=/)
+  await expect(page.getByRole('complementary', { name: 'Book inspector' })).toHaveCount(0)
 })
 
 test('searches Books without Enter and clears the applied query', async ({ page }) => {
@@ -1177,4 +1238,60 @@ test('shows separate account progress and resumes the selected account', async (
   await page.getByRole('button', { name: 'Resume import' }).click()
   await expect(page.getByRole('button', { name: 'Resume import' })).toHaveCount(0)
   expect(resumed).toBe(true)
+})
+
+test('searches every channel and pages native channel choices', async ({ page }) => {
+  const channelItem = {
+    ...video,
+    id: 'channel-z',
+    kind: 'channel',
+    title: 'Zebra Channel',
+    channelId: 'channel-z',
+    channelTitle: 'Zebra Channel',
+  }
+  await page.route('**/api/library/videos?*', async (route) => {
+    const url = new URL(route.request().url())
+    const options = url.searchParams.get('view') === 'channels'
+    const searching = url.searchParams.get('q') === 'Zebra'
+    await route.fulfill({
+      json: options
+        ? videosResponse(
+            [
+              searching
+                ? channelItem
+                : {
+                    ...channelItem,
+                    id: url.searchParams.has('cursor') ? 'channel-b' : 'channel-a',
+                    title: url.searchParams.has('cursor') ? 'Beta' : 'Alpha',
+                  },
+            ],
+            searching || url.searchParams.has('cursor') ? null : 'next-options',
+          )
+        : videosResponse(),
+    })
+  })
+  await page.goto('/library/videos/archive')
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  await expect(
+    page
+      .getByRole('combobox', { name: 'Channel', exact: true })
+      .getByRole('option', { name: 'Alpha' }),
+  ).toHaveCount(1)
+  await page.getByRole('button', { name: 'Load more channels' }).click()
+  await expect(
+    page
+      .getByRole('combobox', { name: 'Channel', exact: true })
+      .getByRole('option', { name: 'Beta' }),
+  ).toHaveCount(1)
+  await page.getByRole('searchbox', { name: 'Search channel options' }).fill('Zebra')
+  await page.getByRole('combobox', { name: 'Channel', exact: true }).selectOption('channel-z')
+  await expect(page).toHaveURL(/channel=%5B%22channel-z%22%5D/)
+})
+
+test('shows positive short video duration as under a minute', async ({ page }) => {
+  await page.route('**/api/library/videos?*', (route) =>
+    route.fulfill({ json: videosResponse([{ ...video, durationMs: 20000 }]) }),
+  )
+  await page.goto('/library/videos/archive')
+  await expect(page.getByRole('button', { name: /A Distant Video/ })).toContainText('<1 min')
 })

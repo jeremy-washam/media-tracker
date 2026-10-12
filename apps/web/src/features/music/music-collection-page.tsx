@@ -144,7 +144,10 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               <Link
                 key={target}
                 to={`/library/music/${target}`}
-                search={normalizeMusicSearch(search, target)}
+                search={normalizeMusicSearch(
+                  target === view ? search : { ...search, item: undefined },
+                  target,
+                )}
                 activeProps={{ className: 'active', 'aria-current': 'page' }}
               >
                 {target[0]!.toUpperCase() + target.slice(1)}{' '}
@@ -459,7 +462,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 selected={search.item === item.id}
                 onSelect={(element) => {
                   selectedResultRef.current = element
-                  update({ item: item.id })
+                  update({ item: search.item === item.id ? undefined : item.id })
                 }}
               />
             ))}
@@ -787,7 +790,10 @@ function MusicInspector({
                   {detail.data.relatedTracks.map((track) => (
                     <Link key={track.id} to="/library/music/tracks" search={{ item: track.id }}>
                       <span>{track.title}</span>
-                      <small>{track.playbackCount.toLocaleString()} observations</small>
+                      <small>
+                        {track.playbackCount.toLocaleString()}{' '}
+                        {track.playbackCount === 1 ? 'observation' : 'observations'}
+                      </small>
                     </Link>
                   ))}
                 </div>
@@ -798,7 +804,10 @@ function MusicInspector({
                   {detail.data.relatedAlbums.map((album) => (
                     <Link key={album.id} to="/library/music/albums" search={{ item: album.id }}>
                       <span>{album.title}</span>
-                      <small>{album.playbackCount.toLocaleString()} observations</small>
+                      <small>
+                        {album.playbackCount.toLocaleString()}{' '}
+                        {album.playbackCount === 1 ? 'observation' : 'observations'}
+                      </small>
                     </Link>
                   ))}
                 </div>
@@ -815,7 +824,9 @@ function MusicInspector({
               {history.isPending ? <p>Loading history…</p> : null}
               {history.isError ? <p role="alert">{history.error.message}</p> : null}
               {history.data?.pages[0]?.totalCount === 0 ? <p>No playback observations.</p> : null}
-              <ol className="history-list spotify-history-list">
+              <ol
+                className={`history-list spotify-history-list ${view === 'tracks' ? '' : 'music-entity-history'}`}
+              >
                 {history.data?.pages
                   .flatMap((page) => page.data)
                   .map((entry, index) => (

@@ -3328,52 +3328,25 @@ select {
 .books-sort > svg {
   display: none;
 }
-.library-select-trigger {
+.books-toolbar {
+  --toolbar-font-size: 11px;
+}
+.books-toolbar .toolbar-button,
+.books-toolbar .books-sort,
+.books-toolbar .books-sort select {
+  font-size: var(--toolbar-font-size);
+}
+.books-sort .library-native-select {
+  min-width: 140px;
+  height: 100%;
+  max-width: none;
   width: 100%;
-  min-height: 34px;
-  padding: 7px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: inherit;
+  color: var(--foreground);
   background: transparent;
-  color: inherit;
-  font: inherit;
-  white-space: nowrap;
-}
-.library-select-trigger:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.library-select-positioner {
-  z-index: 80;
-}
-.library-select-popup {
-  padding: 5px;
-  min-width: var(--anchor-width);
-  max-height: var(--available-height);
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 14%);
-}
-.library-select-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 8px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  outline: none;
-}
-.library-select-option[data-highlighted] {
-  background: var(--accent);
-  color: var(--accent-foreground);
+  font-family: inherit;
 }
 .library-inline-filter select,
 .date-filter select {
@@ -3488,4 +3461,66 @@ select {
   font-size: 12px;
   line-height: 1.6;
   color: var(--muted-foreground);
+}
+
+/* Keep date checkboxes inline rather than inheriting full-width date inputs. */
+.date-filter .unknown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.date-filter .unknown-toggle input[type='checkbox'] {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+}
+.media-inspector .music-entity-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+}
+.media-inspector .music-entity-history li strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.media-inspector .music-entity-history li span {
+  text-align: left;
+  font-size: 10px;
+}
+
+.video-channel-picker input,
+.video-channel-picker select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 11px;
+}
+.video-channel-picker input {
+  padding: 0 8px;
+}
+.video-channel-picker select {
+  margin-top: 6px;
+}
+.video-channel-picker small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+}
+
+.spotify-library-page .books-toolbar {
+  grid-template-columns: minmax(140px, 1fr) repeat(5, auto);
+}
+
+/* Album/Artist view controls need a second toolbar row beside the inspector. */
+.music-page:has(.media-inspector):has(.layout-toggle) .books-toolbar {
+  grid-template-columns: repeat(5, auto);
+}
+.music-page:has(.media-inspector):has(.layout-toggle) .books-toolbar > .books-search {
+  grid-column: 1 / -1;
 }

@@ -295,7 +295,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                 expanded={true}
                 selected={search.item === item.id}
                 ref={search.item === item.id ? selectedRef : undefined}
-                onClick={() => update({ item: item.id })}
+                onClick={() => update({ item: search.item === item.id ? undefined : item.id })}
               />
             ))}
           </div>

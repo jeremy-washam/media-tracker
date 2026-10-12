@@ -43,6 +43,7 @@ function date(value: string | null | undefined) {
 
 function duration(value: number | null) {
   if (value === null) return 'Duration unavailable'
+  if (value > 0 && value < 60_000) return '<1 min'
   const minutes = Math.round(value / 60_000)
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes} min`
 }
@@ -288,7 +289,11 @@ export function VideosCollectionPage({ view }: { view: View }) {
                   view === 'channels' ? search.channelItem === item.id : search.item === item.id
                 }
                 onSelect={() =>
-                  update(view === 'channels' ? { channelItem: item.id } : { item: item.id })
+                  update(
+                    view === 'channels'
+                      ? { channelItem: search.channelItem === item.id ? undefined : item.id }
+                      : { item: search.item === item.id ? undefined : item.id },
+                  )
                 }
               />
             ))}
@@ -315,6 +320,92 @@ export function VideosCollectionPage({ view }: { view: View }) {
         />
       ) : null}
     </section>
+  )
+}
+
+function VideoChannelPicker({
+  search,
+  summary,
+  update,
+}: {
+  search: VideosRouteSearch
+  summary: VideosResponse | undefined
+  update: (patch: Partial<VideosRouteSearch>) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const [query, setQuery] = useState<string | undefined>(undefined)
+  useLiveSearch(draft, query, setQuery, () => setDraft(null))
+  const channels = useInfiniteQuery({
+    queryKey: ['video-channel-options', query],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      fetchVideos(
+        {
+          view: 'channels',
+          sort: query ? 'relevance' : 'channel',
+          direction: 'asc',
+          limit: 50,
+          ...(query ? { q: query } : {}),
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+        signal,
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+  const options = channels.data?.pages.flatMap((page) => page.data) ?? []
+  const selected = search.channel?.[0] ?? ''
+  const selectedFacet = summary?.facets.channels.find((option) => option.value === selected)
+  return (
+    <fieldset className="filter-group video-channel-picker">
+      <legend>Channel</legend>
+      <input
+        type="search"
+        aria-label="Search channel options"
+        placeholder="Search all channels"
+        value={draft ?? query ?? ''}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+      <select
+        aria-label="Channel"
+        value={selected}
+        onChange={(event) =>
+          update({
+            channel: event.target.value ? [event.target.value] : undefined,
+            item: undefined,
+          })
+        }
+      >
+        <option value="">All channels</option>
+        {selected && !options.some((item) => item.id === selected) ? (
+          <option value={selected}>
+            {selectedFacet?.label ??
+              (selected === '__unknown__' ? 'Channel unavailable' : selected)}
+          </option>
+        ) : null}
+        {options.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.title}
+          </option>
+        ))}
+        {selected !== '__unknown__' &&
+        summary?.facets.channels.some((item) => item.value === '__unknown__') ? (
+          <option value="__unknown__">Channel unavailable</option>
+        ) : null}
+      </select>
+      {channels.isPending ? <small>Loading channels…</small> : null}
+      {channels.isError ? <p role="alert">{channels.error.message}</p> : null}
+      {channels.isSuccess && options.length === 0 ? <small>No matching channels.</small> : null}
+      {channels.hasNextPage ? (
+        <button
+          type="button"
+          className="facet-load-more"
+          disabled={channels.isFetchingNextPage}
+          onClick={() => void channels.fetchNextPage()}
+        >
+          {channels.isFetchingNextPage ? 'Loading…' : 'Load more channels'}
+        </button>
+      ) : null}
+    </fieldset>
   )
 }
 
@@ -482,25 +573,7 @@ function VideoFilters({
             ))}
           </select>
         </label>
-        <label className="library-inline-filter">
-          <span>Channel</span>
-          <select
-            value={search.channel?.[0] ?? ''}
-            onChange={(event) =>
-              update({
-                channel: event.target.value ? [event.target.value] : undefined,
-                item: undefined,
-              })
-            }
-          >
-            <option value="">All channels</option>
-            {summary?.facets.channels.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label} ({option.count})
-              </option>
-            ))}
-          </select>
-        </label>
+        <VideoChannelPicker search={search} summary={summary} update={update} />
         {view === 'archive' ? (
           <label className="library-inline-filter">
             <span>Watches</span>
@@ -1039,6 +1112,11 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                   Queue
                 </button>
               </div>
+              {library.isPending ? <p>Loading videos…</p> : null}
+              {library.isError ? <p role="alert">{library.error.message}</p> : null}
+              {library.isSuccess && library.data.pages.every((page) => page.data.length === 0) ? (
+                <p>{membership === 'queue' ? 'No queued videos.' : 'No archived videos.'}</p>
+              ) : null}
               <ol className="history-list">
                 {library.data?.pages
                   .flatMap((page) => page.data)

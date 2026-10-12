@@ -74,7 +74,10 @@ Books list columns are title/author, Publish Year, Read Date (Added Date in Queu
 and personal Rating; formats do not appear in those rows.
 
 Search updates after a short typing pause and has an explicit clear control.
-Shared Base UI selects provide accessible custom sort menus. Book/Movie cards
+As of October 12, sort dropdowns use native selects throughout the app while
+filter design remains under review. Filters and Sort use the same toolbar font
+size on every Library page. Clicking a selected result deselects it and closes
+its inspector. Book/Movie cards
 share fixed artwork dimensions; inspector opening changes column count, never
 card dimensions. The application contains scrolling within collections and
 inspectors. The inspector fills the viewport height. Its entrance/exit and the

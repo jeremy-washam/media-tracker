@@ -392,7 +392,9 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                 view={view}
                 selected={search.item === movie.id}
                 buttonRef={search.item === movie.id ? selectedRef : undefined}
-                onSelect={() => updateSearch({ item: movie.id })}
+                onSelect={() =>
+                  updateSearch({ item: search.item === movie.id ? undefined : movie.id })
+                }
               />
             ))}
           </div>

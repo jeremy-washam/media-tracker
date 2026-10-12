@@ -115,5 +115,18 @@ export function collectionQuerySearch(search: BooksRouteSearch): BooksRouteSearc
   const query = { ...search }
   delete query.layout
   delete query.item
+  for (const [mode, from, to] of [
+    ['finishedMode', 'finishedFrom', 'finishedTo'],
+    ['publishedMode', 'publishedFrom', 'publishedTo'],
+    ['addedMode', 'addedFrom', 'addedTo'],
+  ] as const) {
+    const boundary =
+      mode === 'publishedMode' ? /^\d{4}(?:-\d{2}(?:-\d{2})?)?$/ : /^\d{4}-\d{2}-\d{2}$/
+    if (query[from] && !boundary.test(query[from]!)) delete query[from]
+    if (query[to] && !boundary.test(query[to]!)) delete query[to]
+    if (query[mode] === 'range' && !query[from] && !query[to]) {
+      delete query[mode]
+    }
+  }
   return query
 }

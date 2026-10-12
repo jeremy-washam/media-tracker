@@ -451,7 +451,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           <span>
             {result.isPending
               ? 'Loading podcasts…'
-              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? 'shows' : 'episodes'}`}
+              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? ((summary?.filteredCount ?? 0) === 1 ? 'show' : 'shows') : (summary?.filteredCount ?? 0) === 1 ? 'episode' : 'episodes'}`}
           </span>
         </div>
         {!result.isPending &&
@@ -487,7 +487,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 selected={search.item === item.id}
                 onSelect={(element) => {
                   selectedResultRef.current = element
-                  update({ item: item.id, kind: item.kind })
+                  update({ item: search.item === item.id ? undefined : item.id, kind: item.kind })
                 }}
               />
             ))}

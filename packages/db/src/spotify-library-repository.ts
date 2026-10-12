@@ -1577,16 +1577,20 @@ export class SqlSpotifyLibraryRepository {
   async findPodcastShow(id: string) {
     const item = await statement(
       this.database,
-      `SELECT s.*,MAX(ss.added_at) saved_at,
+      `SELECT s.*,MAX(CASE WHEN ss.active=1 THEN ss.added_at END) saved_at,
+         COALESCE(MAX(ss.active),0) following,
          MIN(ss.first_observed_at) first_observed_at,
          MAX(ss.last_observed_at) last_observed_at,
          (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_archive=1) archive_count,
          (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_queue=1) queue_count
-       FROM spotify_podcast_shows s JOIN spotify_saved_shows ss ON ss.show_id=s.id
-       WHERE s.id=? AND ss.active=1 AND ${podcastShowPredicate} GROUP BY s.id`,
+       FROM spotify_podcast_shows s LEFT JOIN spotify_saved_shows ss ON ss.show_id=s.id
+       WHERE s.id=? AND ${podcastShowPredicate}
+         AND (EXISTS(SELECT 1 FROM spotify_saved_shows saved WHERE saved.show_id=s.id AND saved.active=1)
+           OR EXISTS(SELECT 1 FROM podcast_library_projection p WHERE p.show_id=s.id AND (p.in_archive=1 OR p.in_queue=1)))
+       GROUP BY s.id`,
       [id],
     ).first<Record<string, string | number | null>>()
-    if (!item) return null
+    if (!item) return this.findPodcastShowFromEpisodes(id)
     return {
       id: String(item.id),
       showId: String(item.id),
@@ -1602,7 +1606,7 @@ export class SqlSpotifyLibraryRepository {
       playbackCount: 0,
       inArchive: false,
       inQueue: false,
-      following: true,
+      following: Number(item.following) === 1,
       archiveEpisodeCount: Number(item.archive_count ?? 0),
       queueEpisodeCount: Number(item.queue_count ?? 0),
       totalEpisodes: item.total_episodes as number | null,
@@ -1612,6 +1616,57 @@ export class SqlSpotifyLibraryRepository {
       showDescription: item.description as string | null,
       showUrl: item.canonical_url as string | null,
       availability: String(item.availability_state),
+    }
+  }
+
+  private async findPodcastShowFromEpisodes(id: string) {
+    // Episode imports can identify a show before its separate catalog metadata
+    // arrives. Keep those local Library relationships inspectable.
+    const item = await statement(
+      this.database,
+      `
+      SELECT p.show_name,
+        (SELECT e.show_uri FROM spotify_podcast_episodes e WHERE e.show_id=p.show_id AND e.show_uri IS NOT NULL LIMIT 1) show_uri,
+        (SELECT COUNT(*) FROM podcast_library_projection related WHERE related.show_id=p.show_id AND related.in_archive=1) archive_count,
+        (SELECT COUNT(*) FROM podcast_library_projection related WHERE related.show_id=p.show_id AND related.in_queue=1) queue_count
+      FROM podcast_library_projection p LEFT JOIN spotify_podcast_shows s ON s.id=p.show_id
+      WHERE p.show_id=? AND s.id IS NULL AND (p.in_archive=1 OR p.in_queue=1)
+      ORDER BY p.source_refreshed_at DESC,p.media_item_id LIMIT 1`,
+      [id],
+    ).first<{
+      show_name: string | null
+      show_uri: string | null
+      archive_count: number
+      queue_count: number
+    }>()
+    if (!item) return null
+    const spotifyId = item.show_uri?.match(/^spotify:show:([a-zA-Z0-9]+)$/)?.[1]
+    const url = spotifyId ? `https://open.spotify.com/show/${spotifyId}` : null
+    return {
+      id,
+      showId: id,
+      kind: 'show' as const,
+      title: item.show_name ?? 'Untitled show',
+      subtitle: null,
+      imageUrl: null,
+      date: null,
+      durationMs: null,
+      observedMs: 0,
+      playbackCount: 0,
+      inArchive: false,
+      inQueue: false,
+      following: false,
+      archiveEpisodeCount: item.archive_count,
+      queueEpisodeCount: item.queue_count,
+      totalEpisodes: null,
+      canonicalUrl: url,
+      description: null,
+      publisher: null,
+      showDescription: null,
+      showUrl: url,
+      availability: 'unknown',
+      firstObservedAt: null,
+      lastObservedAt: null,
     }
   }
 

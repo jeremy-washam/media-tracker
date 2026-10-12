@@ -1,6 +1,9 @@
 # UI polish baseline QA
 
-Report-only independent review, 2026-10-04. New findings require owner review before implementation.
+Independent baseline review, 2026-10-04. Owner review completed October 12:
+findings 1, 2, 6, 7, and 9–13 are approved for fixes; 4 and 5 are deferred;
+8 is already resolved in the exercised case; 3 was reproduced on current
+Music Albums/Artists toolbars and addressed. See [follow-up results](ui-polish-followup.md).
 
 ## Baseline and isolation
 

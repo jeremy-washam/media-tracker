@@ -277,6 +277,33 @@ describe('Spotify library repository', () => {
         10,
       ),
     ).resolves.toMatchObject({ data: [{ value: 'en', count: 1 }] })
+    await expect(repository.findPodcastShow('spotify_show_show1')).resolves.toMatchObject({
+      following: true,
+      queueEpisodeCount: 1,
+    })
+    database.exec("UPDATE spotify_saved_shows SET active=0 WHERE show_id='spotify_show_show1'")
+    await expect(repository.findPodcastShow('spotify_show_show1')).resolves.toMatchObject({
+      title: 'Show',
+      following: false,
+      queueEpisodeCount: 1,
+      date: null,
+    })
+    database.exec("DELETE FROM spotify_saved_shows WHERE show_id='spotify_show_show1'")
+    await expect(repository.findPodcastShow('spotify_show_show1')).resolves.toMatchObject({
+      title: 'Show',
+      following: false,
+      queueEpisodeCount: 1,
+    })
+    database.exec("DELETE FROM spotify_podcast_shows WHERE id='spotify_show_show1'")
+    await expect(repository.findPodcastShow('spotify_show_show1')).resolves.toMatchObject({
+      title: 'Show',
+      following: false,
+      queueEpisodeCount: 1,
+      publisher: null,
+      totalEpisodes: null,
+      canonicalUrl: 'https://open.spotify.com/show/show1',
+    })
+    await expect(repository.findPodcastShow('unknown-show')).resolves.toBeNull()
   })
 
   it('includes independent Reader podcast Archive items without putting them in Queue', async () => {

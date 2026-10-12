@@ -2,6 +2,8 @@
 
 > Presentation update (2026-10-04): [UI polish](../ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
 
+> October 12 follow-up: native channel filtering searches and pages the existing Channels collection so every named Library channel is reachable. See [follow-up results](../ui-polish-followup.md).
+
 - Date: 2026-09-20
 - Status: Historical owner-approved baseline; production implementation shipped.
   The 2026-09-21 owner decision removes OAuth, current subscriptions, and every

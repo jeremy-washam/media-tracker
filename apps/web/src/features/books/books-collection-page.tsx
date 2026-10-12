@@ -163,18 +163,18 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
     requestAnimationFrame(() => returnFocus?.focus())
   }
 
-  const request = useMemo<BooksRequest>(
-    () => ({
+  const request = useMemo<BooksRequest>(() => {
+    const query = collectionQuerySearch(search)
+    return {
       collection,
-      ...collectionQuerySearch(search),
-      finishedMode: search.finishedMode ?? 'any',
-      publishedMode: search.publishedMode ?? 'any',
-      addedMode: search.addedMode ?? 'any',
-      ratingMode: search.ratingMode ?? 'any',
+      ...query,
+      finishedMode: query.finishedMode ?? 'any',
+      publishedMode: query.publishedMode ?? 'any',
+      addedMode: query.addedMode ?? 'any',
+      ratingMode: query.ratingMode ?? 'any',
       limit: 48,
-    }),
-    [collection, search],
-  )
+    }
+  }, [collection, search])
   const books = useInfiniteQuery({
     queryKey: ['books', request],
     initialPageParam: undefined as string | undefined,
@@ -424,7 +424,9 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
                 layout={layout}
                 selected={search.item === book.id}
                 buttonRef={search.item === book.id ? selectedResultRef : undefined}
-                onSelect={() => updateSearch({ item: book.id })}
+                onSelect={() =>
+                  updateSearch({ item: search.item === book.id ? undefined : book.id })
+                }
               />
             ))}
           </div>
