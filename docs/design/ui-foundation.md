@@ -85,8 +85,9 @@ collection width share one 180 ms easing timeline, including immediate collectio
 expansion when closing begins, with reduced-motion support. New styling issues may
 be resolved iteratively without waiting for a comprehensive redesign.
 Workspace and inspector headers share one height so their horizontal dividers align.
-Sidebar navigation hover uses a stronger neutral background in both appearance modes;
-selected navigation retains its selection background while hovered.
+Neutral buttons and sidebar navigation share a visible hover background that is
+less emphasized than selection in both appearance modes, including the sidebar toggle.
+Selected controls retain their selection background while hovered.
 
 ## Visual and writing principles
 

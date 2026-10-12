@@ -25,7 +25,7 @@
   --ring: oklch(0.4891 0 0);
   --sidebar: oklch(0.937 0 0);
   --sidebar-foreground: oklch(0.3211 0 0);
-  --surface-hover: color-mix(in srgb, var(--background), var(--foreground) 4%);
+  --surface-hover: color-mix(in srgb, var(--sidebar), var(--selection) 60%);
   --selection: color-mix(in srgb, var(--background), var(--foreground) 8%);
   --selection-edge: color-mix(in srgb, var(--background), var(--foreground) 55%);
 }

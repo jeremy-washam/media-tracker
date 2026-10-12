@@ -846,7 +846,7 @@ a:focus-visible {
 .sidebar-secondary a:hover,
 .sidebar-secondary button:hover {
   color: var(--foreground);
-  background: color-mix(in srgb, var(--sidebar), var(--sidebar-foreground) 10%);
+  background: var(--surface-hover);
 }
 
 .global-navigation svg,
@@ -3320,7 +3320,7 @@ select {
   border-radius: 5px;
 }
 .books-search > button:hover {
-  background: var(--secondary);
+  background: var(--surface-hover);
 }
 .books-sort {
   padding: 0;
@@ -3524,4 +3524,36 @@ select {
 }
 .music-page:has(.media-inspector):has(.layout-toggle) .books-toolbar > .books-search {
   grid-column: 1 / -1;
+}
+
+/* Neutral controls share hover emphasis; selected and disabled states take precedence. */
+.app-frame
+  button:where(
+    :not(
+      :disabled,
+      [aria-disabled='true'],
+      [data-disabled],
+      [aria-pressed='true'],
+      [aria-selected='true'],
+      [aria-checked='true'],
+      .selected,
+      .active,
+      .inspector-backdrop,
+      .mobile-backdrop,
+      .sync-button,
+      [data-slot='button']
+    )
+  ):hover,
+.app-frame .sync-button-secondary:not(:disabled):hover,
+.books-sort:hover {
+  background: var(--surface-hover);
+}
+.sync-button:not(.sync-button-secondary):not(:disabled):hover {
+  background: color-mix(in srgb, var(--primary), var(--primary-foreground) 12%);
+}
+.article-row.selected,
+.spotify-result.selected,
+.video-result.selected,
+.video-channel-row.selected {
+  background: var(--selection);
 }
