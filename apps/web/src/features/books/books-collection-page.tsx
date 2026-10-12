@@ -1,3 +1,9 @@
+import { LibrarySelect, MediaCard, RatingStars } from '../../components/library-controls'
+import {
+  useLiveSearch,
+  useLibraryLayout,
+  useInspectorPresence,
+} from '../../components/library-hooks'
 import {
   useEffect,
   useMemo,
@@ -81,7 +87,7 @@ function Cover({ book, size = 'card' }: { book: BookCollectionItem; size?: 'card
 function contextLabel(book: BookCollectionItem, collection: 'archive' | 'queue') {
   if (collection === 'archive') {
     const date = formatDate(book.latestReadDate, book.latestReadPrecision)
-    return `${date === null ? 'Read — date unavailable' : `Read ${date}`}${book.latestReadFormat ? ` · ${book.latestReadFormat}` : ''}`
+    return `${date === null ? 'Read — date unavailable' : `Read ${date}`}`
   }
   const date = formatDate(book.addedToHardcoverDate, 'day')
   return date === null ? 'Added date unavailable' : `Added to Hardcover ${date}`
@@ -128,9 +134,10 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
   const [draftSearch, setDraftSearch] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedResultRef = useRef<HTMLButtonElement>(null)
-  const layout = search.layout ?? 'grid'
+  const [layout, saveLayout] = useLibraryLayout(search.layout)
 
   const updateSearch = (patch: Partial<BooksRouteSearch>) => {
+    if (patch.layout) saveLayout(patch.layout)
     const next = { ...search, ...patch }
     for (const [key, value] of Object.entries(next)) {
       if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
@@ -143,6 +150,13 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
     })
   }
 
+  useLiveSearch(
+    draftSearch,
+    search.q,
+    (q) => updateSearch({ q, item: undefined }),
+    () => setDraftSearch(null),
+  )
+  const inspectorItem = useInspectorPresence(search.item)
   const closeInspector = () => {
     const returnFocus = selectedResultRef.current
     updateSearch({ item: undefined })
@@ -187,7 +201,11 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
   }
 
   return (
-    <section className={`books-page books-layout-${layout}`} aria-labelledby="books-title">
+    <section
+      data-inspector-open={Boolean(search.item)}
+      className={`books-page books-layout-${layout}`}
+      aria-labelledby="books-title"
+    >
       <div className="books-collection">
         <header className="books-header">
           <div>
@@ -255,7 +273,8 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           <label className="books-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort books</span>
-            <select
+            <LibrarySelect
+              aria-label="Sort books"
               value={selectedSort}
               onChange={(event) =>
                 updateSearch({ sort: event.target.value, direction: undefined, item: undefined })
@@ -266,7 +285,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
                   {label}
                 </option>
               ))}
-            </select>
+            </LibrarySelect>
           </label>
           <button
             type="button"
@@ -388,6 +407,15 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
 
         {items.length > 0 ? (
           <div className={layout === 'grid' ? 'books-grid' : 'books-list'}>
+            {layout === 'list' ? (
+              <div className="book-list-head" aria-hidden="true">
+                <span>Title</span>
+                <span>Publish Year</span>
+                <span>{collection === 'archive' ? 'Read Date' : 'Added Date'}</span>
+                <span>Rating</span>
+                <span />
+              </div>
+            ) : null}
             {items.map((book) => (
               <BookResult
                 key={book.id}
@@ -414,7 +442,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
         ) : null}
       </div>
 
-      {search.item ? (
+      {inspectorItem ? (
         <>
           <button
             type="button"
@@ -422,7 +450,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             aria-label="Close inspector"
             onClick={closeInspector}
           />
-          <BookInspector mediaItemId={search.item} onClose={closeInspector} />
+          <BookInspector mediaItemId={inspectorItem} onClose={closeInspector} />
         </>
       ) : null}
     </section>
@@ -446,7 +474,7 @@ function BookResult({
 }) {
   if (layout === 'grid') {
     return (
-      <button
+      <MediaCard
         type="button"
         ref={buttonRef}
         className={selected ? 'book-card selected' : 'book-card'}
@@ -454,9 +482,10 @@ function BookResult({
         onClick={onSelect}
       >
         <Cover book={book} />
+        <RatingStars rating={book.personalRating} />
         <strong>{book.title}</strong>
         <span>{authors(book)}</span>
-      </button>
+      </MediaCard>
     )
   }
   return (
@@ -472,18 +501,13 @@ function BookResult({
         <strong>{book.title}</strong>
         <small>{authors(book)}</small>
       </span>
-      <span className="book-row-series">
-        {book.primarySeries ??
-          (book.publicationDate
-            ? `Published ${formatDate(book.publicationDate, book.publicationPrecision)}`
-            : '—')}
-      </span>
+      <span className="book-row-year">{book.publicationDate?.slice(0, 4) ?? '—'}</span>
       <span className="book-row-context">
-        {contextLabel(book, collection)}
-        {collection === 'archive' && book.personalRating !== null
-          ? ` · ${book.personalRating}/5`
-          : ''}
+        {collection === 'archive'
+          ? (formatDate(book.latestReadDate, book.latestReadPrecision) ?? '—')
+          : contextLabel(book, collection)}
       </span>
+      <RatingStars rating={book.personalRating} />
       <ChevronRight aria-hidden="true" />
     </button>
   )
@@ -548,6 +572,7 @@ function DateFilter({
     <fieldset className="date-filter">
       <legend>{label}</legend>
       <select
+        aria-label={label}
         value={mode}
         onChange={(event) => {
           const next = event.target.value as 'any' | 'range' | 'unavailable'
@@ -679,6 +704,7 @@ function FilterPanel({
           <fieldset className="date-filter">
             <legend>Personal rating</legend>
             <select
+              aria-label="Personal rating"
               value={search.ratingMode ?? 'any'}
               onChange={(event) => {
                 const mode = event.target.value as 'any' | 'rated' | 'unrated' | 'minimum'

@@ -21,6 +21,8 @@
 
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
+- [October UI polish](planning/ui-polish.md): approved iterative fixes, browser
+  baseline evidence, parallel ownership, and acceptance checks
 - [Library implementation handoff](planning/library-implementation.md): per-media
   specification, source-derived Queue rules, Songs, and production delivery steps
 - [Books implementation plan](planning/books-implementation.md): end-to-end

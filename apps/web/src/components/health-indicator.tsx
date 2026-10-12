@@ -13,7 +13,9 @@ export function HealthIndicator() {
   if (health.isPending) {
     return (
       <div className="status-pill" aria-live="polite">
-        <span className="status-dot status-dot-pending" />
+        <span className="status-icon">
+          <span className="status-dot status-dot-pending" />
+        </span>
         Connecting to local API
       </div>
     )
@@ -22,7 +24,9 @@ export function HealthIndicator() {
   if (health.isError) {
     return (
       <div className="status-pill status-pill-error" aria-live="polite">
-        <span className="status-dot status-dot-error" />
+        <span className="status-icon">
+          <span className="status-dot status-dot-error" />
+        </span>
         Local API unavailable
       </div>
     )
@@ -30,7 +34,9 @@ export function HealthIndicator() {
 
   return (
     <div className="status-pill" aria-live="polite">
-      <span className="status-dot status-dot-ready" />
+      <span className="status-icon">
+        <span className="status-dot status-dot-ready" />
+      </span>
       Local API connected
     </div>
   )

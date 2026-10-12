@@ -330,6 +330,7 @@ export const archiveEntries = sqliteTable(
       table.sourceOccurrenceKey,
     ),
     index('archive_entries_media_consumed_idx').on(table.mediaItemId, table.consumedAtValue),
+    index('archive_entries_state_id_idx').on(table.upstreamState, table.id),
     check(
       'archive_entries_admission_reason_valid',
       sql.raw(`admission_reason IN (${inList(ARCHIVE_ADMISSION_REASONS)})`),
@@ -1378,56 +1379,71 @@ export const podcastLibraryProjection = sqliteTable('podcast_library_projection'
   projectionVersion: integer('projection_version').notNull(),
 })
 
-export const spotifySongObservations = sqliteTable('spotify_song_observations', {
-  id: text('id').primaryKey(),
-  sourceRecordId: text('source_record_id')
-    .notNull()
-    .unique()
-    .references(() => sourceRecords.id, { onDelete: 'restrict' }),
-  connectionId: text('connection_id')
-    .notNull()
-    .references(() => connections.id, { onDelete: 'restrict' }),
-  mediaItemId: text('media_item_id')
-    .notNull()
-    .references(() => mediaItems.id, { onDelete: 'restrict' }),
-  spotifyTrackUri: text('spotify_track_uri').notNull(),
-  sourceKind: text('source_kind').notNull(),
-  occurredAt: text('occurred_at'),
-  millisecondsPlayed: integer('milliseconds_played'),
-  skipped: integer('skipped', { mode: 'boolean' }),
-  trackName: text('track_name'),
-  artistName: text('artist_name'),
-  albumName: text('album_name'),
-  reasonStart: text('reason_start'),
-  reasonEnd: text('reason_end'),
-  parserVersion: text('parser_version').notNull(),
-})
+export const spotifySongObservations = sqliteTable(
+  'spotify_song_observations',
+  {
+    id: text('id').primaryKey(),
+    sourceRecordId: text('source_record_id')
+      .notNull()
+      .unique()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    spotifyTrackUri: text('spotify_track_uri').notNull(),
+    sourceKind: text('source_kind').notNull(),
+    occurredAt: text('occurred_at'),
+    millisecondsPlayed: integer('milliseconds_played'),
+    skipped: integer('skipped', { mode: 'boolean' }),
+    trackName: text('track_name'),
+    artistName: text('artist_name'),
+    albumName: text('album_name'),
+    reasonStart: text('reason_start'),
+    reasonEnd: text('reason_end'),
+    parserVersion: text('parser_version').notNull(),
+  },
+  (table) => [
+    index('spotify_song_observations_rollup_idx').on(
+      table.mediaItemId,
+      table.sourceKind,
+      table.occurredAt,
+      table.millisecondsPlayed,
+    ),
+  ],
+)
 
-export const spotifySongTracks = sqliteTable('spotify_song_tracks', {
-  mediaItemId: text('media_item_id')
-    .primaryKey()
-    .references(() => mediaItems.id, { onDelete: 'restrict' }),
-  spotifyTrackUri: text('spotify_track_uri').notNull().unique(),
-  spotifyTrackId: text('spotify_track_id').notNull(),
-  title: text('title'),
-  artistText: text('artist_text'),
-  albumId: text('album_id'),
-  albumUri: text('album_uri'),
-  albumName: text('album_name'),
-  imageUrl: text('image_url'),
-  canonicalUrl: text('canonical_url'),
-  durationMs: integer('duration_ms'),
-  explicit: integer('explicit', { mode: 'boolean' }),
-  isrc: text('isrc'),
-  latestPlayedAt: text('latest_played_at'),
-  firstPlayedAt: text('first_played_at'),
-  playbackCount: integer('playback_count').notNull().default(0),
-  observedMs: integer('observed_ms').notNull().default(0),
-  apiOnlyCount: integer('api_only_count').notNull().default(0),
-  metadataState: text('metadata_state').notNull().default('export_only'),
-  metadataObservedAt: text('metadata_observed_at'),
-  updatedAt: text('updated_at').notNull(),
-})
+export const spotifySongTracks = sqliteTable(
+  'spotify_song_tracks',
+  {
+    mediaItemId: text('media_item_id')
+      .primaryKey()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    spotifyTrackUri: text('spotify_track_uri').notNull().unique(),
+    spotifyTrackId: text('spotify_track_id').notNull(),
+    title: text('title'),
+    artistText: text('artist_text'),
+    albumId: text('album_id'),
+    albumUri: text('album_uri'),
+    albumName: text('album_name'),
+    imageUrl: text('image_url'),
+    canonicalUrl: text('canonical_url'),
+    durationMs: integer('duration_ms'),
+    explicit: integer('explicit', { mode: 'boolean' }),
+    isrc: text('isrc'),
+    latestPlayedAt: text('latest_played_at'),
+    firstPlayedAt: text('first_played_at'),
+    playbackCount: integer('playback_count').notNull().default(0),
+    observedMs: integer('observed_ms').notNull().default(0),
+    apiOnlyCount: integer('api_only_count').notNull().default(0),
+    metadataState: text('metadata_state').notNull().default('export_only'),
+    metadataObservedAt: text('metadata_observed_at'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [index('spotify_song_tracks_album_idx').on(table.albumId, table.mediaItemId)],
+)
 
 export const spotifySongAlbums = sqliteTable('spotify_song_albums', {
   id: text('id').primaryKey(),
@@ -1583,35 +1599,47 @@ export const youtubeChannelAssertions = sqliteTable('youtube_channel_assertions'
   observedAt: text('observed_at').notNull(),
 })
 
-export const youtubeWatchObservations = sqliteTable('youtube_watch_observations', {
-  sourceRecordId: text('source_record_id')
-    .primaryKey()
-    .references(() => sourceRecords.id, { onDelete: 'restrict' }),
-  archiveEntryId: text('archive_entry_id')
-    .notNull()
-    .references(() => archiveEntries.id, { onDelete: 'restrict' }),
-  connectionId: text('connection_id')
-    .notNull()
-    .references(() => connections.id, { onDelete: 'restrict' }),
-  mediaItemId: text('media_item_id')
-    .notNull()
-    .references(() => mediaItems.id, { onDelete: 'restrict' }),
-  videoId: text('video_id').notNull(),
-  historicalTitle: text('historical_title'),
-  sourceVideoUrl: text('source_video_url'),
-  historicalChannelTitle: text('historical_channel_title'),
-  sourceChannelUrl: text('source_channel_url'),
-  channelId: text('channel_id').references(() => youtubeChannels.channelId, {
-    onDelete: 'restrict',
-  }),
-  product: text('product', { enum: ['youtube', 'youtube_music', 'unknown'] }).notNull(),
-  fromGoogleAds: integer('from_google_ads', { mode: 'boolean' }).notNull(),
-  occurredAt: text('occurred_at').notNull(),
-  occurredAtRaw: text('occurred_at_raw'),
-  occurrenceRank: integer('occurrence_rank').notNull(),
-  parserVersion: text('parser_version').notNull(),
-  observedAt: text('observed_at').notNull(),
-})
+export const youtubeWatchObservations = sqliteTable(
+  'youtube_watch_observations',
+  {
+    sourceRecordId: text('source_record_id')
+      .primaryKey()
+      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+    archiveEntryId: text('archive_entry_id')
+      .notNull()
+      .references(() => archiveEntries.id, { onDelete: 'restrict' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    mediaItemId: text('media_item_id')
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: 'restrict' }),
+    videoId: text('video_id').notNull(),
+    historicalTitle: text('historical_title'),
+    sourceVideoUrl: text('source_video_url'),
+    historicalChannelTitle: text('historical_channel_title'),
+    sourceChannelUrl: text('source_channel_url'),
+    channelId: text('channel_id').references(() => youtubeChannels.channelId, {
+      onDelete: 'restrict',
+    }),
+    product: text('product', { enum: ['youtube', 'youtube_music', 'unknown'] }).notNull(),
+    fromGoogleAds: integer('from_google_ads', { mode: 'boolean' }).notNull(),
+    occurredAt: text('occurred_at').notNull(),
+    occurredAtRaw: text('occurred_at_raw'),
+    occurrenceRank: integer('occurrence_rank').notNull(),
+    parserVersion: text('parser_version').notNull(),
+    observedAt: text('observed_at').notNull(),
+  },
+  (table) => [
+    index('youtube_watch_rollup_idx').on(
+      table.mediaItemId,
+      table.archiveEntryId,
+      table.connectionId,
+      table.occurredAt,
+      table.product,
+    ),
+  ],
+)
 
 export const youtubeChannelSubscriptions = sqliteTable(
   'youtube_channel_subscriptions',

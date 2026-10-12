@@ -1,5 +1,16 @@
 import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './database'
 
+// Spotify also returns audiobooks from /me/shows with type=show. Only exclude
+// the explicit author/narrator metadata block; titles and publishers are not
+// classification evidence. Keep unknown descriptions and the source rows.
+const podcastShowPredicate = `NOT (
+  COALESCE(s.description,'') LIKE 'Author(s):%'
+  AND INSTR(REPLACE(COALESCE(s.description,''),char(13),''),char(10)||'Narrator(s):')>0
+)`
+const followingCount = `(SELECT COUNT(DISTINCT ss.show_id)
+  FROM spotify_saved_shows ss JOIN spotify_podcast_shows s ON s.id=ss.show_id
+  WHERE ss.active=1 AND ${podcastShowPredicate})`
+
 function statement(database: DatabaseClient, query: string, values: readonly DatabaseValue[] = []) {
   return database.prepare(query).bind(...values)
 }
@@ -1217,7 +1228,7 @@ export class SqlSpotifyLibraryRepository {
     const counts = await statement(
       this.database,
       `SELECT SUM(in_archive) archive,SUM(in_queue) queue,
-       (SELECT COUNT(DISTINCT show_id) FROM spotify_saved_shows WHERE active=1) following
+       ${followingCount} following
        FROM podcast_library_projection`,
     ).first<{ archive: number; queue: number; following: number }>()
     const total = count?.value ?? 0
@@ -1306,6 +1317,7 @@ export class SqlSpotifyLibraryRepository {
     } else {
       source = 'spotify_podcast_shows s JOIN spotify_saved_shows ss ON ss.show_id=s.id'
       clauses.push('ss.active=1')
+      clauses.push(podcastShowPredicate)
       if (input.q) {
         clauses.push("(s.name LIKE ? ESCAPE '\\' OR s.publisher LIKE ? ESCAPE '\\')")
         values.push(safeLike(input.q), safeLike(input.q))
@@ -1376,7 +1388,7 @@ export class SqlSpotifyLibraryRepository {
   }
 
   private async listShows(input: PodcastsListInput, anchor: LibraryCursor | null, key: string) {
-    const clauses = ['ss.active=1']
+    const clauses = ['ss.active=1', podcastShowPredicate]
     const values: DatabaseValue[] = []
     if (input.q) {
       clauses.push("(s.name LIKE ? ESCAPE '\\' OR s.publisher LIKE ? ESCAPE '\\')")
@@ -1480,7 +1492,7 @@ export class SqlSpotifyLibraryRepository {
     const total = count?.value ?? 0
     const counts = await statement(
       this.database,
-      `SELECT SUM(in_archive) archive,SUM(in_queue) queue,(SELECT COUNT(DISTINCT show_id) FROM spotify_saved_shows WHERE active=1) following FROM podcast_library_projection`,
+      `SELECT SUM(in_archive) archive,SUM(in_queue) queue,${followingCount} following FROM podcast_library_projection`,
     ).first<{ archive: number; queue: number; following: number }>()
     return {
       data: rows.results.slice(0, input.limit).map((row) => ({
@@ -1571,7 +1583,7 @@ export class SqlSpotifyLibraryRepository {
          (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_archive=1) archive_count,
          (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_queue=1) queue_count
        FROM spotify_podcast_shows s JOIN spotify_saved_shows ss ON ss.show_id=s.id
-       WHERE s.id=? AND ss.active=1 GROUP BY s.id`,
+       WHERE s.id=? AND ss.active=1 AND ${podcastShowPredicate} GROUP BY s.id`,
       [id],
     ).first<Record<string, string | number | null>>()
     if (!item) return null
@@ -1791,8 +1803,8 @@ export class SqlSpotifyLibraryRepository {
     const row = await statement(
       this.database,
       `SELECT (SELECT COUNT(*) FROM spotify_song_tracks) tracks,
-       (SELECT COUNT(*) FROM spotify_song_albums a WHERE EXISTS(SELECT 1 FROM spotify_song_tracks t WHERE t.album_id=a.id)) albums,
-       (SELECT COUNT(*) FROM spotify_song_artists a WHERE EXISTS(SELECT 1 FROM spotify_song_track_artists ta WHERE ta.artist_id=a.id)) artists`,
+       (SELECT COUNT(*) FROM spotify_song_albums WHERE id IN (SELECT album_id FROM spotify_song_tracks)) albums,
+       (SELECT COUNT(*) FROM spotify_song_artists WHERE id IN (SELECT artist_id FROM spotify_song_track_artists)) artists`,
     ).first<{ tracks: number; albums: number; artists: number }>()
     return { tracks: row?.tracks ?? 0, albums: row?.albums ?? 0, artists: row?.artists ?? 0 }
   }

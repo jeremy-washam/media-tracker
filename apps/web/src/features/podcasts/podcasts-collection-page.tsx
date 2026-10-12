@@ -1,9 +1,16 @@
+import { LibrarySelect } from '../../components/library-controls'
+import {
+  useLiveSearch,
+  useLibraryLayout,
+  useInspectorPresence,
+} from '../../components/library-hooks'
 import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ExternalLink,
-  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Grid2X2,
   Headphones,
   List,
@@ -51,13 +58,21 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedResultRef = useRef<HTMLButtonElement | null>(null)
   const headingRef = useRef<HTMLHeadingElement | null>(null)
-  const layout = search.layout ?? (view === 'following' ? 'grid' : 'list')
+  const [layout, saveLayout] = useLibraryLayout(search.layout, view === 'following')
   const update = (patch: Partial<PodcastsRouteSearch>) => {
+    if (patch.layout) saveLayout(patch.layout)
     const next = { ...search, ...patch }
     for (const key of Object.keys(next) as (keyof PodcastsRouteSearch)[])
       if (next[key] === undefined || next[key] === '') delete next[key]
     void navigate({ to: `/library/podcasts/${view}`, search: next })
   }
+  useLiveSearch(
+    draft,
+    search.q,
+    (q) => update({ q, item: undefined }),
+    () => setDraft(null),
+  )
+  const inspectorItem = useInspectorPresence(search.item)
   const closeInspector = () => {
     const target = selectedResultRef.current?.isConnected
       ? selectedResultRef.current
@@ -105,7 +120,10 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
     search.direction ??
     (['title', 'show', 'publisher', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
   return (
-    <section className={`books-page spotify-library-page podcasts-page podcasts-${layout}`}>
+    <section
+      data-inspector-open={Boolean(search.item)}
+      className={`books-page spotify-library-page podcasts-page podcasts-${layout}`}
+    >
       <div className="books-collection">
         <header className="books-header">
           <div>
@@ -192,7 +210,8 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </button>
           <label className="books-sort">
             <span className="sr-only">Sort podcasts</span>
-            <select
+            <LibrarySelect
+              aria-label="Sort podcasts"
               value={selectedSort}
               onChange={(event) =>
                 update({ sort: event.target.value, direction: undefined, item: undefined })
@@ -203,7 +222,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                   {label}
                 </option>
               ))}
-            </select>
+            </LibrarySelect>
           </label>
           <button
             type="button"
@@ -216,27 +235,32 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               })
             }
           >
-            <ArrowUpDown aria-hidden="true" />
-            {selectedDirection === 'asc' ? 'Ascending' : 'Descending'}
+            {selectedDirection === 'asc' ? (
+              <ArrowUp aria-hidden="true" />
+            ) : (
+              <ArrowDown aria-hidden="true" />
+            )}
           </button>
-          <div className="layout-toggle" aria-label="Result layout">
-            <button
-              type="button"
-              aria-label="Grid view"
-              aria-pressed={layout === 'grid'}
-              onClick={() => update({ layout: 'grid' })}
-            >
-              <Grid2X2 />
-            </button>
-            <button
-              type="button"
-              aria-label="List view"
-              aria-pressed={layout === 'list'}
-              onClick={() => update({ layout: 'list' })}
-            >
-              <List />
-            </button>
-          </div>
+          {view === 'following' ? (
+            <div className="layout-toggle" aria-label="Result layout">
+              <button
+                type="button"
+                aria-label="Grid view"
+                aria-pressed={layout === 'grid'}
+                onClick={() => update({ layout: 'grid' })}
+              >
+                <Grid2X2 />
+              </button>
+              <button
+                type="button"
+                aria-label="List view"
+                aria-pressed={layout === 'list'}
+                onClick={() => update({ layout: 'list' })}
+              >
+                <List />
+              </button>
+            </div>
+          ) : null}
         </div>
         {filtersOpen ? (
           <section className="filter-panel" aria-label="Podcast filters">
@@ -480,9 +504,9 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </button>
         ) : null}
       </div>
-      {search.item ? (
+      {inspectorItem ? (
         <PodcastInspector
-          id={search.item}
+          id={inspectorItem}
           kind={search.kind ?? (view === 'following' ? 'show' : 'episode')}
           onClose={closeInspector}
           onOpenShow={(id) => update({ item: id, kind: 'show' })}

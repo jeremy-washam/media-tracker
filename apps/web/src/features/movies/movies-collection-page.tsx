@@ -1,3 +1,9 @@
+import { LibrarySelect, MediaCard, RatingStars } from '../../components/library-controls'
+import {
+  useLiveSearch,
+  useLibraryLayout,
+  useInspectorPresence,
+} from '../../components/library-hooks'
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
@@ -119,9 +125,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
   const [draftSearch, setDraftSearch] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedRef = useRef<HTMLButtonElement>(null)
-  const view = search.view ?? 'grid'
+  const [view, saveLayout] = useLibraryLayout(search.view)
 
   const updateSearch = (patch: Partial<MoviesRouteSearch>) => {
+    if (patch.view) saveLayout(patch.view)
     const next = { ...search, ...patch }
     for (const [key, value] of Object.entries(next)) {
       if (value === undefined || value === '' || value === false) {
@@ -134,6 +141,13 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
     })
   }
 
+  useLiveSearch(
+    draftSearch,
+    search.q,
+    (q) => updateSearch({ q, item: undefined }),
+    () => setDraftSearch(null),
+  )
+  const inspectorItem = useInspectorPresence(search.item)
   const closeInspector = () => {
     const target = selectedRef.current
     updateSearch({ item: undefined })
@@ -168,6 +182,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
 
   return (
     <section
+      data-inspector-open={Boolean(search.item)}
       className={`books-page movies-page movies-view-${view}`}
       aria-labelledby="movies-title"
     >
@@ -248,7 +263,8 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           <label className="books-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort movies</span>
-            <select
+            <LibrarySelect
+              aria-label="Sort movies"
               value={selectedSort}
               onChange={(event) =>
                 updateSearch({ sort: event.target.value, direction: undefined, item: undefined })
@@ -263,7 +279,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                   {label}
                 </option>
               ))}
-            </select>
+            </LibrarySelect>
           </label>
           <button
             type="button"
@@ -394,7 +410,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
         ) : null}
       </div>
 
-      {search.item ? (
+      {inspectorItem ? (
         <>
           <button
             type="button"
@@ -402,7 +418,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             aria-label="Close inspector"
             onClick={closeInspector}
           />
-          <MovieInspector mediaItemId={search.item} search={search} onClose={closeInspector} />
+          <MovieInspector mediaItemId={inspectorItem} search={search} onClose={closeInspector} />
         </>
       ) : null}
     </section>
@@ -431,7 +447,7 @@ function MovieResult({
       : 'Director unavailable'
   if (view === 'grid') {
     return (
-      <button
+      <MediaCard
         type="button"
         ref={buttonRef}
         className={selected ? 'movie-card selected' : 'movie-card'}
@@ -440,9 +456,10 @@ function MovieResult({
         onClick={onSelect}
       >
         <MoviePoster movie={movie} />
+        <RatingStars rating={movie.personal.currentRating} />
         <strong>{movie.displayTitle}</strong>
         <span>{[movie.releaseYear, director].filter(Boolean).join(' · ')}</span>
-      </button>
+      </MediaCard>
     )
   }
   const context =
@@ -516,6 +533,7 @@ function DateFilter({
     <fieldset className="date-filter">
       <legend>{label}</legend>
       <select
+        aria-label={label}
         value={mode}
         onChange={(event) => {
           const next = event.target.value as 'all' | 'range' | 'unknown'
@@ -627,6 +645,7 @@ function MovieFilters({
         <fieldset className="date-filter">
           <legend>Your rating</legend>
           <select
+            aria-label="Your rating"
             value={search.rating ?? 'any'}
             onChange={(event) =>
               onChange({
@@ -687,6 +706,7 @@ function MovieFilters({
         <fieldset className="date-filter">
           <legend>{collection === 'archive' ? 'Review' : 'Archive status'}</legend>
           <select
+            aria-label={collection === 'archive' ? 'Review' : 'Archive status'}
             value={(collection === 'archive' ? search.reviewed : search.archive) ?? 'any'}
             onChange={(event) =>
               onChange(
@@ -719,6 +739,7 @@ function MovieFilters({
           <fieldset className="date-filter">
             <legend>Runtime</legend>
             <select
+              aria-label="Runtime"
               value={search.runtime ?? 'any'}
               onChange={(event) =>
                 onChange({

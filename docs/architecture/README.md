@@ -121,3 +121,21 @@ Feed is a separate current-state view and does not become Queue or the future
 recommendation Feed. Exact content API responses are private raw evidence;
 bounded chunk indexing promotes a manifest only after the final batch commits,
 and failed or stale reservations remain recoverable.
+
+## Library query and sync activity refinements
+
+Music section counts use set membership rather than a correlated track scan per
+album. Migration 0023 adds the album lookup and covering Music/YouTube observation
+indexes; 0024 covers canonical Archive membership checks. The Videos occurrence
+rollup explicitly selects its covering index so SQLite does not prefer the narrower
+chronological index and fetch source rows for every aggregate. Filtering, exact
+counts, distinct occurrences, unknown duration/date semantics, and keyset cursors
+are unchanged. Apply these additive migrations before serving the updated API.
+
+Connections presents durable Spotify catalog-backfill progress separately from
+canonical import failures. Sync summaries include optional `catalogProgress` with
+returned/unavailable counts, last activity, and the next scheduled attempt. An
+unexpired lease means running; a future retry means waiting; otherwise an unfinished
+job awaits a worker. This is a read-time observation, not a mutation to the recorded
+run or a claim that the job failed. The durable run remains resumable. Collection
+browsing and viewing Connections never start or resume provider requests.

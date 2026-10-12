@@ -9,7 +9,6 @@
   --ink: var(--foreground);
   --ink-muted: var(--muted-foreground);
   font-family:
-    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -102,7 +101,7 @@ a {
   color: #f8f5ee;
   background: #272922;
   box-shadow: 0 7px 18px rgb(35 36 31 / 16%);
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 1.12rem;
 }
 
@@ -200,7 +199,7 @@ a {
 .page-heading h1 {
   max-width: 720px;
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: inherit;
   font-size: clamp(2.65rem, 6.8vw, 5.4rem);
   font-weight: 520;
   letter-spacing: -0.055em;
@@ -244,7 +243,7 @@ a {
 
 .summary-card strong {
   margin-top: 16px;
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 2.15rem;
   font-weight: 500;
   letter-spacing: -0.04em;
@@ -270,7 +269,7 @@ a {
 .empty-panel h1,
 .empty-panel h2 {
   margin: 0;
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 1.65rem;
   font-weight: 520;
 }
@@ -334,7 +333,7 @@ a {
   border-radius: 13px;
   color: white;
   background: #34362e;
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 1.1rem;
 }
 
@@ -389,7 +388,7 @@ a {
   font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
-  cursor: pointer;
+  cursor: default;
 }
 
 .sync-button:disabled {
@@ -452,7 +451,7 @@ a {
   font: inherit;
   font-size: 0.73rem;
   font-weight: 680;
-  cursor: pointer;
+  cursor: default;
 }
 
 .media-filters button:hover {
@@ -513,7 +512,7 @@ a {
   border-radius: 11px;
   color: #f8f5ee;
   background: #626558;
-  font-family: Georgia, serif;
+  font-family: inherit;
 }
 
 .media-type-article {
@@ -758,7 +757,7 @@ a:focus-visible {
   border-radius: var(--radius);
   color: var(--primary-foreground);
   background: var(--primary);
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 14px;
 }
 
@@ -774,7 +773,7 @@ a:focus-visible {
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  cursor: pointer;
+  cursor: default;
 }
 
 .sidebar-collapse:hover,
@@ -824,7 +823,7 @@ a:focus-visible {
   border-radius: var(--radius);
   color: var(--muted-foreground);
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   font-size: 12px;
   text-align: left;
 }
@@ -986,7 +985,7 @@ a:focus-visible {
 
 .route-state h1 {
   margin-top: 0;
-  font-family: Georgia, serif;
+  font-family: inherit;
 }
 
 .route-state a {
@@ -1028,7 +1027,7 @@ a:focus-visible {
 
 .books-header h1 {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: inherit;
   font-size: clamp(32px, 4vw, 45px);
   font-weight: 500;
   letter-spacing: -0.04em;
@@ -1117,7 +1116,7 @@ a:focus-visible {
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  cursor: pointer;
+  cursor: default;
 }
 
 .books-search button svg {
@@ -1140,7 +1139,7 @@ a:focus-visible {
   place-items: center;
   padding: 0;
   color: var(--muted-foreground);
-  cursor: pointer;
+  cursor: default;
 }
 
 .sort-direction svg {
@@ -1153,7 +1152,7 @@ a:focus-visible {
   align-items: center;
   gap: 7px;
   padding: 0 11px;
-  cursor: pointer;
+  cursor: default;
   font-size: 11px;
 }
 
@@ -1210,7 +1209,7 @@ a:focus-visible {
   border-radius: calc(var(--radius) - 1px);
   color: var(--muted-foreground);
   background: transparent;
-  cursor: pointer;
+  cursor: default;
 }
 
 .layout-toggle button[aria-pressed='true'] {
@@ -1245,7 +1244,7 @@ a:focus-visible {
   border: 0;
   color: var(--muted-foreground);
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   font-size: 10px;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1364,7 +1363,7 @@ a:focus-visible {
   border-radius: calc(var(--radius) * 1.5);
   color: inherit;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   text-align: left;
 }
 
@@ -1413,7 +1412,7 @@ a:focus-visible {
   border-radius: calc(var(--radius) * 1.5);
   color: inherit;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   text-align: left;
 }
 
@@ -1489,7 +1488,7 @@ a:focus-visible {
   color: var(--muted-foreground, #696861);
   font: inherit;
   font-size: 0.78rem;
-  cursor: pointer;
+  cursor: default;
 }
 
 .article-density-toggle button[aria-pressed='true'] {
@@ -1516,7 +1515,7 @@ a:focus-visible {
   background: transparent;
   color: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
 
 .article-row:hover,
@@ -1713,7 +1712,7 @@ a:focus-visible {
 
 .movie-poster-fallback strong {
   color: var(--foreground);
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 24px;
   font-weight: 500;
 }
@@ -1741,7 +1740,7 @@ a:focus-visible {
   border-bottom: 1px solid var(--border);
   color: inherit;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   text-align: left;
 }
 
@@ -1912,7 +1911,7 @@ a:focus-visible {
 .book-cover-fallback small {
   display: -webkit-box;
   overflow: hidden;
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 10px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -1934,7 +1933,7 @@ a:focus-visible {
   border-bottom: 1px solid var(--border);
   color: inherit;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   text-align: left;
 }
 
@@ -1999,7 +1998,7 @@ a:focus-visible {
 .books-state h2 {
   margin: 0;
   color: var(--foreground);
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-weight: 500;
 }
 
@@ -2018,7 +2017,7 @@ a:focus-visible {
   border-radius: var(--radius);
   color: var(--foreground);
   background: var(--card);
-  cursor: pointer;
+  cursor: default;
   font-size: 11px;
 }
 
@@ -2074,7 +2073,7 @@ a:focus-visible {
   border: 0;
   color: var(--muted-foreground);
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   font-size: 11px;
   font-weight: 600;
 }
@@ -2134,7 +2133,7 @@ a:focus-visible {
 
 .inspector-book-heading h2 {
   margin: 4px 0 5px;
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 22px;
   font-weight: 500;
   letter-spacing: -0.025em;
@@ -2600,7 +2599,7 @@ a:focus-visible {
   grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .library-facet-options label > span {
@@ -2619,7 +2618,7 @@ a:focus-visible {
   border: 0;
   background: transparent;
   color: var(--accent);
-  cursor: pointer;
+  cursor: default;
   font-size: 11px;
 }
 
@@ -2648,7 +2647,7 @@ a:focus-visible {
   align-items: center;
   gap: 12px;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
 
 .podcasts-list .spotify-result,
@@ -2727,7 +2726,7 @@ a:focus-visible {
   border: 0;
   background: transparent;
   color: var(--ink-muted);
-  cursor: pointer;
+  cursor: default;
 }
 
 .media-inspector > .spotify-inspector-topbar {
@@ -2827,7 +2826,7 @@ a:focus-visible {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .inspector-related-links {
@@ -2898,7 +2897,7 @@ a:focus-visible {
   align-items: center;
   gap: 12px;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
 
 .videos-list .video-result,
@@ -3099,4 +3098,395 @@ a:focus-visible {
     grid-column: 3;
     grid-row: 4;
   }
+}
+
+/* Shared desktop Library polish. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.app-frame {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-workspace {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.workspace-header {
+  height: 54px;
+  flex: 0 0 54px;
+}
+.workspace-content {
+  overflow: hidden;
+}
+.workspace-content > .page-stack {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-block: 30px;
+}
+.books-page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.books-collection {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.books-page:has(.book-inspector),
+.books-page:has(.media-inspector) {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+.books-page > .book-inspector,
+.books-page > .media-inspector {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  height: 100dvh;
+  z-index: 30;
+  overscroll-behavior: contain;
+  animation: inspector-enter 180ms ease-out;
+}
+.books-page[data-inspector-open='false'] > .book-inspector,
+.books-page[data-inspector-open='false'] > .media-inspector {
+  animation: inspector-exit 180ms ease-in forwards;
+  pointer-events: none;
+}
+@keyframes inspector-enter {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes inspector-exit {
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+.global-navigation a.active:hover,
+.media-navigation a.active:hover,
+.sidebar-secondary a.active:hover {
+  background: var(--selection);
+}
+.sidebar-health {
+  padding-inline: 10px;
+}
+.sidebar-health .status-pill {
+  gap: 10px;
+}
+.sidebar-health .status-icon {
+  display: flex;
+  width: 17px;
+  flex: 0 0 17px;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-health .status-dot {
+  width: 8px;
+  height: 8px;
+  box-shadow: none;
+}
+.sidebar-health .status-pill {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  font-size: 11px;
+}
+.media-card .rating-unavailable {
+  visibility: hidden;
+}
+button,
+[role='button'],
+[role='option'],
+select {
+  cursor: default;
+}
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+}
+.books-header h1 {
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.books-grid,
+.movies-grid {
+  grid-template-columns: repeat(auto-fill, 154px);
+  gap: 20px 16px;
+  justify-content: start;
+}
+.media-card {
+  width: 154px;
+  height: 304px;
+  padding: 7px;
+  gap: 0;
+}
+.media-card .book-cover-card,
+.media-card .movie-poster-card {
+  width: 138px;
+  height: 207px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.media-card > strong {
+  min-height: 0;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+.media-card > span:not(.rating-stars) {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rating-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--muted-foreground);
+  line-height: 1;
+}
+.media-card > .rating-stars {
+  height: 15px;
+  margin-top: 5px;
+}
+.rating-star {
+  position: relative;
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+}
+.rating-star > svg {
+  opacity: 0.25;
+}
+.rating-star svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  stroke-width: 0;
+  flex-shrink: 0;
+}
+.rating-star > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  display: flex;
+}
+.rating-unavailable {
+  font-size: 12px;
+}
+.book-row {
+  grid-template-columns: 38px minmax(140px, 1fr) 90px 120px 74px 14px;
+  gap: 14px;
+}
+.book-list-head {
+  display: grid;
+  grid-template-columns: minmax(192px, 1fr) 90px 120px 74px 14px;
+  gap: 14px;
+  padding: 8px 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+}
+.book-row-year,
+.book-row-context {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.books-search > button {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 5px;
+}
+.books-search > button:hover {
+  background: var(--secondary);
+}
+.books-sort {
+  padding: 0;
+  gap: 0;
+}
+.books-sort > svg {
+  display: none;
+}
+.library-select-trigger {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+.library-select-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.library-select-positioner {
+  z-index: 80;
+}
+.library-select-popup {
+  padding: 5px;
+  min-width: var(--anchor-width);
+  max-height: var(--available-height);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 14%);
+}
+.library-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+.library-select-option[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.library-inline-filter select,
+.date-filter select {
+  padding-right: 26px;
+}
+.music-page .books-tabs span {
+  min-width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.media-inspector .history-list .channel-library-video {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 5px 12px;
+  padding-block: 12px;
+}
+.channel-library-video .video-thumbnail {
+  grid-row: span 2;
+  width: 96px;
+  height: 54px;
+}
+.media-inspector .history-list .channel-library-video strong {
+  white-space: normal;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.media-inspector .history-list .channel-library-video > span:last-child {
+  font-size: 10px;
+}
+/* Connections follows the same type, surface and control tokens as Library. */
+.page-heading-compact h1 {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.page-heading .eyebrow {
+  color: var(--muted-foreground) !important;
+  font-size: 10px !important;
+  margin-bottom: 5px;
+}
+.page-heading > p:last-child {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.connection-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 18px;
+}
+.connection-copy p {
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.connection-state {
+  color: var(--muted-foreground);
+  border-color: var(--border);
+}
+.sync-button {
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 500;
+}
+.sync-button-secondary {
+  border-color: var(--border);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+.checkpoint-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.checkpoint-note input {
+  margin-left: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+@media (max-width: 1000px) {
+  .books-page:has(.book-inspector),
+  .books-page:has(.media-inspector) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .books-page > .book-inspector,
+  .books-page > .media-inspector {
+    box-shadow: -10px 0 35px rgb(0 0 0 / 10%);
+  }
+  .book-row {
+    grid-template-columns: 32px minmax(120px, 1fr) 74px 100px 65px 12px;
+    gap: 10px;
+  }
+  .book-list-head {
+    grid-template-columns: minmax(162px, 1fr) 74px 100px 65px 12px;
+    gap: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .books-page > .book-inspector,
+  .books-page > .media-inspector {
+    animation-duration: 1ms;
+  }
+}
+
+.page-stack > .connection-row {
+  display: block;
+}
+.page-stack > .connection-row p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
 }

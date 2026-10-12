@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
@@ -10,30 +10,11 @@ import type {
 } from './database'
 import { SqlSpotifyLibraryRepository } from './spotify-library-repository'
 
-const migrations = Array.from({ length: 15 }, (_, index) => {
-  const number = String(index + 1).padStart(4, '0')
-  const names = [
-    'canonical_ledger',
-    'rotating_credentials',
-    'books_library',
-    'books_review_facts',
-    'books_format_projection',
-    'movies_library',
-    'movies_nullable_source_link',
-    'articles_library',
-    'article_content_search_map',
-    'article_content_jobs',
-    'article_current_availability',
-    'article_content_reliability',
-    'article_content_attempts',
-    'podcasts_library',
-    'songs_library',
-  ]
-  return readFileSync(
-    new URL(`../migrations/${number}_${names[index]}.sql`, import.meta.url),
-    'utf8',
-  )
-}).join('\n')
+const migrations = readdirSync(new URL('../migrations/', import.meta.url))
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
+  .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
+  .join('\n')
 
 class Statement implements DatabaseStatement {
   #values: readonly DatabaseValue[] = []
@@ -155,6 +136,52 @@ describe('Spotify library repository', () => {
         .prepare(`SELECT COUNT(*) count FROM queue_entries WHERE upstream_state='active'`)
         .get(),
     ).toEqual({ count: 0 })
+  })
+
+  it('excludes explicitly labeled audiobooks from Following without title heuristics or source deletion', async () => {
+    for (const [id, description] of [
+      ['book', 'Author(s): Synthetic Author\nNarrator(s): Synthetic Narrator\nDescription'],
+      ['book-crlf', 'Author(s): Synthetic Author\r\nNarrator(s): Synthetic Narrator'],
+      ['podcast', 'A podcast about audiobooks and narrators.'],
+      ['unknown', null],
+      ['quoted', 'This episode discusses the credits:\nAuthor(s): Person\nNarrator(s): Person'],
+    ] as const) {
+      await repository.upsertSavedShows([
+        {
+          connectionId: 'spotify',
+          sourceRecordId: 'saved-record',
+          id,
+          showId: id,
+          showUri: `spotify:show:${id}`,
+          addedAt: '2026-01-01T00:00:00Z',
+          observedAt: '2026-01-01T00:00:00Z',
+          name: 'The same title',
+          publisher: id,
+          description,
+          imageUrl: null,
+          canonicalUrl: null,
+          languages: ['en'],
+          totalEpisodes: 10,
+        },
+      ])
+    }
+    const page = await repository.listPodcasts({ view: 'following', limit: 10 })
+    expect(page.data.map((item) => item.id).sort()).toEqual(['podcast', 'quoted', 'unknown'])
+    expect(page).toMatchObject({ totalCount: 3, sectionCounts: { following: 3 } })
+    expect(
+      (await repository.listPodcasts({ view: 'archive', limit: 10 })).sectionCounts.following,
+    ).toBe(3)
+    const facets = await repository.listPodcastFilterOptions(
+      { view: 'following', limit: 10 },
+      'publisher',
+      undefined,
+      10,
+    )
+    expect(facets.data.map((item) => item.value).sort()).toEqual(['podcast', 'quoted', 'unknown'])
+    expect(await repository.findPodcastShow('book')).toBeNull()
+    expect(
+      database.prepare('SELECT COUNT(*) value FROM spotify_saved_shows WHERE active=1').get(),
+    ).toEqual({ value: 5 })
   })
 
   it('admits an explicit zero-progress saved episode to Queue', async () => {
@@ -425,6 +452,17 @@ describe('Spotify library repository', () => {
       explicit: false,
       isrc: null,
       observedAt: '2026-02-01T00:00:00Z',
+    })
+    database.exec(`
+      INSERT INTO spotify_song_albums(id,spotify_album_uri,spotify_album_id,updated_at)
+        VALUES('orphan-album','spotify:album:orphan','orphan','2026-01-01T00:00:00Z');
+      INSERT INTO spotify_song_artists(id,spotify_artist_uri,spotify_artist_id,updated_at)
+        VALUES('orphan-artist','spotify:artist:orphan','orphan','2026-01-01T00:00:00Z');
+    `)
+    expect((await repository.listMusic({ view: 'tracks', limit: 10 })).sectionCounts).toEqual({
+      tracks: 1,
+      albums: 1,
+      artists: 1,
     })
     const recentTracks = await repository.listMusic({
       view: 'tracks',

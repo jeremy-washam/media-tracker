@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
@@ -10,16 +10,9 @@ import type {
 } from './database'
 import { SqlVideosRepository, type VideosListInput } from './videos-repository'
 
-const migrations = [
-  '0001_canonical_ledger.sql',
-  '0006_movies_library.sql',
-  '0016_videos_takeout_library.sql',
-  '0017_videos_snapshot_safety.sql',
-  '0018_videos_snapshot_head_backfill.sql',
-  '0019_provider_catalog_caches.sql',
-  '0020_tmdb_match_evidence.sql',
-  '0021_video_thumbnail_preference.sql',
-]
+const migrations = readdirSync(new URL('../migrations/', import.meta.url))
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
   .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
   .join('\n')
 

@@ -1,9 +1,16 @@
+import { LibrarySelect } from '../../components/library-controls'
+import {
+  useLiveSearch,
+  useLibraryLayout,
+  useInspectorPresence,
+} from '../../components/library-hooks'
 import { useRef, useState } from 'react'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Disc3,
-  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ExternalLink,
   Grid2X2,
   List,
@@ -39,6 +46,7 @@ function listened(value: number) {
 }
 
 export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'artists' }) {
+  const queryClient = useQueryClient()
   const raw = useSearch({ strict: false }) as MusicRouteSearch
   const search = normalizeMusicSearch(raw, view)
   const navigate = useNavigate()
@@ -46,13 +54,21 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedResultRef = useRef<HTMLButtonElement | null>(null)
   const headingRef = useRef<HTMLHeadingElement | null>(null)
-  const layout = search.layout ?? (view === 'albums' ? 'grid' : 'list')
+  const [layout, saveLayout] = useLibraryLayout(search.layout, view !== 'tracks')
   const update = (patch: Partial<MusicRouteSearch>) => {
+    if (patch.layout) saveLayout(patch.layout)
     const next = { ...search, ...patch }
     for (const key of Object.keys(next) as (keyof MusicRouteSearch)[])
       if (next[key] === undefined || next[key] === '') delete next[key]
     void navigate({ to: `/library/music/${view}`, search: next })
   }
+  useLiveSearch(
+    draft,
+    search.q,
+    (q) => update({ q, item: undefined }),
+    () => setDraft(null),
+  )
+  const inspectorItem = useInspectorPresence(search.item)
   const closeInspector = () => {
     const target = selectedResultRef.current?.isConnected
       ? selectedResultRef.current
@@ -70,6 +86,13 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
   })
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const summary = result.data?.pages[0]
+  const previousCounts = queryClient
+    .getQueriesData<{
+      pages: Array<{ sectionCounts: NonNullable<typeof summary>['sectionCounts'] }>
+    }>({ queryKey: ['music'] })
+    .flatMap(([, data]) => data?.pages ?? [])
+    .at(-1)?.sectionCounts
+  const sectionCounts = summary?.sectionCounts ?? previousCounts
   const sorts =
     view === 'tracks'
       ? [
@@ -104,7 +127,10 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
     search.direction ??
     (['title', 'artist', 'album', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
   return (
-    <section className={`books-page spotify-library-page music-page music-${layout}`}>
+    <section
+      data-inspector-open={Boolean(search.item)}
+      className={`books-page spotify-library-page music-page music-${layout}`}
+    >
       <div className="books-collection">
         <header className="books-header">
           <div>
@@ -122,7 +148,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 activeProps={{ className: 'active', 'aria-current': 'page' }}
               >
                 {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{summary?.sectionCounts[target] ?? '—'}</span>
+                <span>{sectionCounts?.[target] ?? '—'}</span>
               </Link>
             ))}
           </nav>
@@ -179,7 +205,8 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           </label>
           <label className="books-sort">
             <span className="sr-only">Sort music</span>
-            <select
+            <LibrarySelect
+              aria-label="Sort music"
               value={selectedSort}
               onChange={(event) =>
                 update({ sort: event.target.value, direction: undefined, item: undefined })
@@ -190,12 +217,13 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                   {label}
                 </option>
               ))}
-            </select>
+            </LibrarySelect>
           </label>
           <button
             type="button"
             className="toolbar-button"
-            aria-label="Reverse music sort"
+            aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
+            title={selectedDirection === 'asc' ? 'Ascending' : 'Descending'}
             onClick={() =>
               update({
                 direction: selectedDirection === 'asc' ? 'desc' : 'asc',
@@ -203,8 +231,11 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               })
             }
           >
-            <ArrowUpDown aria-hidden="true" />
-            {selectedDirection === 'asc' ? 'Ascending' : 'Descending'}
+            {selectedDirection === 'asc' ? (
+              <ArrowUp aria-hidden="true" />
+            ) : (
+              <ArrowDown aria-hidden="true" />
+            )}
           </button>
           <button
             type="button"
@@ -214,24 +245,26 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
           </button>
-          <div className="layout-toggle" aria-label="Result layout">
-            <button
-              type="button"
-              aria-label="Grid view"
-              aria-pressed={layout === 'grid'}
-              onClick={() => update({ layout: 'grid' })}
-            >
-              <Grid2X2 />
-            </button>
-            <button
-              type="button"
-              aria-label="List view"
-              aria-pressed={layout === 'list'}
-              onClick={() => update({ layout: 'list' })}
-            >
-              <List />
-            </button>
-          </div>
+          {view !== 'tracks' ? (
+            <div className="layout-toggle" aria-label="Result layout">
+              <button
+                type="button"
+                aria-label="Grid view"
+                aria-pressed={layout === 'grid'}
+                onClick={() => update({ layout: 'grid' })}
+              >
+                <Grid2X2 />
+              </button>
+              <button
+                type="button"
+                aria-label="List view"
+                aria-pressed={layout === 'list'}
+                onClick={() => update({ layout: 'list' })}
+              >
+                <List />
+              </button>
+            </div>
+          ) : null}
         </div>
         {filtersOpen ? (
           <section className="filter-panel" aria-label="Music filters">
@@ -443,9 +476,9 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           </button>
         ) : null}
       </div>
-      {search.item ? (
+      {inspectorItem ? (
         <MusicInspector
-          id={search.item}
+          id={inspectorItem}
           view={view}
           onClose={closeInspector}
           matchingItem={
@@ -566,7 +599,16 @@ function MusicItem({
         <small>
           {item.playbackCount.toLocaleString()} playback{' '}
           {item.playbackCount === 1 ? 'observation' : 'observations'} ·{' '}
-          {item.observedDurationKnown ? listened(item.observedMs) : 'time unavailable'}
+          {item.observedDurationKnown ? (
+            listened(item.observedMs)
+          ) : (
+            <span
+              aria-label="Listening time unavailable from Spotify recent history"
+              title="Spotify recent history does not include listening duration"
+            >
+              —
+            </span>
+          )}
           {item.observedDurationKnown && item.durationUnknownCount > 0
             ? ` · ${item.durationUnknownCount.toLocaleString()} without duration`
             : ''}

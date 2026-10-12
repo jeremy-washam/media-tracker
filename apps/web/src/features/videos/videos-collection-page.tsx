@@ -1,8 +1,15 @@
+import { LibrarySelect } from '../../components/library-controls'
+import {
+  useLiveSearch,
+  useLibraryLayout,
+  useInspectorPresence,
+} from '../../components/library-hooks'
 import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ExternalLink,
   Grid2X2,
   List,
@@ -53,13 +60,22 @@ export function VideosCollectionPage({ view }: { view: View }) {
   const navigate = useNavigate()
   const [draft, setDraft] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const layout = view === 'channels' ? 'list' : (search.layout ?? 'list')
+  const [layout, saveLayout] = useLibraryLayout(search.layout, view !== 'channels')
   const update = (patch: Partial<VideosRouteSearch>) => {
+    if (patch.layout) saveLayout(patch.layout)
     const next = normalizeVideoSearch({ ...search, ...patch }, view)
     for (const key of Object.keys(next) as (keyof VideosRouteSearch)[])
       if (next[key] === undefined || next[key] === '') delete next[key]
     void navigate({ to: `/library/videos/${view}`, search: next })
   }
+  useLiveSearch(
+    draft,
+    search.q,
+    (q) => update({ q, item: undefined, channelItem: undefined }),
+    () => setDraft(null),
+  )
+  const inspectorItem = useInspectorPresence(search.item)
+  const channelInspectorItem = useInspectorPresence(search.channelItem)
   const request = useMemo(() => ({ view, ...videoQuerySearch(search), limit: 50 }), [view, search])
   const result = useInfiniteQuery({
     queryKey: ['videos', request],
@@ -100,7 +116,10 @@ export function VideosCollectionPage({ view }: { view: View }) {
     search.direction ?? (['title', 'channel', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
 
   return (
-    <section className={`books-page videos-page videos-${layout}`}>
+    <section
+      data-inspector-open={Boolean(search.item || search.channelItem)}
+      className={`books-page videos-page videos-${layout}`}
+    >
       <div className="books-collection">
         <header className="books-header">
           <div>
@@ -159,7 +178,8 @@ export function VideosCollectionPage({ view }: { view: View }) {
           </form>
           <label className="books-sort">
             <span className="sr-only">Sort videos</span>
-            <select
+            <LibrarySelect
+              aria-label="Sort videos"
               value={selectedSort}
               onChange={(event) =>
                 update({
@@ -175,12 +195,12 @@ export function VideosCollectionPage({ view }: { view: View }) {
                   {label}
                 </option>
               ))}
-            </select>
+            </LibrarySelect>
           </label>
           <button
             type="button"
             className="toolbar-button"
-            aria-label="Reverse video sort"
+            aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
             onClick={() =>
               update({
                 direction: selectedDirection === 'asc' ? 'desc' : 'asc',
@@ -189,8 +209,11 @@ export function VideosCollectionPage({ view }: { view: View }) {
               })
             }
           >
-            <ArrowUpDown aria-hidden="true" />
-            {selectedDirection === 'asc' ? 'Ascending' : 'Descending'}
+            {selectedDirection === 'asc' ? (
+              <ArrowUp aria-hidden="true" />
+            ) : (
+              <ArrowDown aria-hidden="true" />
+            )}
           </button>
           <button
             type="button"
@@ -282,12 +305,12 @@ export function VideosCollectionPage({ view }: { view: View }) {
           </button>
         ) : null}
       </div>
-      {search.item ? (
-        <VideoInspector id={search.item} onClose={() => update({ item: undefined })} />
+      {inspectorItem ? (
+        <VideoInspector id={inspectorItem} onClose={() => update({ item: undefined })} />
       ) : null}
-      {search.channelItem ? (
+      {channelInspectorItem ? (
         <ChannelInspector
-          id={search.channelItem}
+          id={channelInspectorItem}
           onClose={() => update({ channelItem: undefined })}
         />
       ) : null}
@@ -1020,7 +1043,14 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                 {library.data?.pages
                   .flatMap((page) => page.data)
                   .map((item) => (
-                    <li key={item.id}>
+                    <li key={item.id} className="channel-library-video">
+                      <span className="video-thumbnail">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt="" loading="lazy" />
+                        ) : (
+                          <PlaySquare aria-hidden="true" />
+                        )}
+                      </span>
                       <strong>{item.title}</strong>
                       <span>
                         {membership === 'archive'

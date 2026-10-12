@@ -1,3 +1,5 @@
+import { LibrarySelect } from '../../components/library-controls'
+import { useLiveSearch, useInspectorPresence } from '../../components/library-hooks'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
@@ -90,6 +92,13 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
         delete next[key as keyof ArticlesRouteSearch]
     void navigate({ to: `/library/articles/${section}`, search: next })
   }
+  useLiveSearch(
+    draft,
+    search.q,
+    (q) => update({ q, item: undefined }),
+    () => setDraft(null),
+  )
+  const inspectorItem = useInspectorPresence(search.item)
   const request = useMemo<ArticlesRequest>(
     () => ({ section, ...articleCollectionQuerySearch(search), limit: 50 }),
     [section, search],
@@ -132,7 +141,8 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
   }
   return (
     <section
-      className={`books-page articles-page articles-density-${search.density ?? 'restrained'}`}
+      data-inspector-open={Boolean(search.item)}
+      className={`books-page articles-page articles-density-expanded`}
       aria-labelledby="articles-title"
     >
       <div className="books-collection">
@@ -203,7 +213,8 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           <label className="books-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort articles</span>
-            <select
+            <LibrarySelect
+              aria-label="Sort articles"
               value={sort}
               onChange={(event) =>
                 update({ sort: event.target.value, direction: undefined, item: undefined })
@@ -214,7 +225,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                   {label}
                 </option>
               ))}
-            </select>
+            </LibrarySelect>
           </label>
           <button
             type="button"
@@ -231,22 +242,6 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
               <ArrowDown aria-hidden="true" />
             )}
           </button>
-          <div className="article-density-toggle" aria-label="Row density">
-            <button
-              type="button"
-              aria-pressed={(search.density ?? 'restrained') === 'restrained'}
-              onClick={() => update({ density: 'restrained' })}
-            >
-              Compact
-            </button>
-            <button
-              type="button"
-              aria-pressed={search.density === 'expanded'}
-              onClick={() => update({ density: 'expanded' })}
-            >
-              Expanded
-            </button>
-          </div>
         </div>
         {filtersOpen ? (
           <ArticleFilters section={section} search={search} summary={summary} onChange={update} />
@@ -297,7 +292,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                 key={item.id}
                 item={item}
                 section={section}
-                expanded={search.density === 'expanded'}
+                expanded={true}
                 selected={search.item === item.id}
                 ref={search.item === item.id ? selectedRef : undefined}
                 onClick={() => update({ item: item.id })}
@@ -316,7 +311,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           </button>
         ) : null}
       </div>
-      {search.item ? (
+      {inspectorItem ? (
         <>
           <button
             type="button"
@@ -324,7 +319,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             aria-label="Close inspector"
             onClick={close}
           />
-          <ArticleInspector id={search.item} onClose={close} />
+          <ArticleInspector id={inspectorItem} onClose={close} />
         </>
       ) : null}
     </section>
@@ -370,7 +365,6 @@ function ArticleRow({
         {expanded ? (
           <em>
             {[
-              item.subtype.toUpperCase(),
               item.readingTime.minutes == null
                 ? null
                 : `${Math.round(item.readingTime.minutes)} min`,

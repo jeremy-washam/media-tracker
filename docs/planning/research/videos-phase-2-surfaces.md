@@ -1,5 +1,7 @@
 # Videos Phase 2 surface specification
 
+> Presentation update (2026-10-04): [UI polish](../ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
+
 - Date: 2026-09-20
 - Status: Historical owner-approved baseline; production implementation shipped.
   The 2026-09-21 owner decision removes OAuth, current subscriptions, and every

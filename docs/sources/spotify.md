@@ -634,3 +634,21 @@ reconciliation and recovery policies in [ADR 0010](../decisions/0010-reconciliat
 This implementation update does not represent a new private payload probe or a
 new verification of upstream API capabilities. See the connector README for
 current behavior; earlier reconnaissance questions remain historical evidence.
+
+## October 4 Library verification
+
+The retained saved-shows response includes audiobooks as `type: show`, with
+`spotify:show` identities and `media_type: audio`, just like audio-only podcasts.
+Those fields do not identify the audiobook subset. The current response explicitly
+labels audiobook descriptions with a leading `Author(s):` line followed by a
+`Narrator(s):` line. Following excludes only that positive source metadata pattern
+from its rows, counts, facets, and show details. It does not guess from titles,
+publishers, artwork, or episode counts, and does not delete saved-show evidence.
+Descriptions lacking that explicit pattern remain eligible; this is conservative
+source-backed filtering, not complete catalog-wide audiobook classification.
+
+Recently-played track responses provide playback timestamps but no observed
+listening duration. Their missing `milliseconds_played` remains null, while real
+export durations contribute to totals. Catalog track length must never replace
+missing observed listening time; partial totals retain their unknown-observation
+count.

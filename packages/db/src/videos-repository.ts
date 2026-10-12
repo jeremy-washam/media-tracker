@@ -1268,7 +1268,7 @@ export class SqlVideosRepository {
             COUNT(DISTINCT w.archive_entry_id) matching_watch_count,
             COUNT(DISTINCT w.connection_id) matching_watch_account_count,
             0 matching_queue_count,0 matching_queue_account_count
-          FROM youtube_watch_observations w
+          FROM youtube_watch_observations w INDEXED BY youtube_watch_rollup_idx
           JOIN archive_entries a ON a.id=w.archive_entry_id
           WHERE ${predicate.sql} GROUP BY w.media_item_id
         )`,

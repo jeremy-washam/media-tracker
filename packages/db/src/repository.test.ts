@@ -24,7 +24,7 @@ import {
   type SyncCursor,
   type SyncRun,
 } from '@media-tracker/domain'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   DatabaseAllResult,
@@ -253,10 +253,63 @@ describe('canonical ledger migration and repository', () => {
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
     database.exec(migration)
+    database.exec(
+      readFileSync(
+        new URL('../migrations/0022_spotify_catalog_backfill.sql', import.meta.url),
+        'utf8',
+      ),
+    )
     repository = new SqlCanonicalLedgerRepository(new SqliteClient(database))
   })
 
-  afterEach(() => database.close())
+  afterEach(() => {
+    database.close()
+    vi.useRealTimers()
+  })
+
+  it('reports durable catalog progress and expired worker leases without rewriting the run', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-13T12:00:00Z'))
+    const data = fixtures()
+    await repository.saveConnection(data.connection)
+    await repository.saveSyncRun(data.runningSyncRun)
+    database.exec(`INSERT INTO spotify_catalog_backfill_jobs(
+      id,connection_id,sync_run_id,state,phase,requested_count,returned_count,unavailable_count,
+      lease_expires_at,created_at,updated_at)
+      VALUES('catalog','connection-spotify','sync-run-1','running','tracks',12,10,2,
+        '2026-09-13T11:00:00Z','2026-09-12T20:00:00Z','2026-09-13T10:55:00Z')`)
+    const page = await repository.listSyncRuns(10)
+    expect(page.data[0]).toMatchObject({
+      status: 'running',
+      sourceRecords: 10,
+      normalizedRecords: 10,
+      catalogProgress: {
+        state: 'awaiting_worker',
+        requestedCount: 12,
+        returnedCount: 10,
+        unavailableCount: 2,
+        lastActivityAt: '2026-09-13T10:55:00Z',
+        nextAttemptAt: null,
+      },
+    })
+    expect(database.prepare('SELECT status,source_record_count FROM sync_runs').get()).toEqual({
+      status: 'running',
+      source_record_count: 0,
+    })
+
+    database.exec(
+      "UPDATE spotify_catalog_backfill_jobs SET lease_expires_at='2026-09-13T12:05:00Z'",
+    )
+    expect((await repository.listSyncRuns(10)).data[0]?.catalogProgress?.state).toBe('running')
+    database.exec(
+      "UPDATE spotify_catalog_backfill_jobs SET state='pending',lease_expires_at=NULL,next_attempt_at='2026-09-13T12:15:00Z'",
+    )
+    expect((await repository.listSyncRuns(10)).data[0]?.catalogProgress?.state).toBe('waiting')
+    database.exec("UPDATE spotify_catalog_backfill_jobs SET state='succeeded'")
+    expect((await repository.listSyncRuns(10)).data[0]?.catalogProgress?.state).toBe('succeeded')
+    database.exec('DELETE FROM spotify_catalog_backfill_jobs')
+    expect((await repository.listSyncRuns(10)).data[0]).not.toHaveProperty('catalogProgress')
+  })
 
   it('applies from an empty database and seeds stable sources', () => {
     const rows = database.prepare('SELECT source FROM sources ORDER BY source').all()

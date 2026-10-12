@@ -163,6 +163,14 @@ export interface SyncRunRecord {
   failedRecords: number
   errorCode: string | null
   errorMessage: string | null
+  catalogProgress?: {
+    state: 'running' | 'waiting' | 'awaiting_worker' | 'succeeded' | 'failed'
+    requestedCount: number
+    returnedCount: number
+    unavailableCount: number
+    lastActivityAt: string
+    nextAttemptAt: string | null
+  }
 }
 export interface IncompleteImport {
   importId: string
@@ -713,18 +721,70 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
     encodedCursor?: string,
   ): Promise<{ data: readonly SyncRunRecord[]; nextCursor: string | null }> {
     const cursor = decodeCursor(encodedCursor)
+    const at = new Date().toISOString()
     const rows = await statement(
       this.#database,
-      `SELECT s.id, s.connection_id connectionId, c.label connectionLabel, c.source, s.kind, s.status, s.started_at startedAt, s.finished_at finishedAt, s.source_record_count sourceRecords, s.normalized_record_count normalizedRecords, s.failed_record_count failedRecords, s.error_code errorCode, s.error_message errorMessage FROM sync_runs s JOIN connections c ON c.id=s.connection_id WHERE (? IS NULL OR s.started_at < ? OR (s.started_at = ? AND s.id < ?)) ORDER BY s.started_at DESC,s.id DESC LIMIT ?`,
+      `SELECT s.id,s.connection_id connectionId,c.label connectionLabel,c.source,s.kind,s.status,
+        s.started_at startedAt,s.finished_at finishedAt,
+        COALESCE(j.returned_count,s.source_record_count) sourceRecords,
+        COALESCE(j.returned_count,s.normalized_record_count) normalizedRecords,
+        s.failed_record_count failedRecords,s.error_code errorCode,s.error_message errorMessage,
+        CASE WHEN j.id IS NULL THEN NULL
+          WHEN j.state IN ('succeeded','failed') THEN j.state
+          WHEN j.lease_expires_at>? THEN 'running'
+          WHEN j.next_attempt_at>? THEN 'waiting'
+          ELSE 'awaiting_worker' END catalogState,
+        j.requested_count requestedCount,j.returned_count returnedCount,
+        j.unavailable_count unavailableCount,j.updated_at lastActivityAt,j.next_attempt_at nextAttemptAt
+       FROM sync_runs s JOIN connections c ON c.id=s.connection_id
+       LEFT JOIN spotify_catalog_backfill_jobs j ON j.sync_run_id=s.id
+       WHERE (? IS NULL OR s.started_at < ? OR (s.started_at = ? AND s.id < ?))
+       ORDER BY s.started_at DESC,s.id DESC LIMIT ?`,
       [
+        at,
+        at,
         cursor?.value ?? null,
         cursor?.value ?? null,
         cursor?.value ?? null,
         cursor?.id ?? null,
         limit + 1,
       ],
-    ).all<SyncRunRecord>()
-    const data = rows.results.slice(0, limit)
+    ).all<
+      SyncRunRecord & {
+        catalogState: NonNullable<SyncRunRecord['catalogProgress']>['state'] | null
+        requestedCount: number | null
+        returnedCount: number | null
+        unavailableCount: number | null
+        lastActivityAt: string | null
+        nextAttemptAt: string | null
+      }
+    >()
+    const data = rows.results.slice(0, limit).map((row) => {
+      const {
+        catalogState,
+        requestedCount,
+        returnedCount,
+        unavailableCount,
+        lastActivityAt,
+        nextAttemptAt,
+        ...run
+      } = row
+      return {
+        ...run,
+        ...(catalogState === null
+          ? {}
+          : {
+              catalogProgress: {
+                state: catalogState,
+                requestedCount: requestedCount ?? 0,
+                returnedCount: returnedCount ?? 0,
+                unavailableCount: unavailableCount ?? 0,
+                lastActivityAt: lastActivityAt!,
+                nextAttemptAt,
+              },
+            }),
+      }
+    })
     const last = data.at(-1)
     return {
       data,

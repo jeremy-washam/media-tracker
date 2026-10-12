@@ -124,6 +124,10 @@ class D1SqliteDatabase {
       '0018_videos_snapshot_head_backfill.sql',
       '0019_provider_catalog_caches.sql',
       '0020_tmdb_match_evidence.sql',
+      '0021_video_thumbnail_preference.sql',
+      '0022_spotify_catalog_backfill.sql',
+      '0023_library_query_indexes.sql',
+      '0024_archive_membership_lookup.sql',
     ]) {
       this.database.exec(
         readFileSync(

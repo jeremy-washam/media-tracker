@@ -186,6 +186,16 @@ export const SyncRunSummarySchema = z.object({
   errorMessage: z.string().nullable(),
   startedAt: z.string().datetime(),
   finishedAt: z.string().datetime().nullable(),
+  catalogProgress: z
+    .object({
+      state: z.enum(['running', 'waiting', 'awaiting_worker', 'succeeded', 'failed']),
+      requestedCount: z.number().int().nonnegative(),
+      returnedCount: z.number().int().nonnegative(),
+      unavailableCount: z.number().int().nonnegative(),
+      lastActivityAt: z.string().datetime(),
+      nextAttemptAt: z.string().datetime().nullable(),
+    })
+    .optional(),
 })
 
 export const SyncRunsResponseSchema = z.object({

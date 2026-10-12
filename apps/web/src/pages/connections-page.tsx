@@ -29,7 +29,7 @@ const coverageNotes = {
   letterboxd:
     'RSS covers recent public activity. Import exports periodically for older and private history.',
   spotify:
-    'Polling sees saved episodes only. Import Extended Streaming History for missing podcast plays. Songs and audiobooks are deferred.',
+    'Spotify sync discovers saved episodes and shows and imports recent tracks. Import Extended Streaming History for older listening history. Audiobooks are not included in Podcasts.',
   youtube:
     'Manual Takeout imports only. Automatic watch-history sync is unavailable. Use the same account when importing later snapshots.',
 } as const
@@ -438,13 +438,27 @@ export function ConnectionsPage() {
             <div>
               <strong>{run.connectionLabel}</strong>
               <p>
-                {run.kind} · {run.status.replaceAll('_', ' ')} ·{' '}
+                {run.catalogProgress ? 'Catalog refresh' : run.kind} ·{' '}
+                {(run.catalogProgress?.state ?? run.status).replaceAll('_', ' ')} ·{' '}
                 {new Date(run.startedAt).toLocaleString()}
               </p>
-              <p>
-                {run.sourceRecords} source records · {run.normalizedRecords} normalized ·{' '}
-                {run.failedRecords} failed
-              </p>
+              {run.catalogProgress ? (
+                <p>
+                  {run.catalogProgress.returnedCount.toLocaleString()} metadata records returned ·{' '}
+                  {run.catalogProgress.unavailableCount.toLocaleString()} unavailable ·{' '}
+                  {run.catalogProgress.requestedCount.toLocaleString()} requested
+                  <br />
+                  Last activity {new Date(run.catalogProgress.lastActivityAt).toLocaleString()}
+                  {run.catalogProgress.nextAttemptAt
+                    ? ` · Next attempt ${new Date(run.catalogProgress.nextAttemptAt).toLocaleString()}`
+                    : ''}
+                </p>
+              ) : (
+                <p>
+                  {run.sourceRecords} source records · {run.normalizedRecords} normalized ·{' '}
+                  {run.failedRecords} failed
+                </p>
+              )}
               {run.errorMessage === null ? null : (
                 <p role="alert">
                   {run.errorMessage} ({run.errorCode})

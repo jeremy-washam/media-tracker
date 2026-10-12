@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
 - Status: Index selected as the base; detailed surface design remains open
-- Last updated: 2026-09-20
+- Last updated: 2026-10-04
 
 ## Purpose and scope
 
@@ -57,6 +57,29 @@ For paginated Library collections, opening or closing the inspector and changing
 between grid and list are presentation changes: they preserve every loaded page
 and do not restart the collection query.
 
+## October 2026 iterative polish
+
+The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
+presentation details where they conflict. Use the platform system font throughout
+production UI. Buttons use the default cursor. The current Letterboxd reference
+applies only to small, muted personal-rating stars below Book and Movie artwork,
+including half stars; it does not prescribe poster density, colors, or metadata.
+
+Collections default to list. A single local preference remembers grid/list across
+supported pages and browser sessions; explicit layout in a URL takes precedence.
+Only Following supports grid within Podcasts, and only Albums/Artists within
+Music. Articles have one expanded row style with no ARTICLE/PDF type label.
+Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
+and personal Rating; formats do not appear in those rows.
+
+Search updates after a short typing pause and has an explicit clear control.
+Shared Base UI selects provide accessible custom sort menus. Book/Movie cards
+share fixed artwork dimensions; inspector opening changes column count, never
+card dimensions. The application contains scrolling within collections and
+inspectors. The inspector fills the viewport height and animates in and out,
+with reduced-motion support. New styling issues may be resolved iteratively
+without waiting for a comprehensive redesign.
+
 ## Visual and writing principles
 
 Use Readwise Reader for polish, density, hierarchy, and contextual browsing, and
@@ -105,7 +128,7 @@ Podcasts and Songs need their own metadata/density treatment. Detailed decisions
 are recorded in the owner-approved
 [Library surface specification](../planning/library-phase-2-surfaces.md) and its
 per-media contracts. Books use sparse grid and Readwise-style list modes;
-Articles use restrained and expanded row densities; Podcasts include Following;
+Articles use a single expanded row presentation without type badges; Podcasts include Following;
 Music includes Tracks, Albums, and Artists; Videos include a Channels activity
 rollup without a subscription/Following surface. Books and Songs in particular use
 substantially different experiences.

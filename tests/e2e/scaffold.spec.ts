@@ -60,7 +60,7 @@ test('searches and applies complete Music artist facet options', async ({ page }
   await expect(page.getByRole('group', { name: /Artists \(1 selected\)/ })).toBeVisible()
 })
 
-test('keeps loaded Podcast pages while changing layout and opening the inspector', async ({
+test('keeps loaded Podcast pages while opening the inspector in list-only Archive', async ({
   page,
 }) => {
   const requested: string[] = []
@@ -101,7 +101,7 @@ test('keeps loaded Podcast pages while changing layout and opening the inspector
   await page.getByRole('button', { name: 'Load more' }).click()
   await expect(page.getByRole('button', { name: /Second Episode/ })).toBeVisible()
   const afterPaging = requested.length
-  await page.getByRole('button', { name: 'Grid view' }).click()
+  await expect(page.getByRole('button', { name: 'Grid view' })).toHaveCount(0)
   await page.getByRole('button', { name: /A Distant Episode/ }).click()
   await expect(page.getByText('Episode description.')).toBeVisible()
   await expect(page.getByText('1969', { exact: true })).toBeVisible()
@@ -114,7 +114,7 @@ test('keeps loaded Podcast pages while changing layout and opening the inspector
   )
 })
 
-test('keeps loaded Music pages while changing layout and opening the inspector', async ({
+test('keeps loaded Music pages while opening the inspector in list-only Tracks', async ({
   page,
 }) => {
   const requested: string[] = []
@@ -165,7 +165,7 @@ test('keeps loaded Music pages while changing layout and opening the inspector',
   await page.getByRole('button', { name: 'Load more' }).click()
   await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
   const afterPaging = requested.length
-  await page.getByRole('button', { name: 'Grid view' }).click()
+  await expect(page.getByRole('button', { name: 'Grid view' })).toHaveCount(0)
   await page.getByRole('button', { name: /A Distant Track/ }).click()
   await expect(page.getByRole('heading', { name: 'A Distant Track' })).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).click()
@@ -418,8 +418,9 @@ test('keeps every Article toolbar control visible at intermediate desktop width'
     route.fulfill({ json: articlesResponse() }),
   )
   await page.goto('/library/articles/archive')
-  await expect(page.getByRole('button', { name: 'Expanded' })).toBeVisible()
-  const box = await page.getByRole('button', { name: 'Expanded' }).boundingBox()
+  await expect(page.getByRole('button', { name: 'Expanded' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Compact' })).toHaveCount(0)
+  const box = await page.getByRole('button', { name: 'Filters', exact: true }).boundingBox()
   expect(box).not.toBeNull()
   expect(box!.x + box!.width).toBeLessThanOrEqual(853)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(853)
@@ -599,11 +600,15 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
   await page.getByRole('button', { name: 'Load more' }).click()
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
   const requestsAfterPaging = requested.length
-  await page.getByRole('button', { name: 'List view' }).click()
-  await expect(page).toHaveURL(/layout=list/)
+  await page.getByRole('button', { name: 'Grid view' }).click()
+  await expect(page).toHaveURL(/layout=grid/)
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
+  const cardBefore = await page.getByRole('button', { name: /A Distant Book/ }).boundingBox()
   await page.getByRole('button', { name: /A Distant Book/ }).click()
   await expect(page).toHaveURL(/item=book-one/)
+  const cardAfter = await page.getByRole('button', { name: /A Distant Book/ }).boundingBox()
+  expect(cardAfter!.width).toBeCloseTo(cardBefore!.width, 0)
+  expect(cardAfter!.height).toBeCloseTo(cardBefore!.height, 0)
   await page.getByRole('button', { name: 'Close inspector' }).last().click()
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
   expect(requested).toHaveLength(requestsAfterPaging)
@@ -611,12 +616,88 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
     true,
   )
   await page.getByRole('textbox', { name: 'Search books' }).fill('Ada')
-  await page.getByRole('textbox', { name: 'Search books' }).press('Enter')
   await expect(page).toHaveURL(/q=Ada/)
   await page.getByRole('button', { name: 'Sort ascending' }).click()
   await expect(page).toHaveURL(/direction=asc/)
   expect(requested.some((value) => value.includes('cursor=next-page'))).toBe(true)
   expect(requested.some((value) => value.includes('q=Ada'))).toBe(true)
+})
+
+test('searches Books without Enter and clears the applied query', async ({ page }) => {
+  const requested: URL[] = []
+  await page.route('**/api/library/books?*', async (route) => {
+    const url = new URL(route.request().url())
+    requested.push(url)
+    await route.fulfill({ json: booksResponse(url.searchParams.get('q') ? [] : [book]) })
+  })
+  await page.goto('/library/books/archive')
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Search books' }).fill('absent title')
+  await expect(page).toHaveURL(/q=absent/)
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Clear search', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Search books' })).toHaveValue('')
+  await expect(page).not.toHaveURL(/[?&]q=/)
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  expect(requested.some((url) => url.searchParams.get('q') === 'absent title')).toBe(true)
+})
+
+for (const media of ['movies', 'articles', 'podcasts', 'music', 'videos'] as const) {
+  test(`applies ${media} search while typing and exposes clearing`, async ({ page }) => {
+    const responses = {
+      movies: moviesResponse(),
+      articles: articlesResponse(),
+      podcasts: podcastsResponse(),
+      music: musicResponse(),
+      videos: videosResponse(),
+    }
+    const queries: Array<string | null> = []
+    await page.route(`**/api/library/${media}?*`, async (route) => {
+      queries.push(new URL(route.request().url()).searchParams.get('q'))
+      await route.fulfill({ json: responses[media] })
+    })
+    await page.goto(`/library/${media}/${media === 'music' ? 'tracks' : 'archive'}`)
+    const search = page.getByRole('textbox', { name: `Search ${media}` })
+    await search.fill('distant')
+    await expect(page).toHaveURL(/q=distant/)
+    await expect.poll(() => queries.includes('distant')).toBe(true)
+    await page.getByRole('button', { name: 'Clear search', exact: true }).click()
+    await expect(search).toHaveValue('')
+    await expect(page).not.toHaveURL(/[?&]q=/)
+  })
+}
+
+test('shares the saved layout across media and reloads while respecting explicit URLs', async ({
+  page,
+}) => {
+  await page.route('**/api/library/movies?*', (route) => route.fulfill({ json: moviesResponse() }))
+  await page.goto('/library/books/archive')
+  await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByRole('button', { name: 'Grid view' }).click()
+  await page.getByRole('link', { name: 'Movies', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.goto('/library/movies/archive?view=list')
+  await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByRole('button', { name: 'List view' }).click()
+  await page.getByRole('link', { name: 'Books', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
 })
 
 test('opens a selected Book and loads personal activity in History', async ({ page }) => {
@@ -782,8 +863,8 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
 
   const requestsAfterPaging = requested.length
-  await page.getByRole('button', { name: 'List view' }).click()
-  await expect(page).toHaveURL(/view=list/)
+  await page.getByRole('button', { name: 'Grid view' }).click()
+  await expect(page).toHaveURL(/view=grid/)
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
   await page.getByRole('button', { name: /A Distant Movie/ }).click()
   await expect(page).toHaveURL(/item=movie-one/)
@@ -850,7 +931,11 @@ test('labels TMDB TV creators correctly in a Letterboxd-logged series', async ({
   await page.goto('/library/movies/archive')
   await page.getByRole('button', { name: /Over the Garden Wall/ }).click()
   await expect(page.getByText('Creators', { exact: true })).toBeVisible()
-  await expect(page.getByText('Patrick McHale', { exact: true })).toBeVisible()
+  await expect(
+    page
+      .getByRole('complementary', { name: 'Movie inspector' })
+      .getByText('Patrick McHale', { exact: true }),
+  ).toBeVisible()
 })
 
 test('keeps incomplete Movie filter drafts out of API requests', async ({ page }) => {
@@ -901,9 +986,7 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
     .toBe(true)
 })
 
-test('keeps loaded Article pages while changing density and inspecting History', async ({
-  page,
-}) => {
+test('keeps loaded Article pages while inspecting History in expanded rows', async ({ page }) => {
   const requested: string[] = []
   await page.route('**/api/library/articles?*', async (route) => {
     const url = new URL(route.request().url())
@@ -1012,8 +1095,8 @@ test('keeps loaded Article pages while changing density and inspecting History',
   await page.getByRole('button', { name: 'Load more articles' }).click()
   await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
   const afterPaging = requested.length
-  await page.getByRole('button', { name: 'Expanded' }).click()
-  await expect(page).toHaveURL(/density=expanded/)
+  await expect(page.getByRole('button', { name: 'Expanded' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Compact' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
   await page.getByRole('button', { name: /A Distant Article/ }).click()
   await expect(page.getByText('A concise article summary.')).toBeVisible()
