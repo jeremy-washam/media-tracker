@@ -388,7 +388,6 @@ a {
   font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
-  cursor: default;
 }
 
 .sync-button:disabled {
@@ -451,7 +450,6 @@ a {
   font: inherit;
   font-size: 0.73rem;
   font-weight: 680;
-  cursor: default;
 }
 
 .media-filters button:hover {
@@ -773,7 +771,6 @@ a:focus-visible {
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  cursor: default;
 }
 
 .sidebar-collapse:hover,
@@ -823,7 +820,6 @@ a:focus-visible {
   border-radius: var(--radius);
   color: var(--muted-foreground);
   background: transparent;
-  cursor: default;
   font-size: 12px;
   text-align: left;
 }
@@ -1116,7 +1112,6 @@ a:focus-visible {
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  cursor: default;
 }
 
 .books-search button svg {
@@ -1139,7 +1134,6 @@ a:focus-visible {
   place-items: center;
   padding: 0;
   color: var(--muted-foreground);
-  cursor: default;
 }
 
 .sort-direction svg {
@@ -1152,7 +1146,6 @@ a:focus-visible {
   align-items: center;
   gap: 7px;
   padding: 0 11px;
-  cursor: default;
   font-size: 11px;
 }
 
@@ -1209,7 +1202,6 @@ a:focus-visible {
   border-radius: calc(var(--radius) - 1px);
   color: var(--muted-foreground);
   background: transparent;
-  cursor: default;
 }
 
 .layout-toggle button[aria-pressed='true'] {
@@ -1244,7 +1236,6 @@ a:focus-visible {
   border: 0;
   color: var(--muted-foreground);
   background: transparent;
-  cursor: default;
   font-size: 10px;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1363,7 +1354,6 @@ a:focus-visible {
   border-radius: calc(var(--radius) * 1.5);
   color: inherit;
   background: transparent;
-  cursor: default;
   text-align: left;
 }
 
@@ -1412,7 +1402,6 @@ a:focus-visible {
   border-radius: calc(var(--radius) * 1.5);
   color: inherit;
   background: transparent;
-  cursor: default;
   text-align: left;
 }
 
@@ -1488,7 +1477,6 @@ a:focus-visible {
   color: var(--muted-foreground, #696861);
   font: inherit;
   font-size: 0.78rem;
-  cursor: default;
 }
 
 .article-density-toggle button[aria-pressed='true'] {
@@ -1515,7 +1503,6 @@ a:focus-visible {
   background: transparent;
   color: inherit;
   text-align: left;
-  cursor: default;
 }
 
 .article-row:hover,
@@ -1740,7 +1727,6 @@ a:focus-visible {
   border-bottom: 1px solid var(--border);
   color: inherit;
   background: transparent;
-  cursor: default;
   text-align: left;
 }
 
@@ -1933,7 +1919,6 @@ a:focus-visible {
   border-bottom: 1px solid var(--border);
   color: inherit;
   background: transparent;
-  cursor: default;
   text-align: left;
 }
 
@@ -2017,7 +2002,6 @@ a:focus-visible {
   border-radius: var(--radius);
   color: var(--foreground);
   background: var(--card);
-  cursor: default;
   font-size: 11px;
 }
 
@@ -2074,7 +2058,6 @@ a:focus-visible {
   border: 0;
   color: var(--muted-foreground);
   background: transparent;
-  cursor: default;
   font-size: 11px;
   font-weight: 600;
 }
@@ -2600,7 +2583,6 @@ a:focus-visible {
   grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  cursor: default;
 }
 
 .library-facet-options label > span {
@@ -2619,7 +2601,6 @@ a:focus-visible {
   border: 0;
   background: transparent;
   color: var(--accent);
-  cursor: default;
   font-size: 11px;
 }
 
@@ -2648,7 +2629,6 @@ a:focus-visible {
   align-items: center;
   gap: 12px;
   text-align: left;
-  cursor: default;
 }
 
 .podcasts-list .spotify-result,
@@ -2727,7 +2707,6 @@ a:focus-visible {
   border: 0;
   background: transparent;
   color: var(--ink-muted);
-  cursor: default;
 }
 
 .media-inspector > .spotify-inspector-topbar {
@@ -2827,7 +2806,6 @@ a:focus-visible {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
-  cursor: default;
 }
 
 .inspector-related-links {
@@ -2898,7 +2876,6 @@ a:focus-visible {
   align-items: center;
   gap: 12px;
   text-align: left;
-  cursor: default;
 }
 
 .videos-list .video-result,
@@ -3210,12 +3187,6 @@ body,
 }
 .media-card .rating-unavailable {
   visibility: hidden;
-}
-button,
-[role='button'],
-[role='option'],
-select {
-  cursor: default;
 }
 input,
 textarea,

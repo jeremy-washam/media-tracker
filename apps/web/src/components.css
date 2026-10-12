@@ -2,6 +2,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* App controls use the native arrow, including links rendered as tabs/navigation. */
+@layer base {
+  button,
+  [role='button'],
+  [role='option'],
+  select,
+  a {
+    cursor: default;
+  }
+}
+
 /* Approved Graphite production tokens. */
 :root {
   --radius: 0.35rem;

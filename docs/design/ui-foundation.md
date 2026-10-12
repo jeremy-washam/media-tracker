@@ -61,7 +61,10 @@ and do not restart the collection query.
 
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
 presentation details where they conflict. Use the platform system font throughout
-production UI. Buttons use the default cursor. The current Letterboxd reference
+production UI. A global base-layer rule gives buttons, native selects, and links
+(including collection tabs and sidebar navigation) the default cursor. Text inputs
+retain their text cursor; disabled and busy controls retain their specific cursors.
+The current Letterboxd reference
 applies only to small, muted personal-rating stars below Book and Movie artwork,
 including half stars; it does not prescribe poster density, colors, or metadata.
 
