@@ -385,3 +385,29 @@ remote transfer/resume, remote performance and cleanup throughput, provider
 budgets and account activation remain deployment gates. The full-copy restore now verifies both physical backup hashes. Local query
 comparisons and the remaining correctness overhead are recorded in the storage
 plan; final release checks include the integrated UI revision.
+
+## October 13 merged local acceptance
+
+The reviewed storage implementation and fixes are merged with the current Library
+UI. Frontend source and browser tests were preserved from main. On the integrated
+revision, `pnpm check` passed formatting, typechecks, lint and 337 tests across 53
+files; all 142 Playwright browser tests passed on isolated ports. Production
+package builds, app-only assets and the Worker dry run passed.
+
+Before applying migrations 0026 through 0029 to the local ledger, independent
+copies of its database and R2 metadata were created with verified hashes and
+integrity under ignored `.private/deployment/before-storage-merge-2026-10-13`.
+The local API was stopped during migration. Post-migration hashes matched all
+1,107,878 retained rows across eleven ledger/source/identity/observation/Queue
+tables using their original columns, including all 476,297 evidence role links.
+New private storage keys were excluded from the original-column comparison.
+Foreign keys and full SQLite integrity checks passed.
+
+A temporary paused Worker on an isolated port served health, all sixteen Library
+collections, video details and video History successfully against the migrated
+local database. A catalog-write request returned the expected 503 while paused.
+The temporary Worker was stopped afterward. No provider acquisition, cloud
+deployment or billing change was performed. Remote import/resume, authenticated
+hosted validation, measured D1 costs and provider-job budgets remain deployment
+gates. The before-migration backup must be retained until hosted recovery is
+verified.

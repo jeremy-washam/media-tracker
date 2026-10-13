@@ -684,8 +684,9 @@ It recommends one paid D1 initially, copy-rehearsed
 compact references/evidence layouts, cache maintenance while ingestion is paused,
 and bounded job budgets. Further database splits and historical interpretation
 archival require demonstrated benefits and explicit recovery boundaries. This
-contains local code and forward migrations; the live ledger and production
-have not been migrated, and retention policy is unchanged.
+contains merged code and forward migrations. The local ledger was backed up and
+migrated through 0029 on October 13; hosted migration remains pending and
+retention policy is unchanged.
 
 The [private deployment runbook](deployment.md) records the October 12
 preparation: Worker-side owner authentication, an app-only production bundle,
