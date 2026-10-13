@@ -13,5 +13,9 @@ for (const media of ['books', 'movies', 'articles', 'podcasts', 'music', 'videos
     await expect(loading).toBeVisible()
     await expect(loading).toHaveAttribute('role', 'status')
     await expect(loading).toContainText(`Loading ${media}…`)
+    await expect(loading.locator('.sr-only')).toHaveCount(0)
+    const label = loading.getByText(`Loading ${media}…`, { exact: true })
+    await expect(label).toBeVisible()
+    expect((await label.boundingBox())?.height).toBeGreaterThan(10)
   })
 }

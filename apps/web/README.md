@@ -34,7 +34,14 @@ instructions and source locations are in [saved mockups](../../docs/design/mocku
 Use shadcn/ui with Base UI (`base-nova`) for new interface work. Tailwind v4
 and the `@/*` alias are configured in Vite and TypeScript. Components are owned
 source in `src/components/ui`, with the class-name helper in `src/lib/utils.ts`.
-Button, Input, and Textarea are installed as a minimal starting set.
+Button, Input, Textarea, Select, Input Group, Toggle/Toggle Group, Tabs, Checkbox, Tooltip, Sheet, Alert, Badge, Skeleton, and Field are installed.
+Library toolbars compose these actual primitives at their shared 32px default height. LibrarySelect composes the
+actual shadcn Select for all collection sorting and single-choice filters.
+Pass explicit string-valued options and onValueChange; do not use native
+select elements or synthesize DOM change events. The wrapper sets the popup
+to start alignment below its trigger and preserves shadcn component styling.
+See the [production component audit](../../docs/planning/shadcn-ui-audit.md)
+for the completed migrations and regression evidence.
 
 ```tsx
 import { Button } from '@/components/ui/button'
@@ -65,3 +72,7 @@ component tokens. No theme switcher or existing screen migration is included.
 Future entries should import Tailwind and this stylesheet once; the theme
 specimen keeps its own styles while exploration is ongoing. Update the shared
 tokens after selecting a theme rather than hardcoding colors in components.
+
+## Production UI guardrails
+
+The root and web AGENTS.md require installed shadcn/ui Base UI controls, their supported variants, and interaction/visual verification. ESLint rejects raw button/input/select/textarea markup and handcrafted tab roles in production feature/page code and the shell. Media row/card and inspector backdrop buttons are deliberately centralized in library-controls.tsx; ordinary actions use Button. Explanatory hints use Hint, which composes Tooltip. FileUploadButton, Notice, and LoadingState compose installed Input/Button, Alert, and Skeleton without replacing their primitives. Historical design studies remain separate references. See docs/planning/shadcn-ui-audit.md for the audit and acceptance evidence.

@@ -1,11 +1,28 @@
+import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
+import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
+import { Notice, LoadingState, Hint } from '@/components/ui-patterns'
 import {
-  CollectionTabList,
-  FlatTabs,
-  FlatTabsContent,
-  FlatTabsList,
-  FlatTabsTrigger,
+  FlatTabs as Tabs,
+  FlatTabsList as TabsList,
+  FlatTabsTrigger as TabsTrigger,
+  FlatTabsContent as TabsContent,
 } from '@/components/flat-tabs'
-import { LibrarySelect, MediaCard, RatingStars } from '../../components/library-controls'
+import { FieldLabel } from '@/components/ui/field'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
+import {
+  LibraryLayoutToggle,
+  LibrarySelect,
+  MediaCard,
+  RatingStars,
+} from '../../components/library-controls'
 import {
   useLiveSearch,
   useLibraryLayout,
@@ -31,8 +48,6 @@ import {
   Check,
   ChevronRight,
   ExternalLink,
-  Grid2X2,
-  List,
   Search,
   SlidersHorizontal,
   X,
@@ -112,7 +127,7 @@ function activeFilterCount(search: BooksRouteSearch, collection: 'archive' | 'qu
   )
 }
 
-function sortOptions(collection: 'archive' | 'queue') {
+function sortOptions(collection: 'archive' | 'queue'): [string, string][] {
   return collection === 'archive'
     ? [
         ['recent_read', 'Recently read'],
@@ -237,7 +252,6 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             Queue <span>{sectionCounts?.queue ?? '—'}</span>
           </Link>
         </CollectionTabList>
-
         <div className="books-toolbar">
           <form
             className="books-search"
@@ -249,87 +263,83 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
               updateSearch({ q: value || undefined, item: undefined })
             }}
           >
-            <Search aria-hidden="true" />
-            <input
-              aria-label="Search books"
-              placeholder="Search title, author, series, or ISBN"
-              value={draftSearch ?? search.q ?? ''}
-              onChange={(event) => setDraftSearch(event.target.value)}
-            />
-            {(draftSearch ?? search.q) ? (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => {
-                  setDraftSearch(null)
-                  updateSearch({ q: undefined, item: undefined })
-                }}
-              >
-                <X aria-hidden="true" />
-              </button>
-            ) : null}
+            <InputGroup>
+              <InputGroupInput
+                aria-label="Search books"
+                placeholder="Search title, author, series, or ISBN"
+                value={draftSearch ?? search.q ?? ''}
+                onChange={(event) => setDraftSearch(event.target.value)}
+              />
+              <InputGroupAddon>
+                <Search aria-hidden="true" />
+              </InputGroupAddon>
+              {(draftSearch ?? search.q) ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setDraftSearch(null)
+                      updateSearch({ q: undefined, item: undefined })
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
           </form>
-          <button
+          <Button
+            variant={filters > 0 ? 'secondary' : 'outline'}
             type="button"
-            className={filters > 0 ? 'toolbar-button active' : 'toolbar-button'}
+            className="toolbar-button"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
             {filters > 0 ? <span>{filters}</span> : null}
-          </button>
+          </Button>
           <label className="books-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort books</span>
             <LibrarySelect
               aria-label="Sort books"
               value={selectedSort}
-              onChange={(event) =>
-                updateSearch({ sort: event.target.value, direction: undefined, item: undefined })
+              onValueChange={(value) =>
+                updateSearch({ sort: value, direction: undefined, item: undefined })
+              }
+              options={[
+                ...sortOptions(collection).map(([value, label]) => ({
+                  value: String(value),
+                  label,
+                })),
+              ]}
+            />
+          </label>
+          <Hint content={direction === 'asc' ? 'Ascending' : 'Descending'}>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className="sort-direction"
+              aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              onClick={() =>
+                updateSearch({ direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
               }
             >
-              {sortOptions(collection).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </LibrarySelect>
-          </label>
-          <button
-            type="button"
-            className="sort-direction"
-            aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
-            title={direction === 'asc' ? 'Ascending' : 'Descending'}
-            onClick={() =>
-              updateSearch({ direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
-            }
-          >
-            {direction === 'asc' ? (
-              <ArrowUp aria-hidden="true" />
-            ) : (
-              <ArrowDown aria-hidden="true" />
-            )}
-          </button>
-          <div className="layout-toggle" aria-label="Result layout">
-            <button
-              type="button"
-              aria-label="List view"
-              aria-pressed={layout === 'list'}
-              onClick={() => updateSearch({ layout: 'list' })}
-            >
-              <List aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              aria-label="Grid view"
-              aria-pressed={layout === 'grid'}
-              onClick={() => updateSearch({ layout: 'grid' })}
-            >
-              <Grid2X2 aria-hidden="true" />
-            </button>
-          </div>
+              {direction === 'asc' ? (
+                <ArrowUp aria-hidden="true" />
+              ) : (
+                <ArrowDown aria-hidden="true" />
+              )}
+            </Button>
+          </Hint>
+          <LibraryLayoutToggle
+            value={layout}
+            onValueChange={(layout) => updateSearch({ layout })}
+          />
         </div>
-
         {filtersOpen ? (
           <FilterPanel
             collection={collection}
@@ -358,7 +368,6 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             }
           />
         ) : null}
-
         <div className="books-result-summary" aria-live="polite">
           {books.isPending ? null : (
             <span>
@@ -371,21 +380,17 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           {summary?.freshness.degraded ? <strong>Hardcover sync needs attention</strong> : null}
         </div>
         {books.isPending ? (
-          <div className="books-state books-loading" role="status">
-            Loading books…
-          </div>
+          <LoadingState className="books-loading">Loading books…</LoadingState>
         ) : null}
-
         {books.isError ? (
-          <div className="books-state books-state-error" role="alert">
+          <Notice className="books-state books-state-error">
             <h2>Books could not be loaded</h2>
             <p>{books.error.message}</p>
-            <button type="button" onClick={() => void books.refetch()}>
+            <Button variant="outline" type="button" onClick={() => void books.refetch()}>
               Try again
-            </button>
-          </div>
+            </Button>
+          </Notice>
         ) : null}
-
         {!books.isPending && !books.isError && items.length === 0 ? (
           <div className="books-state">
             <BookOpen aria-hidden="true" />
@@ -396,7 +401,8 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
                 : 'Sync Hardcover from Connections to populate this collection.'}
             </p>
             {filters || search.q ? (
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => {
                   setDraftSearch(null)
@@ -409,13 +415,12 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
                 }}
               >
                 Clear search and facets
-              </button>
+              </Button>
             ) : (
               <Link to="/connections">Open Connections</Link>
             )}
           </div>
         ) : null}
-
         {items.length > 0 ? (
           <div className={layout === 'grid' ? 'books-grid' : 'books-list'}>
             {layout === 'list' ? (
@@ -442,22 +447,21 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             ))}
           </div>
         ) : null}
-
         {books.hasNextPage ? (
-          <button
+          <Button
+            variant="outline"
             className="load-more"
             type="button"
             disabled={books.isFetchingNextPage}
             onClick={() => void books.fetchNextPage()}
           >
             {books.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </button>
+          </Button>
         ) : null}
       </FlatTabsContent>
-
       {inspectorItem ? (
         <>
-          <button
+          <InspectorBackdrop
             type="button"
             className="inspector-backdrop"
             aria-label="Close inspector"
@@ -502,7 +506,7 @@ function BookResult({
     )
   }
   return (
-    <button
+    <MediaRowButton
       type="button"
       ref={buttonRef}
       className={selected ? 'book-row selected' : 'book-row'}
@@ -522,7 +526,7 @@ function BookResult({
       </span>
       <RatingStars rating={book.personalRating} />
       <ChevronRight aria-hidden="true" />
-    </button>
+    </MediaRowButton>
   )
 }
 
@@ -549,15 +553,14 @@ function FacetGroup({
       <legend>{title}</legend>
       <div>
         {merged.map((facet) => (
-          <label key={facet.value}>
-            <input
-              type="checkbox"
+          <FieldLabel key={facet.value}>
+            <Checkbox
               checked={selected.includes(facet.value)}
-              onChange={() => onToggle(facet.value)}
+              onCheckedChange={() => onToggle(facet.value)}
             />
             <span>{facet.label}</span>
             <small>{facet.count}</small>
-          </label>
+          </FieldLabel>
         ))}
       </div>
     </fieldset>
@@ -584,21 +587,22 @@ function DateFilter({
   return (
     <fieldset className="date-filter">
       <legend>{label}</legend>
-      <select
+      <LibrarySelect
         aria-label={label}
         value={mode}
-        onChange={(event) => {
-          const next = event.target.value as 'any' | 'range' | 'unavailable'
+        onValueChange={(value) => {
+          const next = value as 'any' | 'range' | 'unavailable'
           onChange(next === 'any' ? {} : { mode: next, from, to })
         }}
-      >
-        <option value="any">Any time</option>
-        <option value="range">Custom range</option>
-        <option value="unavailable">Date unavailable</option>
-      </select>
+        options={[
+          { value: 'any', label: 'Any time' },
+          { value: 'range', label: 'Custom range' },
+          { value: 'unavailable', label: 'Date unavailable' },
+        ]}
+      />
       {mode === 'range' ? (
         <span>
-          <input
+          <Input
             type="date"
             aria-label={`${label} from`}
             value={from ?? ''}
@@ -606,7 +610,7 @@ function DateFilter({
               onChange({ mode: 'range', from: event.target.value || undefined, to })
             }
           />
-          <input
+          <Input
             type="date"
             aria-label={`${label} to`}
             value={to ?? ''}
@@ -644,10 +648,10 @@ function FilterPanel({
   return (
     <section className="filter-panel" aria-label="Book filters">
       <div className="filter-panel-heading">
-        <strong>Filters</strong>
-        <button type="button" onClick={onClear}>
+        <strong> Filters</strong>
+        <Button variant="outline" type="button" onClick={onClear}>
           Clear all
-        </button>
+        </Button>
       </div>
       <div className="filter-panel-grid">
         <FacetGroup
@@ -716,37 +720,36 @@ function FilterPanel({
         {collection === 'archive' ? (
           <fieldset className="date-filter">
             <legend>Personal rating</legend>
-            <select
+            <LibrarySelect
               aria-label="Personal rating"
               value={search.ratingMode ?? 'any'}
-              onChange={(event) => {
-                const mode = event.target.value as 'any' | 'rated' | 'unrated' | 'minimum'
+              onValueChange={(value) => {
+                const mode = value as 'any' | 'rated' | 'unrated' | 'minimum'
                 onChange({
                   ratingMode: mode === 'any' ? undefined : mode,
                   minRating: mode === 'minimum' ? (search.minRating ?? 3) : undefined,
                   item: undefined,
                 })
               }}
-            >
-              <option value="any">Any rating</option>
-              <option value="rated">Rated</option>
-              <option value="unrated">Unrated</option>
-              <option value="minimum">At least…</option>
-            </select>
+              options={[
+                { value: 'any', label: 'Any rating' },
+                { value: 'rated', label: 'Rated' },
+                { value: 'unrated', label: 'Unrated' },
+                { value: 'minimum', label: 'At least…' },
+              ]}
+            />
             {search.ratingMode === 'minimum' ? (
-              <select
+              <LibrarySelect
                 aria-label="Minimum personal rating"
-                value={search.minRating ?? 3}
-                onChange={(event) =>
-                  onChange({ minRating: Number(event.target.value), item: undefined })
-                }
-              >
-                {Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((rating) => (
-                  <option value={rating} key={rating}>
-                    {rating}/5
-                  </option>
-                ))}
-              </select>
+                value={String(search.minRating ?? 3)}
+                onValueChange={(value) => onChange({ minRating: Number(value), item: undefined })}
+                options={[
+                  ...Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((rating) => ({
+                    value: String(rating),
+                    label: [rating, '/5'].join(''),
+                  })),
+                ]}
+              />
             ) : null}
           </fieldset>
         ) : null}
@@ -805,50 +808,53 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
   }, [mediaItemId])
 
   return (
-    <FlatTabs
-      value={tab}
-      onValueChange={(value) => setTab(value as typeof tab)}
-      render={<aside ref={inspectorRef} />}
-      className="book-inspector"
-      aria-label="Book inspector"
-    >
-      <div className="inspector-topbar">
-        <FlatTabsList aria-label="Book information">
-          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
-          <FlatTabsTrigger value="history">History</FlatTabsTrigger>
-        </FlatTabsList>
-        <button
-          className="inspector-close"
-          type="button"
-          aria-label="Close inspector"
-          onClick={onClose}
-        >
-          <X aria-hidden="true" />
-        </button>
-      </div>
-
-      {book.isPending ? <div className="inspector-state">Loading book…</div> : null}
-      {book.isError ? (
-        <div className="inspector-state" role="alert">
-          {book.error.message}
+    <aside ref={inspectorRef} className="book-inspector" aria-label="Book inspector">
+      <Tabs
+        className="inspector-tab-root"
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+      >
+        <div className="inspector-topbar">
+          <TabsList variant="line" className="inspector-tabs" aria-label="Book information">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="inspector-close"
+            type="button"
+            aria-label="Close inspector"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" />
+          </Button>
         </div>
-      ) : null}
-      <FlatTabsContent value="details" className="inspector-tab-panel">
-        {book.data ? <BookDetails book={book.data} /> : null}
-      </FlatTabsContent>
-      <FlatTabsContent value="history" className="inspector-tab-panel">
-        {book.data ? (
-          <BookHistory
-            entries={history.data?.pages.flatMap((page) => page.data) ?? []}
-            pending={history.isPending}
-            error={history.isError ? history.error.message : null}
-            hasMore={history.hasNextPage}
-            loadingMore={history.isFetchingNextPage}
-            onLoadMore={() => void history.fetchNextPage()}
-          />
+        {book.isPending ? (
+          <LoadingState className="inspector-state">Loading book…</LoadingState>
         ) : null}
-      </FlatTabsContent>
-    </FlatTabs>
+        {book.isError ? <Notice className="inspector-state">{book.error.message}</Notice> : null}
+        {
+          <TabsContent value="details" className="inspector-tab-panel">
+            {book.data ? <BookDetails book={book.data} /> : null}
+          </TabsContent>
+        }
+        {
+          <TabsContent value="history" className="inspector-tab-panel">
+            {book.data ? (
+              <BookHistory
+                entries={history.data?.pages.flatMap((page) => page.data) ?? []}
+                pending={history.isPending}
+                error={history.isError ? history.error.message : null}
+                hasMore={history.hasNextPage}
+                loadingMore={history.isFetchingNextPage}
+                onLoadMore={() => void history.fetchNextPage()}
+              />
+            ) : null}
+          </TabsContent>
+        }
+      </Tabs>
+    </aside>
   )
 }
 
@@ -1025,7 +1031,7 @@ function BookHistory({
   loadingMore: boolean
   onLoadMore: () => void
 }) {
-  if (pending) return <div className="inspector-state">Loading history…</div>
+  if (pending) return <LoadingState className="inspector-state">Loading history…</LoadingState>
   if (error) return <div className="inspector-state">{error}</div>
   return (
     <div className="inspector-scroll">
@@ -1051,9 +1057,15 @@ function BookHistory({
         ))}
       </div>
       {hasMore ? (
-        <button type="button" className="load-more" disabled={loadingMore} onClick={onLoadMore}>
+        <Button
+          variant="outline"
+          type="button"
+          className="load-more"
+          disabled={loadingMore}
+          onClick={onLoadMore}
+        >
           {loadingMore ? 'Loading…' : 'Load older history'}
-        </button>
+        </Button>
       ) : null}
     </div>
   )

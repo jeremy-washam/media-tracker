@@ -696,6 +696,26 @@ for (const scenario of [
 }
 
 test('shows the production Books shell and preserves Connections', async ({ page }) => {
+  await page.route('**/api/connections', (route) =>
+    route.fulfill({
+      json: {
+        data: ['readwise', 'youtube'].map((source) => ({
+          id: `synthetic-${source}`,
+          label: source,
+          source,
+          status: 'connected',
+          coverage: 'complete',
+          lastSuccessfulSyncAt: null,
+          lastAttemptedSyncAt: null,
+          lastExportAt: null,
+          incompleteImports: [],
+        })),
+      },
+    }),
+  )
+  await page.route('**/api/sync-runs*', (route) =>
+    route.fulfill({ json: { data: [], nextCursor: null } }),
+  )
   await page.goto('/')
 
   await expect(page).toHaveURL(/\/library\/books\/archive/)
@@ -812,7 +832,8 @@ test('keeps Books range drafts valid until a boundary is entered', async ({ page
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   for (const label of ['Finished', 'Published']) {
-    await page.getByRole('combobox', { name: label, exact: true }).selectOption('range')
+    await page.getByRole('combobox', { name: label, exact: true }).click()
+    await page.getByRole('option', { name: 'Custom range', exact: true }).click()
     await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
     await page.getByRole('textbox', { name: `${label} from`, exact: true }).fill('2020-01-01')
     await expect
@@ -1172,16 +1193,11 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
   await expect(page.getByRole('heading', { name: 'Movies' })).toBeVisible()
   await page.getByRole('button', { name: /Filters/ }).click()
 
-  await page
-    .getByRole('group', { name: 'Watched date' })
-    .getByRole('combobox')
-    .selectOption('range')
+  await page.getByRole('group', { name: 'Watched date' }).getByRole('combobox').click()
+  await page.getByRole('option', { name: 'Custom range', exact: true }).click()
   await page.getByRole('group', { name: 'Release year' }).getByLabel('Release year from').fill('20')
-  await page
-    .getByRole('group', { name: 'Your rating' })
-    .getByRole('combobox')
-    .first()
-    .selectOption('range')
+  await page.getByRole('group', { name: 'Your rating' }).getByRole('combobox').first().click()
+  await page.getByRole('option', { name: 'Custom range', exact: true }).click()
 
   await expect(page).toHaveURL(/watched=range/)
   await expect(page).toHaveURL(/releaseYearFrom=/)
@@ -1196,7 +1212,8 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
 
   await page.getByLabel('Watched date from').fill('2020-01-01')
   await page.getByLabel('Release year from').fill('2020')
-  await page.getByLabel('Minimum rating').selectOption('4')
+  await page.getByRole('combobox', { name: 'Minimum rating', exact: true }).click()
+  await page.getByRole('option', { name: '4', exact: true }).click()
   await expect
     .poll(() =>
       requested.some(
@@ -1405,7 +1422,7 @@ test('shows separate account progress and resumes the selected account', async (
   expect(resumed).toBe(true)
 })
 
-test('searches every channel and pages native channel choices', async ({ page }) => {
+test('searches every channel and pages shadcn channel choices', async ({ page }) => {
   const channelItem = {
     ...video,
     id: 'channel-z',
@@ -1437,19 +1454,17 @@ test('searches every channel and pages native channel choices', async ({ page })
   })
   await page.goto('/library/videos/archive')
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
-  await expect(
-    page
-      .getByRole('combobox', { name: 'Channel', exact: true })
-      .getByRole('option', { name: 'Alpha' }),
-  ).toHaveCount(1)
+  const channel = page.getByRole('combobox', { name: 'Channel', exact: true })
+  await channel.click()
+  await expect(page.getByRole('option', { name: 'Alpha', exact: true })).toBeVisible()
+  await channel.press('Escape')
   await page.getByRole('button', { name: 'Load more channels' }).click()
-  await expect(
-    page
-      .getByRole('combobox', { name: 'Channel', exact: true })
-      .getByRole('option', { name: 'Beta' }),
-  ).toHaveCount(1)
+  await channel.click()
+  await expect(page.getByRole('option', { name: 'Beta', exact: true })).toBeVisible()
+  await channel.press('Escape')
   await page.getByRole('searchbox', { name: 'Search channel options' }).fill('Zebra')
-  await page.getByRole('combobox', { name: 'Channel', exact: true }).selectOption('channel-z')
+  await channel.click()
+  await page.getByRole('option', { name: 'Zebra Channel', exact: true }).click()
   await expect(page).toHaveURL(/channel=%5B%22channel-z%22%5D/)
 })
 
@@ -1459,6 +1474,238 @@ test('shows positive short video duration as under a minute', async ({ page }) =
   )
   await page.goto('/library/videos/archive')
   await expect(page.getByRole('button', { name: /A Distant Video/ })).toContainText('<1 min')
+})
+
+test('uses aligned shadcn toolbars and sorting on every Library media collection', async ({
+  page,
+}) => {
+  const collections = [
+    { media: 'books', view: 'archive', option: 'Title', response: booksResponse() },
+    { media: 'movies', view: 'archive', option: 'Title', response: moviesResponse() },
+    { media: 'articles', view: 'archive', option: 'Title', response: articlesResponse() },
+    { media: 'podcasts', view: 'archive', option: 'Episode', response: podcastsResponse() },
+    { media: 'music', view: 'tracks', option: 'Track', response: musicResponse() },
+    { media: 'videos', view: 'archive', option: 'Title', response: videosResponse() },
+  ]
+  for (const collection of collections) {
+    await page.route(`**/api/library/${collection.media}?*`, (route) =>
+      route.fulfill({ json: collection.response }),
+    )
+    await page.goto(`/library/${collection.media}/${collection.view}`)
+    const trigger = page.getByRole('combobox', { name: `Sort ${collection.media}`, exact: true })
+    await expect(trigger).toHaveAttribute('data-slot', 'select-trigger')
+    const controls = await page.locator('.books-toolbar').evaluate((toolbar) =>
+      Array.from(toolbar.children).map((control) => {
+        const rect = control.getBoundingClientRect()
+        return { height: rect.height, top: rect.top, left: rect.left, right: rect.right }
+      }),
+    )
+    for (const [index, control] of controls.entries()) {
+      expect(control.height, `${collection.media} toolbar control ${index}`).toBe(32)
+      expect(Math.abs(control.top - controls[0]!.top)).toBeLessThanOrEqual(1)
+      if (index > 0) expect(control.left).toBeGreaterThanOrEqual(controls[index - 1]!.right)
+    }
+    await trigger.click()
+    await page.getByRole('option', { name: collection.option, exact: true }).click()
+    await expect(page).toHaveURL(/sort=title/)
+    await expect(trigger).toContainText(collection.option)
+    await expect(page.getByRole('listbox')).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+  }
+})
+
+test('preserves keyboard selection, focus, URL history and clearing with shadcn Select', async ({
+  page,
+}) => {
+  await page.route('**/api/library/podcasts?*', (route) =>
+    route.fulfill({ json: podcastsResponse() }),
+  )
+  await page.goto('/library/podcasts/archive')
+  const trigger = page.getByRole('combobox', { name: 'Show', exact: true })
+  await expect(trigger).toContainText('All shows')
+  const before = await trigger.boundingBox()
+  await trigger.press('ArrowDown')
+  await expect(page.getByRole('listbox')).toBeVisible()
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/following=not_following/)
+  await expect(trigger).toContainText('Not following')
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await page.getByRole('option', { name: 'All shows', exact: true }).click()
+  await expect(trigger).toContainText('All shows')
+  await page.goBack()
+  await expect(trigger).toContainText('Not following')
+  await page.goForward()
+  await expect(trigger).toContainText('All shows')
+  await trigger.click()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  await page.getByRole('option', { name: 'All shows', exact: true }).press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  expect(await trigger.boundingBox()).toEqual(before)
+  const geometry = await trigger.evaluate((el) => {
+    const rect = el.getBoundingClientRect()
+    const icon = el.querySelector('svg')!.getBoundingClientRect()
+    return {
+      centerDifference: Math.abs(rect.top + rect.height / 2 - (icon.top + icon.height / 2)),
+      rightInset: rect.right - icon.right,
+      outline: getComputedStyle(el).outlineStyle,
+    }
+  })
+  expect(geometry.centerDifference).toBeLessThanOrEqual(1)
+  expect(geometry.rightInset).toBeGreaterThanOrEqual(8)
+  expect(geometry.outline).toBe('none')
+})
+
+for (const dark of [false, true]) {
+  for (const media of ['books', 'movies', 'articles', 'podcasts', 'music', 'videos'] as const) {
+    test(`keeps ${media} controls and menus within the pane in ${dark ? 'dark' : 'light'} appearance`, async ({
+      page,
+    }) => {
+      const responses = {
+        books: booksResponse(),
+        movies: moviesResponse(),
+        articles: articlesResponse(),
+        podcasts: podcastsResponse(),
+        music: musicResponse(),
+        videos: videosResponse(),
+      }
+      await page.addInitScript((dark) => {
+        localStorage.setItem('media-tracker:dark', String(dark))
+      }, dark)
+      await page.route(`**/api/library/${media}?*`, (route) =>
+        route.fulfill({ json: responses[media] }),
+      )
+      await page.route(/\/api\/library\/(books|movies|articles|podcasts|music|videos)\//, (route) =>
+        route.fulfill({
+          status: 404,
+          json: { error: { message: 'Synthetic inspector details unavailable' } },
+        }),
+      )
+      const toolbar = page.locator('.books-toolbar')
+      const trigger = page.getByRole('combobox', { name: `Sort ${media}`, exact: true })
+      const measure = () =>
+        toolbar.evaluate((el) => {
+          const bounds = el.getBoundingClientRect()
+          const controls = Array.from(el.children).map((child) => child.getBoundingClientRect())
+          return controls.every(
+            (rect) =>
+              rect.height === 32 &&
+              rect.left >= bounds.left - 1 &&
+              rect.right <= bounds.right + 1 &&
+              rect.top >= bounds.top - 1 &&
+              rect.bottom <= bounds.bottom + 1,
+          )
+        })
+      for (const width of [1280, 1024, 768, 390]) {
+        await page.setViewportSize({ width, height: 768 })
+        await page.goto(`/library/${media}/${media === 'music' ? 'tracks' : 'archive'}`)
+        await expect(trigger).toBeVisible()
+        await expect.poll(measure, { message: `${media} toolbar at ${width}px` }).toBe(true)
+        await trigger.click()
+        const menu = page.getByRole('listbox')
+        await expect(menu).toBeVisible()
+        const rect = await menu.boundingBox()
+        expect(rect!.x).toBeGreaterThanOrEqual(0)
+        expect(rect!.x + rect!.width).toBeLessThanOrEqual(width + 1)
+        expect(rect!.y + rect!.height).toBeLessThanOrEqual(769)
+        const labelsFit = await page.getByRole('option').evaluateAll((options) =>
+          options.every((option) => {
+            const label = option.firstElementChild!
+            return label.scrollWidth <= label.clientWidth + 1
+          }),
+        )
+        expect(labelsFit, `${media} menu labels at ${width}px`).toBe(true)
+        await trigger.press('Escape')
+        await expect(menu).toHaveCount(0)
+      }
+      await page.setViewportSize({ width: 1024, height: 768 })
+      await page
+        .locator(
+          'button.book-row, button.movie-row, button.article-row, button.spotify-result, button.video-result',
+        )
+        .first()
+        .click()
+      await expect(page.locator('.books-page')).toHaveAttribute('data-inspector-open', 'true')
+      await expect
+        .poll(() =>
+          page
+            .locator('.books-page')
+            .evaluate((el) =>
+              Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--inspector-space'))),
+            ),
+        )
+        .toBe(360)
+      await expect.poll(measure, { message: `${media} toolbar with inspector open` }).toBe(true)
+      // Narrow Books/Movie/Article inspectors intentionally block the backdrop.
+      // Verify menu interaction at the nonmodal desktop width.
+      await page.setViewportSize({ width: 1280, height: 768 })
+      await expect.poll(measure).toBe(true)
+      await trigger.click()
+      await expect(page.getByRole('listbox')).toBeVisible()
+      await trigger.press('Escape')
+      await page
+        .locator('.book-inspector, .media-inspector')
+        .getByRole('button', { name: 'Close inspector', exact: true })
+        .click()
+      await expect
+        .poll(() =>
+          page
+            .locator('.books-page')
+            .evaluate((el) =>
+              Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--inspector-space'))),
+            ),
+        )
+        .toBe(0)
+      await expect.poll(measure).toBe(true)
+    })
+  }
+}
+
+test('wraps long channel labels inside the viewport without losing the complete option', async ({
+  page,
+}) => {
+  const title =
+    'A channel with a deliberately long name about films, technology, books, music, and the people who create them'
+  await page.setViewportSize({ width: 390, height: 768 })
+  await page.route('**/api/library/videos?*', (route) => {
+    const channels = new URL(route.request().url()).searchParams.get('view') === 'channels'
+    return route.fulfill({
+      json: channels
+        ? videosResponse([
+            {
+              ...video,
+              id: 'channel-long',
+              kind: 'channel',
+              title,
+              channelId: 'channel-long',
+              channelTitle: title,
+            },
+          ])
+        : videosResponse(),
+    })
+  })
+  await page.goto('/library/videos/archive')
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Channel', exact: true }).click()
+  const option = page.getByRole('option', { name: title, exact: true })
+  await expect(option).toBeVisible()
+  const label = await option.evaluate((el) => {
+    const label = el.firstElementChild!
+    return {
+      width: label.clientWidth,
+      scroll: label.scrollWidth,
+      height: label.getBoundingClientRect().height,
+    }
+  })
+  expect(label.scroll).toBeLessThanOrEqual(label.width + 1)
+  expect(label.height).toBeGreaterThan(32)
+  const menu = (await page.getByRole('listbox').boundingBox())!
+  expect(menu.x).toBeGreaterThanOrEqual(0)
+  expect(menu.x + menu.width).toBeLessThanOrEqual(391)
+  await option.click()
+  await expect(page).toHaveURL(/channel=%5B%22channel-long%22%5D/)
 })
 
 test('uses shared keyboard tabs and associated panels in the Channel inspector', async ({

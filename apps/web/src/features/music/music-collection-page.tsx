@@ -1,11 +1,23 @@
+import { MediaRowButton } from '@/components/library-controls'
+import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
+import { Notice, LoadingState, Hint } from '@/components/ui-patterns'
 import {
-  CollectionTabList,
-  FlatTabs,
-  FlatTabsContent,
-  FlatTabsList,
-  FlatTabsTrigger,
+  FlatTabs as Tabs,
+  FlatTabsList as TabsList,
+  FlatTabsTrigger as TabsTrigger,
+  FlatTabsContent as TabsContent,
 } from '@/components/flat-tabs'
-import { LibrarySelect } from '../../components/library-controls'
+import { FieldLabel } from '@/components/ui/field'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
+import { LibraryLayoutToggle, LibrarySelect } from '../../components/library-controls'
 import {
   useLiveSearch,
   useLibraryLayout,
@@ -20,8 +32,6 @@ import {
   ArrowUp,
   ArrowDown,
   ExternalLink,
-  Grid2X2,
-  List,
   Music2,
   Search,
   SlidersHorizontal,
@@ -94,7 +104,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const summary = result.data?.pages[0]
   const sectionCounts = useLibrarySectionCounts('music', summary, (page) => page.sectionCounts)
-  const sorts =
+  const sorts: [string, string][] =
     view === 'tracks'
       ? [
           ['playedAt', 'Recently played'],
@@ -168,110 +178,102 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               setDraft(null)
             }}
           >
-            <Search />
-            <input
-              aria-label="Search music"
-              placeholder={`Search ${view}`}
-              value={draft ?? search.q ?? ''}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            {(draft ?? search.q) ? (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => {
-                  setDraft(null)
-                  update({ q: undefined, item: undefined, sort: undefined })
-                }}
-              >
-                <X />
-              </button>
-            ) : null}
+            <InputGroup>
+              <InputGroupInput
+                aria-label="Search music"
+                placeholder={`Search ${view}`}
+                value={draft ?? search.q ?? ''}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              {(draft ?? search.q) ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setDraft(null)
+                      update({ q: undefined, item: undefined, sort: undefined })
+                    }}
+                  >
+                    <X />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
           </form>
           <label className="library-inline-filter">
             <span>Source</span>
-            <select
+            <LibrarySelect
               value={search.source ?? 'all'}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 update({
-                  source: event.target.value as MusicRouteSearch['source'],
+                  source: value as MusicRouteSearch['source'],
                   item: undefined,
                 })
               }
-            >
-              <option value="all">All history</option>
-              <option value="export">Extended history</option>
-              <option value="recent_api">Recent API</option>
-            </select>
+              aria-label="Source"
+              options={[
+                { value: 'all', label: 'All history' },
+                { value: 'export', label: 'Extended history' },
+                { value: 'recent_api', label: 'Recent API' },
+              ]}
+            />
           </label>
           <label className="books-sort">
             <span className="sr-only">Sort music</span>
             <LibrarySelect
               aria-label="Sort music"
               value={selectedSort}
-              onChange={(event) =>
-                update({ sort: event.target.value, direction: undefined, item: undefined })
+              onValueChange={(value) =>
+                update({ sort: value, direction: undefined, item: undefined })
+              }
+              options={[...sorts.map(([value, label]) => ({ value, label }))]}
+            />
+          </label>
+          <Hint content={selectedDirection === 'asc' ? 'Ascending' : 'Descending'}>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className="sort-direction"
+              aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              onClick={() =>
+                update({
+                  direction: selectedDirection === 'asc' ? 'desc' : 'asc',
+                  item: undefined,
+                })
               }
             >
-              {sorts.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </LibrarySelect>
-          </label>
-          <button
-            type="button"
-            className="toolbar-button"
-            aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
-            title={selectedDirection === 'asc' ? 'Ascending' : 'Descending'}
-            onClick={() =>
-              update({
-                direction: selectedDirection === 'asc' ? 'desc' : 'asc',
-                item: undefined,
-              })
-            }
-          >
-            {selectedDirection === 'asc' ? (
-              <ArrowUp aria-hidden="true" />
-            ) : (
-              <ArrowDown aria-hidden="true" />
-            )}
-          </button>
-          <button
+              {selectedDirection === 'asc' ? (
+                <ArrowUp aria-hidden="true" />
+              ) : (
+                <ArrowDown aria-hidden="true" />
+              )}
+            </Button>
+          </Hint>
+          <Button
+            variant="outline"
             type="button"
             className="toolbar-button"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
-          </button>
+          </Button>
           {view !== 'tracks' ? (
-            <div className="layout-toggle" aria-label="Result layout">
-              <button
-                type="button"
-                aria-label="List view"
-                aria-pressed={layout === 'list'}
-                onClick={() => update({ layout: 'list' })}
-              >
-                <List />
-              </button>
-              <button
-                type="button"
-                aria-label="Grid view"
-                aria-pressed={layout === 'grid'}
-                onClick={() => update({ layout: 'grid' })}
-              >
-                <Grid2X2 />
-              </button>
-            </div>
+            <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
           ) : null}
         </div>
         {filtersOpen ? (
           <section className="filter-panel" aria-label="Music filters">
             <div className="filter-panel-heading">
-              <strong>Filters</strong>
-              <button
+              <strong> Filters</strong>
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() =>
                   update({
@@ -288,14 +290,14 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 }
               >
                 Clear
-              </button>
+              </Button>
             </div>
             <div className="filter-panel-grid">
               <fieldset className="date-filter">
                 <legend>Playback date</legend>
                 <label>
                   From
-                  <input
+                  <Input
                     type="date"
                     value={search.from ?? ''}
                     onChange={(event) =>
@@ -305,7 +307,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 </label>
                 <label>
                   To
-                  <input
+                  <Input
                     type="date"
                     value={search.to ?? ''}
                     onChange={(event) =>
@@ -316,77 +318,85 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               </fieldset>
               <label className="library-inline-filter">
                 <span>Playback observations</span>
-                <select
+                <LibrarySelect
                   value={search.playbackCount ?? 'any'}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     update({
-                      playbackCount: event.target.value as MusicRouteSearch['playbackCount'],
+                      playbackCount: value as MusicRouteSearch['playbackCount'],
                       item: undefined,
                     })
                   }
-                >
-                  <option value="any">Any count</option>
-                  <option value="once">1</option>
-                  <option value="2to9">2–9</option>
-                  <option value="10to49">10–49</option>
-                  <option value="50plus">50+</option>
-                </select>
+                  aria-label="Playback observations"
+                  options={[
+                    { value: 'any', label: 'Any count' },
+                    { value: 'once', label: '1' },
+                    { value: '2to9', label: '2–9' },
+                    { value: '10to49', label: '10–49' },
+                    { value: '50plus', label: '50+' },
+                  ]}
+                />
               </label>
               <label className="library-inline-filter">
                 <span>Metadata</span>
-                <select
+                <LibrarySelect
                   value={search.metadata ?? 'any'}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     update({
-                      metadata: event.target.value as MusicRouteSearch['metadata'],
+                      metadata: value as MusicRouteSearch['metadata'],
                       item: undefined,
                     })
                   }
-                >
-                  <option value="any">Any state</option>
-                  <option value="current">Current catalog data</option>
-                  <option value="export_only">Export only</option>
-                  <option value="unavailable">Unavailable</option>
-                </select>
+                  aria-label="Metadata"
+                  options={[
+                    { value: 'any', label: 'Any state' },
+                    { value: 'current', label: 'Current catalog data' },
+                    { value: 'export_only', label: 'Export only' },
+                    { value: 'unavailable', label: 'Unavailable' },
+                  ]}
+                />
               </label>
               {view === 'tracks' ? (
                 <label className="library-inline-filter">
                   <span>Explicit</span>
-                  <select
+                  <LibrarySelect
                     value={search.explicit ?? 'any'}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       update({
-                        explicit: event.target.value as MusicRouteSearch['explicit'],
+                        explicit: value as MusicRouteSearch['explicit'],
                         item: undefined,
                       })
                     }
-                  >
-                    <option value="any">Any</option>
-                    <option value="yes">Explicit</option>
-                    <option value="no">Not explicit</option>
-                    <option value="unknown">Unknown</option>
-                  </select>
+                    aria-label="Explicit"
+                    options={[
+                      { value: 'any', label: 'Any' },
+                      { value: 'yes', label: 'Explicit' },
+                      { value: 'no', label: 'Not explicit' },
+                      { value: 'unknown', label: 'Unknown' },
+                    ]}
+                  />
                 </label>
               ) : null}
               {view === 'albums' ? (
                 <label className="library-inline-filter">
                   <span>Album type</span>
-                  <select
+                  <LibrarySelect
                     value={search.albumType ?? 'any'}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       update({
-                        albumType: event.target.value as MusicRouteSearch['albumType'],
+                        albumType: value as MusicRouteSearch['albumType'],
                         item: undefined,
                       })
                     }
-                  >
-                    <option value="any">Any type</option>
-                    <option value="album">Album</option>
-                    <option value="single">Single</option>
-                    <option value="compilation">Compilation</option>
-                    <option value="other">Other</option>
-                    <option value="unknown">Unknown</option>
-                  </select>
+                    aria-label="Album type"
+                    options={[
+                      { value: 'any', label: 'Any type' },
+                      { value: 'album', label: 'Album' },
+                      { value: 'single', label: 'Single' },
+                      { value: 'compilation', label: 'Compilation' },
+                      { value: 'other', label: 'Other' },
+                      { value: 'unknown', label: 'Unknown' },
+                    ]}
+                  />
                 </label>
               ) : null}
               {view !== 'artists' ? (
@@ -426,9 +436,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           </span>
         </div>
         {result.isPending ? (
-          <div className="books-state books-loading" role="status">
-            Loading music…
-          </div>
+          <LoadingState className="books-loading">Loading music…</LoadingState>
         ) : null}
         {summary?.coverage?.possibleRecentGap ? (
           <p className="library-coverage-note" role="status">
@@ -442,10 +450,10 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           </p>
         ) : null}
         {result.isError ? (
-          <div className="books-state books-state-error" role="alert">
+          <Notice className="books-state books-state-error">
             <h2>Music could not be loaded</h2>
             <p>{result.error.message}</p>
-          </div>
+          </Notice>
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
           <div className="books-state">
@@ -470,14 +478,15 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           </div>
         ) : null}
         {result.hasNextPage ? (
-          <button
+          <Button
+            variant="outline"
             className="load-more"
             type="button"
             disabled={result.isFetchingNextPage}
             onClick={() => void result.fetchNextPage()}
           >
             {result.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </button>
+          </Button>
         ) : null}
       </FlatTabsContent>
       {inspectorItem ? (
@@ -535,7 +544,7 @@ function MusicFacetPicker({
         {label}
         {selected.length ? ` (${selected.length} selected)` : ''}
       </legend>
-      <input
+      <Input
         aria-label={`Search ${label.toLowerCase()} options`}
         type="search"
         placeholder={`Find ${facet}`}
@@ -543,31 +552,31 @@ function MusicFacetPicker({
         onChange={(event) => setOptionQ(event.target.value)}
       />
       <div className="library-facet-options">
-        {options.isPending ? <span>Loading options…</span> : null}
-        {options.isError ? <span role="alert">Options unavailable</span> : null}
+        {options.isPending ? <LoadingState>Loading options…</LoadingState> : null}
+        {options.isError ? <Notice>Options unavailable</Notice> : null}
         {options.data?.pages
           .flatMap((page) => page.data)
           .map((option) => (
-            <label key={option.value}>
-              <input
-                type="checkbox"
+            <FieldLabel key={option.value}>
+              <Checkbox
                 checked={selected.includes(option.value)}
-                onChange={() => onChange(option.value)}
+                onCheckedChange={() => onChange(option.value)}
               />
               <span>{option.label}</span>
               <small>{option.count.toLocaleString()}</small>
-            </label>
+            </FieldLabel>
           ))}
         {options.data?.pages[0]?.data.length === 0 ? <span>No matching options</span> : null}
       </div>
       {options.hasNextPage ? (
-        <button
+        <Button
+          variant="outline"
           type="button"
           disabled={options.isFetchingNextPage}
           onClick={() => void options.fetchNextPage()}
         >
           {options.isFetchingNextPage ? 'Loading…' : 'More options'}
-        </button>
+        </Button>
       ) : null}
     </fieldset>
   )
@@ -583,7 +592,7 @@ function MusicItem({
   onSelect: (element: HTMLButtonElement) => void
 }) {
   return (
-    <button
+    <MediaRowButton
       type="button"
       className={`spotify-result ${selected ? 'selected' : ''}`}
       onClick={(event) => onSelect(event.currentTarget)}
@@ -606,12 +615,14 @@ function MusicItem({
           {item.observedDurationKnown ? (
             listened(item.observedMs)
           ) : (
-            <span
-              aria-label="Listening time unavailable from Spotify recent history"
-              title="Spotify recent history does not include listening duration"
-            >
-              —
-            </span>
+            <Hint content="Spotify recent history does not include listening duration">
+              <span
+                aria-label="Listening time unavailable from Spotify recent history"
+                tabIndex={0}
+              >
+                —
+              </span>
+            </Hint>
           )}
           {item.observedDurationKnown && item.durationUnknownCount > 0
             ? ` · ${item.durationUnknownCount.toLocaleString()} without duration`
@@ -621,7 +632,7 @@ function MusicItem({
             : ''}
         </small>
       </span>
-    </button>
+    </MediaRowButton>
   )
 }
 
@@ -650,215 +661,242 @@ function MusicInspector({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <FlatTabs
-      value={tab}
-      onValueChange={(value) => setTab(value as typeof tab)}
-      render={<aside ref={inspectorRef} />}
-      className="media-inspector"
-      aria-label="Music inspector"
-    >
-      <header className="spotify-inspector-topbar">
-        <FlatTabsList aria-label="Music information">
-          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
-          <FlatTabsTrigger value="history">
-            History{detail.data ? ` (${detail.data.playbackCount.toLocaleString()})` : ''}
-          </FlatTabsTrigger>
-        </FlatTabsList>
-        <button type="button" onClick={onClose} aria-label="Close inspector">
-          <X />
-        </button>
-      </header>
-
-      {detail.isPending ? (
-        <p>Loading…</p>
-      ) : detail.isError ? (
-        <p role="alert">{detail.error.message}</p>
-      ) : detail.data ? (
-        <>
-          <div className="inspector-hero">
-            {detail.data.imageUrl ? (
-              <img src={detail.data.imageUrl} alt="" />
-            ) : (
-              <span className="spotify-art-fallback">
-                <Music2 />
-              </span>
-            )}
-            <div>
-              <span className="eyebrow">{detail.data.kind}</span>
-              <h2>{detail.data.title}</h2>
-              <p>{detail.data.subtitle}</p>
+    <aside ref={inspectorRef} className="media-inspector" aria-label="Music inspector">
+      <Tabs
+        className="inspector-tab-root"
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+      >
+        <header className="spotify-inspector-topbar">
+          <TabsList variant="line" className="inspector-tabs" aria-label="Music information">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="history">
+              History{detail.data ? ` (${detail.data.playbackCount.toLocaleString()})` : ''}
+            </TabsTrigger>
+          </TabsList>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={onClose}
+            aria-label="Close inspector"
+          >
+            <X />
+          </Button>
+        </header>
+        {detail.isPending ? (
+          <LoadingState>Loading…</LoadingState>
+        ) : detail.isError ? (
+          <Notice>{detail.error.message}</Notice>
+        ) : detail.data ? (
+          <>
+            <div className="inspector-hero">
+              {detail.data.imageUrl ? (
+                <img src={detail.data.imageUrl} alt="" />
+              ) : (
+                <span className="spotify-art-fallback">
+                  <Music2 />
+                </span>
+              )}
+              <div>
+                <span className="eyebrow">{detail.data.kind}</span>
+                <h2>{detail.data.title}</h2>
+                <p>{detail.data.subtitle}</p>
+              </div>
             </div>
-          </div>
-          <FlatTabsContent value="details" className="inspector-tab-panel">
-            <section>
-              <h3>Details</h3>
-              <dl>
-                {matchingItem ? (
-                  <>
-                    <div>
-                      <dt>Matching observations</dt>
-                      <dd>{matchingItem.playbackCount.toLocaleString()}</dd>
-                    </div>
-                    <div>
-                      <dt>Matching observed time</dt>
-                      <dd>
-                        {matchingItem.observedDurationKnown
-                          ? listened(matchingItem.observedMs)
-                          : 'Unavailable'}
-                      </dd>
-                    </div>
-                  </>
-                ) : null}
-                <div>
-                  <dt>{matchingItem ? 'Lifetime observations' : 'Playback observations'}</dt>
-                  <dd>{detail.data.playbackCount.toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt>{matchingItem ? 'Lifetime observed time' : 'Observed time'}</dt>
-                  <dd>
-                    {detail.data.observedDurationKnown
-                      ? listened(detail.data.observedMs)
-                      : 'Unavailable'}
-                    {detail.data.observedDurationKnown && detail.data.durationUnknownCount > 0
-                      ? ` · ${detail.data.durationUnknownCount.toLocaleString()} without duration`
-                      : ''}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Latest activity</dt>
-                  <dd>{date(detail.data.latestPlayedAt)}</dd>
-                </div>
-                <div>
-                  <dt>First activity</dt>
-                  <dd>{date(detail.data.firstPlayedAt)}</dd>
-                </div>
-                {detail.data.album ? (
-                  <div>
-                    <dt>Album</dt>
-                    <dd>
-                      {detail.data.albumId ? (
-                        <Link to="/library/music/albums" search={{ item: detail.data.albumId }}>
-                          {detail.data.album}
-                        </Link>
-                      ) : (
-                        detail.data.album
-                      )}
-                    </dd>
-                  </div>
-                ) : null}
-                {detail.data.albumType ? (
-                  <div>
-                    <dt>Album type</dt>
-                    <dd>{detail.data.albumType}</dd>
-                  </div>
-                ) : null}
-                {detail.data.releaseDate ? (
-                  <div>
-                    <dt>Released</dt>
-                    <dd>{detail.data.releaseDate}</dd>
-                  </div>
-                ) : null}
-                {detail.data.durationMs !== null ? (
-                  <div>
-                    <dt>Track length</dt>
-                    <dd>{listened(detail.data.durationMs)}</dd>
-                  </div>
-                ) : null}
-                {detail.data.isrc ? (
-                  <div>
-                    <dt>ISRC</dt>
-                    <dd>{detail.data.isrc}</dd>
-                  </div>
-                ) : null}
-              </dl>
-              {detail.data.artists?.length ? (
-                <div className="inspector-related-links">
-                  {detail.data.artists.map((artist) => (
-                    <Link key={artist.id} to="/library/music/artists" search={{ item: artist.id }}>
-                      {artist.name}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              {detail.data.relatedTracks?.length ? (
-                <div className="inspector-related-list">
-                  <h3>Heard tracks</h3>
-                  {detail.data.relatedTracks.map((track) => (
-                    <Link key={track.id} to="/library/music/tracks" search={{ item: track.id }}>
-                      <span>{track.title}</span>
-                      <small>
-                        {track.playbackCount.toLocaleString()}{' '}
-                        {track.playbackCount === 1 ? 'observation' : 'observations'}
-                      </small>
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              {detail.data.relatedAlbums?.length ? (
-                <div className="inspector-related-list">
-                  <h3>Albums</h3>
-                  {detail.data.relatedAlbums.map((album) => (
-                    <Link key={album.id} to="/library/music/albums" search={{ item: album.id }}>
-                      <span>{album.title}</span>
-                      <small>
-                        {album.playbackCount.toLocaleString()}{' '}
-                        {album.playbackCount === 1 ? 'observation' : 'observations'}
-                      </small>
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              {detail.data.canonicalUrl ? (
-                <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                  Open in Spotify <ExternalLink />
-                </a>
-              ) : null}
-            </section>
-          </FlatTabsContent>
-          <FlatTabsContent value="history" className="inspector-tab-panel">
-            <section>
-              <h3>History</h3>
-              {history.isPending ? <p>Loading history…</p> : null}
-              {history.isError ? <p role="alert">{history.error.message}</p> : null}
-              {history.data?.pages[0]?.totalCount === 0 ? <p>No playback observations.</p> : null}
-              <ol
-                className={`history-list spotify-history-list ${view === 'tracks' ? '' : 'music-entity-history'}`}
-              >
-                {history.data?.pages
-                  .flatMap((page) => page.data)
-                  .map((entry, index) => (
-                    <li key={`${entry.occurredAt}:${index}`}>
-                      <strong>
-                        {view === 'tracks' ? (
-                          date(entry.occurredAt)
-                        ) : (
-                          <Link to="/library/music/tracks" search={{ item: entry.trackId }}>
-                            {entry.trackTitle}
+            {
+              <>
+                <TabsContent value="details" className="inspector-tab-panel">
+                  <section>
+                    <h3>Details</h3>
+                    <dl>
+                      {matchingItem ? (
+                        <>
+                          <div>
+                            <dt>Matching observations</dt>
+                            <dd>{matchingItem.playbackCount.toLocaleString()}</dd>
+                          </div>
+                          <div>
+                            <dt>Matching observed time</dt>
+                            <dd>
+                              {matchingItem.observedDurationKnown
+                                ? listened(matchingItem.observedMs)
+                                : 'Unavailable'}
+                            </dd>
+                          </div>
+                        </>
+                      ) : null}
+                      <div>
+                        <dt>{matchingItem ? 'Lifetime observations' : 'Playback observations'}</dt>
+                        <dd>{detail.data.playbackCount.toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt>{matchingItem ? 'Lifetime observed time' : 'Observed time'}</dt>
+                        <dd>
+                          {detail.data.observedDurationKnown
+                            ? listened(detail.data.observedMs)
+                            : 'Unavailable'}
+                          {detail.data.observedDurationKnown && detail.data.durationUnknownCount > 0
+                            ? ` · ${detail.data.durationUnknownCount.toLocaleString()} without duration`
+                            : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Latest activity</dt>
+                        <dd>{date(detail.data.latestPlayedAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>First activity</dt>
+                        <dd>{date(detail.data.firstPlayedAt)}</dd>
+                      </div>
+                      {detail.data.album ? (
+                        <div>
+                          <dt>Album</dt>
+                          <dd>
+                            {detail.data.albumId ? (
+                              <Link
+                                to="/library/music/albums"
+                                search={{ item: detail.data.albumId }}
+                              >
+                                {detail.data.album}
+                              </Link>
+                            ) : (
+                              detail.data.album
+                            )}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {detail.data.albumType ? (
+                        <div>
+                          <dt>Album type</dt>
+                          <dd>{detail.data.albumType}</dd>
+                        </div>
+                      ) : null}
+                      {detail.data.releaseDate ? (
+                        <div>
+                          <dt>Released</dt>
+                          <dd>{detail.data.releaseDate}</dd>
+                        </div>
+                      ) : null}
+                      {detail.data.durationMs !== null ? (
+                        <div>
+                          <dt>Track length</dt>
+                          <dd>{listened(detail.data.durationMs)}</dd>
+                        </div>
+                      ) : null}
+                      {detail.data.isrc ? (
+                        <div>
+                          <dt>ISRC</dt>
+                          <dd>{detail.data.isrc}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    {detail.data.artists?.length ? (
+                      <div className="inspector-related-links">
+                        {detail.data.artists.map((artist) => (
+                          <Link
+                            key={artist.id}
+                            to="/library/music/artists"
+                            search={{ item: artist.id }}
+                          >
+                            {artist.name}
                           </Link>
-                        )}
-                      </strong>
-                      <span>
-                        {entry.source === 'export' && entry.observedMs !== null
-                          ? `${view === 'tracks' ? '' : `${date(entry.occurredAt)} · `}${listened(entry.observedMs)} observed`
-                          : `${view === 'tracks' ? '' : `${date(entry.occurredAt)} · `}Recent API`}
-                      </span>
-                    </li>
-                  ))}
-              </ol>
-              {history.hasNextPage ? (
-                <button
-                  type="button"
-                  className="load-more"
-                  disabled={history.isFetchingNextPage}
-                  onClick={() => void history.fetchNextPage()}
-                >
-                  {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
-                </button>
-              ) : null}
-            </section>
-          </FlatTabsContent>
-        </>
-      ) : null}
-    </FlatTabs>
+                        ))}
+                      </div>
+                    ) : null}
+                    {detail.data.relatedTracks?.length ? (
+                      <div className="inspector-related-list">
+                        <h3>Heard tracks</h3>
+                        {detail.data.relatedTracks.map((track) => (
+                          <Link
+                            key={track.id}
+                            to="/library/music/tracks"
+                            search={{ item: track.id }}
+                          >
+                            <span>{track.title}</span>
+                            <small>
+                              {track.playbackCount.toLocaleString()}{' '}
+                              {track.playbackCount === 1 ? 'observation' : 'observations'}
+                            </small>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                    {detail.data.relatedAlbums?.length ? (
+                      <div className="inspector-related-list">
+                        <h3>Albums</h3>
+                        {detail.data.relatedAlbums.map((album) => (
+                          <Link
+                            key={album.id}
+                            to="/library/music/albums"
+                            search={{ item: album.id }}
+                          >
+                            <span>{album.title}</span>
+                            <small>
+                              {album.playbackCount.toLocaleString()}{' '}
+                              {album.playbackCount === 1 ? 'observation' : 'observations'}
+                            </small>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                    {detail.data.canonicalUrl ? (
+                      <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                        Open in Spotify <ExternalLink />
+                      </a>
+                    ) : null}
+                  </section>
+                </TabsContent>
+                <TabsContent value="history" className="inspector-tab-panel">
+                  <section>
+                    <h3>History</h3>
+                    {history.isPending ? <LoadingState>Loading history…</LoadingState> : null}
+                    {history.isError ? <Notice>{history.error.message}</Notice> : null}
+                    {history.data?.pages[0]?.totalCount === 0 ? (
+                      <p>No playback observations.</p>
+                    ) : null}
+                    <ol
+                      className={`history-list spotify-history-list ${view === 'tracks' ? '' : 'music-entity-history'}`}
+                    >
+                      {history.data?.pages
+                        .flatMap((page) => page.data)
+                        .map((entry, index) => (
+                          <li key={`${entry.occurredAt}:${index}`}>
+                            <strong>
+                              {view === 'tracks' ? (
+                                date(entry.occurredAt)
+                              ) : (
+                                <Link to="/library/music/tracks" search={{ item: entry.trackId }}>
+                                  {entry.trackTitle}
+                                </Link>
+                              )}
+                            </strong>
+                            <span>
+                              {entry.source === 'export' && entry.observedMs !== null
+                                ? `${view === 'tracks' ? '' : `${date(entry.occurredAt)} · `}${listened(entry.observedMs)} observed`
+                                : `${view === 'tracks' ? '' : `${date(entry.occurredAt)} · `}Recent API`}
+                            </span>
+                          </li>
+                        ))}
+                    </ol>
+                    {history.hasNextPage ? (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="load-more"
+                        disabled={history.isFetchingNextPage}
+                        onClick={() => void history.fetchNextPage()}
+                      >
+                        {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
+                      </Button>
+                    ) : null}
+                  </section>
+                </TabsContent>
+              </>
+            }
+          </>
+        ) : null}
+      </Tabs>
+    </aside>
   )
 }

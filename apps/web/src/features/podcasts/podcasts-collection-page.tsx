@@ -1,11 +1,23 @@
+import { MediaRowButton } from '@/components/library-controls'
+import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
+import { Notice, LoadingState } from '@/components/ui-patterns'
 import {
-  CollectionTabList,
-  FlatTabs,
-  FlatTabsContent,
-  FlatTabsList,
-  FlatTabsTrigger,
+  FlatTabs as Tabs,
+  FlatTabsList as TabsList,
+  FlatTabsTrigger as TabsTrigger,
+  FlatTabsContent as TabsContent,
 } from '@/components/flat-tabs'
-import { LibrarySelect } from '../../components/library-controls'
+import { FieldLabel } from '@/components/ui/field'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
+import { LibraryLayoutToggle, LibrarySelect } from '../../components/library-controls'
 import {
   useLiveSearch,
   useLibraryLayout,
@@ -19,9 +31,7 @@ import {
   ExternalLink,
   ArrowUp,
   ArrowDown,
-  Grid2X2,
   Headphones,
-  List,
   Search,
   SlidersHorizontal,
   X,
@@ -99,7 +109,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const summary = result.data?.pages[0]
   const sectionCounts = useLibrarySectionCounts('podcasts', summary, (page) => page.sectionCounts)
-  const sorts =
+  const sorts: [string, string][] =
     view === 'following'
       ? [
           ['savedAt', 'Recently followed'],
@@ -166,73 +176,80 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               setDraft(null)
             }}
           >
-            <Search aria-hidden="true" />
-            <input
-              aria-label="Search podcasts"
-              placeholder={
-                view === 'following' ? 'Search shows or publishers' : 'Search episodes or shows'
-              }
-              value={draft ?? search.q ?? ''}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            {(draft ?? search.q) ? (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => {
-                  setDraft(null)
-                  update({ q: undefined, item: undefined, sort: undefined })
-                }}
-              >
-                <X aria-hidden="true" />
-              </button>
-            ) : null}
+            <InputGroup>
+              <InputGroupInput
+                aria-label="Search podcasts"
+                placeholder={
+                  view === 'following' ? 'Search shows or publishers' : 'Search episodes or shows'
+                }
+                value={draft ?? search.q ?? ''}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <InputGroupAddon>
+                <Search aria-hidden="true" />
+              </InputGroupAddon>
+              {(draft ?? search.q) ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setDraft(null)
+                      update({ q: undefined, item: undefined, sort: undefined })
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
           </form>
           {view !== 'following' ? (
             <label className="library-inline-filter">
               <span>Show</span>
-              <select
+              <LibrarySelect
                 value={search.following ?? 'all'}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   update({
-                    following: event.target.value as PodcastsRouteSearch['following'],
+                    following: value as PodcastsRouteSearch['following'],
                     item: undefined,
                   })
                 }
-              >
-                <option value="all">All shows</option>
-                <option value="following">Following</option>
-                <option value="not_following">Not following</option>
-              </select>
+                aria-label="Show"
+                options={[
+                  { value: 'all', label: 'All shows' },
+                  { value: 'following', label: 'Following' },
+                  { value: 'not_following', label: 'Not following' },
+                ]}
+              />
             </label>
           ) : null}
-          <button
+          <Button
+            variant="outline"
             type="button"
             className="toolbar-button"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
-          </button>
+          </Button>
           <label className="books-sort">
             <span className="sr-only">Sort podcasts</span>
             <LibrarySelect
               aria-label="Sort podcasts"
               value={selectedSort}
-              onChange={(event) =>
-                update({ sort: event.target.value, direction: undefined, item: undefined })
+              onValueChange={(value) =>
+                update({ sort: value, direction: undefined, item: undefined })
               }
-            >
-              {sorts.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </LibrarySelect>
+              options={[...sorts.map(([value, label]) => ({ value, label }))]}
+            />
           </label>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             type="button"
-            className="toolbar-button"
+            className="sort-direction"
             aria-label="Reverse podcast sort"
             onClick={() =>
               update({
@@ -246,33 +263,17 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             ) : (
               <ArrowDown aria-hidden="true" />
             )}
-          </button>
+          </Button>
           {view === 'following' ? (
-            <div className="layout-toggle" aria-label="Result layout">
-              <button
-                type="button"
-                aria-label="List view"
-                aria-pressed={layout === 'list'}
-                onClick={() => update({ layout: 'list' })}
-              >
-                <List />
-              </button>
-              <button
-                type="button"
-                aria-label="Grid view"
-                aria-pressed={layout === 'grid'}
-                onClick={() => update({ layout: 'grid' })}
-              >
-                <Grid2X2 />
-              </button>
-            </div>
+            <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
           ) : null}
         </div>
         {filtersOpen ? (
           <section className="filter-panel" aria-label="Podcast filters">
             <div className="filter-panel-heading">
-              <strong>Filters</strong>
-              <button
+              <strong> Filters</strong>
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() =>
                   update({
@@ -293,14 +294,14 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 }
               >
                 Clear
-              </button>
+              </Button>
             </div>
             <div className="filter-panel-grid">
               <fieldset className="date-filter">
                 <legend>{view === 'archive' ? 'Activity date' : 'Saved date'}</legend>
                 <label>
                   From
-                  <input
+                  <Input
                     type="date"
                     value={search.dateFrom ?? ''}
                     onChange={(event) =>
@@ -310,7 +311,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 </label>
                 <label>
                   To
-                  <input
+                  <Input
                     type="date"
                     value={search.dateTo ?? ''}
                     onChange={(event) =>
@@ -318,16 +319,15 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                     }
                   />
                 </label>
-                <label>
-                  <input
-                    type="checkbox"
+                <FieldLabel>
+                  <Checkbox
                     checked={search.dateUnknown ?? false}
-                    onChange={(event) =>
-                      update({ dateUnknown: event.target.checked || undefined, item: undefined })
+                    onCheckedChange={(checked) =>
+                      update({ dateUnknown: checked || undefined, item: undefined })
                     }
                   />{' '}
                   Date unavailable
-                </label>
+                </FieldLabel>
               </fieldset>
               {view !== 'following' ? (
                 <>
@@ -335,7 +335,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                     <legend>Published</legend>
                     <label>
                       From
-                      <input
+                      <Input
                         type="date"
                         value={search.publishedFrom ?? ''}
                         onChange={(event) =>
@@ -348,7 +348,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                     </label>
                     <label>
                       To
-                      <input
+                      <Input
                         type="date"
                         value={search.publishedTo ?? ''}
                         onChange={(event) =>
@@ -356,44 +356,41 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                         }
                       />
                     </label>
-                    <label>
-                      <input
-                        type="checkbox"
+                    <FieldLabel>
+                      <Checkbox
                         checked={search.publishedUnknown ?? false}
-                        onChange={(event) =>
+                        onCheckedChange={(checked) =>
                           update({
-                            publishedUnknown: event.target.checked || undefined,
+                            publishedUnknown: checked || undefined,
                             item: undefined,
                           })
                         }
                       />{' '}
                       Date unavailable
-                    </label>
+                    </FieldLabel>
                   </fieldset>
                   <label className="library-inline-filter">
                     <span>Duration</span>
-                    <select
+                    <LibrarySelect
                       value={search.duration?.[0] ?? ''}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         update({
-                          duration: event.target.value
-                            ? [
-                                event.target.value as NonNullable<
-                                  PodcastsRouteSearch['duration']
-                                >[number],
-                              ]
+                          duration: value
+                            ? [value as NonNullable<PodcastsRouteSearch['duration']>[number]]
                             : undefined,
                           item: undefined,
                         })
                       }
-                    >
-                      <option value="">Any duration</option>
-                      <option value="under30">Under 30 min</option>
-                      <option value="30to59">30–59 min</option>
-                      <option value="1to2hours">1–2 hr</option>
-                      <option value="over2hours">Over 2 hr</option>
-                      <option value="unknown">Duration unavailable</option>
-                    </select>
+                      aria-label="Duration"
+                      options={[
+                        { value: '', label: 'Any duration' },
+                        { value: 'under30', label: 'Under 30 min' },
+                        { value: '30to59', label: '30–59 min' },
+                        { value: '1to2hours', label: '1–2 hr' },
+                        { value: 'over2hours', label: 'Over 2 hr' },
+                        { value: 'unknown', label: 'Duration unavailable' },
+                      ]}
+                    />
                   </label>
                   <PodcastFacetPicker
                     view={view}
@@ -409,26 +406,24 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 <>
                   <label className="library-inline-filter">
                     <span>Library episodes</span>
-                    <select
+                    <LibrarySelect
                       value={search.libraryEpisodes?.[0] ?? ''}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         update({
-                          libraryEpisodes: event.target.value
-                            ? [
-                                event.target.value as NonNullable<
-                                  PodcastsRouteSearch['libraryEpisodes']
-                                >[number],
-                              ]
+                          libraryEpisodes: value
+                            ? [value as NonNullable<PodcastsRouteSearch['libraryEpisodes']>[number]]
                             : undefined,
                           item: undefined,
                         })
                       }
-                    >
-                      <option value="">Any</option>
-                      <option value="archive">Has Archive episodes</option>
-                      <option value="queue">Has Queue episodes</option>
-                      <option value="none">No Library episodes</option>
-                    </select>
+                      aria-label="Library episodes"
+                      options={[
+                        { value: '', label: 'Any' },
+                        { value: 'archive', label: 'Has Archive episodes' },
+                        { value: 'queue', label: 'Has Queue episodes' },
+                        { value: 'none', label: 'No Library episodes' },
+                      ]}
+                    />
                   </label>
                   <PodcastFacetPicker
                     view="following"
@@ -461,9 +456,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </span>
         </div>
         {result.isPending ? (
-          <div className="books-state books-loading" role="status">
-            Loading podcasts…
-          </div>
+          <LoadingState className="books-loading">Loading podcasts…</LoadingState>
         ) : null}
         {!result.isPending &&
         summary?.coverage &&
@@ -477,10 +470,10 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </p>
         ) : null}
         {result.isError ? (
-          <div className="books-state books-state-error" role="alert">
+          <Notice className="books-state books-state-error">
             <h2>Podcasts could not be loaded</h2>
             <p>{result.error.message}</p>
-          </div>
+          </Notice>
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
           <div className="books-state">
@@ -505,14 +498,15 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </div>
         ) : null}
         {result.hasNextPage ? (
-          <button
+          <Button
+            variant="outline"
             className="load-more"
             type="button"
             disabled={result.isFetchingNextPage}
             onClick={() => void result.fetchNextPage()}
           >
             {result.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </button>
+          </Button>
         ) : null}
       </FlatTabsContent>
       {inspectorItem ? (
@@ -566,7 +560,7 @@ function PodcastFacetPicker({
         {label}
         {selected.length ? ` (${selected.length} selected)` : ''}
       </legend>
-      <input
+      <Input
         aria-label={`Search ${label.toLowerCase()} options`}
         type="search"
         placeholder={`Find ${facet}`}
@@ -574,31 +568,31 @@ function PodcastFacetPicker({
         onChange={(event) => setOptionQ(event.target.value)}
       />
       <div className="library-facet-options">
-        {options.isPending ? <span>Loading options…</span> : null}
-        {options.isError ? <span role="alert">Options unavailable</span> : null}
+        {options.isPending ? <LoadingState>Loading options…</LoadingState> : null}
+        {options.isError ? <Notice>Options unavailable</Notice> : null}
         {options.data?.pages
           .flatMap((page) => page.data)
           .map((option) => (
-            <label key={option.value}>
-              <input
-                type="checkbox"
+            <FieldLabel key={option.value}>
+              <Checkbox
                 checked={selected.includes(option.value)}
-                onChange={() => onChange(option.value)}
+                onCheckedChange={() => onChange(option.value)}
               />
               <span>{option.label}</span>
               <small>{option.count.toLocaleString()}</small>
-            </label>
+            </FieldLabel>
           ))}
         {options.data?.pages[0]?.data.length === 0 ? <span>No matching options</span> : null}
       </div>
       {options.hasNextPage ? (
-        <button
+        <Button
+          variant="outline"
           type="button"
           disabled={options.isFetchingNextPage}
           onClick={() => void options.fetchNextPage()}
         >
           {options.isFetchingNextPage ? 'Loading…' : 'More options'}
-        </button>
+        </Button>
       ) : null}
     </fieldset>
   )
@@ -614,7 +608,7 @@ function PodcastItem({
   onSelect: (element: HTMLButtonElement) => void
 }) {
   return (
-    <button
+    <MediaRowButton
       type="button"
       className={`spotify-result ${selected ? 'selected' : ''}`}
       onClick={(event) => onSelect(event.currentTarget)}
@@ -637,7 +631,7 @@ function PodcastItem({
             : [date(item.date), duration(item.durationMs)].filter(Boolean).join(' · ')}
         </small>
       </span>
-    </button>
+    </MediaRowButton>
   )
 }
 
@@ -666,165 +660,176 @@ function PodcastInspector({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <FlatTabs
-      value={tab}
-      onValueChange={(value) => setTab(value as typeof tab)}
-      render={<aside ref={inspectorRef} />}
-      className="media-inspector"
-      aria-label="Podcast inspector"
-    >
-      <header className="spotify-inspector-topbar">
-        <FlatTabsList aria-label="Podcast information">
-          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
-          <FlatTabsTrigger value="history">
-            History{kind === 'episode' && detail.data ? ` (${detail.data.playbackCount})` : ''}
-          </FlatTabsTrigger>
-        </FlatTabsList>
-        <button type="button" onClick={onClose} aria-label="Close inspector">
-          <X />
-        </button>
-      </header>
-
-      {detail.isPending ? (
-        <p>Loading…</p>
-      ) : detail.isError ? (
-        <p role="alert">{detail.error.message}</p>
-      ) : detail.data ? (
-        <>
-          <div className="inspector-hero">
-            {detail.data.imageUrl ? (
-              <img src={detail.data.imageUrl} alt="" />
-            ) : (
-              <span className="spotify-art-fallback">
-                <Headphones />
-              </span>
-            )}
-            <div>
-              <span className="eyebrow">{detail.data.kind}</span>
-              <h2>{detail.data.title}</h2>
-              <p>{detail.data.subtitle}</p>
+    <aside ref={inspectorRef} className="media-inspector" aria-label="Podcast inspector">
+      <Tabs
+        className="inspector-tab-root"
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+      >
+        <header className="spotify-inspector-topbar">
+          <TabsList variant="line" className="inspector-tabs" aria-label="Podcast information">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="history">
+              History{kind === 'episode' && detail.data ? ` (${detail.data.playbackCount})` : ''}
+            </TabsTrigger>
+          </TabsList>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={onClose}
+            aria-label="Close inspector"
+          >
+            <X />
+          </Button>
+        </header>
+        {detail.isPending ? (
+          <LoadingState>Loading…</LoadingState>
+        ) : detail.isError ? (
+          <Notice>{detail.error.message}</Notice>
+        ) : detail.data ? (
+          <>
+            <div className="inspector-hero">
+              {detail.data.imageUrl ? (
+                <img src={detail.data.imageUrl} alt="" />
+              ) : (
+                <span className="spotify-art-fallback">
+                  <Headphones />
+                </span>
+              )}
+              <div>
+                <span className="eyebrow">{detail.data.kind}</span>
+                <h2>{detail.data.title}</h2>
+                <p>{detail.data.subtitle}</p>
+              </div>
             </div>
-          </div>
-          <FlatTabsContent value="details" className="inspector-tab-panel">
-            <section>
-              <h3>Details</h3>
-              {detail.data.description ? <p>{detail.data.description}</p> : null}
-              <dl>
-                <div>
-                  <dt>{kind === 'show' ? 'Episodes in Archive' : 'Observed time'}</dt>
-                  <dd>
-                    {kind === 'show'
-                      ? detail.data.archiveEpisodeCount
-                      : duration(detail.data.observedMs)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{kind === 'show' ? 'Episodes queued' : 'Published'}</dt>
-                  <dd>
-                    {kind === 'show'
-                      ? detail.data.queueEpisodeCount
-                      : date(detail.data.publishedAt)}
-                  </dd>
-                </div>
-                {kind === 'episode' && detail.data.durationMs !== null ? (
-                  <div>
-                    <dt>Duration</dt>
-                    <dd>{duration(detail.data.durationMs)}</dd>
-                  </div>
-                ) : null}
-                {kind === 'show' && detail.data.totalEpisodes !== null ? (
-                  <div>
-                    <dt>Catalog episodes</dt>
-                    <dd>{detail.data.totalEpisodes}</dd>
-                  </div>
-                ) : null}
-              </dl>
-              {kind === 'episode' && detail.data.showId ? (
-                <button
-                  type="button"
-                  className="inspector-related-link"
-                  onClick={() => onOpenShow(detail.data!.showId!)}
-                >
-                  Show details: {detail.data.subtitle ?? 'Show'}
-                </button>
-              ) : null}
-              {kind === 'show' ? (
-                <div className="inspector-related-links">
-                  <Link to="/library/podcasts/archive" search={{ show: [id] }}>
-                    Archive episodes
-                  </Link>
-                  <Link to="/library/podcasts/queue" search={{ show: [id] }}>
-                    Queued episodes
-                  </Link>
-                </div>
-              ) : null}
-              {detail.data.canonicalUrl ? (
-                <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                  Open in Spotify <ExternalLink />
-                </a>
-              ) : null}
-            </section>
-          </FlatTabsContent>
-          <FlatTabsContent value="history" className="inspector-tab-panel">
-            {kind === 'episode' ? (
-              <section>
-                <h3>History</h3>
-                {history.isPending ? <p>Loading history…</p> : null}
-                {history.isError ? <p role="alert">{history.error.message}</p> : null}
-                {history.data?.pages[0]?.totalCount === 0 ? <p>No supported history.</p> : null}
-                <ol className="history-list">
-                  {history.data?.pages
-                    .flatMap((page) => page.data)
-                    .map((entry, index) => (
-                      <li key={`${entry.occurredAt}:${index}`}>
-                        <strong>{date(entry.occurredAt)}</strong>
-                        <span>
-                          {entry.source === 'reader'
-                            ? 'Reader Archive'
-                            : entry.observedMs === null
-                              ? 'Playback detected'
-                              : `${duration(entry.observedMs)} observed`}
-                        </span>
-                      </li>
-                    ))}
-                </ol>
-                {history.hasNextPage ? (
-                  <button
-                    type="button"
-                    className="load-more"
-                    disabled={history.isFetchingNextPage}
-                    onClick={() => void history.fetchNextPage()}
-                  >
-                    {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
-                  </button>
-                ) : null}
-              </section>
-            ) : (
-              <section>
-                <h3>Following</h3>
-                <dl>
-                  <div>
-                    <dt>Saved in Spotify</dt>
-                    <dd>{date(detail.data.date)}</dd>
-                  </div>
-                  <div>
-                    <dt>First observed</dt>
-                    <dd>{date(detail.data.firstObservedAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Last observed</dt>
-                    <dd>{date(detail.data.lastObservedAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Current state</dt>
-                    <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
-                  </div>
-                </dl>
-              </section>
-            )}
-          </FlatTabsContent>
-        </>
-      ) : null}
-    </FlatTabs>
+            {
+              <>
+                <TabsContent value="details" className="inspector-tab-panel">
+                  <section>
+                    <h3>Details</h3>
+                    {detail.data.description ? <p>{detail.data.description}</p> : null}
+                    <dl>
+                      <div>
+                        <dt>{kind === 'show' ? 'Episodes in Archive' : 'Observed time'}</dt>
+                        <dd>
+                          {kind === 'show'
+                            ? detail.data.archiveEpisodeCount
+                            : duration(detail.data.observedMs)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{kind === 'show' ? 'Episodes queued' : 'Published'}</dt>
+                        <dd>
+                          {kind === 'show'
+                            ? detail.data.queueEpisodeCount
+                            : date(detail.data.publishedAt)}
+                        </dd>
+                      </div>
+                      {kind === 'episode' && detail.data.durationMs !== null ? (
+                        <div>
+                          <dt>Duration</dt>
+                          <dd>{duration(detail.data.durationMs)}</dd>
+                        </div>
+                      ) : null}
+                      {kind === 'show' && detail.data.totalEpisodes !== null ? (
+                        <div>
+                          <dt>Catalog episodes</dt>
+                          <dd>{detail.data.totalEpisodes}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    {kind === 'episode' && detail.data.showId ? (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="inspector-related-link"
+                        onClick={() => onOpenShow(detail.data!.showId!)}
+                      >
+                        Show details: {detail.data.subtitle ?? 'Show'}
+                      </Button>
+                    ) : null}
+                    {kind === 'show' ? (
+                      <div className="inspector-related-links">
+                        <Link to="/library/podcasts/archive" search={{ show: [id] }}>
+                          Archive episodes
+                        </Link>
+                        <Link to="/library/podcasts/queue" search={{ show: [id] }}>
+                          Queued episodes
+                        </Link>
+                      </div>
+                    ) : null}
+                    {detail.data.canonicalUrl ? (
+                      <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                        Open in Spotify <ExternalLink />
+                      </a>
+                    ) : null}
+                  </section>
+                </TabsContent>
+                <TabsContent value="history" className="inspector-tab-panel">
+                  kind === 'episode' ? (
+                  <section>
+                    <h3>History</h3>
+                    {history.isPending ? <LoadingState>Loading history…</LoadingState> : null}
+                    {history.isError ? <Notice>{history.error.message}</Notice> : null}
+                    {history.data?.pages[0]?.totalCount === 0 ? <p>No supported history.</p> : null}
+                    <ol className="history-list">
+                      {history.data?.pages
+                        .flatMap((page) => page.data)
+                        .map((entry, index) => (
+                          <li key={`${entry.occurredAt}:${index}`}>
+                            <strong>{date(entry.occurredAt)}</strong>
+                            <span>
+                              {entry.source === 'reader'
+                                ? 'Reader Archive'
+                                : entry.observedMs === null
+                                  ? 'Playback detected'
+                                  : `${duration(entry.observedMs)} observed`}
+                            </span>
+                          </li>
+                        ))}
+                    </ol>
+                    {history.hasNextPage ? (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="load-more"
+                        disabled={history.isFetchingNextPage}
+                        onClick={() => void history.fetchNextPage()}
+                      >
+                        {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
+                      </Button>
+                    ) : null}
+                  </section>
+                  ) : (
+                  <section>
+                    <h3>Following</h3>
+                    <dl>
+                      <div>
+                        <dt>Saved in Spotify</dt>
+                        <dd>{date(detail.data.date)}</dd>
+                      </div>
+                      <div>
+                        <dt>First observed</dt>
+                        <dd>{date(detail.data.firstObservedAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>Last observed</dt>
+                        <dd>{date(detail.data.lastObservedAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>Current state</dt>
+                        <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
+                      </div>
+                    </dl>
+                  </section>
+                  )
+                </TabsContent>
+              </>
+            }
+          </>
+        ) : null}
+      </Tabs>
+    </aside>
   )
 }

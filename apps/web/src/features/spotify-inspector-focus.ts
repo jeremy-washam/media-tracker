@@ -12,16 +12,16 @@ export function useSpotifyInspectorFocus(onClose: () => void, itemId: string) {
     const inspector = inspectorRef.current
     inspector?.querySelector<HTMLElement>('[aria-label="Close inspector"]')?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
         onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || inspector === null) return
       const focusable = Array.from(
         inspector.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          'a[href], button:not([disabled]):not([tabindex="-1"]), select:not([disabled]), input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0)
+      ).filter((element) => element.getClientRects().length > 0)
       if (focusable.length === 0) return
       const first = focusable[0]!
       const last = focusable.at(-1)!

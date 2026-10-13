@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
@@ -104,16 +105,18 @@ export function HistoryPage() {
       {totalCount > 0 ? (
         <>
           <div className="media-filters" aria-label="Filter Archive by media type">
-            <button
+            <Button
+              variant="outline"
               type="button"
               className={filter === 'all' ? 'active' : ''}
               aria-pressed={filter === 'all'}
               onClick={() => setFilter('all')}
             >
               All <span>{totalCount}</span>
-            </button>
+            </Button>
             {mediaTypes.map((type) => (
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 className={filter === type ? 'active' : ''}
                 aria-pressed={filter === type}
@@ -121,7 +124,7 @@ export function HistoryPage() {
                 key={type}
               >
                 {mediaTypePluralNames[type]} <span>{counts[type]}</span>
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -148,14 +151,15 @@ export function HistoryPage() {
             ) : null}
           </div>
           {media.hasNextPage ? (
-            <button
+            <Button
+              variant="outline"
               type="button"
               className="sync-button"
               disabled={media.isFetchingNextPage}
               onClick={() => void media.fetchNextPage()}
             >
               {media.isFetchingNextPage ? 'Loading…' : 'Load more'}
-            </button>
+            </Button>
           ) : null}
           <p className="checkpoint-note">
             Showing {items.length} of {filteredCount} items.

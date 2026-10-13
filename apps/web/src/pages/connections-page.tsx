@@ -1,3 +1,8 @@
+import { Notice, FileUploadButton } from '@/components/ui-patterns'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -141,16 +146,14 @@ export function ConnectionsPage() {
         <h1 id="connections-title">Connections</h1>
         <p>See what is connected, how much history is covered, and when each source last synced.</p>
       </div>
-
       {connections.isError ? (
-        <div className="notice notice-error" role="alert">
+        <Notice className="notice notice-error">
           Connection status is unavailable because the local API could not be reached.
-        </div>
+        </Notice>
       ) : null}
-
       <label className="checkpoint-note">
         New YouTube account or channel label{' '}
-        <input
+        <Input
           aria-label="YouTube account label"
           value={youtubeKey}
           onChange={(event) => setYoutubeKey(event.target.value)}
@@ -158,20 +161,17 @@ export function ConnectionsPage() {
         />
       </label>
       {youtubeKey.trim() !== '' ? (
-        <label className="sync-button">
+        <FileUploadButton
+          accept=".zip,application/zip"
+          disabled={youtubeImport.isPending}
+          onChange={(event) => {
+            const archive = event.currentTarget.files?.[0]
+            if (archive !== undefined) youtubeImport.mutate({ archive })
+            event.currentTarget.value = ''
+          }}
+        >
           Import a new YouTube account
-          <input
-            className="file-input"
-            type="file"
-            accept=".zip,application/zip"
-            disabled={youtubeImport.isPending}
-            onChange={(event) => {
-              const archive = event.currentTarget.files?.[0]
-              if (archive !== undefined) youtubeImport.mutate({ archive })
-              event.currentTarget.value = ''
-            }}
-          />
-        </label>
+        </FileUploadButton>
       ) : null}
       <div className="connection-list" aria-busy={connections.isPending}>
         {(connections.data?.data ?? []).map((connection) => (
@@ -202,7 +202,8 @@ export function ConnectionsPage() {
                   </p>
                   {connection.id !== null &&
                   (connection.source === 'youtube' || connection.source === 'spotify') ? (
-                    <button
+                    <Button
+                      variant="outline"
                       className="sync-button"
                       type="button"
                       disabled={resumed.isPending}
@@ -215,7 +216,7 @@ export function ConnectionsPage() {
                       }
                     >
                       Resume import
-                    </button>
+                    </Button>
                   ) : (
                     <p>Upload the same ZIP again to retry.</p>
                   )}
@@ -228,113 +229,100 @@ export function ConnectionsPage() {
               </p>
             </div>
             {connection.source === 'readwise' ? (
-              <button
+              <Button
+                variant="outline"
                 className="sync-button"
                 type="button"
                 disabled={readwiseSync.isPending}
                 onClick={() => readwiseSync.mutate()}
               >
                 {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
-              </button>
+              </Button>
             ) : connection.source === 'hardcover' ? (
-              <button
+              <Button
+                variant="outline"
                 className="sync-button"
                 type="button"
                 disabled={hardcoverSync.isPending}
                 onClick={() => hardcoverSync.mutate()}
               >
                 {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
-              </button>
+              </Button>
             ) : connection.source === 'letterboxd' ? (
               <div className="connection-actions">
-                <button
+                <Button
+                  variant="outline"
                   className="sync-button sync-button-secondary"
                   type="button"
                   disabled={letterboxdSync.isPending}
                   onClick={() => letterboxdSync.mutate()}
                 >
                   {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
-                </button>
-                <label
-                  className={`sync-button${letterboxdImport.isPending ? ' sync-button-disabled' : ''}`}
+                </Button>
+                <FileUploadButton
+                  accept=".zip,application/zip"
+                  disabled={letterboxdImport.isPending}
+                  onChange={(event) => {
+                    const archive = event.currentTarget.files?.[0]
+                    if (archive !== undefined) letterboxdImport.mutate(archive)
+                    event.currentTarget.value = ''
+                  }}
                 >
                   {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
-                  <input
-                    className="file-input"
-                    type="file"
-                    accept=".zip,application/zip"
-                    disabled={letterboxdImport.isPending}
-                    onChange={(event) => {
-                      const archive = event.currentTarget.files?.[0]
-                      if (archive !== undefined) letterboxdImport.mutate(archive)
-                      event.currentTarget.value = ''
-                    }}
-                  />
-                </label>
+                </FileUploadButton>
               </div>
             ) : connection.source === 'spotify' ? (
               <div className="connection-actions">
-                <button
+                <Button
+                  variant="outline"
                   className="sync-button sync-button-secondary"
                   type="button"
                   disabled={spotifySync.isPending}
                   onClick={() => spotifySync.mutate()}
                 >
                   {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
-                </button>
-                <label
-                  className={`sync-button${spotifyImport.isPending ? ' sync-button-disabled' : ''}`}
-                >
-                  {spotifyImport.isPending ? 'Importing…' : 'Import ZIP'}
-                  <input
-                    className="file-input"
-                    type="file"
-                    accept=".zip,application/zip"
-                    disabled={spotifyImport.isPending}
-                    onChange={(event) => {
-                      const archive = event.currentTarget.files?.[0]
-                      if (archive !== undefined) spotifyImport.mutate(archive)
-                      event.currentTarget.value = ''
-                    }}
-                  />
-                </label>
-              </div>
-            ) : connection.source === 'youtube' ? (
-              <label
-                className={`sync-button${youtubeImport.isPending ? ' sync-button-disabled' : ''}`}
-              >
-                {youtubeImport.isPending ? 'Importing…' : 'Import Takeout'}
-                <input
-                  className="file-input"
-                  type="file"
+                </Button>
+                <FileUploadButton
                   accept=".zip,application/zip"
-                  disabled={
-                    youtubeImport.isPending || (connection.id === null && youtubeKey.trim() === '')
-                  }
+                  disabled={spotifyImport.isPending}
                   onChange={(event) => {
                     const archive = event.currentTarget.files?.[0]
-                    if (archive !== undefined)
-                      youtubeImport.mutate({
-                        archive,
-                        ...(connection.id === null ? {} : { connectionId: connection.id }),
-                      })
+                    if (archive !== undefined) spotifyImport.mutate(archive)
                     event.currentTarget.value = ''
                   }}
-                />
-              </label>
+                >
+                  {spotifyImport.isPending ? 'Importing…' : 'Import ZIP'}
+                </FileUploadButton>
+              </div>
+            ) : connection.source === 'youtube' ? (
+              <FileUploadButton
+                accept=".zip,application/zip"
+                disabled={
+                  youtubeImport.isPending || (connection.id === null && youtubeKey.trim() === '')
+                }
+                onChange={(event) => {
+                  const archive = event.currentTarget.files?.[0]
+                  if (archive !== undefined)
+                    youtubeImport.mutate({
+                      archive,
+                      ...(connection.id === null ? {} : { connectionId: connection.id }),
+                    })
+                  event.currentTarget.value = ''
+                }}
+              >
+                {youtubeImport.isPending ? 'Importing…' : 'Import Takeout'}
+              </FileUploadButton>
             ) : (
-              <span className="connection-state">{connection.status}</span>
+              <Badge variant="outline">{connection.status}</Badge>
             )}
           </article>
         ))}
-
         {connections.isPending
           ? Array.from({ length: 5 }, (_, index) => (
-              <div className="connection-row connection-skeleton" key={index} aria-hidden="true" />
+              <Skeleton className="connection-skeleton" key={index} aria-hidden="true" />
             ))
           : null}
       </div>
-
       {readwiseSync.isSuccess ? (
         <p className="checkpoint-note">
           Imported {readwiseSync.data.archiveItems} Archive items from{' '}
@@ -342,9 +330,9 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {readwiseSync.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Readwise sync failed. Confirm the Worker has a valid READWISE_TOKEN secret.
-        </p>
+        </Notice>
       ) : null}
       {hardcoverSync.isSuccess ? (
         <p className="checkpoint-note">
@@ -354,9 +342,9 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {hardcoverSync.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Hardcover sync failed. Confirm the Worker has a valid HARDCOVER_TOKEN secret.
-        </p>
+        </Notice>
       ) : null}
       {letterboxdImport.isSuccess ? (
         <p className="checkpoint-note">
@@ -366,9 +354,9 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {letterboxdImport.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Letterboxd import failed. Select the ZIP downloaded from Letterboxd’s export page.
-        </p>
+        </Notice>
       ) : null}
       {letterboxdSync.isSuccess ? (
         <p className="checkpoint-note">
@@ -378,9 +366,9 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {letterboxdSync.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Letterboxd RSS sync failed. Confirm the configured username and try again.
-        </p>
+        </Notice>
       ) : null}
       {spotifyImport.isSuccess ? (
         <p className="checkpoint-note">
@@ -390,9 +378,9 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {spotifyImport.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Spotify import failed. Select the Extended Streaming History ZIP from Spotify.
-        </p>
+        </Notice>
       ) : null}
       {spotifySync.isSuccess ? (
         <p className="checkpoint-note">
@@ -402,15 +390,15 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {spotifySync.isSuccess && spotifySync.data.partialFailures.length > 0 ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Some Spotify reads could not be refreshed: {spotifySync.data.partialFailures.join(', ')}.
           Retained data remains available.
-        </p>
+        </Notice>
       ) : null}
       {spotifySync.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           Spotify sync failed. Confirm its client ID and refresh token are configured.
-        </p>
+        </Notice>
       ) : null}
       {youtubeImport.isSuccess ? (
         <p className="checkpoint-note">
@@ -420,17 +408,17 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {youtubeImport.isError ? (
-        <p className="checkpoint-note sync-error" role="alert">
+        <Notice className="checkpoint-note sync-error">
           YouTube import failed. Select a Google Takeout ZIP containing YouTube watch history.
-        </p>
+        </Notice>
       ) : null}
       {resumed.isError ? (
-        <p role="alert">
+        <Notice>
           Import could not resume. Retry, or upload the original ZIP if parsing did not finish.
-        </p>
+        </Notice>
       ) : null}
       <h2>Recent sync activity</h2>
-      {runs.isError ? <p role="alert">Sync activity could not be loaded.</p> : null}
+      {runs.isError ? <Notice>Sync activity could not be loaded.</Notice> : null}
       {runs.data?.pages
         .flatMap((page) => page.data)
         .map((run) => (
@@ -460,22 +448,23 @@ export function ConnectionsPage() {
                 </p>
               )}
               {run.errorMessage === null ? null : (
-                <p role="alert">
+                <Notice>
                   {run.errorMessage} ({run.errorCode})
-                </p>
+                </Notice>
               )}
             </div>
           </article>
         ))}
       {runs.hasNextPage ? (
-        <button
+        <Button
+          variant="outline"
           type="button"
           className="sync-button"
           disabled={runs.isFetchingNextPage}
           onClick={() => void runs.fetchNextPage()}
         >
           Older activity
-        </button>
+        </Button>
       ) : null}
     </section>
   )

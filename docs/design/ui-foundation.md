@@ -74,7 +74,7 @@ oversized Library/page heading is removed from the collection body. The breadcru
 and all collection/inspector tabs use 12px type. Shared FlatTabs compose the actual
 shadcn Tabs line variant, including keyboard navigation and associated panels.
 Route tabs retain URL-backed search normalization and stable cached counts. The
-header reserves the inspector width while it opens and closes.
+header reserves the inspector width while it opens and closes. Header and collection use one horizontal inset token (the collection's existing responsive padding), including the same reserved scrollbar gutter, so the breadcrumb/tab row aligns with the toolbar and list edges.
 
 Collections default to list. A single local preference remembers grid/list across
 supported pages and browser sessions; explicit layout in a URL takes precedence.
@@ -96,9 +96,19 @@ Collection list rows are transparent at rest and share the same separators,
 horizontal spacing, muted hover background, and selection treatment.
 
 Search updates after a short typing pause and has an explicit clear control.
-As of October 12, sort dropdowns use native selects throughout the app while
-filter design remains under review. Filters and Sort use the same toolbar font
-size on every Library page. Clicking a selected result deselects it and closes
+As of October 12, production sorting and single-choice filters use the actual
+shadcn/ui Select with Base UI. The shared LibrarySelect composes the installed
+Select primitives; native select elements and bespoke dropdown implementations
+are not the production component foundation. Menus open below the trigger with
+start alignment and keep shadcn icon, border, and focus styling. Popups fit their
+option labels within the available viewport width; very long labels wrap. Filter design
+remains under review. Filters and Sort use the same toolbar font
+size on every Library page. Search, Filters, Select, sort-direction actions, and
+List/Grid controls use actual shadcn Input Group, Button, Select, and Toggle Group
+components at their default 32px height; obsolete custom toolbar sizing is removed.
+Toolbar wrapping follows the collection pane width, including the space occupied
+by an inspector. At narrow pane widths, search occupies a full row and the other
+controls wrap without clipping. Clicking a selected result deselects it and closes
 its inspector. Book/Movie cards
 share fixed artwork dimensions; inspector opening changes column count, never
 card dimensions. The application contains scrolling within collections and
@@ -261,7 +271,10 @@ CSS variables is the provisional initialization, not an approved final theme.
 The separate theme specimen can explore alternatives without coupling production
 components to its files. See the [web README](../../apps/web/README.md#shared-components)
 for imports, adding components, and theme integration. The initial setup supplies
-Button, Input, and Textarea; add other primitives when features need them.
+Button, Input, Textarea, Select, Input Group, Toggle/Toggle Group, Tabs, Checkbox, Tooltip, Sheet, Alert, Badge, Skeleton, and Field; add other primitives when features need them.
+Use the installed shadcn component for matching controls rather than copying its
+appearance into raw HTML or building directly against Base UI. Completed migrations and validation
+are recorded in the [production component audit](../planning/shadcn-ui-audit.md).
 
 ## Brand identity: compact J2 symbol
 
@@ -361,3 +374,14 @@ The preview has a separate Vite HTML entry and does not replace the operational
 application. Index is selected and its shell, sidebar collapse, Graphite tokens,
 and Books-specific interface are now integrated in production. Keep the other
 studies available as references unless the owner requests their removal.
+
+## Enforced shadcn implementation contract (2026-10-12)
+
+Use the installed **shadcn/ui Base UI components** in `apps/web/src/components/ui/` for controls and standard interaction patterns. Read `docs/design/ui-foundation.md` and `apps/web/README.md` before UI edits. A native control plus CSS that resembles shadcn is not an acceptable substitute.
+
+- Use Button, Input/Input Group, Checkbox with FieldLabel, Select, ToggleGroup, Tabs, Tooltip, Sheet, Alert, Badge, and Skeleton as appropriate. Install missing primitives with the configured shadcn CLI; preserve existing components, use the local cn helper, and do not add a second primitive library.
+- Compose the real primitives. Keep their focus, keyboard, ARIA, disabled, and popup behavior. Do not replace an entire TabsContent with a single changing panel; each trigger needs its own associated panel. Keep lazy data loading and source semantics intact.
+- Component variants own appearance. Keep global CSS for app layouts, media content, and sizing constraints; remove old native-control appearance rules when migrating. Do not force custom borders, backgrounds, focus outlines, padding, or chevrons over the installed primitive.
+- Application media rows/cards and inspector click-away surfaces are intentional custom interactions. Their native buttons are centralized in library-controls.tsx. Ordinary actions cannot use those exceptions. Semantic headings, fieldsets, labels, and route links remain appropriate HTML. Historical design studies are references, not production component sources.
+- Verify real light/dark UI at desktop and narrow widths, with filters, popups, and inspectors open. Measure adjacent control heights and popup/toolbar bounds, test keyboard navigation and label activation, and verify modal focus/return behavior. Passing typecheck is not visual QA.
+- Run pnpm check, the frontend build, and relevant Playwright coverage after final edits. Production route code has ESLint restrictions against raw controls, handcrafted tab roles, and browser title hints; do not disable those rules to ship a replacement.

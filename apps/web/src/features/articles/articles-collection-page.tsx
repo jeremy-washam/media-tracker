@@ -1,10 +1,22 @@
+import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
+import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
+import { Notice, LoadingState } from '@/components/ui-patterns'
 import {
-  CollectionTabList,
-  FlatTabs,
-  FlatTabsContent,
-  FlatTabsList,
-  FlatTabsTrigger,
+  FlatTabs as Tabs,
+  FlatTabsList as TabsList,
+  FlatTabsTrigger as TabsTrigger,
+  FlatTabsContent as TabsContent,
 } from '@/components/flat-tabs'
+import { FieldLabel } from '@/components/ui/field'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
 import { LibrarySelect } from '../../components/library-controls'
 import {
   useLiveSearch,
@@ -192,53 +204,68 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
               })
             }}
           >
-            <Search aria-hidden="true" />
-            <input
-              aria-label="Search articles"
-              placeholder="Search title, author, publication, notes, or highlights"
-              value={draft ?? search.q ?? ''}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            {(draft ?? search.q) ? (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => {
-                  setDraft(null)
-                  update({ q: undefined, sort: undefined, direction: undefined, item: undefined })
-                }}
-              >
-                <X aria-hidden="true" />
-              </button>
-            ) : null}
+            <InputGroup>
+              <InputGroupInput
+                aria-label="Search articles"
+                placeholder="Search title, author, publication, notes, or highlights"
+                value={draft ?? search.q ?? ''}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <InputGroupAddon>
+                <Search aria-hidden="true" />
+              </InputGroupAddon>
+              {(draft ?? search.q) ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setDraft(null)
+                      update({
+                        q: undefined,
+                        sort: undefined,
+                        direction: undefined,
+                        item: undefined,
+                      })
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
           </form>
-          <button
+          <Button
+            variant={activeFilters ? 'secondary' : 'outline'}
             type="button"
-            className={activeFilters ? 'toolbar-button active' : 'toolbar-button'}
+            className="toolbar-button"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <ListFilter aria-hidden="true" /> Filters{' '}
             {activeFilters ? <span>{activeFilters}</span> : null}
-          </button>
+          </Button>
           <label className="books-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort articles</span>
             <LibrarySelect
               aria-label="Sort articles"
               value={sort}
-              onChange={(event) =>
-                update({ sort: event.target.value, direction: undefined, item: undefined })
+              onValueChange={(value) =>
+                update({ sort: value, direction: undefined, item: undefined })
               }
-            >
-              {sortOptions(section, Boolean(search.q)).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </LibrarySelect>
+              options={[
+                ...sortOptions(section, Boolean(search.q)).map(([value, label]) => ({
+                  value: String(value),
+                  label,
+                })),
+              ]}
+            />
           </label>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             type="button"
             className="sort-direction"
             disabled={sort === 'relevance'}
@@ -252,7 +279,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             ) : (
               <ArrowDown aria-hidden="true" />
             )}
-          </button>
+          </Button>
         </div>
         {filtersOpen ? (
           <ArticleFilters section={section} search={search} summary={summary} onChange={update} />
@@ -268,18 +295,16 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           ) : null}
         </div>
         {articles.isPending ? (
-          <div className="books-state books-loading" role="status">
-            Loading articles…
-          </div>
+          <LoadingState className="books-loading">Loading articles…</LoadingState>
         ) : null}
         {articles.isError ? (
-          <div className="books-state books-state-error" role="alert">
+          <Notice className="books-state books-state-error">
             <h2>Articles could not be loaded</h2>
             <p>{articles.error.message}</p>
-            <button type="button" onClick={() => void articles.refetch()}>
+            <Button variant="outline" type="button" onClick={() => void articles.refetch()}>
               Try again
-            </button>
-          </div>
+            </Button>
+          </Notice>
         ) : null}
         {!articles.isPending && !articles.isError && !items.length ? (
           <div className="books-state">
@@ -293,9 +318,9 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                 : 'Sync Readwise from Connections to populate this section.'}
             </p>
             {activeFilters || search.q ? (
-              <button type="button" onClick={() => update(clearFilters())}>
+              <Button variant="outline" type="button" onClick={() => update(clearFilters())}>
                 Clear search and filters
-              </button>
+              </Button>
             ) : (
               <Link to="/connections">Open Connections</Link>
             )}
@@ -317,19 +342,20 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           </div>
         ) : null}
         {articles.hasNextPage ? (
-          <button
+          <Button
+            variant="outline"
             className="load-more"
             type="button"
             disabled={articles.isFetchingNextPage}
             onClick={() => void articles.fetchNextPage()}
           >
             {articles.isFetchingNextPage ? 'Loading…' : 'Load more articles'}
-          </button>
+          </Button>
         ) : null}
       </FlatTabsContent>
       {inspectorItem ? (
         <>
-          <button
+          <InspectorBackdrop
             type="button"
             className="inspector-backdrop"
             aria-label="Close inspector"
@@ -358,7 +384,7 @@ function ArticleRow({
   ref?: React.Ref<HTMLButtonElement> | undefined
 }) {
   return (
-    <button
+    <MediaRowButton
       ref={ref}
       type="button"
       className={selected ? 'article-row selected' : 'article-row'}
@@ -392,13 +418,13 @@ function ArticleRow({
         ) : null}
         {item.searchExcerpt?.text ? (
           <span className="article-search-excerpt">
-            <b>{item.searchExcerpt.source}</b> · {item.searchExcerpt.text}
+            <b>{item.searchExcerpt.source}</b> ·{item.searchExcerpt.text}
           </span>
         ) : null}
       </span>
       <span className="article-row-fact">{fact(item, section)}</span>
       <ChevronRight aria-hidden="true" />
-    </button>
+    </MediaRowButton>
   )
 }
 
@@ -469,10 +495,10 @@ function ArticleFilters({
   return (
     <section className="filter-panel" aria-label="Article filters">
       <div className="filter-panel-heading">
-        <strong>Filters</strong>
-        <button type="button" onClick={() => onChange(clearFilters())}>
+        <strong> Filters</strong>
+        <Button variant="outline" type="button" onClick={() => onChange(clearFilters())}>
           Clear all
-        </button>
+        </Button>
       </div>
       <div className="filter-panel-grid">
         <FacetGroup
@@ -665,7 +691,7 @@ function FacetGroup({
     <fieldset className="filter-group">
       <legend>{title}</legend>
       {searchable ? (
-        <input
+        <Input
           className="facet-search"
           type="search"
           aria-label={`Search ${title.toLocaleLowerCase()}`}
@@ -676,15 +702,14 @@ function FacetGroup({
       ) : null}
       <div>
         {visible.map((facet) => (
-          <label key={facet.value}>
-            <input
-              type="checkbox"
+          <FieldLabel key={facet.value}>
+            <Checkbox
               checked={selected.includes(facet.value)}
-              onChange={() => onToggle(facet.value)}
+              onCheckedChange={() => onToggle(facet.value)}
             />
             <span>{facet.label}</span>
             {facet.count === undefined ? null : <small>{facet.count}</small>}
-          </label>
+          </FieldLabel>
         ))}
       </div>
     </fieldset>
@@ -707,7 +732,7 @@ function DateSelect({
     <fieldset className="date-filter">
       <legend>{label}</legend>
       <span>
-        <input
+        <Input
           type="date"
           aria-label={`${label} from`}
           value={from ?? ''}
@@ -715,7 +740,7 @@ function DateSelect({
             onChange(event.target.value || undefined, to, includeUnknown ? true : undefined)
           }
         />
-        <input
+        <Input
           type="date"
           aria-label={`${label} to`}
           value={to ?? ''}
@@ -724,14 +749,13 @@ function DateSelect({
           }
         />
       </span>
-      <label className="movie-filter-check">
-        <input
-          type="checkbox"
+      <FieldLabel className="movie-filter-check">
+        <Checkbox
           checked={includeUnknown ?? false}
-          onChange={(event) => onChange(from, to, event.target.checked ? true : undefined)}
+          onCheckedChange={(checked) => onChange(from, to, checked ? true : undefined)}
         />{' '}
         Include unknown
-      </label>
+      </FieldLabel>
     </fieldset>
   )
 }
@@ -770,140 +794,153 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
     return () => document.removeEventListener('keydown', key)
   }, [id])
   return (
-    <FlatTabs
-      value={tab}
-      onValueChange={(value) => setTab(value as typeof tab)}
-      render={<aside ref={ref} />}
-      className="book-inspector article-inspector"
-      aria-label="Article inspector"
-    >
-      <div className="inspector-topbar">
-        <FlatTabsList aria-label="Inspector information">
-          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
-          <FlatTabsTrigger value="history">History</FlatTabsTrigger>
-        </FlatTabsList>
-        <button
-          className="inspector-close"
-          type="button"
-          aria-label="Close inspector"
-          onClick={onClose}
-        >
-          <X aria-hidden="true" />
-        </button>
-      </div>
-
-      {article.isPending ? <div className="inspector-state">Loading article…</div> : null}
-      {article.isError ? (
-        <div className="inspector-state" role="alert">
-          {article.error.message}
+    <aside ref={ref} className="book-inspector article-inspector" aria-label="Article inspector">
+      <Tabs
+        className="inspector-tab-root"
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+      >
+        <div className="inspector-topbar">
+          <TabsList variant="line" className="inspector-tabs">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="inspector-close"
+            type="button"
+            aria-label="Close inspector"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" />
+          </Button>
         </div>
-      ) : null}
-      <FlatTabsContent value="details" className="inspector-tab-panel">
-        {article.data ? <ArticleDetails article={article.data} /> : null}
-      </FlatTabsContent>
-      <FlatTabsContent value="history" className="inspector-tab-panel">
-        {article.data ? (
-          <div className="inspector-scroll">
-            <section className="inspector-section">
-              <h3>Reader activity</h3>
-              <dl className="detail-list">
-                <dt>Current state</dt>
-                <dd>
-                  {article.data.currentAvailable
-                    ? article.data.currentLocation
-                    : `Unavailable · last known ${article.data.currentLocation}`}
-                </dd>
-                <dt>First opened</dt>
-                <dd>{formatDate(article.data.dates.firstOpenedAt) ?? 'Not observed'}</dd>
-                <dt>Last opened</dt>
-                <dd>{formatDate(article.data.dates.lastOpenedAt) ?? 'Not observed'}</dd>
-                <dt>Progress</dt>
-                <dd>
-                  {article.data.progress.valid && article.data.progress.value != null
-                    ? `${Math.round(article.data.progress.value * 100)}%`
-                    : 'Unknown'}
-                </dd>
-                <dt>Observed</dt>
-                <dd>{formatDate(article.data.dates.observedAt) ?? 'Unknown'}</dd>
-              </dl>
-              {article.data.documentNote ? (
-                <div className="article-note">
-                  <strong>Document note</strong>
-                  <p>{article.data.documentNote}</p>
-                </div>
-              ) : null}
-              {article.data.highlightDocumentNote ? (
-                <div className="article-note">
-                  <strong>Highlight note</strong>
-                  <p>{article.data.highlightDocumentNote}</p>
-                </div>
-              ) : null}
-            </section>
-            <section className="inspector-section">
-              <h3>Archive history</h3>
-              {history.isPending ? (
-                <p>Loading history…</p>
-              ) : history.isError ? (
-                <p role="alert">History could not be loaded: {history.error.message}</p>
-              ) : (
-                history.data?.pages
-                  .flatMap((page) => page.data)
-                  .map((entry) => (
-                    <article className="article-history-entry" key={entry.archiveEntryId}>
-                      <strong>
-                        {entry.archivedAt
-                          ? `Archived ${formatDate(entry.archivedAt.value)}`
-                          : 'Archived — date unknown'}
-                      </strong>
-                      <span>
-                        {entry.disposition === 'current'
-                          ? 'Currently in Archive'
-                          : 'Retained history'}{' '}
-                        · {entry.connection.label}
-                        {entry.sourceRecordedAt
-                          ? ` · Source recorded ${formatDate(entry.sourceRecordedAt.value)}`
-                          : ''}
-                      </span>
-                    </article>
-                  ))
-              )}
-              {history.hasNextPage ? (
-                <button type="button" onClick={() => void history.fetchNextPage()}>
-                  Load more
-                </button>
-              ) : null}
-            </section>
-            <section className="inspector-section">
-              <h3>Highlights and notes</h3>
-              {highlights.isPending ? (
-                <p>Loading highlights…</p>
-              ) : highlights.isError ? (
-                <p role="alert">Highlights could not be loaded: {highlights.error.message}</p>
-              ) : (
-                highlights.data?.pages
-                  .flatMap((page) => page.data)
-                  .map((item) => (
-                    <blockquote key={item.id}>
-                      {item.text ? <p>{item.text}</p> : null}
-                      {item.note ? <footer>{item.note}</footer> : null}
-                    </blockquote>
-                  ))
-              )}
-              {!highlights.isPending &&
-              !highlights.isError &&
-              !highlights.data?.pages.some((page) => page.data.length) ? (
-                <p>No active highlights.</p>
-              ) : null}
-              {highlights.hasNextPage ? (
-                <button type="button" onClick={() => void highlights.fetchNextPage()}>
-                  Load more
-                </button>
-              ) : null}
-            </section>
-          </div>
+        {article.isPending ? (
+          <LoadingState className="inspector-state">Loading article…</LoadingState>
         ) : null}
-      </FlatTabsContent>
-    </FlatTabs>
+        {article.isError ? (
+          <Notice className="inspector-state">{article.error.message}</Notice>
+        ) : null}
+        {
+          <TabsContent value="details" className="inspector-tab-panel">
+            {article.data ? <ArticleDetails article={article.data} /> : null}
+          </TabsContent>
+        }
+        {
+          <TabsContent value="history" className="inspector-tab-panel">
+            {article.data ? (
+              <div className="inspector-scroll">
+                <section className="inspector-section">
+                  <h3>Reader activity</h3>
+                  <dl className="detail-list">
+                    <dt>Current state</dt>
+                    <dd>
+                      {article.data.currentAvailable
+                        ? article.data.currentLocation
+                        : `Unavailable · last known ${article.data.currentLocation}`}
+                    </dd>
+                    <dt>First opened</dt>
+                    <dd>{formatDate(article.data.dates.firstOpenedAt) ?? 'Not observed'}</dd>
+                    <dt>Last opened</dt>
+                    <dd>{formatDate(article.data.dates.lastOpenedAt) ?? 'Not observed'}</dd>
+                    <dt>Progress</dt>
+                    <dd>
+                      {article.data.progress.valid && article.data.progress.value != null
+                        ? `${Math.round(article.data.progress.value * 100)}%`
+                        : 'Unknown'}
+                    </dd>
+                    <dt>Observed</dt>
+                    <dd>{formatDate(article.data.dates.observedAt) ?? 'Unknown'}</dd>
+                  </dl>
+                  {article.data.documentNote ? (
+                    <div className="article-note">
+                      <strong>Document note</strong>
+                      <p>{article.data.documentNote}</p>
+                    </div>
+                  ) : null}
+                  {article.data.highlightDocumentNote ? (
+                    <div className="article-note">
+                      <strong>Highlight note</strong>
+                      <p>{article.data.highlightDocumentNote}</p>
+                    </div>
+                  ) : null}
+                </section>
+                <section className="inspector-section">
+                  <h3>Archive history</h3>
+                  {history.isPending ? (
+                    <LoadingState>Loading history…</LoadingState>
+                  ) : history.isError ? (
+                    <Notice>History could not be loaded: {history.error.message}</Notice>
+                  ) : (
+                    history.data?.pages
+                      .flatMap((page) => page.data)
+                      .map((entry) => (
+                        <article className="article-history-entry" key={entry.archiveEntryId}>
+                          <strong>
+                            {entry.archivedAt
+                              ? `Archived ${formatDate(entry.archivedAt.value)}`
+                              : 'Archived — date unknown'}
+                          </strong>
+                          <span>
+                            {entry.disposition === 'current'
+                              ? 'Currently in Archive'
+                              : 'Retained history'}{' '}
+                            · {entry.connection.label}
+                            {entry.sourceRecordedAt
+                              ? ` · Source recorded ${formatDate(entry.sourceRecordedAt.value)}`
+                              : ''}
+                          </span>
+                        </article>
+                      ))
+                  )}
+                  {history.hasNextPage ? (
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => void history.fetchNextPage()}
+                    >
+                      Load more
+                    </Button>
+                  ) : null}
+                </section>
+                <section className="inspector-section">
+                  <h3>Highlights and notes</h3>
+                  {highlights.isPending ? (
+                    <LoadingState>Loading highlights…</LoadingState>
+                  ) : highlights.isError ? (
+                    <Notice>Highlights could not be loaded: {highlights.error.message}</Notice>
+                  ) : (
+                    highlights.data?.pages
+                      .flatMap((page) => page.data)
+                      .map((item) => (
+                        <blockquote key={item.id}>
+                          {item.text ? <p>{item.text}</p> : null}
+                          {item.note ? <footer>{item.note}</footer> : null}
+                        </blockquote>
+                      ))
+                  )}
+                  {!highlights.isPending &&
+                  !highlights.isError &&
+                  !highlights.data?.pages.some((page) => page.data.length) ? (
+                    <p>No active highlights.</p>
+                  ) : null}
+                  {highlights.hasNextPage ? (
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => void highlights.fetchNextPage()}
+                    >
+                      Load more
+                    </Button>
+                  ) : null}
+                </section>
+              </div>
+            ) : null}
+          </TabsContent>
+        }
+      </Tabs>
+    </aside>
   )
 }
 function ArticleDetails({ article }: { article: ArticleDetail }) {

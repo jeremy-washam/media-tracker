@@ -1,11 +1,28 @@
+import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
+import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
+import { Notice, LoadingState } from '@/components/ui-patterns'
 import {
-  CollectionTabList,
-  FlatTabs,
-  FlatTabsContent,
-  FlatTabsList,
-  FlatTabsTrigger,
+  FlatTabs as Tabs,
+  FlatTabsList as TabsList,
+  FlatTabsTrigger as TabsTrigger,
+  FlatTabsContent as TabsContent,
 } from '@/components/flat-tabs'
-import { LibrarySelect, MediaCard, RatingStars } from '../../components/library-controls'
+import { FieldLabel } from '@/components/ui/field'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
+import {
+  LibraryLayoutToggle,
+  LibrarySelect,
+  MediaCard,
+  RatingStars,
+} from '../../components/library-controls'
 import {
   useLiveSearch,
   useLibraryLayout,
@@ -23,9 +40,7 @@ import {
   ChevronRight,
   ExternalLink,
   Film,
-  Grid2X2,
   Heart,
-  List,
   Search,
   SlidersHorizontal,
   X,
@@ -94,8 +109,12 @@ function activeFilters(search: MoviesRouteSearch, collection: 'archive' | 'queue
   ].filter(Boolean).length
 }
 
-function sortOptions(collection: 'archive' | 'queue', hasSearch: boolean, runtime: boolean) {
-  const options =
+function sortOptions(
+  collection: 'archive' | 'queue',
+  hasSearch: boolean,
+  runtime: boolean,
+): [string, string][] {
+  const options: [string, string][] =
     collection === 'archive'
       ? [
           ['watchedAt', 'Watched date'],
@@ -217,7 +236,6 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             Queue <span>{sectionCounts?.queueItems ?? '—'}</span>
           </Link>
         </CollectionTabList>
-
         <div className="books-toolbar">
           <form
             className="books-search"
@@ -234,62 +252,69 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
               })
             }}
           >
-            <Search aria-hidden="true" />
-            <input
-              aria-label="Search movies"
-              placeholder="Search title, year, or review"
-              value={draftSearch ?? search.q ?? ''}
-              onChange={(event) => setDraftSearch(event.target.value)}
-            />
-            {(draftSearch ?? search.q) ? (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => {
-                  setDraftSearch(null)
-                  updateSearch({
-                    q: undefined,
-                    sort: undefined,
-                    direction: undefined,
-                    item: undefined,
-                  })
-                }}
-              >
-                <X aria-hidden="true" />
-              </button>
-            ) : null}
+            <InputGroup>
+              <InputGroupInput
+                aria-label="Search movies"
+                placeholder="Search title, year, or review"
+                value={draftSearch ?? search.q ?? ''}
+                onChange={(event) => setDraftSearch(event.target.value)}
+              />
+              <InputGroupAddon>
+                <Search aria-hidden="true" />
+              </InputGroupAddon>
+              {(draftSearch ?? search.q) ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setDraftSearch(null)
+                      updateSearch({
+                        q: undefined,
+                        sort: undefined,
+                        direction: undefined,
+                        item: undefined,
+                      })
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
           </form>
-          <button
+          <Button
+            variant={filters > 0 ? 'secondary' : 'outline'}
             type="button"
-            className={filters > 0 ? 'toolbar-button active' : 'toolbar-button'}
+            className="toolbar-button"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
             {filters > 0 ? <span>{filters}</span> : null}
-          </button>
+          </Button>
           <label className="books-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort movies</span>
             <LibrarySelect
               aria-label="Sort movies"
               value={selectedSort}
-              onChange={(event) =>
-                updateSearch({ sort: event.target.value, direction: undefined, item: undefined })
+              onValueChange={(value) =>
+                updateSearch({ sort: value, direction: undefined, item: undefined })
               }
-            >
-              {sortOptions(
-                collection,
-                Boolean(search.q),
-                summary?.facets.runtimeAvailable ?? false,
-              ).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </LibrarySelect>
+              options={[
+                ...sortOptions(
+                  collection,
+                  Boolean(search.q),
+                  summary?.facets.runtimeAvailable ?? false,
+                ).map(([value, label]) => ({ value, label })),
+              ]}
+            />
           </label>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             type="button"
             className="sort-direction"
             disabled={selectedSort === 'relevance'}
@@ -307,27 +332,9 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             ) : (
               <ArrowDown aria-hidden="true" />
             )}
-          </button>
-          <div className="layout-toggle" aria-label="Result layout">
-            <button
-              type="button"
-              aria-label="List view"
-              aria-pressed={view === 'list'}
-              onClick={() => updateSearch({ view: 'list' })}
-            >
-              <List aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              aria-label="Grid view"
-              aria-pressed={view === 'grid'}
-              onClick={() => updateSearch({ view: 'grid' })}
-            >
-              <Grid2X2 aria-hidden="true" />
-            </button>
-          </div>
+          </Button>
+          <LibraryLayoutToggle value={view} onValueChange={(view) => updateSearch({ view })} />
         </div>
-
         {filtersOpen ? (
           <MovieFilters
             collection={collection}
@@ -336,7 +343,6 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             onChange={updateSearch}
           />
         ) : null}
-
         <div className="books-result-summary" aria-live="polite">
           {movies.isPending ? null : (
             <span>
@@ -353,21 +359,17 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           ) : null}
         </div>
         {movies.isPending ? (
-          <div className="books-state books-loading" role="status">
-            Loading movies…
-          </div>
+          <LoadingState className="books-loading">Loading movies…</LoadingState>
         ) : null}
-
         {movies.isError ? (
-          <div className="books-state books-state-error" role="alert">
+          <Notice className="books-state books-state-error">
             <h2>Movies could not be loaded</h2>
             <p>{movies.error.message}</p>
-            <button type="button" onClick={() => void movies.refetch()}>
+            <Button variant="outline" type="button" onClick={() => void movies.refetch()}>
               Try again
-            </button>
-          </div>
+            </Button>
+          </Notice>
         ) : null}
-
         {!movies.isPending && !movies.isError && items.length === 0 ? (
           <div className="books-state">
             <Film aria-hidden="true" />
@@ -378,7 +380,8 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                 : 'Import Letterboxd from Connections to populate this collection.'}
             </p>
             {filters || search.q ? (
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => {
                   setDraftSearch(null)
@@ -386,13 +389,12 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                 }}
               >
                 Clear search and filters
-              </button>
+              </Button>
             ) : (
               <Link to="/connections">Open Connections</Link>
             )}
           </div>
         ) : null}
-
         {items.length > 0 ? (
           <div className={view === 'grid' ? 'movies-grid' : 'movies-list'}>
             {items.map((movie) => (
@@ -410,22 +412,21 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             ))}
           </div>
         ) : null}
-
         {movies.hasNextPage ? (
-          <button
+          <Button
+            variant="outline"
             className="load-more"
             type="button"
             disabled={movies.isFetchingNextPage}
             onClick={() => void movies.fetchNextPage()}
           >
             {movies.isFetchingNextPage ? 'Loading…' : 'Load more movies'}
-          </button>
+          </Button>
         ) : null}
       </FlatTabsContent>
-
       {inspectorItem ? (
         <>
-          <button
+          <InspectorBackdrop
             type="button"
             className="inspector-backdrop"
             aria-label="Close inspector"
@@ -484,7 +485,7 @@ function MovieResult({
         ? `Added ${formatDate(movie.queue.addedOn)}`
         : 'Added date unknown'
   return (
-    <button
+    <MediaRowButton
       type="button"
       ref={buttonRef}
       className={selected ? 'movie-row selected' : 'movie-row'}
@@ -502,7 +503,7 @@ function MovieResult({
         {movie.personal.currentRating === null ? '—' : `${movie.personal.currentRating}/5`}
       </span>
       <ChevronRight aria-hidden="true" />
-    </button>
+    </MediaRowButton>
   )
 }
 
@@ -545,31 +546,32 @@ function DateFilter({
   return (
     <fieldset className="date-filter">
       <legend>{label}</legend>
-      <select
+      <LibrarySelect
         aria-label={label}
         value={mode}
-        onChange={(event) => {
-          const next = event.target.value as 'all' | 'range' | 'unknown'
+        onValueChange={(value) => {
+          const next = value as 'all' | 'range' | 'unknown'
           onChange(
             next === 'all' ? undefined : next,
             next === 'range' ? from : undefined,
             next === 'range' ? to : undefined,
           )
         }}
-      >
-        <option value="all">Any time</option>
-        <option value="range">Custom range</option>
-        <option value="unknown">Date unavailable</option>
-      </select>
+        options={[
+          { value: 'all', label: 'Any time' },
+          { value: 'range', label: 'Custom range' },
+          { value: 'unknown', label: 'Date unavailable' },
+        ]}
+      />
       {mode === 'range' ? (
         <span>
-          <input
+          <Input
             type="date"
             aria-label={`${label} from`}
             value={from ?? ''}
             onChange={(event) => onChange('range', event.target.value || undefined, to)}
           />
-          <input
+          <Input
             type="date"
             aria-label={`${label} to`}
             value={to ?? ''}
@@ -595,10 +597,10 @@ function MovieFilters({
   return (
     <section className="filter-panel" aria-label="Movie filters">
       <div className="filter-panel-heading">
-        <strong>Filters</strong>
-        <button type="button" onClick={() => onChange(clearMovieFilters())}>
+        <strong> Filters</strong>
+        <Button variant="outline" type="button" onClick={() => onChange(clearMovieFilters())}>
           Clear all
-        </button>
+        </Button>
       </div>
       <div className="filter-panel-grid">
         {collection === 'archive' ? (
@@ -625,7 +627,7 @@ function MovieFilters({
         <fieldset className="date-filter">
           <legend>Release year</legend>
           <span className="movie-year-range">
-            <input
+            <Input
               aria-label="Release year from"
               inputMode="numeric"
               placeholder="From"
@@ -634,7 +636,7 @@ function MovieFilters({
                 onChange({ releaseYearFrom: event.target.value || undefined, item: undefined })
               }
             />
-            <input
+            <Input
               aria-label="Release year to"
               inputMode="numeric"
               placeholder="To"
@@ -644,142 +646,129 @@ function MovieFilters({
               }
             />
           </span>
-          <label className="movie-filter-check">
-            <input
-              type="checkbox"
+          <FieldLabel className="movie-filter-check">
+            <Checkbox
               checked={search.releaseYearUnknown ?? false}
-              onChange={(event) =>
-                onChange({ releaseYearUnknown: event.target.checked || undefined, item: undefined })
+              onCheckedChange={(checked) =>
+                onChange({ releaseYearUnknown: checked || undefined, item: undefined })
               }
             />{' '}
             Include unknown
-          </label>
+          </FieldLabel>
         </fieldset>
         <fieldset className="date-filter">
           <legend>Your rating</legend>
-          <select
+          <LibrarySelect
             aria-label="Your rating"
             value={search.rating ?? 'any'}
-            onChange={(event) =>
+            onValueChange={(value) =>
               onChange({
-                rating:
-                  event.target.value === 'any'
-                    ? undefined
-                    : (event.target.value as MoviesRouteSearch['rating']),
+                rating: value === 'any' ? undefined : (value as MoviesRouteSearch['rating']),
                 ratingMin: undefined,
                 ratingMax: undefined,
                 item: undefined,
               })
             }
-          >
-            <option value="any">Any rating</option>
-            <option value="rated">Rated</option>
-            <option value="unrated">Unrated</option>
-            <option value="range">Custom range</option>
-          </select>
+            options={[
+              { value: 'any', label: 'Any rating' },
+              { value: 'rated', label: 'Rated' },
+              { value: 'unrated', label: 'Unrated' },
+              { value: 'range', label: 'Custom range' },
+            ]}
+          />
           {search.rating === 'range' ? (
             <span>
-              <select
+              <LibrarySelect
                 aria-label="Minimum rating"
-                value={search.ratingMin ?? ''}
-                onChange={(event) =>
+                value={String(search.ratingMin ?? '')}
+                onValueChange={(value) =>
                   onChange({
-                    ratingMin: event.target.value ? Number(event.target.value) : undefined,
+                    ratingMin: value ? Number(value) : undefined,
                     item: undefined,
                   })
                 }
-              >
-                <option value="">Min</option>
-                {Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-              <select
+                options={[
+                  { value: '', label: 'Min' },
+                  ...Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => ({
+                    value: String(value),
+                    label: String(value),
+                  })),
+                ]}
+              />
+              <LibrarySelect
                 aria-label="Maximum rating"
-                value={search.ratingMax ?? ''}
-                onChange={(event) =>
+                value={String(search.ratingMax ?? '')}
+                onValueChange={(value) =>
                   onChange({
-                    ratingMax: event.target.value ? Number(event.target.value) : undefined,
+                    ratingMax: value ? Number(value) : undefined,
                     item: undefined,
                   })
                 }
-              >
-                <option value="">Max</option>
-                {Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'Max' },
+                  ...Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => ({
+                    value: String(value),
+                    label: String(value),
+                  })),
+                ]}
+              />
             </span>
           ) : null}
         </fieldset>
         <fieldset className="date-filter">
           <legend>{collection === 'archive' ? 'Review' : 'Archive status'}</legend>
-          <select
+          <LibrarySelect
             aria-label={collection === 'archive' ? 'Review' : 'Archive status'}
             value={(collection === 'archive' ? search.reviewed : search.archive) ?? 'any'}
-            onChange={(event) =>
+            onValueChange={(value) =>
               onChange(
                 collection === 'archive'
                   ? {
-                      reviewed:
-                        event.target.value === 'any'
-                          ? undefined
-                          : (event.target.value as 'yes' | 'no'),
+                      reviewed: value === 'any' ? undefined : (value as 'yes' | 'no'),
                       item: undefined,
                     }
                   : {
-                      archive:
-                        event.target.value === 'any'
-                          ? undefined
-                          : (event.target.value as 'yes' | 'no'),
+                      archive: value === 'any' ? undefined : (value as 'yes' | 'no'),
                       item: undefined,
                     },
               )
             }
-          >
-            <option value="any">Any</option>
-            <option value="yes">{collection === 'archive' ? 'Reviewed' : 'In Archive'}</option>
-            <option value="no">
-              {collection === 'archive' ? 'Not reviewed' : 'Not in Archive'}
-            </option>
-          </select>
+            options={[
+              { value: 'any', label: 'Any' },
+              { value: 'yes', label: collection === 'archive' ? 'Reviewed' : 'In Archive' },
+              { value: 'no', label: collection === 'archive' ? 'Not reviewed' : 'Not in Archive' },
+            ]}
+          />
         </fieldset>
         {runtimeAvailable ? (
           <fieldset className="date-filter">
             <legend>Runtime</legend>
-            <select
+            <LibrarySelect
               aria-label="Runtime"
               value={search.runtime ?? 'any'}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 onChange({
-                  runtime:
-                    event.target.value === 'any'
-                      ? undefined
-                      : (event.target.value as MoviesRouteSearch['runtime']),
+                  runtime: value === 'any' ? undefined : (value as MoviesRouteSearch['runtime']),
                   item: undefined,
                 })
               }
-            >
-              <option value="any">Any runtime</option>
-              <option value="under90">Under 90 min</option>
-              <option value="90to119">90–119 min</option>
-              <option value="120to149">120–149 min</option>
-              <option value="150plus">150+ min</option>
-            </select>
-            <label className="movie-filter-check">
-              <input
-                type="checkbox"
+              options={[
+                { value: 'any', label: 'Any runtime' },
+                { value: 'under90', label: 'Under 90 min' },
+                { value: '90to119', label: '90–119 min' },
+                { value: '120to149', label: '120–149 min' },
+                { value: '150plus', label: '150+ min' },
+              ]}
+            />
+            <FieldLabel className="movie-filter-check">
+              <Checkbox
                 checked={search.runtimeUnknown ?? false}
-                onChange={(event) =>
-                  onChange({ runtimeUnknown: event.target.checked || undefined, item: undefined })
+                onCheckedChange={(checked) =>
+                  onChange({ runtimeUnknown: checked || undefined, item: undefined })
                 }
               />{' '}
               Include unknown
-            </label>
+            </FieldLabel>
           </fieldset>
         ) : null}
       </div>
@@ -832,52 +821,55 @@ function MovieInspector({
   }, [mediaItemId])
 
   return (
-    <FlatTabs
-      value={tab}
-      onValueChange={(value) => setTab(value as typeof tab)}
-      render={<aside ref={ref} />}
-      className="book-inspector movie-inspector"
-      aria-label="Movie inspector"
-    >
-      <div className="inspector-topbar">
-        <FlatTabsList aria-label="Movie information">
-          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
-          <FlatTabsTrigger value="history">
-            History{movie.data ? ` (${movie.data.archive.lifetimeWatchCount})` : ''}
-          </FlatTabsTrigger>
-        </FlatTabsList>
-        <button
-          className="inspector-close"
-          type="button"
-          aria-label="Close inspector"
-          onClick={onClose}
-        >
-          <X aria-hidden="true" />
-        </button>
-      </div>
-
-      {movie.isPending ? <div className="inspector-state">Loading movie…</div> : null}
-      {movie.isError ? (
-        <div className="inspector-state" role="alert">
-          {movie.error.message}
+    <aside ref={ref} className="book-inspector movie-inspector" aria-label="Movie inspector">
+      <Tabs
+        className="inspector-tab-root"
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+      >
+        <div className="inspector-topbar">
+          <TabsList variant="line" className="inspector-tabs" aria-label="Movie information">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="history">
+              History{movie.data ? ` (${movie.data.archive.lifetimeWatchCount})` : ''}
+            </TabsTrigger>
+          </TabsList>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="inspector-close"
+            type="button"
+            aria-label="Close inspector"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" />
+          </Button>
         </div>
-      ) : null}
-      <FlatTabsContent value="details" className="inspector-tab-panel">
-        {movie.data ? <MovieDetails movie={movie.data} /> : null}
-      </FlatTabsContent>
-      <FlatTabsContent value="history" className="inspector-tab-panel">
-        {movie.data ? (
-          <MovieHistory
-            entries={history.data?.pages.flatMap((page) => page.data) ?? []}
-            pending={history.isPending}
-            error={history.isError ? history.error.message : null}
-            hasMore={history.hasNextPage}
-            loadingMore={history.isFetchingNextPage}
-            onLoadMore={() => void history.fetchNextPage()}
-          />
+        {movie.isPending ? (
+          <LoadingState className="inspector-state">Loading movie…</LoadingState>
         ) : null}
-      </FlatTabsContent>
-    </FlatTabs>
+        {movie.isError ? <Notice className="inspector-state">{movie.error.message}</Notice> : null}
+        {
+          <TabsContent value="details" className="inspector-tab-panel">
+            {movie.data ? <MovieDetails movie={movie.data} /> : null}
+          </TabsContent>
+        }
+        {
+          <TabsContent value="history" className="inspector-tab-panel">
+            {movie.data ? (
+              <MovieHistory
+                entries={history.data?.pages.flatMap((page) => page.data) ?? []}
+                pending={history.isPending}
+                error={history.isError ? history.error.message : null}
+                hasMore={history.hasNextPage}
+                loadingMore={history.isFetchingNextPage}
+                onLoadMore={() => void history.fetchNextPage()}
+              />
+            ) : null}
+          </TabsContent>
+        }
+      </Tabs>
+    </aside>
   )
 }
 
@@ -951,7 +943,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           ) : null}
           {movie.personal.liked ? (
             <>
-              <dt>Liked</dt>
+              <dt> Liked</dt>
               <dd>Yes</dd>
             </>
           ) : null}
@@ -1069,7 +1061,7 @@ function MovieHistory({
   loadingMore: boolean
   onLoadMore: () => void
 }) {
-  if (pending) return <div className="inspector-state">Loading history…</div>
+  if (pending) return <LoadingState className="inspector-state">Loading history…</LoadingState>
   if (error) return <div className="inspector-state">{error}</div>
   return (
     <div className="inspector-scroll">
@@ -1108,9 +1100,15 @@ function MovieHistory({
         ))}
       </div>
       {hasMore ? (
-        <button className="load-more" type="button" disabled={loadingMore} onClick={onLoadMore}>
+        <Button
+          variant="outline"
+          className="load-more"
+          type="button"
+          disabled={loadingMore}
+          onClick={onLoadMore}
+        >
           {loadingMore ? 'Loading…' : 'Load older viewings'}
-        </button>
+        </Button>
       ) : null}
     </div>
   )
