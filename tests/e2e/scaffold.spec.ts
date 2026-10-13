@@ -1,4 +1,38 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+async function checkInspectorTabs(page: Page, label: string) {
+  const inspector = page.locator(`aside[aria-label="${label}"]`)
+  const tabs = inspector.getByRole('tablist').first().getByRole('tab')
+  const first = tabs.first()
+  await expect(first).toHaveAttribute('aria-selected', 'true')
+  for (const trigger of await tabs.all()) {
+    await expect(trigger).toHaveAttribute('aria-controls', /.+/)
+    const id = await trigger.getAttribute('aria-controls')
+    const panel = page.locator(`[id="${id}"]`)
+    await expect(panel).toHaveAttribute('role', 'tabpanel')
+    if ((await trigger.getAttribute('aria-selected')) === 'false') await expect(panel).toBeHidden()
+  }
+  await first.press('ArrowRight')
+  await expect(tabs.nth(1)).toBeFocused()
+  await tabs.nth(1).press('Enter')
+  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(tabs.nth(1)).toHaveAttribute('aria-controls', /.+/)
+  const association = await tabs.nth(1).evaluate((tab) => {
+    const panel = document.getElementById(tab.getAttribute('aria-controls')!)
+    return {
+      panel: panel?.getAttribute('role'),
+      labelledBy: panel?.getAttribute('aria-labelledby'),
+      triggerId: tab.id,
+      font: getComputedStyle(tab).fontSize,
+    }
+  })
+  expect(association.panel).toBe('tabpanel')
+  expect(association.labelledBy).toBe(association.triggerId)
+  expect(association.font).toBe('12px')
+  await tabs.nth(1).press('Home')
+  await first.press('Enter')
+  await expect(first).toBeFocused()
+  await expect(first).toHaveAttribute('aria-selected', 'true')
+}
 
 const book = {
   id: 'book-one',
@@ -105,6 +139,7 @@ test('keeps loaded Podcast pages while opening the inspector in list-only Archiv
   await expect(page.getByRole('button', { name: 'Grid view' })).toHaveCount(0)
   await page.getByRole('button', { name: /A Distant Episode/ }).click()
   await expect(page.getByText('Episode description.')).toBeVisible()
+  await checkInspectorTabs(page, 'Podcast inspector')
   await expect(page.getByText('1969', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).click()
   await expect(page.getByRole('button', { name: /A Distant Episode/ })).toBeFocused()
@@ -169,6 +204,7 @@ test('keeps loaded Music pages while opening the inspector in list-only Tracks',
   await expect(page.getByRole('button', { name: 'Grid view' })).toHaveCount(0)
   await page.getByRole('button', { name: /A Distant Track/ }).click()
   await expect(page.getByRole('heading', { name: 'A Distant Track' })).toBeVisible()
+  await checkInspectorTabs(page, 'Music inspector')
   await page.getByRole('button', { name: 'Close inspector' }).click()
   await expect(page.getByRole('button', { name: /A Distant Track/ })).toBeFocused()
   await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
@@ -246,7 +282,7 @@ test('opens bounded Album history and links back to its heard Track', async ({ p
   await expect(page.getByText('1 observation', { exact: true })).toBeVisible()
   await page.getByRole('tab', { name: /History/ }).click()
   await expect(page.getByRole('link', { name: 'A Distant Track' })).toBeVisible()
-  await page.getByRole('link', { name: /^Artists / }).click()
+  await page.getByRole('tab', { name: /^Artists / }).click()
   await expect(page).toHaveURL(/\/library\/music\/artists/)
   await expect(page).not.toHaveURL(/[?&]item=/)
   await expect(page.getByRole('complementary', { name: 'Music inspector' })).toHaveCount(0)
@@ -300,6 +336,7 @@ test('keeps loaded Video pages while changing layout and opening the inspector',
   await page.getByRole('button', { name: 'Grid view' }).click()
   await page.getByRole('button', { name: /A Distant Video/ }).click()
   await expect(page.getByRole('heading', { name: 'A Distant Video' })).toBeVisible()
+  await checkInspectorTabs(page, 'Video inspector')
   await page.getByRole('button', { name: 'Close inspector' }).click()
   await expect(page.getByRole('button', { name: /Second Video/ })).toBeVisible()
   expect(requested).toHaveLength(afterPaging)
@@ -605,7 +642,21 @@ for (const scenario of [
     })
     await page.goto(`/library/${scenario.media}/${scenario.start}`)
     const nav = page.getByRole('navigation', { name: scenario.nav })
+    await expect(page.locator('.workspace-header').getByRole('tablist')).toBeVisible()
+    await expect(page.locator('.books-header')).toHaveCount(0)
+    expect(
+      await page
+        .locator('.workspace-breadcrumb strong')
+        .evaluate((e) => getComputedStyle(e).fontSize),
+    ).toBe('12px')
     await expect(nav.locator('span').first()).not.toHaveText('—')
+    await expect
+      .poll(() =>
+        nav
+          .locator('[aria-selected="true"]')
+          .evaluate((e) => getComputedStyle(e, '::after').height),
+      )
+      .toBe('2px')
     const geometry = () =>
       nav.locator('a').evaluateAll((links) =>
         links.map((link) => {
@@ -617,7 +668,7 @@ for (const scenario of [
     const counts = await nav.locator('span').allTextContents()
     hold = true
     try {
-      await nav.getByRole('link', { name: new RegExp(`^${scenario.next} `) }).click()
+      await nav.getByRole('tab', { name: new RegExp(`^${scenario.next} `) }).click()
       await requested
       await expect(nav.locator('a[aria-current="page"]')).toContainText(scenario.next)
       expect(await geometry()).toEqual(before)
@@ -632,7 +683,7 @@ for (const scenario of [
       expect(await geometry()).toEqual(before)
       await expect(nav.locator('span')).toHaveText(freshCounts)
       await nav
-        .getByRole('link', {
+        .getByRole('tab', {
           name: new RegExp(`^${scenario.start === 'tracks' ? 'Tracks' : 'Archive'} `),
         })
         .click()
@@ -649,8 +700,8 @@ test('shows the production Books shell and preserves Connections', async ({ page
 
   await expect(page).toHaveURL(/\/library\/books\/archive/)
   await expect(page.getByRole('heading', { name: 'Books' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Archive 128' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Queue 986' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Archive 128' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Queue 986' })).toBeVisible()
   await expect(page.getByText('Local API connected')).toBeVisible()
 
   await page.getByRole('link', { name: 'Connections' }).click()
@@ -928,6 +979,7 @@ test('opens a selected Book and loads personal activity in History', async ({ pa
   await page.getByRole('button', { name: /A Distant Book/ }).click()
   await expect(page).toHaveURL(/item=book-one/)
   await expect(page.getByText('A concise overview.')).toBeVisible()
+  await checkInspectorTabs(page, 'Book inspector')
   await page.getByRole('tab', { name: 'History' }).click()
   await expect(page.getByText('Paperback')).toBeVisible()
   await page.getByRole('button', { name: 'Close inspector' }).last().click()
@@ -1027,8 +1079,8 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
 
   await page.goto('/library/movies/archive')
   await expect(page.getByRole('heading', { name: 'Movies' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Archive 372' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Queue 309' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Archive 372' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Queue 309' })).toBeVisible()
   await page.getByRole('button', { name: 'Load more movies' }).click()
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
 
@@ -1039,6 +1091,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await page.getByRole('button', { name: /A Distant Movie/ }).click()
   await expect(page).toHaveURL(/item=movie-one/)
   await expect(page.getByText('TMDB metadata is not configured.')).toBeVisible()
+  await checkInspectorTabs(page, 'Movie inspector')
   await expect(
     page.getByText('Reviewed occurrences').locator('xpath=following-sibling::dd[1]'),
   ).toHaveText('1')
@@ -1259,9 +1312,9 @@ test('keeps loaded Article pages while inspecting History in expanded rows', asy
   )
   await page.goto('/library/articles/archive')
   await expect(page.getByRole('heading', { name: 'Articles' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Archive 72' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Queue 178' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Feed 666' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Archive 72' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Queue 178' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Feed 666' })).toBeVisible()
   await page.getByRole('button', { name: 'Load more articles' }).click()
   await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
   const afterPaging = requested.length
@@ -1270,12 +1323,15 @@ test('keeps loaded Article pages while inspecting History in expanded rows', asy
   await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
   await page.getByRole('button', { name: /A Distant Article/ }).click()
   await expect(page.getByText('A concise article summary.')).toBeVisible()
+  await checkInspectorTabs(page, 'Article inspector')
   await expect(page.getByText('1,200')).toBeVisible()
   await expect(page.getByText('Readwise Reader · archive')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Reader relationships' })).toBeVisible()
   await page.getByRole('tab', { name: 'History' }).click()
   await expect(page.getByText('Current state')).toBeVisible()
-  await expect(page.getByText('50%')).toBeVisible()
+  await expect(
+    page.getByRole('tabpanel', { name: 'History', exact: true }).getByText('50%'),
+  ).toBeVisible()
   await expect(page.getByText('Remember this.')).toBeVisible()
   await expect(page.getByText('A useful passage.')).toBeVisible()
   await expect(page.getByText('My note.')).toBeVisible()
@@ -1403,4 +1459,49 @@ test('shows positive short video duration as under a minute', async ({ page }) =
   )
   await page.goto('/library/videos/archive')
   await expect(page.getByRole('button', { name: /A Distant Video/ })).toContainText('<1 min')
+})
+
+test('uses shared keyboard tabs and associated panels in the Channel inspector', async ({
+  page,
+}) => {
+  const channel = {
+    ...video,
+    id: 'channel-one',
+    kind: 'channel',
+    title: 'A Distant Channel',
+    canonicalUrl: 'https://www.youtube.com/channel/channel-one',
+    archiveVideoCount: 2,
+    queueVideoCount: 1,
+  }
+  await page.route('**/api/library/videos?*', (route) =>
+    route.fulfill({ json: videosResponse([channel]) }),
+  )
+  await page.route('**/api/library/video-channels/channel-one', (route) =>
+    route.fulfill({
+      json: {
+        ...channel,
+        description: 'Channel description.',
+        customUrl: null,
+        catalogCheckedAt: null,
+        country: null,
+        metadataMessage: null,
+      },
+    }),
+  )
+  await page.route('**/api/library/video-channels/channel-one/videos?*', (route) =>
+    route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
+  )
+  await page.goto('/library/videos/channels')
+  await page.getByRole('button', { name: /A Distant Channel/ }).click()
+  await expect(page.getByText('Channel description.')).toBeVisible()
+  await checkInspectorTabs(page, 'Channel inspector')
+  const inspector = page.locator('aside[aria-label="Channel inspector"]')
+  await inspector.getByRole('tab', { name: 'Library', exact: true }).click()
+  const archive = inspector.getByRole('tab', { name: 'Archive', exact: true })
+  await archive.press('ArrowRight')
+  await inspector.getByRole('tab', { name: 'Queue', exact: true }).press('Enter')
+  const queue = inspector.getByRole('tab', { name: 'Queue', exact: true })
+  await expect(queue).toHaveAttribute('aria-selected', 'true')
+  await expect(queue).toHaveAttribute('aria-controls', /.+/)
+  await expect(inspector.getByText('No queued videos.')).toBeVisible()
 })

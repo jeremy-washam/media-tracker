@@ -1,3 +1,10 @@
+import {
+  CollectionTabList,
+  FlatTabs,
+  FlatTabsContent,
+  FlatTabsList,
+  FlatTabsTrigger,
+} from '@/components/flat-tabs'
 import { LibrarySelect } from '../../components/library-controls'
 import {
   useLiveSearch,
@@ -145,31 +152,30 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
     requestAnimationFrame(() => target?.focus())
   }
   return (
-    <section
+    <FlatTabs
+      value={section}
+      render={<section />}
       data-inspector-open={Boolean(search.item)}
       className={`books-page articles-page articles-density-expanded`}
       aria-labelledby="articles-title"
     >
-      <div className="books-collection">
-        <header className="books-header">
-          <div>
-            <span className="eyebrow">Library</span>
-            <h1 id="articles-title">Articles</h1>
-          </div>
-          <nav className="books-tabs" aria-label="Article sections">
-            {(['archive', 'queue', 'feed'] as const).map((target) => (
-              <Link
-                key={target}
-                to={`/library/articles/${target}`}
-                search={normalizedForArticleSection(search, target)}
-                activeProps={{ 'aria-current': 'page', className: 'active' }}
-              >
-                {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{sectionCounts?.[target] ?? '—'}</span>
-              </Link>
-            ))}
-          </nav>
-        </header>
+      <FlatTabsContent value={section} className="books-collection">
+        <h1 className="sr-only" id="articles-title">
+          Articles
+        </h1>
+        <CollectionTabList aria-label="Article sections">
+          {(['archive', 'queue', 'feed'] as const).map((target) => (
+            <Link
+              key={target}
+              to={`/library/articles/${target}`}
+              search={normalizedForArticleSection(search, target)}
+              activeProps={{ 'aria-current': 'page', className: 'active' }}
+            >
+              {target[0]!.toUpperCase() + target.slice(1)}{' '}
+              <span>{sectionCounts?.[target] ?? '—'}</span>
+            </Link>
+          ))}
+        </CollectionTabList>
         <div className="books-toolbar">
           <form
             className="books-search"
@@ -254,13 +260,18 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
         <div className="books-result-summary" aria-live="polite">
           <span>
             {articles.isPending
-              ? 'Loading articles…'
+              ? null
               : `${(summary?.filteredCount ?? 0).toLocaleString()} of ${(summary?.totalCount ?? 0).toLocaleString()} ${(summary?.totalCount ?? 0) === 1 ? 'article' : 'articles'}${section === 'archive' && summary?.occurrenceCount != null ? ` · ${summary.occurrenceCount.toLocaleString()} archive ${summary.occurrenceCount === 1 ? 'occurrence' : 'occurrences'}` : ''}`}
           </span>
           {summary?.coverage.lastSuccessfulSyncAt ? (
             <small>Reader synced {formatDate(summary.coverage.lastSuccessfulSyncAt)}</small>
           ) : null}
         </div>
+        {articles.isPending ? (
+          <div className="books-state books-loading" role="status">
+            Loading articles…
+          </div>
+        ) : null}
         {articles.isError ? (
           <div className="books-state books-state-error" role="alert">
             <h2>Articles could not be loaded</h2>
@@ -315,7 +326,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             {articles.isFetchingNextPage ? 'Loading…' : 'Load more articles'}
           </button>
         ) : null}
-      </div>
+      </FlatTabsContent>
       {inspectorItem ? (
         <>
           <button
@@ -327,7 +338,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           <ArticleInspector id={inspectorItem} onClose={close} />
         </>
       ) : null}
-    </section>
+    </FlatTabs>
   )
 }
 
@@ -759,26 +770,18 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
     return () => document.removeEventListener('keydown', key)
   }, [id])
   return (
-    <aside ref={ref} className="book-inspector article-inspector" aria-label="Article inspector">
+    <FlatTabs
+      value={tab}
+      onValueChange={(value) => setTab(value as typeof tab)}
+      render={<aside ref={ref} />}
+      className="book-inspector article-inspector"
+      aria-label="Article inspector"
+    >
       <div className="inspector-topbar">
-        <div className="inspector-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'details'}
-            onClick={() => setTab('details')}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'history'}
-            onClick={() => setTab('history')}
-          >
-            History
-          </button>
-        </div>
+        <FlatTabsList aria-label="Inspector information">
+          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
+          <FlatTabsTrigger value="history">History</FlatTabsTrigger>
+        </FlatTabsList>
         <button
           className="inspector-close"
           type="button"
@@ -788,114 +791,119 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
           <X aria-hidden="true" />
         </button>
       </div>
+
       {article.isPending ? <div className="inspector-state">Loading article…</div> : null}
       {article.isError ? (
         <div className="inspector-state" role="alert">
           {article.error.message}
         </div>
       ) : null}
-      {article.data && tab === 'details' ? <ArticleDetails article={article.data} /> : null}
-      {article.data && tab === 'history' ? (
-        <div className="inspector-scroll">
-          <section className="inspector-section">
-            <h3>Reader activity</h3>
-            <dl className="detail-list">
-              <dt>Current state</dt>
-              <dd>
-                {article.data.currentAvailable
-                  ? article.data.currentLocation
-                  : `Unavailable · last known ${article.data.currentLocation}`}
-              </dd>
-              <dt>First opened</dt>
-              <dd>{formatDate(article.data.dates.firstOpenedAt) ?? 'Not observed'}</dd>
-              <dt>Last opened</dt>
-              <dd>{formatDate(article.data.dates.lastOpenedAt) ?? 'Not observed'}</dd>
-              <dt>Progress</dt>
-              <dd>
-                {article.data.progress.valid && article.data.progress.value != null
-                  ? `${Math.round(article.data.progress.value * 100)}%`
-                  : 'Unknown'}
-              </dd>
-              <dt>Observed</dt>
-              <dd>{formatDate(article.data.dates.observedAt) ?? 'Unknown'}</dd>
-            </dl>
-            {article.data.documentNote ? (
-              <div className="article-note">
-                <strong>Document note</strong>
-                <p>{article.data.documentNote}</p>
-              </div>
-            ) : null}
-            {article.data.highlightDocumentNote ? (
-              <div className="article-note">
-                <strong>Highlight note</strong>
-                <p>{article.data.highlightDocumentNote}</p>
-              </div>
-            ) : null}
-          </section>
-          <section className="inspector-section">
-            <h3>Archive history</h3>
-            {history.isPending ? (
-              <p>Loading history…</p>
-            ) : history.isError ? (
-              <p role="alert">History could not be loaded: {history.error.message}</p>
-            ) : (
-              history.data?.pages
-                .flatMap((page) => page.data)
-                .map((entry) => (
-                  <article className="article-history-entry" key={entry.archiveEntryId}>
-                    <strong>
-                      {entry.archivedAt
-                        ? `Archived ${formatDate(entry.archivedAt.value)}`
-                        : 'Archived — date unknown'}
-                    </strong>
-                    <span>
-                      {entry.disposition === 'current'
-                        ? 'Currently in Archive'
-                        : 'Retained history'}{' '}
-                      · {entry.connection.label}
-                      {entry.sourceRecordedAt
-                        ? ` · Source recorded ${formatDate(entry.sourceRecordedAt.value)}`
-                        : ''}
-                    </span>
-                  </article>
-                ))
-            )}
-            {history.hasNextPage ? (
-              <button type="button" onClick={() => void history.fetchNextPage()}>
-                Load more
-              </button>
-            ) : null}
-          </section>
-          <section className="inspector-section">
-            <h3>Highlights and notes</h3>
-            {highlights.isPending ? (
-              <p>Loading highlights…</p>
-            ) : highlights.isError ? (
-              <p role="alert">Highlights could not be loaded: {highlights.error.message}</p>
-            ) : (
-              highlights.data?.pages
-                .flatMap((page) => page.data)
-                .map((item) => (
-                  <blockquote key={item.id}>
-                    {item.text ? <p>{item.text}</p> : null}
-                    {item.note ? <footer>{item.note}</footer> : null}
-                  </blockquote>
-                ))
-            )}
-            {!highlights.isPending &&
-            !highlights.isError &&
-            !highlights.data?.pages.some((page) => page.data.length) ? (
-              <p>No active highlights.</p>
-            ) : null}
-            {highlights.hasNextPage ? (
-              <button type="button" onClick={() => void highlights.fetchNextPage()}>
-                Load more
-              </button>
-            ) : null}
-          </section>
-        </div>
-      ) : null}
-    </aside>
+      <FlatTabsContent value="details" className="inspector-tab-panel">
+        {article.data ? <ArticleDetails article={article.data} /> : null}
+      </FlatTabsContent>
+      <FlatTabsContent value="history" className="inspector-tab-panel">
+        {article.data ? (
+          <div className="inspector-scroll">
+            <section className="inspector-section">
+              <h3>Reader activity</h3>
+              <dl className="detail-list">
+                <dt>Current state</dt>
+                <dd>
+                  {article.data.currentAvailable
+                    ? article.data.currentLocation
+                    : `Unavailable · last known ${article.data.currentLocation}`}
+                </dd>
+                <dt>First opened</dt>
+                <dd>{formatDate(article.data.dates.firstOpenedAt) ?? 'Not observed'}</dd>
+                <dt>Last opened</dt>
+                <dd>{formatDate(article.data.dates.lastOpenedAt) ?? 'Not observed'}</dd>
+                <dt>Progress</dt>
+                <dd>
+                  {article.data.progress.valid && article.data.progress.value != null
+                    ? `${Math.round(article.data.progress.value * 100)}%`
+                    : 'Unknown'}
+                </dd>
+                <dt>Observed</dt>
+                <dd>{formatDate(article.data.dates.observedAt) ?? 'Unknown'}</dd>
+              </dl>
+              {article.data.documentNote ? (
+                <div className="article-note">
+                  <strong>Document note</strong>
+                  <p>{article.data.documentNote}</p>
+                </div>
+              ) : null}
+              {article.data.highlightDocumentNote ? (
+                <div className="article-note">
+                  <strong>Highlight note</strong>
+                  <p>{article.data.highlightDocumentNote}</p>
+                </div>
+              ) : null}
+            </section>
+            <section className="inspector-section">
+              <h3>Archive history</h3>
+              {history.isPending ? (
+                <p>Loading history…</p>
+              ) : history.isError ? (
+                <p role="alert">History could not be loaded: {history.error.message}</p>
+              ) : (
+                history.data?.pages
+                  .flatMap((page) => page.data)
+                  .map((entry) => (
+                    <article className="article-history-entry" key={entry.archiveEntryId}>
+                      <strong>
+                        {entry.archivedAt
+                          ? `Archived ${formatDate(entry.archivedAt.value)}`
+                          : 'Archived — date unknown'}
+                      </strong>
+                      <span>
+                        {entry.disposition === 'current'
+                          ? 'Currently in Archive'
+                          : 'Retained history'}{' '}
+                        · {entry.connection.label}
+                        {entry.sourceRecordedAt
+                          ? ` · Source recorded ${formatDate(entry.sourceRecordedAt.value)}`
+                          : ''}
+                      </span>
+                    </article>
+                  ))
+              )}
+              {history.hasNextPage ? (
+                <button type="button" onClick={() => void history.fetchNextPage()}>
+                  Load more
+                </button>
+              ) : null}
+            </section>
+            <section className="inspector-section">
+              <h3>Highlights and notes</h3>
+              {highlights.isPending ? (
+                <p>Loading highlights…</p>
+              ) : highlights.isError ? (
+                <p role="alert">Highlights could not be loaded: {highlights.error.message}</p>
+              ) : (
+                highlights.data?.pages
+                  .flatMap((page) => page.data)
+                  .map((item) => (
+                    <blockquote key={item.id}>
+                      {item.text ? <p>{item.text}</p> : null}
+                      {item.note ? <footer>{item.note}</footer> : null}
+                    </blockquote>
+                  ))
+              )}
+              {!highlights.isPending &&
+              !highlights.isError &&
+              !highlights.data?.pages.some((page) => page.data.length) ? (
+                <p>No active highlights.</p>
+              ) : null}
+              {highlights.hasNextPage ? (
+                <button type="button" onClick={() => void highlights.fetchNextPage()}>
+                  Load more
+                </button>
+              ) : null}
+            </section>
+          </div>
+        ) : null}
+      </FlatTabsContent>
+    </FlatTabs>
   )
 }
 function ArticleDetails({ article }: { article: ArticleDetail }) {

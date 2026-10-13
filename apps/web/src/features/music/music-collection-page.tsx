@@ -1,3 +1,10 @@
+import {
+  CollectionTabList,
+  FlatTabs,
+  FlatTabsContent,
+  FlatTabsList,
+  FlatTabsTrigger,
+} from '@/components/flat-tabs'
 import { LibrarySelect } from '../../components/library-controls'
 import {
   useLiveSearch,
@@ -121,35 +128,32 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
     search.direction ??
     (['title', 'artist', 'album', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
   return (
-    <section
+    <FlatTabs
+      value={view}
+      render={<section />}
       data-inspector-open={Boolean(search.item)}
       className={`books-page spotify-library-page music-page music-${layout}`}
     >
-      <div className="books-collection">
-        <header className="books-header">
-          <div>
-            <span className="eyebrow">Library</span>
-            <h1 ref={headingRef} tabIndex={-1}>
-              Music
-            </h1>
-          </div>
-          <nav className="books-tabs" aria-label="Music sections">
-            {(['tracks', 'albums', 'artists'] as const).map((target) => (
-              <Link
-                key={target}
-                to={`/library/music/${target}`}
-                search={normalizeMusicSearch(
-                  target === view ? search : { ...search, item: undefined },
-                  target,
-                )}
-                activeProps={{ className: 'active', 'aria-current': 'page' }}
-              >
-                {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{sectionCounts?.[target] ?? '—'}</span>
-              </Link>
-            ))}
-          </nav>
-        </header>
+      <FlatTabsContent value={view} className="books-collection">
+        <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
+          Music
+        </h1>
+        <CollectionTabList aria-label="Music sections">
+          {(['tracks', 'albums', 'artists'] as const).map((target) => (
+            <Link
+              key={target}
+              to={`/library/music/${target}`}
+              search={normalizeMusicSearch(
+                target === view ? search : { ...search, item: undefined },
+                target,
+              )}
+              activeProps={{ className: 'active', 'aria-current': 'page' }}
+            >
+              {target[0]!.toUpperCase() + target.slice(1)}{' '}
+              <span>{sectionCounts?.[target] ?? '—'}</span>
+            </Link>
+          ))}
+        </CollectionTabList>
         <div className="books-toolbar">
           <form
             className="books-search"
@@ -418,11 +422,14 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
         ) : null}
         <div className="books-result-summary" aria-live="polite">
           <span>
-            {result.isPending
-              ? 'Loading music…'
-              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
+            {result.isPending ? null : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
           </span>
         </div>
+        {result.isPending ? (
+          <div className="books-state books-loading" role="status">
+            Loading music…
+          </div>
+        ) : null}
         {summary?.coverage?.possibleRecentGap ? (
           <p className="library-coverage-note" role="status">
             Recent playback coverage may have a gap between Spotify polls. Imported history is
@@ -472,7 +479,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
             {result.isFetchingNextPage ? 'Loading…' : 'Load more'}
           </button>
         ) : null}
-      </div>
+      </FlatTabsContent>
       {inspectorItem ? (
         <MusicInspector
           id={inspectorItem}
@@ -485,7 +492,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           }
         />
       ) : null}
-    </section>
+    </FlatTabs>
   )
 }
 
@@ -643,30 +650,25 @@ function MusicInspector({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside ref={inspectorRef} className="media-inspector" aria-label="Music inspector">
+    <FlatTabs
+      value={tab}
+      onValueChange={(value) => setTab(value as typeof tab)}
+      render={<aside ref={inspectorRef} />}
+      className="media-inspector"
+      aria-label="Music inspector"
+    >
       <header className="spotify-inspector-topbar">
-        <div className="inspector-tabs" role="tablist" aria-label="Music information">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'details'}
-            onClick={() => setTab('details')}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'history'}
-            onClick={() => setTab('history')}
-          >
+        <FlatTabsList aria-label="Music information">
+          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
+          <FlatTabsTrigger value="history">
             History{detail.data ? ` (${detail.data.playbackCount.toLocaleString()})` : ''}
-          </button>
-        </div>
+          </FlatTabsTrigger>
+        </FlatTabsList>
         <button type="button" onClick={onClose} aria-label="Close inspector">
           <X />
         </button>
       </header>
+
       {detail.isPending ? (
         <p>Loading…</p>
       ) : detail.isError ? (
@@ -687,7 +689,7 @@ function MusicInspector({
               <p>{detail.data.subtitle}</p>
             </div>
           </div>
-          {tab === 'details' ? (
+          <FlatTabsContent value="details" className="inspector-tab-panel">
             <section>
               <h3>Details</h3>
               <dl>
@@ -812,7 +814,8 @@ function MusicInspector({
                 </a>
               ) : null}
             </section>
-          ) : (
+          </FlatTabsContent>
+          <FlatTabsContent value="history" className="inspector-tab-panel">
             <section>
               <h3>History</h3>
               {history.isPending ? <p>Loading history…</p> : null}
@@ -853,9 +856,9 @@ function MusicInspector({
                 </button>
               ) : null}
             </section>
-          )}
+          </FlatTabsContent>
         </>
       ) : null}
-    </aside>
+    </FlatTabs>
   )
 }

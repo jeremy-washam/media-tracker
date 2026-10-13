@@ -69,6 +69,13 @@ The current Letterboxd reference
 applies only to small, muted personal-rating stars below Book and Movie artwork,
 including half stars; it does not prescribe poster density, colors, or metadata.
 
+Collection section tabs live on the right of the compact workspace header; the
+oversized Library/page heading is removed from the collection body. The breadcrumb
+and all collection/inspector tabs use 12px type. Shared FlatTabs compose the actual
+shadcn Tabs line variant, including keyboard navigation and associated panels.
+Route tabs retain URL-backed search normalization and stable cached counts. The
+header reserves the inspector width while it opens and closes.
+
 Collections default to list. A single local preference remembers grid/list across
 supported pages and browser sessions; explicit layout in a URL takes precedence.
 List appears first in the view controls.

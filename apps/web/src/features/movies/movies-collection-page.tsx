@@ -1,3 +1,10 @@
+import {
+  CollectionTabList,
+  FlatTabs,
+  FlatTabsContent,
+  FlatTabsList,
+  FlatTabsTrigger,
+} from '@/components/flat-tabs'
 import { LibrarySelect, MediaCard, RatingStars } from '../../components/library-controls'
 import {
   useLiveSearch,
@@ -183,34 +190,33 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
   const direction = defaultDirection(selectedSort, search.direction)
 
   return (
-    <section
+    <FlatTabs
+      value={collection}
+      render={<section />}
       data-inspector-open={Boolean(search.item)}
       className={`books-page movies-page movies-view-${view}`}
       aria-labelledby="movies-title"
     >
-      <div className="books-collection">
-        <header className="books-header">
-          <div>
-            <span className="eyebrow">Library</span>
-            <h1 id="movies-title">Movies</h1>
-          </div>
-          <nav className="books-tabs" aria-label="Movie collections">
-            <Link
-              to="/library/movies/archive"
-              search={normalizedForMovieCollection(search, 'archive')}
-              activeProps={{ 'aria-current': 'page', className: 'active' }}
-            >
-              Archive <span>{sectionCounts?.archiveItems ?? '—'}</span>
-            </Link>
-            <Link
-              to="/library/movies/queue"
-              search={normalizedForMovieCollection(search, 'queue')}
-              activeProps={{ 'aria-current': 'page', className: 'active' }}
-            >
-              Queue <span>{sectionCounts?.queueItems ?? '—'}</span>
-            </Link>
-          </nav>
-        </header>
+      <FlatTabsContent value={collection} className="books-collection">
+        <h1 className="sr-only" id="movies-title">
+          Movies
+        </h1>
+        <CollectionTabList aria-label="Movie collections">
+          <Link
+            to="/library/movies/archive"
+            search={normalizedForMovieCollection(search, 'archive')}
+            activeProps={{ 'aria-current': 'page', className: 'active' }}
+          >
+            Archive <span>{sectionCounts?.archiveItems ?? '—'}</span>
+          </Link>
+          <Link
+            to="/library/movies/queue"
+            search={normalizedForMovieCollection(search, 'queue')}
+            activeProps={{ 'aria-current': 'page', className: 'active' }}
+          >
+            Queue <span>{sectionCounts?.queueItems ?? '—'}</span>
+          </Link>
+        </CollectionTabList>
 
         <div className="books-toolbar">
           <form
@@ -332,9 +338,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
         ) : null}
 
         <div className="books-result-summary" aria-live="polite">
-          {movies.isPending ? (
-            <span>Loading movies…</span>
-          ) : (
+          {movies.isPending ? null : (
             <span>
               {count.toLocaleString()} {count === 1 ? 'movie' : 'movies'}
               {collection === 'archive' && summary?.filteredOccurrenceCount !== null
@@ -348,6 +352,11 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             </small>
           ) : null}
         </div>
+        {movies.isPending ? (
+          <div className="books-state books-loading" role="status">
+            Loading movies…
+          </div>
+        ) : null}
 
         {movies.isError ? (
           <div className="books-state books-state-error" role="alert">
@@ -412,7 +421,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             {movies.isFetchingNextPage ? 'Loading…' : 'Load more movies'}
           </button>
         ) : null}
-      </div>
+      </FlatTabsContent>
 
       {inspectorItem ? (
         <>
@@ -425,7 +434,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           <MovieInspector mediaItemId={inspectorItem} search={search} onClose={closeInspector} />
         </>
       ) : null}
-    </section>
+    </FlatTabs>
   )
 }
 
@@ -823,26 +832,20 @@ function MovieInspector({
   }, [mediaItemId])
 
   return (
-    <aside ref={ref} className="book-inspector movie-inspector" aria-label="Movie inspector">
+    <FlatTabs
+      value={tab}
+      onValueChange={(value) => setTab(value as typeof tab)}
+      render={<aside ref={ref} />}
+      className="book-inspector movie-inspector"
+      aria-label="Movie inspector"
+    >
       <div className="inspector-topbar">
-        <div className="inspector-tabs" role="tablist" aria-label="Movie information">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'details'}
-            onClick={() => setTab('details')}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'history'}
-            onClick={() => setTab('history')}
-          >
+        <FlatTabsList aria-label="Movie information">
+          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
+          <FlatTabsTrigger value="history">
             History{movie.data ? ` (${movie.data.archive.lifetimeWatchCount})` : ''}
-          </button>
-        </div>
+          </FlatTabsTrigger>
+        </FlatTabsList>
         <button
           className="inspector-close"
           type="button"
@@ -852,24 +855,29 @@ function MovieInspector({
           <X aria-hidden="true" />
         </button>
       </div>
+
       {movie.isPending ? <div className="inspector-state">Loading movie…</div> : null}
       {movie.isError ? (
         <div className="inspector-state" role="alert">
           {movie.error.message}
         </div>
       ) : null}
-      {movie.data && tab === 'details' ? <MovieDetails movie={movie.data} /> : null}
-      {movie.data && tab === 'history' ? (
-        <MovieHistory
-          entries={history.data?.pages.flatMap((page) => page.data) ?? []}
-          pending={history.isPending}
-          error={history.isError ? history.error.message : null}
-          hasMore={history.hasNextPage}
-          loadingMore={history.isFetchingNextPage}
-          onLoadMore={() => void history.fetchNextPage()}
-        />
-      ) : null}
-    </aside>
+      <FlatTabsContent value="details" className="inspector-tab-panel">
+        {movie.data ? <MovieDetails movie={movie.data} /> : null}
+      </FlatTabsContent>
+      <FlatTabsContent value="history" className="inspector-tab-panel">
+        {movie.data ? (
+          <MovieHistory
+            entries={history.data?.pages.flatMap((page) => page.data) ?? []}
+            pending={history.isPending}
+            error={history.isError ? history.error.message : null}
+            hasMore={history.hasNextPage}
+            loadingMore={history.isFetchingNextPage}
+            onLoadMore={() => void history.fetchNextPage()}
+          />
+        ) : null}
+      </FlatTabsContent>
+    </FlatTabs>
   )
 }
 

@@ -1,3 +1,10 @@
+import {
+  CollectionTabList,
+  FlatTabs,
+  FlatTabsContent,
+  FlatTabsList,
+  FlatTabsTrigger,
+} from '@/components/flat-tabs'
 import { LibrarySelect, MediaCard, RatingStars } from '../../components/library-controls'
 import {
   useLiveSearch,
@@ -203,34 +210,33 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
   }
 
   return (
-    <section
+    <FlatTabs
+      value={collection}
+      render={<section />}
       data-inspector-open={Boolean(search.item)}
       className={`books-page books-layout-${layout}`}
       aria-labelledby="books-title"
     >
-      <div className="books-collection">
-        <header className="books-header">
-          <div>
-            <span className="eyebrow">Library</span>
-            <h1 id="books-title">Books</h1>
-          </div>
-          <nav className="books-tabs" aria-label="Book collections">
-            <Link
-              to="/library/books/archive"
-              search={normalizedForCollection(search, 'archive')}
-              activeProps={{ 'aria-current': 'page', className: 'active' }}
-            >
-              Archive <span>{sectionCounts?.archive ?? '—'}</span>
-            </Link>
-            <Link
-              to="/library/books/queue"
-              search={normalizedForCollection(search, 'queue')}
-              activeProps={{ 'aria-current': 'page', className: 'active' }}
-            >
-              Queue <span>{sectionCounts?.queue ?? '—'}</span>
-            </Link>
-          </nav>
-        </header>
+      <FlatTabsContent value={collection} className="books-collection">
+        <h1 className="sr-only" id="books-title">
+          Books
+        </h1>
+        <CollectionTabList aria-label="Book collections">
+          <Link
+            to="/library/books/archive"
+            search={normalizedForCollection(search, 'archive')}
+            activeProps={{ 'aria-current': 'page', className: 'active' }}
+          >
+            Archive <span>{sectionCounts?.archive ?? '—'}</span>
+          </Link>
+          <Link
+            to="/library/books/queue"
+            search={normalizedForCollection(search, 'queue')}
+            activeProps={{ 'aria-current': 'page', className: 'active' }}
+          >
+            Queue <span>{sectionCounts?.queue ?? '—'}</span>
+          </Link>
+        </CollectionTabList>
 
         <div className="books-toolbar">
           <form
@@ -354,9 +360,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
         ) : null}
 
         <div className="books-result-summary" aria-live="polite">
-          {books.isPending ? (
-            <span>Loading books…</span>
-          ) : (
+          {books.isPending ? null : (
             <span>
               {count.toLocaleString()} {count === 1 ? 'book' : 'books'}
               {collection === 'archive' && summary
@@ -366,6 +370,11 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           )}
           {summary?.freshness.degraded ? <strong>Hardcover sync needs attention</strong> : null}
         </div>
+        {books.isPending ? (
+          <div className="books-state books-loading" role="status">
+            Loading books…
+          </div>
+        ) : null}
 
         {books.isError ? (
           <div className="books-state books-state-error" role="alert">
@@ -444,7 +453,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             {books.isFetchingNextPage ? 'Loading…' : 'Load more'}
           </button>
         ) : null}
-      </div>
+      </FlatTabsContent>
 
       {inspectorItem ? (
         <>
@@ -457,7 +466,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           <BookInspector mediaItemId={inspectorItem} onClose={closeInspector} />
         </>
       ) : null}
-    </section>
+    </FlatTabs>
   )
 }
 
@@ -779,7 +788,7 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
         inspector.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      )
+      ).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0)
       if (focusable.length === 0) return
       const first = focusable[0]!
       const last = focusable.at(-1)!
@@ -796,26 +805,18 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
   }, [mediaItemId])
 
   return (
-    <aside ref={inspectorRef} className="book-inspector" aria-label="Book inspector">
+    <FlatTabs
+      value={tab}
+      onValueChange={(value) => setTab(value as typeof tab)}
+      render={<aside ref={inspectorRef} />}
+      className="book-inspector"
+      aria-label="Book inspector"
+    >
       <div className="inspector-topbar">
-        <div className="inspector-tabs" role="tablist" aria-label="Book information">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'details'}
-            onClick={() => setTab('details')}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'history'}
-            onClick={() => setTab('history')}
-          >
-            History
-          </button>
-        </div>
+        <FlatTabsList aria-label="Book information">
+          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
+          <FlatTabsTrigger value="history">History</FlatTabsTrigger>
+        </FlatTabsList>
         <button
           className="inspector-close"
           type="button"
@@ -825,24 +826,29 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
           <X aria-hidden="true" />
         </button>
       </div>
+
       {book.isPending ? <div className="inspector-state">Loading book…</div> : null}
       {book.isError ? (
         <div className="inspector-state" role="alert">
           {book.error.message}
         </div>
       ) : null}
-      {book.data && tab === 'details' ? <BookDetails book={book.data} /> : null}
-      {book.data && tab === 'history' ? (
-        <BookHistory
-          entries={history.data?.pages.flatMap((page) => page.data) ?? []}
-          pending={history.isPending}
-          error={history.isError ? history.error.message : null}
-          hasMore={history.hasNextPage}
-          loadingMore={history.isFetchingNextPage}
-          onLoadMore={() => void history.fetchNextPage()}
-        />
-      ) : null}
-    </aside>
+      <FlatTabsContent value="details" className="inspector-tab-panel">
+        {book.data ? <BookDetails book={book.data} /> : null}
+      </FlatTabsContent>
+      <FlatTabsContent value="history" className="inspector-tab-panel">
+        {book.data ? (
+          <BookHistory
+            entries={history.data?.pages.flatMap((page) => page.data) ?? []}
+            pending={history.isPending}
+            error={history.isError ? history.error.message : null}
+            hasMore={history.hasNextPage}
+            loadingMore={history.isFetchingNextPage}
+            onLoadMore={() => void history.fetchNextPage()}
+          />
+        ) : null}
+      </FlatTabsContent>
+    </FlatTabs>
   )
 }
 

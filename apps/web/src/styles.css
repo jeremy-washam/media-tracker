@@ -944,7 +944,7 @@ a:focus-visible {
   font-size: 12px;
 }
 
-.workspace-header > div {
+.workspace-breadcrumb {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1024,34 +1024,6 @@ a:focus-visible {
   font-weight: 500;
   letter-spacing: -0.04em;
   line-height: 1;
-}
-
-.books-tabs {
-  display: flex;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--secondary);
-}
-
-.books-tabs a {
-  min-width: 94px;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: calc(var(--radius) - 1px);
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.books-tabs a.active {
-  color: var(--foreground);
-  background: var(--card);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
 }
 
 .books-tabs span {
@@ -2037,36 +2009,6 @@ a:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
-.inspector-tabs {
-  display: flex;
-  align-self: stretch;
-  gap: 15px;
-}
-
-.inspector-tabs button {
-  position: relative;
-  padding: 0 2px;
-  border: 0;
-  color: var(--muted-foreground);
-  background: transparent;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.inspector-tabs button[aria-selected='true'] {
-  color: var(--foreground);
-}
-
-.inspector-tabs button[aria-selected='true']::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  background: var(--foreground);
-}
-
 .inspector-scroll {
   min-height: 0;
   flex: 1;
@@ -3004,11 +2946,6 @@ a:focus-visible {
   width: 132px;
 }
 
-.inspector-tabs button.active {
-  color: var(--foreground);
-  font-weight: 650;
-}
-
 @media (max-width: 1280px) {
   .videos-page:has(.media-inspector) {
     grid-template-columns: 1fr;
@@ -3625,4 +3562,81 @@ select {
 .video-result.selected,
 .video-channel-row.selected {
   background: var(--selection);
+}
+
+/* Shared shadcn line tabs: existing typography, with header-sized hit areas. */
+.flat-tabs {
+  gap: 0;
+}
+.flat-tabs-list[data-slot='tabs-list'] {
+  height: 100%;
+  padding: 0;
+  gap: 15px;
+}
+.flat-tabs-trigger[data-slot='tabs-trigger'] {
+  height: 100%;
+  flex: 0 0 auto;
+  padding-inline: 2px;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.workspace-breadcrumb {
+  flex-shrink: 0;
+}
+.workspace-header-tabs {
+  height: 100%;
+  min-width: 0;
+  margin-left: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.workspace-header-tabs .books-tabs {
+  height: 100%;
+}
+.workspace-header-tabs .flat-tabs-trigger {
+  padding-inline: 8px;
+}
+.inspector-topbar > .flat-tabs-list,
+.spotify-inspector-topbar > .flat-tabs-list {
+  align-self: stretch;
+}
+.media-inspector .flat-tabs:not(.books-page),
+.media-inspector .flat-tabs-list {
+  min-height: 32px;
+}
+.app-workspace {
+  --header-inspector-space: 0px;
+  transition: --header-inspector-space 180ms ease-in-out;
+}
+.app-workspace:has(.books-page[data-inspector-open='true']) {
+  --header-inspector-space: 360px;
+}
+.workspace-header {
+  padding-right: calc(24px + var(--header-inspector-space));
+}
+@property --header-inspector-space {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-workspace {
+    transition: none;
+  }
+}
+@media (max-width: 560px) {
+  .workspace-header {
+    padding-right: calc(14px + var(--header-inspector-space));
+  }
+}
+
+.flat-tabs-trigger[data-slot='tabs-trigger'][data-active] {
+  color: var(--foreground);
+}
+
+.book-inspector .inspector-tab-panel {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
 }

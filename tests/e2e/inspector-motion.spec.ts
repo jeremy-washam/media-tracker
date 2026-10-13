@@ -56,16 +56,23 @@ function sampleMotion(page: Page) {
         }
         frame = requestAnimationFrame(sample)
       }
-      workspace.addEventListener('transitionrun', sample, { once: true })
-      workspace.addEventListener(
-        'transitionend',
-        () => {
-          clearTimeout(timeout)
-          cancelAnimationFrame(frame)
-          resolve(samples)
-        },
-        { once: true },
-      )
+      const intended = (event: TransitionEvent) =>
+        event.target === workspace && event.propertyName === '--inspector-space'
+      const onRun = (event: TransitionEvent) => {
+        if (!intended(event)) return
+        workspace.removeEventListener('transitionrun', onRun)
+        sample()
+      }
+      const onEnd = (event: TransitionEvent) => {
+        if (!intended(event)) return
+        workspace.removeEventListener('transitionrun', onRun)
+        workspace.removeEventListener('transitionend', onEnd)
+        clearTimeout(timeout)
+        cancelAnimationFrame(frame)
+        resolve(samples)
+      }
+      workspace.addEventListener('transitionrun', onRun)
+      workspace.addEventListener('transitionend', onEnd)
     })
   })
 }

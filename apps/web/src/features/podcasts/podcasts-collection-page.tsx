@@ -1,3 +1,10 @@
+import {
+  CollectionTabList,
+  FlatTabs,
+  FlatTabsContent,
+  FlatTabsList,
+  FlatTabsTrigger,
+} from '@/components/flat-tabs'
 import { LibrarySelect } from '../../components/library-controls'
 import {
   useLiveSearch,
@@ -122,32 +129,29 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
     search.direction ??
     (['title', 'show', 'publisher', 'relevance'].includes(selectedSort) ? 'asc' : 'desc')
   return (
-    <section
+    <FlatTabs
+      value={view}
+      render={<section />}
       data-inspector-open={Boolean(search.item)}
       className={`books-page spotify-library-page podcasts-page podcasts-${layout}`}
     >
-      <div className="books-collection">
-        <header className="books-header">
-          <div>
-            <span className="eyebrow">Library</span>
-            <h1 ref={headingRef} tabIndex={-1}>
-              Podcasts
-            </h1>
-          </div>
-          <nav className="books-tabs" aria-label="Podcast sections">
-            {(['archive', 'queue', 'following'] as const).map((target) => (
-              <Link
-                key={target}
-                to={`/library/podcasts/${target}`}
-                search={normalizePodcastSearch(search, target)}
-                activeProps={{ className: 'active', 'aria-current': 'page' }}
-              >
-                {target[0]!.toUpperCase() + target.slice(1)}{' '}
-                <span>{sectionCounts?.[target] ?? '—'}</span>
-              </Link>
-            ))}
-          </nav>
-        </header>
+      <FlatTabsContent value={view} className="books-collection">
+        <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
+          Podcasts
+        </h1>
+        <CollectionTabList aria-label="Podcast sections">
+          {(['archive', 'queue', 'following'] as const).map((target) => (
+            <Link
+              key={target}
+              to={`/library/podcasts/${target}`}
+              search={normalizePodcastSearch(search, target)}
+              activeProps={{ className: 'active', 'aria-current': 'page' }}
+            >
+              {target[0]!.toUpperCase() + target.slice(1)}{' '}
+              <span>{sectionCounts?.[target] ?? '—'}</span>
+            </Link>
+          ))}
+        </CollectionTabList>
         <div className="books-toolbar">
           <form
             className="books-search"
@@ -452,10 +456,15 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
         <div className="books-result-summary" aria-live="polite">
           <span>
             {result.isPending
-              ? 'Loading podcasts…'
+              ? null
               : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? ((summary?.filteredCount ?? 0) === 1 ? 'show' : 'shows') : (summary?.filteredCount ?? 0) === 1 ? 'episode' : 'episodes'}`}
           </span>
         </div>
+        {result.isPending ? (
+          <div className="books-state books-loading" role="status">
+            Loading podcasts…
+          </div>
+        ) : null}
         {!result.isPending &&
         summary?.coverage &&
         (view === 'following'
@@ -505,7 +514,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             {result.isFetchingNextPage ? 'Loading…' : 'Load more'}
           </button>
         ) : null}
-      </div>
+      </FlatTabsContent>
       {inspectorItem ? (
         <PodcastInspector
           id={inspectorItem}
@@ -514,7 +523,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           onOpenShow={(id) => update({ item: id, kind: 'show' })}
         />
       ) : null}
-    </section>
+    </FlatTabs>
   )
 }
 
@@ -657,30 +666,25 @@ function PodcastInspector({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside ref={inspectorRef} className="media-inspector" aria-label="Podcast inspector">
+    <FlatTabs
+      value={tab}
+      onValueChange={(value) => setTab(value as typeof tab)}
+      render={<aside ref={inspectorRef} />}
+      className="media-inspector"
+      aria-label="Podcast inspector"
+    >
       <header className="spotify-inspector-topbar">
-        <div className="inspector-tabs" role="tablist" aria-label="Podcast information">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'details'}
-            onClick={() => setTab('details')}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'history'}
-            onClick={() => setTab('history')}
-          >
+        <FlatTabsList aria-label="Podcast information">
+          <FlatTabsTrigger value="details">Details</FlatTabsTrigger>
+          <FlatTabsTrigger value="history">
             History{kind === 'episode' && detail.data ? ` (${detail.data.playbackCount})` : ''}
-          </button>
-        </div>
+          </FlatTabsTrigger>
+        </FlatTabsList>
         <button type="button" onClick={onClose} aria-label="Close inspector">
           <X />
         </button>
       </header>
+
       {detail.isPending ? (
         <p>Loading…</p>
       ) : detail.isError ? (
@@ -701,7 +705,7 @@ function PodcastInspector({
               <p>{detail.data.subtitle}</p>
             </div>
           </div>
-          {tab === 'details' ? (
+          <FlatTabsContent value="details" className="inspector-tab-panel">
             <section>
               <h3>Details</h3>
               {detail.data.description ? <p>{detail.data.description}</p> : null}
@@ -760,64 +764,67 @@ function PodcastInspector({
                 </a>
               ) : null}
             </section>
-          ) : kind === 'episode' ? (
-            <section>
-              <h3>History</h3>
-              {history.isPending ? <p>Loading history…</p> : null}
-              {history.isError ? <p role="alert">{history.error.message}</p> : null}
-              {history.data?.pages[0]?.totalCount === 0 ? <p>No supported history.</p> : null}
-              <ol className="history-list">
-                {history.data?.pages
-                  .flatMap((page) => page.data)
-                  .map((entry, index) => (
-                    <li key={`${entry.occurredAt}:${index}`}>
-                      <strong>{date(entry.occurredAt)}</strong>
-                      <span>
-                        {entry.source === 'reader'
-                          ? 'Reader Archive'
-                          : entry.observedMs === null
-                            ? 'Playback detected'
-                            : `${duration(entry.observedMs)} observed`}
-                      </span>
-                    </li>
-                  ))}
-              </ol>
-              {history.hasNextPage ? (
-                <button
-                  type="button"
-                  className="load-more"
-                  disabled={history.isFetchingNextPage}
-                  onClick={() => void history.fetchNextPage()}
-                >
-                  {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
-                </button>
-              ) : null}
-            </section>
-          ) : (
-            <section>
-              <h3>Following</h3>
-              <dl>
-                <div>
-                  <dt>Saved in Spotify</dt>
-                  <dd>{date(detail.data.date)}</dd>
-                </div>
-                <div>
-                  <dt>First observed</dt>
-                  <dd>{date(detail.data.firstObservedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Last observed</dt>
-                  <dd>{date(detail.data.lastObservedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Current state</dt>
-                  <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
-                </div>
-              </dl>
-            </section>
-          )}
+          </FlatTabsContent>
+          <FlatTabsContent value="history" className="inspector-tab-panel">
+            {kind === 'episode' ? (
+              <section>
+                <h3>History</h3>
+                {history.isPending ? <p>Loading history…</p> : null}
+                {history.isError ? <p role="alert">{history.error.message}</p> : null}
+                {history.data?.pages[0]?.totalCount === 0 ? <p>No supported history.</p> : null}
+                <ol className="history-list">
+                  {history.data?.pages
+                    .flatMap((page) => page.data)
+                    .map((entry, index) => (
+                      <li key={`${entry.occurredAt}:${index}`}>
+                        <strong>{date(entry.occurredAt)}</strong>
+                        <span>
+                          {entry.source === 'reader'
+                            ? 'Reader Archive'
+                            : entry.observedMs === null
+                              ? 'Playback detected'
+                              : `${duration(entry.observedMs)} observed`}
+                        </span>
+                      </li>
+                    ))}
+                </ol>
+                {history.hasNextPage ? (
+                  <button
+                    type="button"
+                    className="load-more"
+                    disabled={history.isFetchingNextPage}
+                    onClick={() => void history.fetchNextPage()}
+                  >
+                    {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
+                  </button>
+                ) : null}
+              </section>
+            ) : (
+              <section>
+                <h3>Following</h3>
+                <dl>
+                  <div>
+                    <dt>Saved in Spotify</dt>
+                    <dd>{date(detail.data.date)}</dd>
+                  </div>
+                  <div>
+                    <dt>First observed</dt>
+                    <dd>{date(detail.data.firstObservedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Last observed</dt>
+                    <dd>{date(detail.data.lastObservedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Current state</dt>
+                    <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
+                  </div>
+                </dl>
+              </section>
+            )}
+          </FlatTabsContent>
         </>
       ) : null}
-    </aside>
+    </FlatTabs>
   )
 }

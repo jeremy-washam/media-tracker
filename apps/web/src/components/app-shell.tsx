@@ -1,3 +1,4 @@
+import { WorkspaceHeaderContext } from './workspace-header-context'
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
 import {
@@ -44,6 +45,7 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(() => preference('media-tracker:sidebar-collapsed'))
   const [dark, setDark] = useState(initialDark)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [headerTarget, setHeaderTarget] = useState<HTMLDivElement | null>(null)
   const location = useLocation()
   const inBooks = location.pathname.startsWith('/library/books')
   const inMovies = location.pathname.startsWith('/library/movies')
@@ -63,200 +65,203 @@ export function AppShell() {
   }, [collapsed])
 
   return (
-    <div
-      className={`app-frame ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'mobile-nav-open' : ''}`}
-    >
-      <button
-        type="button"
-        className="mobile-backdrop"
-        aria-label="Close navigation"
-        onClick={() => setMobileOpen(false)}
-      />
-      <aside className="app-sidebar" aria-label="Primary navigation">
-        <div className="app-brand">
-          <Link
-            to="/library/books/archive"
-            aria-label="Imladris Books"
-            onClick={() => setMobileOpen(false)}
-          >
-            <span className="app-brand-mark" aria-hidden="true" />
-            <strong className="app-brand-wordmark">Imladris</strong>
-          </Link>
-          <button
-            className="sidebar-collapse"
-            type="button"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            {collapsed ? (
-              <PanelLeftOpen aria-hidden="true" />
-            ) : (
-              <PanelLeftClose aria-hidden="true" />
-            )}
-          </button>
-          <button
-            className="mobile-nav-close"
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
-          >
-            <X aria-hidden="true" />
-          </button>
-        </div>
-
-        <nav className="global-navigation" aria-label="Application">
-          <UnavailableNavigation label="Chat" icon={MessageSquare} collapsed={collapsed} />
-          <Link
-            to="/library/books/archive"
-            className={inLibrary ? 'active' : ''}
-            aria-current={inLibrary ? 'page' : undefined}
-            title="Library"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Library aria-hidden="true" />
-            {!collapsed ? <span>Library</span> : null}
-          </Link>
-          <UnavailableNavigation label="Recaps" icon={ChartNoAxesColumn} collapsed={collapsed} />
-        </nav>
-
-        <nav className="media-navigation" aria-label="Media types">
-          {!collapsed ? <span className="nav-heading">Media</span> : null}
-          <Link
-            to="/library/books/archive"
-            activeOptions={{ includeSearch: false }}
-            className={inBooks ? 'active' : ''}
-            aria-current={inBooks ? 'page' : undefined}
-            title="Books"
-            onClick={() => setMobileOpen(false)}
-          >
-            <BookOpen aria-hidden="true" />
-            {!collapsed ? <span>Books</span> : null}
-          </Link>
-          <Link
-            to="/library/movies/archive"
-            activeOptions={{ includeSearch: false }}
-            className={inMovies ? 'active' : ''}
-            aria-current={inMovies ? 'page' : undefined}
-            title="Movies"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Film aria-hidden="true" />
-            {!collapsed ? <span>Movies</span> : null}
-          </Link>
-          <Link
-            to="/library/articles/archive"
-            activeOptions={{ includeSearch: false }}
-            className={inArticles ? 'active' : ''}
-            aria-current={inArticles ? 'page' : undefined}
-            title="Articles"
-            onClick={() => setMobileOpen(false)}
-          >
-            <FileText aria-hidden="true" />
-            {!collapsed ? <span>Articles</span> : null}
-          </Link>
-          <Link
-            to="/library/podcasts/archive"
-            activeOptions={{ includeSearch: false }}
-            className={inPodcasts ? 'active' : ''}
-            aria-current={inPodcasts ? 'page' : undefined}
-            title="Podcasts"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Headphones aria-hidden="true" />
-            {!collapsed ? <span>Podcasts</span> : null}
-          </Link>
-          <Link
-            to="/library/music/tracks"
-            activeOptions={{ includeSearch: false }}
-            className={inMusic ? 'active' : ''}
-            aria-current={inMusic ? 'page' : undefined}
-            title="Music"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Music2 aria-hidden="true" />
-            {!collapsed ? <span>Music</span> : null}
-          </Link>
-          <Link
-            to="/library/videos/archive"
-            activeOptions={{ includeSearch: false }}
-            className={inVideos ? 'active' : ''}
-            aria-current={inVideos ? 'page' : undefined}
-            title="Videos"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Video aria-hidden="true" />
-            {!collapsed ? <span>Videos</span> : null}
-          </Link>
-          {unavailableMedia.map((item) => (
-            <UnavailableNavigation key={item.label} {...item} collapsed={collapsed} />
-          ))}
-        </nav>
-
-        <div className="sidebar-secondary">
-          <Link
-            to="/connections"
-            activeProps={{ className: 'active' }}
-            title="Connections"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Plug aria-hidden="true" />
-            {!collapsed ? <span>Connections</span> : null}
-          </Link>
-          <button
-            type="button"
-            title={dark ? 'Use light appearance' : 'Use dark appearance'}
-            aria-label={dark ? 'Use light appearance' : 'Use dark appearance'}
-            onClick={() => setDark((value) => !value)}
-          >
-            {dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-            {!collapsed ? <span>{dark ? 'Light appearance' : 'Dark appearance'}</span> : null}
-          </button>
-          <div className="sidebar-health">
-            <HealthIndicator />
+    <WorkspaceHeaderContext value={headerTarget}>
+      <div
+        className={`app-frame ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'mobile-nav-open' : ''}`}
+      >
+        <button
+          type="button"
+          className="mobile-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+        />
+        <aside className="app-sidebar" aria-label="Primary navigation">
+          <div className="app-brand">
+            <Link
+              to="/library/books/archive"
+              aria-label="Imladris Books"
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="app-brand-mark" aria-hidden="true" />
+              <strong className="app-brand-wordmark">Imladris</strong>
+            </Link>
+            <button
+              className="sidebar-collapse"
+              type="button"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => setCollapsed((value) => !value)}
+            >
+              {collapsed ? (
+                <PanelLeftOpen aria-hidden="true" />
+              ) : (
+                <PanelLeftClose aria-hidden="true" />
+              )}
+            </button>
+            <button
+              className="mobile-nav-close"
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setMobileOpen(false)}
+            >
+              <X aria-hidden="true" />
+            </button>
           </div>
-        </div>
-      </aside>
 
-      <div className="app-workspace">
-        <header className="workspace-header">
-          <button
-            className="mobile-nav-trigger"
-            type="button"
-            aria-label="Open navigation"
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu aria-hidden="true" />
-          </button>
-          <div>
-            {inLibrary ? (
-              <>
-                <span>Library</span>
-                <span aria-hidden="true">/</span>
-                <strong>
-                  {inMovies
-                    ? 'Movies'
-                    : inArticles
-                      ? 'Articles'
-                      : inPodcasts
-                        ? 'Podcasts'
-                        : inMusic
-                          ? 'Music'
-                          : inVideos
-                            ? 'Videos'
-                            : 'Books'}
-                </strong>
-              </>
-            ) : (
-              <strong>Connections</strong>
-            )}
+          <nav className="global-navigation" aria-label="Application">
+            <UnavailableNavigation label="Chat" icon={MessageSquare} collapsed={collapsed} />
+            <Link
+              to="/library/books/archive"
+              className={inLibrary ? 'active' : ''}
+              aria-current={inLibrary ? 'page' : undefined}
+              title="Library"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Library aria-hidden="true" />
+              {!collapsed ? <span>Library</span> : null}
+            </Link>
+            <UnavailableNavigation label="Recaps" icon={ChartNoAxesColumn} collapsed={collapsed} />
+          </nav>
+
+          <nav className="media-navigation" aria-label="Media types">
+            {!collapsed ? <span className="nav-heading">Media</span> : null}
+            <Link
+              to="/library/books/archive"
+              activeOptions={{ includeSearch: false }}
+              className={inBooks ? 'active' : ''}
+              aria-current={inBooks ? 'page' : undefined}
+              title="Books"
+              onClick={() => setMobileOpen(false)}
+            >
+              <BookOpen aria-hidden="true" />
+              {!collapsed ? <span>Books</span> : null}
+            </Link>
+            <Link
+              to="/library/movies/archive"
+              activeOptions={{ includeSearch: false }}
+              className={inMovies ? 'active' : ''}
+              aria-current={inMovies ? 'page' : undefined}
+              title="Movies"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Film aria-hidden="true" />
+              {!collapsed ? <span>Movies</span> : null}
+            </Link>
+            <Link
+              to="/library/articles/archive"
+              activeOptions={{ includeSearch: false }}
+              className={inArticles ? 'active' : ''}
+              aria-current={inArticles ? 'page' : undefined}
+              title="Articles"
+              onClick={() => setMobileOpen(false)}
+            >
+              <FileText aria-hidden="true" />
+              {!collapsed ? <span>Articles</span> : null}
+            </Link>
+            <Link
+              to="/library/podcasts/archive"
+              activeOptions={{ includeSearch: false }}
+              className={inPodcasts ? 'active' : ''}
+              aria-current={inPodcasts ? 'page' : undefined}
+              title="Podcasts"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Headphones aria-hidden="true" />
+              {!collapsed ? <span>Podcasts</span> : null}
+            </Link>
+            <Link
+              to="/library/music/tracks"
+              activeOptions={{ includeSearch: false }}
+              className={inMusic ? 'active' : ''}
+              aria-current={inMusic ? 'page' : undefined}
+              title="Music"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Music2 aria-hidden="true" />
+              {!collapsed ? <span>Music</span> : null}
+            </Link>
+            <Link
+              to="/library/videos/archive"
+              activeOptions={{ includeSearch: false }}
+              className={inVideos ? 'active' : ''}
+              aria-current={inVideos ? 'page' : undefined}
+              title="Videos"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Video aria-hidden="true" />
+              {!collapsed ? <span>Videos</span> : null}
+            </Link>
+            {unavailableMedia.map((item) => (
+              <UnavailableNavigation key={item.label} {...item} collapsed={collapsed} />
+            ))}
+          </nav>
+
+          <div className="sidebar-secondary">
+            <Link
+              to="/connections"
+              activeProps={{ className: 'active' }}
+              title="Connections"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Plug aria-hidden="true" />
+              {!collapsed ? <span>Connections</span> : null}
+            </Link>
+            <button
+              type="button"
+              title={dark ? 'Use light appearance' : 'Use dark appearance'}
+              aria-label={dark ? 'Use light appearance' : 'Use dark appearance'}
+              onClick={() => setDark((value) => !value)}
+            >
+              {dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+              {!collapsed ? <span>{dark ? 'Light appearance' : 'Dark appearance'}</span> : null}
+            </button>
+            <div className="sidebar-health">
+              <HealthIndicator />
+            </div>
           </div>
-        </header>
-        <main className="workspace-content">
-          <Outlet />
-        </main>
+        </aside>
+
+        <div className="app-workspace">
+          <header className="workspace-header">
+            <button
+              className="mobile-nav-trigger"
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu aria-hidden="true" />
+            </button>
+            <div className="workspace-breadcrumb">
+              {inLibrary ? (
+                <>
+                  <span>Library</span>
+                  <span aria-hidden="true">/</span>
+                  <strong>
+                    {inMovies
+                      ? 'Movies'
+                      : inArticles
+                        ? 'Articles'
+                        : inPodcasts
+                          ? 'Podcasts'
+                          : inMusic
+                            ? 'Music'
+                            : inVideos
+                              ? 'Videos'
+                              : 'Books'}
+                  </strong>
+                </>
+              ) : (
+                <strong>Connections</strong>
+              )}
+            </div>
+            <div className="workspace-header-tabs" ref={setHeaderTarget} />
+          </header>
+          <main className="workspace-content">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </WorkspaceHeaderContext>
   )
 }
 

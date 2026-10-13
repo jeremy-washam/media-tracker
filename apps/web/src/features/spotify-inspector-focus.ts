@@ -21,7 +21,7 @@ export function useSpotifyInspectorFocus(onClose: () => void, itemId: string) {
         inspector.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      )
+      ).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0)
       if (focusable.length === 0) return
       const first = focusable[0]!
       const last = focusable.at(-1)!
