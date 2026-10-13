@@ -12,13 +12,15 @@ that combination. Switching appearance preserves Library and composer state.
 
 The owner selected **Graphite for now**, with the expectation that the theme
 will be revisited. Keep this comparison and its alternatives available. Both
-light and dark modes remain required. This records a design choice, not a
-completed production theme migration.
+light and dark modes remain required. This records the original design choice.
+Graphite has since been integrated in
+the production shell and all six Library families; the specimen remains the
+separate comparison artifact.
 
 Reopen Graphite at `/specimen.html?theme=graphite&mode=dark` or
 `/specimen.html?theme=graphite&mode=light` after running `pnpm dev:web`.
 The [UI foundation](../../../../docs/design/ui-foundation.md#provisional-theme-graphite)
-records the choice for future implementation work.
+records the choice and its current production application.
 
 ## Theme provenance
 
@@ -76,4 +78,5 @@ appearances; other controls use real interactions.
 Calendar uses React DayPicker, as in the shadcn registry. Registry components are
 owned locally in `ui`, isolated for this theme study. The main app has its own
 component registry configuration and CSS. Theme exploration does not change the
-operational client. Final production tokens and per-media layouts remain open.
+operational client. The [UI foundation](../../../../docs/design/ui-foundation.md)
+owns the current production Graphite application and Library presentation.

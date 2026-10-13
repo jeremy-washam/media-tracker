@@ -1,13 +1,15 @@
 # Music / Songs Phase 2 surface specification
 
-> Presentation update (2026-10-04): [UI polish](../ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
+> Current presentation (reviewed 2026-10-12): the [UI foundation](../../design/ui-foundation.md) and [shadcn audit](../shadcn-ui-audit.md) supersede conflicting layout, density, typography, rating, and control details below. This is the retained September surface contract; the per-media implementation plan records delivered behavior and remaining hardening.
 
 - Date: 2026-09-20
-- Status: Owner-approved implementation baseline; no behavior described here is shipped
+- Status: Historical owner-approved baseline; initial production implementation delivered locally
 - Scope: Spotify-backed Songs Tracks, Albums, and Artists surfaces only
 - Source of truth: the accepted Library Phase 1 decision register, the
   2026-09-19 authenticated Spotify field inventory, the canonical ledger, and
   the catalog reconnaissance
+
+> Counting correction: the owner subsequently approved immediate counting of every identified, non-conflicting export song row and Recently Played event, including zero-duration/skipped export rows. There is no 30-second threshold or threshold-based Excluded mode. The qualification tables, threshold labels, and acceptance cases below preserve the superseded proposal. Use the [Music implementation](../music-implementation.md) and [current shared Music contract](../library-phase-2-surfaces.md#music) for implementation.
 
 ## Outcome
 

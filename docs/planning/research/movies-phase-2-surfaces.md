@@ -1,9 +1,9 @@
 # Movies Phase 2 surface specification
 
-> Presentation update (2026-10-04): [UI polish](../ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
+> Current presentation (reviewed 2026-10-12): the [UI foundation](../../design/ui-foundation.md) and [shadcn audit](../shadcn-ui-audit.md) supersede conflicting layout, density, typography, rating, and control details below. This is the retained September surface contract; the per-media implementation plan records delivered behavior and remaining hardening.
 
 - Date: 2026-09-20
-- Status: Owner-approved implementation baseline; no behavior described here is shipped
+- Status: Historical owner-approved baseline; initial production implementation delivered locally
 - Scope: Movies in Library, for both Archive and source-derived Queue
 - Sources: Letterboxd export and RSS for personal facts; TMDB for additive catalog enrichment
 

@@ -1,4 +1,9 @@
+import { installDefaultApiMocks } from './default-api-mocks'
 import { expect, test } from '@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+  await installDefaultApiMocks(page)
+})
 
 for (const media of ['books', 'movies', 'articles', 'podcasts', 'music', 'videos']) {
   test(`shows only the results loading state for ${media}`, async ({ page }) => {

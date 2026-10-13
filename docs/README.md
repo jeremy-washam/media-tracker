@@ -19,12 +19,21 @@
 
 ## Planning
 
+- [Documentation audit](planning/documentation-audit.md): October 12 comparison
+  against the working checkout, all 16 Library views, Connections, and local API
+- [Private deployment](planning/deployment.md): authentication, production
+  packaging, account prerequisites, snapshot/restore rehearsal, and cutover
+- [Storage efficiency plan](planning/storage-efficiency-plan.md): measured
+  compaction options, database choices, cache freshness, usage budgets, and
+  migration/deployment acceptance gates
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
 - [October UI polish](planning/ui-polish.md): approved iterative fixes, browser
   baseline evidence, parallel ownership, and acceptance checks
 - [UI polish follow-up](planning/ui-polish-followup.md): owner-reviewed QA fixes,
   native menus, selection behavior, and page-by-page verification
+- [Visual UI audit](planning/visual-ui-audit.md): approved inspector, responsive
+  column, typography, disclosure, and toolbar consistency fixes
 - [Library implementation handoff](planning/library-implementation.md): per-media
   specification, source-derived Queue rules, Songs, and production delivery steps
 - [Books implementation plan](planning/books-implementation.md): end-to-end
@@ -51,6 +60,13 @@
   click-through details, existing integration coverage, and catalog dependencies
 - [AI Chat proposal](planning/ai-chat-plan.md): multi-model integration, subscription
   access research, evidence-backed queries, and proposed delivery sequence
+- [AI query design](planning/ai-query-design.md): proposed validated query tools,
+  evidence retrieval, and bounded execution; no runtime integration
+
+Implementation plans retain dated research, delivery stages, and validation
+records. Their current-status notes and the desktop UI foundation supersede
+older presentation instructions. Research verification dates are distinct from
+the local implementation review; provider policies were not reverified by this audit.
 
 ## Sources
 

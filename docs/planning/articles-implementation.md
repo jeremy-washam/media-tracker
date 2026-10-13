@@ -5,6 +5,13 @@
 - Date: 2026-09-20
 - Scope: Readwise-backed Library > Articles Archive, Queue, Feed, and inspector
 
+Current presentation (reviewed 2026-10-12) follows the
+[UI foundation](../design/ui-foundation.md): one expanded row style, no density
+control or type badge, and installed shadcn controls. The two-density instructions
+and September visual results below describe the original implementation and
+are superseded for current UI work. Acquisition, source state, and search
+semantics remain authoritative.
+
 ## Purpose
 
 This document turns the owner-approved

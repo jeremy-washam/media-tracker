@@ -1,7 +1,7 @@
 # Long-Term Product Vision
 
 - Status: Initial surface scope agreed; longer-term concepts exploratory
-- Last updated: 2026-09-20
+- Last updated: 2026-10-12
 
 ## Purpose
 
@@ -28,9 +28,12 @@ over this ledger. They must not become isolated stores of conflicting history.
 
 ### Queue
 
-Queue represents explicit intent to consume something in the future. The local
-queue is authoritative. Upstream watchlists and save-for-later services may be
-mirrored when dependable integrations exist.
+Queue represents explicit intent to consume something in the future. The current
+Library reads source-derived membership from Hardcover, Letterboxd, Reader,
+Spotify, and YouTube. Manual local Queue intent and write-back remain future
+work; local intent may become authoritative under a separate conflict model.
+Upstream watchlists and save-for-later services may then be mirrored when
+dependable integrations exist.
 
 ### Lists and artifacts
 
@@ -191,11 +194,12 @@ where practical, and safe to regenerate as models or ranking logic change.
 
 ## Delivery boundary
 
-The implemented ingestion milestone and the next product interface are distinct.
-The ledger, provenance, and synchronization remain foundations. The current
-browser studies cover Chat, Library, and Recaps with illustrative content; they
-do not implement live LLM services, artifact storage, Queue persistence, catalog
-integration, or recap generation. Next interface work follows the selected Index
+The ledger, provenance, and synchronization remain foundations. The operational
+client now implements all six read-only Library families, source-derived Queue,
+and imported-item/catalog inspection. Chat, live LLM services, saved artifacts,
+manual Queue writes, and recap generation remain deferred. The separate browser
+studies cover Chat, Library, and Recaps with illustrative content; their demos
+do not implement those services. Further interface work follows the selected Index
 foundation and the source-specific design review described in the
 [implementation plan](../planning/implementation-plan.md#20-next-interface-design-and-delivery).
 Lists, Feed, and Explorations remain future scope.

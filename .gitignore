@@ -7,6 +7,8 @@
 .wrangler/
 coverage/
 dist/
+dist-production/
+apps/api/wrangler.production.jsonc
 exports/
 apps/web/public/__private__/
 node_modules/
@@ -17,3 +19,4 @@ test-results/
 *.log
 *.sqlite
 *.sqlite3
+__pycache__/

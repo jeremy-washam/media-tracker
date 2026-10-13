@@ -6,7 +6,7 @@ production cache, and durable public-metadata refresh are implemented. Automatic
 history sync is not available.
 
 This package owns Google Takeout parsing, watch-activity normalization, and
-future YouTube Data API metadata enrichment. Google Data Portability remains a
+typed YouTube Data API metadata acquisition. Google Data Portability remains a
 deferred option rather than part of the initial connector. See the [YouTube
 source reconnaissance](../../../docs/sources/youtube.md) for source capabilities,
 private observations, and modeling implications.

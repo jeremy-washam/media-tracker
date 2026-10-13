@@ -1,8 +1,10 @@
 # Imladris brand assets
 
 The sidebar uses the owner-selected refined compact **J2** house-and-waterfall
-symbol at 30 px, without a wordmark. The owner removed the wordmark after font
-exploration on 2026-10-12. No custom brand font is bundled or loaded; interface
+symbol at 30 px, with a 20 px, weight-500 system-font Imladris wordmark in the
+expanded sidebar. The collapsed sidebar hides the wordmark. The owner removed
+the custom-font wordmark after the October 12 explorations, then approved this
+system-font treatment. No custom brand font is bundled or loaded; interface
 text uses system typography. The brand link retains its accessible Imladris name.
 
 `imladris-symbol.svg` is the native-path compact mark, used as a CSS mask so it

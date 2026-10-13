@@ -1,3 +1,7 @@
+import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
+import { CollectionPagination } from '@/components/collection-pagination'
+import { useCollectionScroll } from '@/components/collection-scroll'
+import { podcastsQueryOptions } from '../../library-queries'
 import { MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -37,12 +41,7 @@ import {
   X,
 } from 'lucide-react'
 import type { PodcastCollectionItem } from '@media-tracker/contracts'
-import {
-  fetchPodcast,
-  fetchPodcastFilterOptions,
-  fetchPodcastHistory,
-  fetchPodcasts,
-} from './podcasts-api'
+import { fetchPodcast, fetchPodcastFilterOptions, fetchPodcastHistory } from './podcasts-api'
 import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
 import {
   normalizePodcastSearch,
@@ -96,17 +95,12 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
       ? selectedResultRef.current
       : headingRef.current
     update({ item: undefined, kind: undefined })
-    requestAnimationFrame(() => target?.focus())
+    requestAnimationFrame(() => target?.focus({ preventScroll: true }))
   }
-  const request = { view, ...podcastQuerySearch(search), limit: 50 }
-  const result = useInfiniteQuery({
-    queryKey: ['podcasts', request],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      fetchPodcasts({ ...request, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const queryOptions = podcastsQueryOptions(view, search)
+  const result = useInfiniteQuery(queryOptions)
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
+  const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
   const summary = result.data?.pages[0]
   const sectionCounts = useLibrarySectionCounts('podcasts', summary, (page) => page.sectionCounts)
   const sorts: [string, string][] =
@@ -145,7 +139,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
       data-inspector-open={Boolean(search.item)}
       className={`books-page spotify-library-page podcasts-page podcasts-${layout}`}
     >
-      <FlatTabsContent value={view} className="books-collection">
+      <FlatTabsContent value={view} className="books-collection" ref={collectionRef}>
         <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
           Podcasts
         </h1>
@@ -158,7 +152,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               activeProps={{ className: 'active', 'aria-current': 'page' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
-              <span>{sectionCounts?.[target] ?? '—'}</span>
+              <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
@@ -469,7 +463,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               : 'Saved episodes have not completed a checkpointed Spotify sync; Queue may be incomplete.'}
           </p>
         ) : null}
-        {result.isError ? (
+        {result.isError && !result.isFetchNextPageError ? (
           <Notice className="books-state books-state-error">
             <h2>Podcasts could not be loaded</h2>
             <p>{result.error.message}</p>
@@ -497,17 +491,12 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             ))}
           </div>
         ) : null}
-        {result.hasNextPage ? (
-          <Button
-            variant="outline"
-            className="load-more"
-            type="button"
-            disabled={result.isFetchingNextPage}
-            onClick={() => void result.fetchNextPage()}
-          >
-            {result.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </Button>
-        ) : null}
+        <CollectionPagination
+          query={result}
+          scrollRef={collectionRef}
+          itemCount={items.length}
+          label={view === 'following' ? 'shows' : 'episodes'}
+        />
       </FlatTabsContent>
       {inspectorItem ? (
         <PodcastInspector
@@ -609,6 +598,7 @@ function PodcastItem({
 }) {
   return (
     <MediaRowButton
+      data-collection-item={item.id}
       type="button"
       className={`spotify-result ${selected ? 'selected' : ''}`}
       onClick={(event) => onSelect(event.currentTarget)}
@@ -666,169 +656,171 @@ function PodcastInspector({
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
-        <header className="spotify-inspector-topbar">
+        <InspectorHeader onClose={onClose}>
           <TabsList variant="line" className="inspector-tabs" aria-label="Podcast information">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">
-              History{kind === 'episode' && detail.data ? ` (${detail.data.playbackCount})` : ''}
+              History
+              {kind === 'episode' && detail.data
+                ? ` (${detail.data.playbackCount.toLocaleString()})`
+                : ''}
             </TabsTrigger>
           </TabsList>
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            onClick={onClose}
-            aria-label="Close inspector"
-          >
-            <X />
-          </Button>
-        </header>
-        {detail.isPending ? (
-          <LoadingState>Loading…</LoadingState>
-        ) : detail.isError ? (
-          <Notice>{detail.error.message}</Notice>
-        ) : detail.data ? (
-          <>
-            <div className="inspector-hero">
-              {detail.data.imageUrl ? (
-                <img src={detail.data.imageUrl} alt="" />
-              ) : (
-                <span className="spotify-art-fallback">
-                  <Headphones />
-                </span>
-              )}
-              <div>
-                <span className="eyebrow">{detail.data.kind}</span>
-                <h2>{detail.data.title}</h2>
-                <p>{detail.data.subtitle}</p>
+        </InspectorHeader>
+        <div className="inspector-scroll">
+          {detail.isPending ? (
+            <InspectorStatePanels values={['details', 'history']}>
+              <LoadingState>Loading…</LoadingState>
+            </InspectorStatePanels>
+          ) : detail.isError ? (
+            <InspectorStatePanels values={['details', 'history']}>
+              <Notice>{detail.error.message}</Notice>
+            </InspectorStatePanels>
+          ) : detail.data ? (
+            <>
+              <div className="inspector-hero">
+                {detail.data.imageUrl ? (
+                  <img src={detail.data.imageUrl} alt="" />
+                ) : (
+                  <span className="spotify-art-fallback">
+                    <Headphones />
+                  </span>
+                )}
+                <div>
+                  <span className="eyebrow">{detail.data.kind}</span>
+                  <h2>{detail.data.title}</h2>
+                  <p>{detail.data.subtitle}</p>
+                </div>
               </div>
-            </div>
-            {
-              <>
-                <TabsContent value="details" className="inspector-tab-panel">
-                  <section>
-                    <h3>Details</h3>
-                    {detail.data.description ? <p>{detail.data.description}</p> : null}
-                    <dl>
-                      <div>
-                        <dt>{kind === 'show' ? 'Episodes in Archive' : 'Observed time'}</dt>
-                        <dd>
-                          {kind === 'show'
-                            ? detail.data.archiveEpisodeCount
-                            : duration(detail.data.observedMs)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>{kind === 'show' ? 'Episodes queued' : 'Published'}</dt>
-                        <dd>
-                          {kind === 'show'
-                            ? detail.data.queueEpisodeCount
-                            : date(detail.data.publishedAt)}
-                        </dd>
-                      </div>
-                      {kind === 'episode' && detail.data.durationMs !== null ? (
+              {
+                <>
+                  <TabsContent value="details" className="inspector-tab-panel">
+                    <section>
+                      <h3>Details</h3>
+                      {detail.data.description ? <p>{detail.data.description}</p> : null}
+                      <dl>
                         <div>
-                          <dt>Duration</dt>
-                          <dd>{duration(detail.data.durationMs)}</dd>
+                          <dt>{kind === 'show' ? 'Episodes in Archive' : 'Observed time'}</dt>
+                          <dd>
+                            {kind === 'show'
+                              ? detail.data.archiveEpisodeCount
+                              : duration(detail.data.observedMs)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>{kind === 'show' ? 'Episodes queued' : 'Published'}</dt>
+                          <dd>
+                            {kind === 'show'
+                              ? detail.data.queueEpisodeCount
+                              : date(detail.data.publishedAt)}
+                          </dd>
+                        </div>
+                        {kind === 'episode' && detail.data.durationMs !== null ? (
+                          <div>
+                            <dt>Duration</dt>
+                            <dd>{duration(detail.data.durationMs)}</dd>
+                          </div>
+                        ) : null}
+                        {kind === 'show' && detail.data.totalEpisodes !== null ? (
+                          <div>
+                            <dt>Catalog episodes</dt>
+                            <dd>{detail.data.totalEpisodes}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                      {kind === 'episode' && detail.data.showId ? (
+                        <Button
+                          variant="outline"
+                          type="button"
+                          className="inspector-related-link"
+                          onClick={() => onOpenShow(detail.data!.showId!)}
+                        >
+                          Show details: {detail.data.subtitle ?? 'Show'}
+                        </Button>
+                      ) : null}
+                      {kind === 'show' ? (
+                        <div className="inspector-related-links">
+                          <Link to="/library/podcasts/archive" search={{ show: [id] }}>
+                            Archive episodes
+                          </Link>
+                          <Link to="/library/podcasts/queue" search={{ show: [id] }}>
+                            Queued episodes
+                          </Link>
                         </div>
                       ) : null}
-                      {kind === 'show' && detail.data.totalEpisodes !== null ? (
-                        <div>
-                          <dt>Catalog episodes</dt>
-                          <dd>{detail.data.totalEpisodes}</dd>
-                        </div>
+                      {detail.data.canonicalUrl ? (
+                        <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                          Open in Spotify <ExternalLink />
+                        </a>
                       ) : null}
-                    </dl>
-                    {kind === 'episode' && detail.data.showId ? (
-                      <Button
-                        variant="outline"
-                        type="button"
-                        className="inspector-related-link"
-                        onClick={() => onOpenShow(detail.data!.showId!)}
-                      >
-                        Show details: {detail.data.subtitle ?? 'Show'}
-                      </Button>
-                    ) : null}
-                    {kind === 'show' ? (
-                      <div className="inspector-related-links">
-                        <Link to="/library/podcasts/archive" search={{ show: [id] }}>
-                          Archive episodes
-                        </Link>
-                        <Link to="/library/podcasts/queue" search={{ show: [id] }}>
-                          Queued episodes
-                        </Link>
-                      </div>
-                    ) : null}
-                    {detail.data.canonicalUrl ? (
-                      <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                        Open in Spotify <ExternalLink />
-                      </a>
-                    ) : null}
-                  </section>
-                </TabsContent>
-                <TabsContent value="history" className="inspector-tab-panel">
-                  kind === 'episode' ? (
-                  <section>
-                    <h3>History</h3>
-                    {history.isPending ? <LoadingState>Loading history…</LoadingState> : null}
-                    {history.isError ? <Notice>{history.error.message}</Notice> : null}
-                    {history.data?.pages[0]?.totalCount === 0 ? <p>No supported history.</p> : null}
-                    <ol className="history-list">
-                      {history.data?.pages
-                        .flatMap((page) => page.data)
-                        .map((entry, index) => (
-                          <li key={`${entry.occurredAt}:${index}`}>
-                            <strong>{date(entry.occurredAt)}</strong>
-                            <span>
-                              {entry.source === 'reader'
-                                ? 'Reader Archive'
-                                : entry.observedMs === null
-                                  ? 'Playback detected'
-                                  : `${duration(entry.observedMs)} observed`}
-                            </span>
-                          </li>
-                        ))}
-                    </ol>
-                    {history.hasNextPage ? (
-                      <Button
-                        variant="outline"
-                        type="button"
-                        className="load-more"
-                        disabled={history.isFetchingNextPage}
-                        onClick={() => void history.fetchNextPage()}
-                      >
-                        {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
-                      </Button>
-                    ) : null}
-                  </section>
-                  ) : (
-                  <section>
-                    <h3>Following</h3>
-                    <dl>
-                      <div>
-                        <dt>Saved in Spotify</dt>
-                        <dd>{date(detail.data.date)}</dd>
-                      </div>
-                      <div>
-                        <dt>First observed</dt>
-                        <dd>{date(detail.data.firstObservedAt)}</dd>
-                      </div>
-                      <div>
-                        <dt>Last observed</dt>
-                        <dd>{date(detail.data.lastObservedAt)}</dd>
-                      </div>
-                      <div>
-                        <dt>Current state</dt>
-                        <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
-                      </div>
-                    </dl>
-                  </section>
-                  )
-                </TabsContent>
-              </>
-            }
-          </>
-        ) : null}
+                    </section>
+                  </TabsContent>
+                  <TabsContent value="history" className="inspector-tab-panel">
+                    {kind === 'episode' ? (
+                      <section>
+                        <h3>History</h3>
+                        {history.isPending ? <LoadingState>Loading history…</LoadingState> : null}
+                        {history.isError ? <Notice>{history.error.message}</Notice> : null}
+                        {history.data?.pages[0]?.totalCount === 0 ? (
+                          <p>No supported history.</p>
+                        ) : null}
+                        <ol className="history-list">
+                          {history.data?.pages
+                            .flatMap((page) => page.data)
+                            .map((entry, index) => (
+                              <li key={`${entry.occurredAt}:${index}`}>
+                                <strong>{date(entry.occurredAt)}</strong>
+                                <span>
+                                  {entry.source === 'reader'
+                                    ? 'Reader Archive'
+                                    : entry.observedMs === null
+                                      ? 'Playback detected'
+                                      : `${duration(entry.observedMs)} observed`}
+                                </span>
+                              </li>
+                            ))}
+                        </ol>
+                        {history.hasNextPage ? (
+                          <Button
+                            variant="outline"
+                            type="button"
+                            className="load-more"
+                            disabled={history.isFetchingNextPage}
+                            onClick={() => void history.fetchNextPage()}
+                          >
+                            {history.isFetchingNextPage ? 'Loading…' : 'Load more history'}
+                          </Button>
+                        ) : null}
+                      </section>
+                    ) : (
+                      <section>
+                        <h3>Following</h3>
+                        <dl>
+                          <div>
+                            <dt>Saved in Spotify</dt>
+                            <dd>{date(detail.data.date)}</dd>
+                          </div>
+                          <div>
+                            <dt>First observed</dt>
+                            <dd>{date(detail.data.firstObservedAt)}</dd>
+                          </div>
+                          <div>
+                            <dt>Last observed</dt>
+                            <dd>{date(detail.data.lastObservedAt)}</dd>
+                          </div>
+                          <div>
+                            <dt>Current state</dt>
+                            <dd>{detail.data.following ? 'Following' : 'Not following'}</dd>
+                          </div>
+                        </dl>
+                      </section>
+                    )}
+                  </TabsContent>
+                </>
+              }
+            </>
+          ) : null}
+        </div>
       </Tabs>
     </aside>
   )

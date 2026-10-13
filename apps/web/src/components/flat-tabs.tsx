@@ -1,4 +1,11 @@
-import { Children, isValidElement, useContext, type ComponentProps, type ReactNode } from 'react'
+import {
+  Children,
+  isValidElement,
+  useContext,
+  useLayoutEffect,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
@@ -41,6 +48,21 @@ export function CollectionTabList({
   'aria-label': string
 }) {
   const target = useContext(WorkspaceHeaderContext)
+  useLayoutEffect(() => {
+    if (!target) return
+    const revealSelected = () => {
+      const active = target.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      if (!active) return
+      const viewport = target.getBoundingClientRect()
+      const tab = active.getBoundingClientRect()
+      if (tab.left < viewport.left) target.scrollBy({ left: tab.left - viewport.left })
+      else if (tab.right > viewport.right) target.scrollBy({ left: tab.right - viewport.right })
+    }
+    revealSelected()
+    const observer = new ResizeObserver(revealSelected)
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [target, children])
   if (!target) return null
   return createPortal(
     <nav className="books-tabs group/tabs" data-orientation="horizontal" aria-label={label}>

@@ -9,7 +9,7 @@ require production-grade protection.
 
 ## Assets
 
-- Consumption history, ratings, highlights, notes, and future queue entries
+- Consumption history, ratings, highlights, notes, and source-derived Queue state
 - Full article text and raw account exports
 - OAuth access tokens, refresh tokens, API tokens, and webhook secrets
 - The Worker secret used to encrypt rotating credentials
@@ -60,6 +60,13 @@ require production-grade protection.
 - Keep R2 buckets private and access objects only through authorized server code.
 - Use opaque object keys rather than titles or URLs containing personal data.
 - Apply retention deliberately; deletion must cover D1 references and R2 objects.
+
+The web client also persists bounded default Library first pages in browser
+local storage. Those snapshots contain private metadata, not provider secrets
+or full article bodies. The [web cache contract](../../apps/web/README.md#library-loading-and-caching)
+documents age, size, schema validation, and invalidation. Cloudflare Access
+protects hosted requests; it does not encrypt or erase already-stored browser
+snapshots.
 
 ### Malicious or malformed source content
 

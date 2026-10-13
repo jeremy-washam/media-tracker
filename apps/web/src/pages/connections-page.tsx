@@ -1,3 +1,4 @@
+import { invalidateLibraryQueries } from '../library-queries'
 import { Notice, FileUploadButton } from '@/components/ui-patterns'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,8 +30,9 @@ const sourceNames = {
 
 const coverageNotes = {
   readwise:
-    'Reader Archive is polled hourly when the Worker is deployed. Removed documents retain their evidence.',
-  hardcover: 'The current Read shelf is reconciled hourly when deployed.',
+    'Reader documents across all locations and highlights are reconciled hourly when deployed. Removed documents retain their evidence.',
+  hardcover:
+    'Want to Read, Currently Reading, and Read relationships are reconciled hourly when deployed.',
   letterboxd:
     'RSS covers recent public activity. Import exports periodically for older and private history.',
   spotify:
@@ -68,6 +70,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })
@@ -78,6 +81,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })
@@ -88,6 +92,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })
@@ -98,6 +103,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })
@@ -108,6 +114,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })
@@ -118,6 +125,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })
@@ -135,6 +143,7 @@ export function ConnectionsPage() {
         queryClient.invalidateQueries({ queryKey: ['connections'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
+        invalidateLibraryQueries(queryClient),
       ])
     },
   })

@@ -2,6 +2,8 @@
 .private
 coverage
 dist
+dist-production
+apps/api/src/worker-bindings.d.ts
 exports
 node_modules
 playwright-report

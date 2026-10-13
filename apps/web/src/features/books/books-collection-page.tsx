@@ -1,3 +1,6 @@
+import { CollectionPagination } from '@/components/collection-pagination'
+import { useCollectionScroll } from '@/components/collection-scroll'
+import { booksQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState, Hint } from '@/components/ui-patterns'
@@ -29,15 +32,7 @@ import {
   useInspectorPresence,
   useLibrarySectionCounts,
 } from '../../components/library-hooks'
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-  type Ref,
-} from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -55,12 +50,8 @@ import {
 
 import type { BookCollectionItem, BookDetail, BookHistoryEntry } from '@media-tracker/contracts'
 
-import { fetchBook, fetchBookHistory, fetchBooks, type BooksRequest } from './books-api'
-import {
-  collectionQuerySearch,
-  normalizedForCollection,
-  type BooksRouteSearch,
-} from './books-route-search'
+import { fetchBook, fetchBookHistory } from './books-api'
+import { normalizedForCollection, type BooksRouteSearch } from './books-route-search'
 
 function formatDate(value: string | null, precision: string | null): string | null {
   if (value === null) return null
@@ -108,12 +99,11 @@ function Cover({ book, size = 'card' }: { book: BookCollectionItem; size?: 'card
 }
 
 function contextLabel(book: BookCollectionItem, collection: 'archive' | 'queue') {
-  if (collection === 'archive') {
-    const date = formatDate(book.latestReadDate, book.latestReadPrecision)
-    return `${date === null ? 'Read — date unavailable' : `Read ${date}`}`
-  }
-  const date = formatDate(book.addedToHardcoverDate, 'day')
-  return date === null ? 'Added date unavailable' : `Added to Hardcover ${date}`
+  return (
+    (collection === 'archive'
+      ? formatDate(book.latestReadDate, book.latestReadPrecision)
+      : formatDate(book.addedToHardcoverDate, 'day')) ?? '—'
+  )
 }
 
 function activeFilterCount(search: BooksRouteSearch, collection: 'archive' | 'queue') {
@@ -183,30 +173,14 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
   const closeInspector = () => {
     const returnFocus = selectedResultRef.current
     updateSearch({ item: undefined })
-    requestAnimationFrame(() => returnFocus?.focus())
+    requestAnimationFrame(() => returnFocus?.focus({ preventScroll: true }))
   }
 
-  const request = useMemo<BooksRequest>(() => {
-    const query = collectionQuerySearch(search)
-    return {
-      collection,
-      ...query,
-      finishedMode: query.finishedMode ?? 'any',
-      publishedMode: query.publishedMode ?? 'any',
-      addedMode: query.addedMode ?? 'any',
-      ratingMode: query.ratingMode ?? 'any',
-      limit: 48,
-    }
-  }, [collection, search])
-  const books = useInfiniteQuery({
-    queryKey: ['books', request],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      fetchBooks({ ...request, ...(pageParam === undefined ? {} : { cursor: pageParam }) }, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const queryOptions = booksQueryOptions(collection, search)
+  const books = useInfiniteQuery(queryOptions)
   const pages = books.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
+  const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
   const summary = pages[0]
   const sectionCounts = useLibrarySectionCounts('books', summary, (page) => page.counts)
   const count = summary?.counts.filteredBooks ?? 0
@@ -232,7 +206,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
       className={`books-page books-layout-${layout}`}
       aria-labelledby="books-title"
     >
-      <FlatTabsContent value={collection} className="books-collection">
+      <FlatTabsContent value={collection} className="books-collection" ref={collectionRef}>
         <h1 className="sr-only" id="books-title">
           Books
         </h1>
@@ -242,14 +216,14 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             search={normalizedForCollection(search, 'archive')}
             activeProps={{ 'aria-current': 'page', className: 'active' }}
           >
-            Archive <span>{sectionCounts?.archive ?? '—'}</span>
+            Archive <span>{sectionCounts?.archive?.toLocaleString() ?? '—'}</span>
           </Link>
           <Link
             to="/library/books/queue"
             search={normalizedForCollection(search, 'queue')}
             activeProps={{ 'aria-current': 'page', className: 'active' }}
           >
-            Queue <span>{sectionCounts?.queue ?? '—'}</span>
+            Queue <span>{sectionCounts?.queue?.toLocaleString() ?? '—'}</span>
           </Link>
         </CollectionTabList>
         <div className="books-toolbar">
@@ -382,7 +356,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
         {books.isPending ? (
           <LoadingState className="books-loading">Loading books…</LoadingState>
         ) : null}
-        {books.isError ? (
+        {books.isError && !books.isFetchNextPageError ? (
           <Notice className="books-state books-state-error">
             <h2>Books could not be loaded</h2>
             <p>{books.error.message}</p>
@@ -425,10 +399,12 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           <div className={layout === 'grid' ? 'books-grid' : 'books-list'}>
             {layout === 'list' ? (
               <div className="book-list-head" aria-hidden="true">
-                <span>Title</span>
-                <span>Publish Year</span>
-                <span>{collection === 'archive' ? 'Read Date' : 'Added Date'}</span>
-                <span>Rating</span>
+                <span className="book-head-title">Title</span>
+                <span className="book-head-year">Publish Year</span>
+                <span className="book-head-context">
+                  {collection === 'archive' ? 'Read Date' : 'Added to Hardcover'}
+                </span>
+                <span className="book-head-rating">Rating</span>
                 <span />
               </div>
             ) : null}
@@ -447,17 +423,12 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             ))}
           </div>
         ) : null}
-        {books.hasNextPage ? (
-          <Button
-            variant="outline"
-            className="load-more"
-            type="button"
-            disabled={books.isFetchingNextPage}
-            onClick={() => void books.fetchNextPage()}
-          >
-            {books.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </Button>
-        ) : null}
+        <CollectionPagination
+          query={books}
+          scrollRef={collectionRef}
+          itemCount={items.length}
+          label="books"
+        />
       </FlatTabsContent>
       {inspectorItem ? (
         <>
@@ -492,6 +463,7 @@ function BookResult({
   if (layout === 'grid') {
     return (
       <MediaCard
+        data-collection-item={book.id}
         type="button"
         ref={buttonRef}
         className={selected ? 'book-card selected' : 'book-card'}
@@ -507,6 +479,7 @@ function BookResult({
   }
   return (
     <MediaRowButton
+      data-collection-item={book.id}
       type="button"
       ref={buttonRef}
       className={selected ? 'book-row selected' : 'book-row'}
@@ -519,11 +492,7 @@ function BookResult({
         <small>{authors(book)}</small>
       </span>
       <span className="book-row-year">{book.publicationDate?.slice(0, 4) ?? '—'}</span>
-      <span className="book-row-context">
-        {collection === 'archive'
-          ? (formatDate(book.latestReadDate, book.latestReadPrecision) ?? '—')
-          : contextLabel(book, collection)}
-      </span>
+      <span className="book-row-context">{contextLabel(book, collection)}</span>
       <RatingStars rating={book.personalRating} />
       <ChevronRight aria-hidden="true" />
     </MediaRowButton>

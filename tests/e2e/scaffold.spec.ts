@@ -1,3 +1,4 @@
+import { installDefaultApiMocks } from './default-api-mocks'
 import { expect, test, type Page } from '@playwright/test'
 async function checkInspectorTabs(page: Page, label: string) {
   const inspector = page.locator(`aside[aria-label="${label}"]`)
@@ -101,7 +102,7 @@ test('keeps loaded Podcast pages while opening the inspector in list-only Archiv
   const requested: string[] = []
   await page.route('**/api/library/podcasts?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url.search)
+    if (url.searchParams.get('view') === 'archive') requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: podcastsResponse(
@@ -133,7 +134,9 @@ test('keeps loaded Podcast pages while opening the inspector in list-only Archiv
     route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
   )
   await page.goto('/library/podcasts/archive')
-  await page.getByRole('button', { name: 'Load more' }).click()
+  await page.locator('.books-collection').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
   await expect(page.getByRole('button', { name: /Second Episode/ })).toBeVisible()
   const afterPaging = requested.length
   await expect(page.getByRole('button', { name: 'Grid view' })).toHaveCount(0)
@@ -156,7 +159,7 @@ test('keeps loaded Music pages while opening the inspector in list-only Tracks',
   const requested: string[] = []
   await page.route('**/api/library/music?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url.search)
+    if (url.searchParams.get('view') === 'tracks') requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: musicResponse(
@@ -198,7 +201,9 @@ test('keeps loaded Music pages while opening the inspector in list-only Tracks',
     route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
   )
   await page.goto('/library/music/tracks')
-  await page.getByRole('button', { name: 'Load more' }).click()
+  await page.locator('.books-collection').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
   await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
   const afterPaging = requested.length
   await expect(page.getByRole('button', { name: 'Grid view' })).toHaveCount(0)
@@ -294,7 +299,7 @@ test('keeps loaded Video pages while changing layout and opening the inspector',
   const requested: string[] = []
   await page.route('**/api/library/videos?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url.search)
+    if (url.searchParams.get('view') === 'archive') requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: videosResponse(
@@ -330,7 +335,9 @@ test('keeps loaded Video pages while changing layout and opening the inspector',
     route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
   )
   await page.goto('/library/videos/archive')
-  await page.getByRole('button', { name: 'Load more' }).click()
+  await page.locator('.books-collection').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
   await expect(page.getByRole('button', { name: /Second Video/ })).toBeVisible()
   const afterPaging = requested.length
   await page.getByRole('button', { name: 'Grid view' }).click()
@@ -569,6 +576,7 @@ const videosResponse = (data = [video], nextCursor: string | null = null) => ({
 })
 
 test.beforeEach(async ({ page }) => {
+  await installDefaultApiMocks(page)
   await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
 })
 
@@ -664,8 +672,23 @@ for (const scenario of [
           return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
         }),
       )
+    const nextPath = `/library/${scenario.media}/${scenario.next.toLowerCase()}`
+    await expect
+      .poll(
+        () =>
+          page.evaluate((path) => {
+            const saved = localStorage.getItem('media-tracker:library-initial-pages:v1')
+            return saved
+              ? JSON.parse(saved).entries.some((entry: { path: string }) => entry.path === path)
+              : false
+          }, nextPath),
+        { timeout: 15_000 },
+      )
+      .toBe(true)
     const before = await geometry()
     const counts = await nav.locator('span').allTextContents()
+    // A warm section stays visible during a refresh once its ten-minute window expires.
+    await page.clock.setFixedTime((await page.evaluate(() => Date.now())) + 11 * 60_000)
     hold = true
     try {
       await nav.getByRole('tab', { name: new RegExp(`^${scenario.next} `) }).click()
@@ -676,7 +699,7 @@ for (const scenario of [
       const results = page.locator(
         '.book-row, .movie-row, .article-row, .spotify-result, .video-result',
       )
-      await expect(results).toHaveCount(0)
+      await expect(results).toHaveCount(1)
       release()
       await expect(results).toHaveCount(1)
       const freshCounts = scenario.media === 'videos' ? [counts[0]!, '111', counts[2]!] : counts
@@ -736,7 +759,7 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
   await page.unroute('**/api/library/books?*')
   await page.route('**/api/library/books?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url.search)
+    if (url.searchParams.get('collection') === 'archive') requested.push(url.search)
     const second = url.searchParams.has('cursor')
     const searched = url.searchParams.get('q') === 'Ada'
     await route.fulfill({
@@ -784,7 +807,9 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
   )
   await page.goto('/library/books/archive')
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
-  await page.getByRole('button', { name: 'Load more' }).click()
+  await page.locator('.books-collection').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
   const requestsAfterPaging = requested.length
   await page.getByRole('button', { name: 'Grid view' }).click()
@@ -832,8 +857,16 @@ test('keeps Books range drafts valid until a boundary is entered', async ({ page
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   for (const label of ['Finished', 'Published']) {
-    await page.getByRole('combobox', { name: label, exact: true }).click()
-    await page.getByRole('option', { name: 'Custom range', exact: true }).click()
+    const select = page.getByRole('combobox', { name: label, exact: true })
+    await select.click()
+    await expect(select).toHaveAttribute('aria-expanded', 'true')
+    const listId = await select.getAttribute('aria-controls')
+    expect(listId).toBeTruthy()
+    await page
+      .locator(`[id="${listId}"]`)
+      .getByRole('option', { name: 'Custom range', exact: true })
+      .click()
+    await expect(page.getByRole('listbox')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
     await page.getByRole('textbox', { name: `${label} from`, exact: true }).fill('2020-01-01')
     await expect
@@ -846,6 +879,9 @@ test('keeps Books range drafts valid until a boundary is entered', async ({ page
       )
       .toBe(true)
     await page.getByRole('textbox', { name: `${label} from`, exact: true }).fill('')
+    await expect(page).toHaveURL(
+      (url) => !url.searchParams.has(`${label === 'Finished' ? 'finished' : 'published'}From`),
+    )
     await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
   }
   expect(invalid).toEqual([])
@@ -1011,7 +1047,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   const requested: string[] = []
   await page.route('**/api/library/movies?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url.search)
+    if (url.searchParams.get('collection') === 'archive') requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: moviesResponse(
@@ -1102,7 +1138,9 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await expect(page.getByRole('heading', { name: 'Movies' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Archive 372' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Queue 309' })).toBeVisible()
-  await page.getByRole('button', { name: 'Load more movies' }).click()
+  await page.locator('.books-collection').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
 
   const requestsAfterPaging = requested.length
@@ -1195,9 +1233,19 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
 
   await page.getByRole('group', { name: 'Watched date' }).getByRole('combobox').click()
   await page.getByRole('option', { name: 'Custom range', exact: true }).click()
+  await expect(page).toHaveURL(/watched=range/)
+  await expect(page.getByRole('listbox')).toHaveCount(0)
   await page.getByRole('group', { name: 'Release year' }).getByLabel('Release year from').fill('20')
-  await page.getByRole('group', { name: 'Your rating' }).getByRole('combobox').first().click()
-  await page.getByRole('option', { name: 'Custom range', exact: true }).click()
+  await expect(page).toHaveURL(/releaseYearFrom=(?:%22)?20/)
+  const rating = page.getByRole('combobox', { name: 'Your rating', exact: true })
+  await rating.click()
+  await expect(rating).toHaveAttribute('aria-expanded', 'true')
+  const ratingListId = await rating.getAttribute('aria-controls')
+  expect(ratingListId).toBeTruthy()
+  await page
+    .locator(`[id="${ratingListId}"]`)
+    .getByRole('option', { name: 'Custom range', exact: true })
+    .click()
 
   await expect(page).toHaveURL(/watched=range/)
   await expect(page).toHaveURL(/releaseYearFrom=/)
@@ -1230,7 +1278,7 @@ test('keeps loaded Article pages while inspecting History in expanded rows', asy
   const requested: string[] = []
   await page.route('**/api/library/articles?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url.search)
+    if (url.searchParams.get('section') === 'archive') requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: articlesResponse(
@@ -1332,7 +1380,9 @@ test('keeps loaded Article pages while inspecting History in expanded rows', asy
   await expect(page.getByRole('tab', { name: 'Archive 72' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Queue 178' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Feed 666' })).toBeVisible()
-  await page.getByRole('button', { name: 'Load more articles' }).click()
+  await page.locator('.books-collection').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
   await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
   const afterPaging = requested.length
   await expect(page.getByRole('button', { name: 'Expanded' })).toHaveCount(0)
@@ -1343,7 +1393,8 @@ test('keeps loaded Article pages while inspecting History in expanded rows', asy
   await checkInspectorTabs(page, 'Article inspector')
   await expect(page.getByText('1,200')).toBeVisible()
   await expect(page.getByText('Readwise Reader · archive')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Reader relationships' })).toBeVisible()
+  await page.getByRole('button', { name: 'Reader source details' }).click()
+  await expect(page.getByText('Reader ID: article-one', { exact: true })).toBeVisible()
   await page.getByRole('tab', { name: 'History' }).click()
   await expect(page.getByText('Current state')).toBeVisible()
   await expect(
@@ -1458,12 +1509,25 @@ test('searches every channel and pages shadcn channel choices', async ({ page })
   await channel.click()
   await expect(page.getByRole('option', { name: 'Alpha', exact: true })).toBeVisible()
   await channel.press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
   await page.getByRole('button', { name: 'Load more channels' }).click()
   await channel.click()
   await expect(page.getByRole('option', { name: 'Beta', exact: true })).toBeVisible()
   await channel.press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  const searchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return (
+      url.pathname === '/api/library/videos' &&
+      url.searchParams.get('view') === 'channels' &&
+      url.searchParams.get('q') === 'Zebra'
+    )
+  })
   await page.getByRole('searchbox', { name: 'Search channel options' }).fill('Zebra')
+  await searchResponse
+  await expect(page.locator('.video-channel-picker').getByRole('status')).toHaveCount(0)
   await channel.click()
+  await expect(channel).toHaveAttribute('aria-expanded', 'true')
   await page.getByRole('option', { name: 'Zebra Channel', exact: true }).click()
   await expect(page).toHaveURL(/channel=%5B%22channel-z%22%5D/)
 })

@@ -4,7 +4,14 @@ The Hono REST API and Cloudflare request, queue, and scheduled-event entry point
 
 `wrangler.jsonc` defines credential-free local D1, R2, Queue, Cron, and static asset
 bindings. The placeholder resource IDs are suitable only for local development;
-replace them with provisioned Cloudflare resources before deployment.
+hosted resource IDs belong in the separate production configuration.
+
+Production uses a separate ignored `wrangler.production.jsonc` and the app-only
+`apps/web/dist-production` bundle. All requests pass through Access JWT/owner
+verification; only explicit local loopback requests can bypass authentication.
+The first deployment has sync, imports, cron, and queue processing paused until
+data transfer is verified. Follow the [deployment runbook](../../docs/planning/deployment.md)
+for target generation, account activation, backups, secrets, and cutover.
 
 ## Readwise MVP sync
 
@@ -54,10 +61,13 @@ history.
 
 Set `HARDCOVER_TOKEN` in `.dev.vars`, then use **Connections → Hardcover → Sync
 now** for the initial import. The same sync runs hourly through the Worker Cron
-Trigger. It reads the current Read shelf, stores each exact GraphQL response page
-in private R2, and projects books into the Archive without manufacturing rereads
-from aggregate counts. Repeating the sync reconciles the full Read shelf
-idempotently.
+Trigger. It reconciles Want to Read, Currently Reading, and Read relationships,
+stores each exact library and edition GraphQL response in private R2, and
+projects work-level Books with distinct edition identities. Finished child read
+rows create Archive occurrences; Read-status books without one receive an
+undated fallback. Active statuses 1 and 2 independently determine Books Queue.
+Aggregate read counts never manufacture rereads. Missing source relationships
+retire only after a complete snapshot; retained Archive history stays available.
 
 ## Spotify and YouTube
 
@@ -66,6 +76,15 @@ Spotify accepts Extended Streaming History ZIPs and polls saved episodes. Set
 32-byte AES key). Apply migration 0002 before syncing. Rotated tokens are saved
 encrypted before library acquisition; a short database lease serializes refreshes.
 A new bootstrap refresh token replaces the previous stored authorization.
+
+The current Spotify path imports both podcast segments and identified song
+rows, and also polls saved shows, current-player episode progress, and Recently
+Played tracks. Optional reads preserve prior state when they fail and report
+partial coverage. Music counts every identified, non-conflicting song row,
+including zero-duration/skipped rows; API-only track events have unknown observed
+time. Audiobooks remain outside the Library. The saved-episode probe's two-scope
+grant alone does not cover player/recent-track reads; see the Spotify source
+report for the separate read scopes.
 
 For exact-ID track and episode metadata, `POST /api/catalogs/spotify/sync`
 starts or resumes a bounded background backfill. `GET
@@ -106,4 +125,6 @@ disclosure and automatic refresh; it defaults off.
 
 Imports are HTTP-driven and stop when the browser stops requesting chunks. Use
 Resume import after reopening Connections. The queue consumer handles selective
-Reader article-content jobs; other generalized background work remains deferred.
+Reader content acquisition/indexing, TMDB and YouTube catalog refresh, and
+resumable Spotify catalog backfill. Generalized replay/export/recovery jobs
+remain deferred.

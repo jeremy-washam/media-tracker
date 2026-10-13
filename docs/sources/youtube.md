@@ -1,9 +1,10 @@
 # YouTube Source Reconnaissance
 
 - Status: Private Takeout history, Watch Later, and subscriptions implemented;
-  public Data API probe complete, with production enrichment pending
+  public Data API probe, catalog persistence, and durable refresh implemented
 - Last verified: 2026-09-21
-- Priority: Takeout-backed Library shipped; public catalog metadata next
+- Implementation reviewed: 2026-10-12 against repository code and local Library
+- Priority: Takeout-backed Library and public enrichment shipped; hardening remains
 - Sources: Official Google/YouTube documentation and private aggregate probes
 
 ## Executive assessment
@@ -30,7 +31,7 @@ Recommended integration shape:
 4. Preserve non-watch activity and unavailable rows as source evidence without
    admitting them as watched videos.
 5. Import Watch Later independently as current, source-derived Queue evidence.
-6. Enrich known public video IDs through `videos.list` later, without making
+6. Enrich known public video IDs through the implemented `videos.list` path, without making
    metadata enrichment a prerequisite for preserving history.
 
 The 2026-09-21 credentialed Data API probe validated this enrichment shape
@@ -39,6 +40,13 @@ and three were omitted. Their 40 distinct returned channels all resolved, and
 the US category catalog returned 32 rows. Detailed field presence is recorded in
 [catalog reconnaissance](catalogs.md); no private titles, IDs, descriptions, or
 raw API payloads were committed.
+
+The Worker now stores exact public responses separately from immutable Takeout
+evidence, maintains expiring video/channel/category caches, and runs bounded
+refresh jobs from `POST /api/catalogs/youtube/sync`. Automatic refresh is opt-in;
+browse API handlers never call Google. The Videos plan and storage-efficiency plan
+record the remaining cache-freshness launch gate when sync is paused. This
+implementation review does not change the upstream-policy verification date.
 
 Official references:
 

@@ -2,15 +2,21 @@
 
 Imladris is a private, single-user ledger that consolidates personal media
 history from Letterboxd, Hardcover, Spotify, Readwise Reader, and YouTube. The
-initial goal is trustworthy historical backfill and ongoing synchronization.
-Future work includes a centralized queue, evidence-backed LLM search, and
-possibly an iOS client.
+foundation is trustworthy historical backfill and ongoing synchronization.
+The desktop Library now browses all six media types with source-derived Queue
+views, search, filters, pagination, and contextual inspectors. Future work
+includes manual Queue management, evidence-backed LLM search, Chat, Recaps,
+and possibly an iOS client.
 
-All five initial sources have local ingestion paths: Readwise Archive polling,
-Hardcover Read-shelf reconciliation, Letterboxd export/RSS ingestion, Spotify
-podcast export/saved-episode ingestion, and manual YouTube Takeout imports.
-History supports server-side media-type filtering, complete counts, and cursor
-pagination. Connections shows each account, source coverage, incomplete imports,
+All five initial sources have local ingestion paths: all-location Readwise
+document/highlight polling, Hardcover Want to Read/Currently Reading/Read
+reconciliation, Letterboxd export/RSS ingestion, Spotify podcast/song exports
+and saved-library/player/recent-track polling, and manual YouTube Takeout
+imports. Library has 16 sections: Books and Movies Archive/Queue, Articles
+Archive/Queue/Feed, Podcasts Archive/Queue/Following, Music Tracks/Albums/Artists,
+and Videos Archive/Queue/Channels. The root opens Books Archive; the legacy
+History page is unmounted, while its generic media API remains available.
+Connections shows each account, source coverage, incomplete imports,
 resume controls, and recent sync attempts. This is a locally validated MVP, not a
 production deployment or a completed recovery toolset.
 
@@ -71,8 +77,9 @@ Provider credentials are required only for their respective sync actions.
 Deployed Cron Triggers poll Readwise, Hardcover, Letterboxd, and Spotify hourly;
 `wrangler dev --test-scheduled` exposes a manual test endpoint and does not run
 an unattended hourly schedule. YouTube has no automatic history sync. The
-IDs in `apps/api/wrangler.jsonc` are local placeholders and must be replaced
-before remote deployment.
+IDs in `apps/api/wrangler.jsonc` are local placeholders. Hosted deployment uses
+a separate ignored `apps/api/wrangler.production.jsonc`; generate and validate
+it through the deployment runbook rather than repurposing the local config.
 
 ## Upgrading an existing local database
 
@@ -92,12 +99,21 @@ lineage. No real source data needs to be deleted to retry an import.
 
 ## Remaining limitations
 
-Songs and audiobooks, source deletion reconciliation beyond Reader moves,
-generalized replay, app-wide export/recovery commands, webhooks, and production
-Access setup remain deferred. The CLI and queue consumer are placeholders;
-imports currently use HTTP requests and polling uses scheduled handlers.
+Audiobooks, generalized replay, app-wide remote export/recovery commands,
+webhooks, and production Access provisioning remain deferred. Music is
+implemented. Imports use HTTP requests, polling uses scheduled handlers, and
+queues handle selective Reader content and catalog jobs. Deployment helpers and
+a local snapshot/restore rehearsal are available; they do not provide the full
+operational recovery toolset.
 
 ## Checks
+
+Private hosting preparation, Access authentication, production asset packaging,
+and the local data-transfer rehearsal are documented in the
+[deployment runbook](docs/planning/deployment.md). Use `pnpm build:production`
+for hosted artifacts and `pnpm deploy` only after configuring the ignored real
+production target. The CLI's deployment helpers do not implement generalized
+replay/export/recovery.
 
 ```sh
 pnpm check

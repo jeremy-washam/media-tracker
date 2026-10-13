@@ -1,10 +1,17 @@
 # Library implementation handoff
 
 - Date: 2026-09-19
-- Status: In progress; Step 1 through the initial Podcasts, Music, and
-  Takeout-backed Videos production slices are implemented
+- Status: All six initial Library slices and TMDB/YouTube/Spotify enrichment
+  paths implemented locally; remaining hardening is tracked in the per-media plans
 - Intended implementer: Sol agent
 - Scope: Production Library, including Archive, source-derived Queue, and item inspection
+
+The staged handoff below preserves the original September delivery sequence.
+For current presentation, use the [UI foundation](../design/ui-foundation.md):
+list defaults, one expanded Article row style, and installed shadcn controls
+supersede older layout/density instructions. Music's immediate-counting rule
+below supersedes the original 30-second proposal. Hosted deployment remains
+pending; “production” here identifies application code rather than a hosted rollout.
 
 ## Outcome
 
@@ -64,8 +71,10 @@ and not all illustrative metadata in the specimen is currently available.
 
 Verify this inventory against code before editing; other work may have advanced.
 Relevant entry points are `packages/contracts/src/index.ts`,
-`packages/db/src/repository.ts`, `apps/api/src/app.ts`, source connectors and sync
-services, `apps/web/src/pages/history-page.tsx`, and the shared UI components.
+the media-specific repositories in `packages/db/src`, `apps/api/src/app.ts`,
+source connectors and sync services, `apps/web/src/router.tsx`,
+`apps/web/src/features`, and the shared UI components. The legacy History page
+is unmounted.
 
 ## Step 1: Specify each media type, including Queue membership
 
@@ -90,7 +99,7 @@ media-specific contracts contain the owner-approved implementation baseline.
 | -------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Movies   | Letterboxd watchlist                                  | Import explicit watchlist membership from the available export. Historical watches do not independently cancel an explicit watchlist entry.                                                                  |
 | Articles | Readwise Inbox, Later, and Shortlist; not Archive     | Map all three upstream locations to Queue. Feed remains a separate Articles section; do not include unrelated Reader categories automatically.                                                               |
-| Books    | Hardcover Want to Read and Currently Reading          | Import both statuses explicitly and keep them in Queue until a supported completed read exists. Paused, Did Not Finish, and other statuses do not become Queue by inference.                                 |
+| Books    | Hardcover Want to Read and Currently Reading          | Active statuses 1 and 2 determine Queue independently from retained finished reads; a book may be in Archive and Queue. Paused, Did Not Finish, and other statuses do not become Queue by inference.         |
 | Podcasts | Spotify library minus podcasts with playback activity | At item level, use saved episodes and exclude any episode with known positive playback evidence, whether from historical export or ongoing observations. Completion is not required for exclusion.           |
 | Videos   | YouTube watchlist                                     | Interpret this as **Watch Later**, consistent with the existing Takeout research. Record this assumption; if the owner means another playlist, resolve its identity before implementing that source mapping. |
 | Songs    | No Queue                                              | Do not show an empty or disabled Queue tab for Songs. Saved/liked tracks are not Queue membership.                                                                                                           |
@@ -129,11 +138,11 @@ membership storage distinct from consumption and capable of future local intent.
 Songs have far more unique items and far more listening activity. Do not copy
 the Books layout or load every playback into the browser.
 
-- Use the accepted source-specific qualification rule: identified export song
-  rows qualify at `ms_played >= 30_000`; identified Recently Played API events
-  qualify immediately because the API omits duration/skip evidence. Preserve
-  zero-duration/skipped/partial rows and keep a source observation distinct from
-  a counted normalized occurrence.
+- Count every identified, non-conflicting export song row and identified
+  Recently Played API event immediately. Zero-duration, skipped, and partial
+  export rows count; there is no minimum-duration threshold. Export milliseconds
+  contribute observed time exactly as reported; API-only events have unknown
+  observed time. Keep source observations distinct from canonical song membership.
 - Preserve raw activity regardless of whether it qualifies for displayed
   aggregates. Document any normalization or deduplication without collapsing
   genuine repeat plays or conflating distinct recordings by title.
@@ -237,7 +246,8 @@ items. The owner-authorized initial selective acquisition indexed all 250
 currently eligible Archive/Queue documents; metadata, notes, and highlight
 search continue to work independently when text is unavailable.
 
-The three remaining slices now have coordinated execution plans:
+The three subsequent slices are now implemented, with hardening tracked in
+their coordinated execution plans:
 
 - [Podcasts](podcasts-implementation.md) owns the next source/read-model
   foundation, saved-episode Queue, Following, and best-effort player polling.

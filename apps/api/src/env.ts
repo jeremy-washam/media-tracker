@@ -12,13 +12,17 @@ import {
   type CanonicalLedgerRepository,
 } from '@media-tracker/db'
 
-export interface Bindings {
-  ASSETS: Fetcher
+export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BUCKET'> {
+  API_RATE_LIMITER?: WorkerBindings['API_RATE_LIMITER']
+  WRITE_RATE_LIMITER?: WorkerBindings['WRITE_RATE_LIMITER']
+  AUTH_MODE?: string
+  ACCESS_TEAM_DOMAIN?: string
+  ACCESS_AUD?: string
+  OWNER_EMAIL?: string
+  SYNC_ENABLED?: string
   CATALOG_AUTO_REFRESH?: string
-  DB: D1Database
   HARDCOVER_TOKEN?: string
   LETTERBOXD_USERNAME?: string
-  RAW_BUCKET: R2Bucket
   READWISE_TOKEN?: string
   SPOTIFY_CLIENT_ID?: string
   SPOTIFY_CLIENT_SECRET?: string

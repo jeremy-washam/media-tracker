@@ -7,6 +7,13 @@
 - Scope: YouTube-backed Library > Videos Archive, Watch Later Queue, Channels,
   and video/channel inspectors
 
+Current presentation (reviewed 2026-10-12) follows the
+[UI foundation](../design/ui-foundation.md): Archive/Queue support list/grid,
+Channels uses rows, and installed shadcn controls replace the earlier native or
+custom control guidance. Earlier delivery-stage and provider-gate descriptions
+are historical. Paused-sync cache maintenance and projection/search freshness
+remain a launch gate in the [storage efficiency plan](storage-efficiency-plan.md).
+
 ## Purpose
 
 This document turns the owner-approved
@@ -14,7 +21,7 @@ This document turns the owner-approved
 into an execution plan for the current Imladris architecture. It covers the
 complete path from retained Google Takeout ZIPs through source projections,
 canonical watch occurrences, Watch Later Queue, channel rollups, refreshable
-YouTube catalog metadata, current subscriptions, typed APIs, and the production
+YouTube catalog metadata, retained subscription evidence, typed APIs, and the production
 Index interface.
 
 This is an implementation plan, not another product-design round. Archive,

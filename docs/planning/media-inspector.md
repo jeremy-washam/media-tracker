@@ -1,9 +1,17 @@
 # Media inspector: initial research and delivery proposal
 
-- Status: Proposal; no implementation or provider adoption
+- Status: Historical September proposal; initial Library inspectors and provider enrichment now implemented, Chat/catalog discovery still proposed
 - Researched: 2026-09-19
 - Scope: Click-through behavior, current data availability, and catalog dependency
 - Next deliverable: Per-media inspector field summaries and layout specifications
+
+The code inventory and “current” gaps below describe the September 19 research
+snapshot. They are retained as history, not the current implementation checklist.
+Per-media inspectors, Hardcover details, Reader highlights/selective full text,
+TMDB/YouTube catalogs, Spotify backfill, and Music ingestion have since shipped
+locally. Use the [Library handoff](library-implementation.md), per-media plans,
+and [UI foundation](../design/ui-foundation.md) for current behavior. External
+Chat references, arbitrary catalog inspection, and LLM retrieval remain proposals.
 
 ## Recommendation
 

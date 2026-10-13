@@ -1,14 +1,19 @@
 # Spotify connector
 
-Status: Extended Streaming History parsing and saved-episode reconciliation are
-implemented. The private history export and saved-episode API were both probed
-before the ingestion rules were frozen.
+Status: podcast/song Extended Streaming History parsing, saved-episode/show
+reconciliation, current-player and Recently Played reads, and exact-ID catalog
+clients are implemented. The API Worker owns their orchestration and durable
+catalog jobs. Historical private probes below retain their original dates and
+coverage; they are not fresh account measurements.
 
-This package owns Extended Streaming History parsing, saved-episode polling,
-token refresh, and source-specific normalization. Untouched saved episodes are
-reported as Queue candidates; any positive playback position or `fully_played`
-signal maps to Archive. Songs and audiobooks remain preserved in the raw export
-but are not admitted to Archive until the owner approves separate rules. See
+This package owns Extended Streaming History parsing, Spotify read clients,
+token refresh, and source-specific normalization. Saved episodes without known
+positive playback support Queue; any positive episode playback position or
+`fully_played` signal maps to Archive, and export evidence takes precedence over
+a later zero resume position. Identified song export rows and Recently Played
+events count immediately, including zero-duration/skipped export rows. Export
+milliseconds contribute observed time; API-only events have unknown duration.
+Audiobooks remain raw evidence outside the Library. See
 the [Spotify source reconnaissance](../../../docs/sources/spotify.md) for the
 current capability assessment, field inventory, limitations, and probe plan.
 
@@ -50,6 +55,12 @@ Spotify has no podcast listening-history endpoint or listener webhook, so this
 poll is best-effort: it sees current saved episodes and their mutable playback
 positions, not every newly played episode.
 
+The probe requests only `user-library-read` and `user-read-playback-position`.
+Production player/recent-track reads additionally need `user-read-playback-state`
+and `user-read-recently-played`. Reauthorizing this probe alone still produces
+the two-scope grant; optional production reads can report partial failures when
+their scopes are absent.
+
 ### Observed private result
 
 The latest complete scan authenticated successfully and returned 111 saved rows:
@@ -85,11 +96,13 @@ reason enums. It does not print titles, show names, track/episode URIs, platform
 strings, countries, or sensitive row content. Tests use synthetic rows only.
 
 The application importer accepts the original ZIP, stores it content-addressed
-in private R2, and retains every podcast playback segment as a source record.
+in private R2, and retains podcast segments and identified song rows as source
+records and typed playback observations.
 Any positive segment with a usable Spotify episode URI admits exactly one
 Archive occurrence for that episode, dated to its latest positive segment.
-It creates a compact derived podcast manifest and commits at most 100 segments
-per request, allowing interrupted imports to resume without repeatedly inflating
+It creates a compact derived podcast/song manifest and commits at most 100 records
+per request in the current resumable import path,
+allowing interrupted imports to resume without repeatedly inflating
 the full export. Re-importing completed ZIP bytes is a no-op. The importer
 deliberately keeps same-second and byte-identical rows distinct by member name
 and array index.

@@ -69,9 +69,10 @@ provenance details are application-specific compositions. They can contain shadc
 controls without being replaced by a generic Card or Table component. Semantic
 HTML remains appropriate for text, labels, headings, fieldsets, links, and data.
 
-Archive/Queue/Following and media-type navigation change routes. Keep them as
-router links; their visual resemblance to tabs does not justify converting them
-to an in-page Tabs widget. The desktop inspector is a nonmodal application pane.
+Media-type navigation remains router links. Collection section navigation now
+uses shared FlatTabs composed from actual shadcn Tabs, with one associated panel
+per trigger and URL-backed navigation/search normalization. The earlier
+router-link-only guidance was superseded by that migration. The desktop inspector is a nonmodal application pane.
 Do not convert it wholesale to Dialog or Sheet. Its narrower-screen overlay
 behavior should be evaluated separately when modal primitives are adopted.
 

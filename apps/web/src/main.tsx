@@ -1,17 +1,25 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 
 import { router } from './router'
+import {
+  browserCacheStorage,
+  createAppQueryClient,
+  persistLibraryCache,
+  startInitialPrefetch,
+} from './library-cache'
 import './styles.css'
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 10_000,
-    },
-  },
+const storage = browserCacheStorage()
+const queryClient = createAppQueryClient(storage)
+const stopPersistence = persistLibraryCache(queryClient, storage)
+const stopPrefetch = startInitialPrefetch(queryClient, () => router.state.location.pathname)
+
+import.meta.hot?.dispose(() => {
+  stopPrefetch()
+  stopPersistence()
 })
 
 const container = document.getElementById('root')

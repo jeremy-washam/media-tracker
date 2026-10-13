@@ -1,7 +1,7 @@
 # Canonical Ledger Specification
 
-- Status: Accepted for initial implementation
-- Last updated: 2026-09-12
+- Status: Accepted ledger model with implemented source-specific extensions
+- Last updated: 2026-10-12
 - Governing decision: [ADR 0009](../decisions/0009-canonical-ledger-identity-and-evidence.md)
 
 ## Purpose
@@ -53,6 +53,9 @@ For this owner's workflow, Reader PDFs, RSS items, and newsletter-style emails
 are articles. Only those articles, videos, and podcasts become standalone
 Archive media. EPUBs, tweets, personal notes, highlight-only documents, and
 other Reader categories remain source evidence without creating media items.
+These category restrictions apply to Reader records. Spotify song observations
+now support the Music Library under the counting rules below; audiobooks remain
+preserved evidence without Library admission.
 Ambiguous records stay unresolved instead of being assigned a generic `other`
 type.
 
@@ -262,6 +265,19 @@ retains membership/removal evidence. Archive admission is independent and
 retained after a later Reader move. A complete Reader snapshot may retire an
 absent Queue relationship but does not erase the historical Archive occurrence.
 
+Books derives Queue from active Hardcover statuses 1 and 2, independently of
+retained read occurrences. Movies uses complete Letterboxd watchlist snapshots.
+Podcasts uses saved Spotify episodes without known positive playback; saved-show
+Following is separate. Videos uses complete, account-scoped Watch Later
+snapshots. Music has no Queue. A source-added date is never a consumption date.
+
+Media-specific Library projections and FTS indexes are rebuildable browse
+models over these facts. TMDB/YouTube catalog overlays follow
+[ADR 0012](../decisions/0012-refreshable-provider-catalog-cache.md), and the
+current Spotify catalog retention follows
+[ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md). Catalog
+responses never create consumption evidence.
+
 ## Cross-source reconciliation rules
 
 1. Match on an authoritative identity before creating a new media item.
@@ -280,7 +296,7 @@ absent Queue relationship but does not erase the historical Archive occurrence.
 | Source evidence                                                     | Media item and identity                                                                    | Archive occurrence                                                                                              | Consumed time                                                                 |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | Eligible Reader document in Archive                                 | Article (including PDF, RSS, or newsletter email), video, or podcast; connection-scoped ID | One current-state occurrence keyed by document ID                                                               | Use `last_moved_at` as inferred time when present; otherwise unknown.         |
-| Hardcover Read user-book with finished child rows                   | Work-level book with distinct work/edition identities                                      | One occurrence per trustworthy finished child ID                                                                | Finished date is source-asserted day precision.                               |
+| Hardcover user-book with finished child rows                        | Work-level book with distinct work/edition identities                                      | One occurrence per trustworthy finished child ID                                                                | Finished date is source-asserted day precision.                               |
 | Hardcover Read user-book without a finished child row               | Same book model                                                                            | One fallback occurrence keyed by user-book Read state                                                           | Unknown. Preserve `read_count` without inventing rereads.                     |
 | Letterboxd Diary row                                                | Film identity plus later TMDB identity when observed                                       | One occurrence per Diary URI; RSS evidence reconciles to it                                                     | Watched date is source-asserted day precision.                                |
 | Letterboxd watched-only row                                         | Film identity                                                                              | One undated watched-state occurrence only when no Diary occurrence accounts for it                              | Unknown. Export `Date` is source-recorded, not consumed.                      |
@@ -295,8 +311,17 @@ Additional rules:
   they are not universal engagement events.
 - Spotify zero-playback saved episodes are Queue candidates. Null/unavailable
   playback observations remain unresolved.
-- Spotify song and audiobook Archive admission is deferred until explicit rules
-  are approved. Their raw records are still retained.
+- Identified, non-conflicting Spotify song export rows and identified Recently
+  Played API events are admitted immediately. Every export row counts as a
+  playback observation, including zero-duration and skipped rows; there is no
+  minimum-duration threshold. Export row identity retains member name and array
+  index so genuine repeats remain distinct. API-only events contribute unknown
+  observed time, and deterministic export/API reconciliation avoids double
+  counting proven overlap. Canonical song membership and the source-owned
+  observation aggregates remain separate; see the
+  [Music implementation](../planning/music-implementation.md).
+- Spotify audiobook Archive admission remains deferred. Its raw records are
+  retained separately from song and podcast activity.
 - YouTube non-watch actions and watched cards without a usable video identity are
   ignored for Archive while remaining preserved in the raw object/source-record
   layer.

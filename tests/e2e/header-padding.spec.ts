@@ -1,3 +1,4 @@
+import { installDefaultApiMocks } from './default-api-mocks'
 import { expect, test } from '@playwright/test'
 import {
   booksResponse,
@@ -7,6 +8,10 @@ import {
   musicResponse,
   videosResponse,
 } from './ui-fixtures'
+
+test.beforeEach(async ({ page }) => {
+  await installDefaultApiMocks(page)
+})
 
 const collections = [
   { media: 'books', section: 'archive', response: booksResponse },

@@ -1,8 +1,8 @@
 # Articles Phase 2 surface specification
 
-> Presentation update (2026-10-04): [UI polish](../ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
+> Current presentation (reviewed 2026-10-12): the [UI foundation](../../design/ui-foundation.md) and [shadcn audit](../shadcn-ui-audit.md) supersede conflicting layout, density, typography, rating, and control details below. This is the retained September surface contract; the per-media implementation plan records delivered behavior and remaining hardening.
 
-- Status: Owner-approved implementation baseline; not implemented
+- Status: Historical owner-approved baseline; initial production implementation delivered locally
 - Date: 2026-09-20
 - Scope: Production Library > Articles Archive, Queue, and Feed
 

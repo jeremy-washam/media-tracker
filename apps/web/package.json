@@ -6,6 +6,7 @@
   "description": "Private responsive web client",
   "scripts": {
     "build": "vite build",
+    "build:production": "vite build --mode deployment",
     "dev": "vite --host 127.0.0.1",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit -p tsconfig.json"
