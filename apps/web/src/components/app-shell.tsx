@@ -80,6 +80,7 @@ export function AppShell() {
             onClick={() => setMobileOpen(false)}
           >
             <span className="app-brand-mark" aria-hidden="true" />
+            <strong className="app-brand-wordmark">Imladris</strong>
           </Link>
           <button
             className="sidebar-collapse"

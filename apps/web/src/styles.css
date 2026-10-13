@@ -747,6 +747,14 @@ a:focus-visible {
   mask: url('./assets/brand/imladris-symbol.svg') center / contain no-repeat;
 }
 
+.app-brand-wordmark {
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .sidebar-collapse,
 .mobile-nav-close,
 .mobile-nav-trigger,

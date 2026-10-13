@@ -281,8 +281,10 @@ Cormorant Garamond, Instrument Serif, Fraunces, Alegreya, Cinzel, and Manrope
 beside the refined compact mark, including small sidebar samples and light/dark
 appearance. Font files and original licenses are bundled locally for an offline
 comparison. Candidate A was initially selected, then superseded by candidate H
-from the next reference set. The owner subsequently removed the wordmark. The web client now uses a 30 px
-compact symbol alone in its sidebar, following the active foreground color.
+from the next reference set. The owner subsequently removed the wordmark, then
+approved the medium-weight system-font treatment from the Library heading mockup. The web
+client now pairs its 30 px compact symbol with a 20 px, weight-500 system-font
+Imladris wordmark in the expanded sidebar, following the active foreground color.
 The brand link retains its accessible Imladris name. No custom brand font is
 bundled or loaded. The HTML includes
 an SVG favicon with system light/dark ink, plus PNG and touch-icon exports.
