@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
-- Status: Index selected as the base; detailed surface design remains open
-- Last updated: 2026-10-04
+- Status: Index and all six initial Library slices implemented; further design remains open
+- Last updated: 2026-10-12
 
 ## Purpose and scope
 
@@ -34,9 +34,9 @@ in production UI, metadata, and maintained design artifacts.
 Make the left sidebar collapsible across all three surfaces. Collapsing it
 reclaims width without changing the navigation model, current media type,
 Archive/Queue state, filters, sorting, selection, or scroll position. Keep an
-obvious way to reopen it. Whether collapse leaves an icon rail or hides the
-sidebar completely, and whether that state persists across sessions, remain
-implementation/design details to settle.
+obvious way to reopen it. The production desktop implementation keeps an icon
+rail and persists collapse across browser sessions. Narrow-screen navigation
+uses the installed shadcn Sheet with modal focus and return behavior.
 
 Top navigation was an alternative shell, not a component to embed inside Index.
 Its width advantage alone is not a reason to adopt it: a collapsible Index
@@ -56,6 +56,33 @@ main workspace; that does not imply a second media-inspection level.
 For paginated Library collections, opening or closing the inspector and changing
 between grid and list are presentation changes: they preserve every loaded page
 and do not restart the collection query.
+
+All collection pages use shared automatic cursor loading near the bottom of
+their contained scroll viewport. Shared pagination shows next-page Spinner/
+status, a retry Alert on failure, completion status, and a keyboard Load more
+fallback. Facet options and inspector History retain explicit pagination.
+Same-session cached navigation and presentation changes preserve a visible-item
+scroll anchor. Long-list virtualization remains separate follow-up work.
+
+All 16 Library collections load subsequent cursor pages automatically as the
+bottom approaches the collection pane's viewport. A shared observer preloads
+within 400px, serializes requests, and continues filling a short pane. Initial
+loading retains Skeleton; subsequent pages use a compact shadcn Spinner and
+muted status text. Exhausted nonempty collections show their actual loaded count.
+Next-page errors leave loaded results visible and show an inline Alert with a
+Button that retries that cursor. Automatic loading pauses after a next-page
+error or while the query is fetching/paused. A manual loading Button becomes
+visible on keyboard focus, or remains visible when observers are unavailable.
+Keyboard activation moves focus to the first newly loaded result on success.
+Reduced motion disables spinner rotation.
+
+The collection remembers a visible item's identity and its offset. Layout and
+inspector-width changes retain that anchor; Back/Forward and revisiting a cached
+collection restore the same-session position and loaded pages. New search,
+filter, and sort navigation starts at the top. This bounded in-memory position
+cache does not persist across reloads; the existing browser cache still stores
+only initial pages. Inspector history, facet options, and Connections retain
+their explicit pagination controls. Virtualization remains a measured follow-up.
 
 ## October 2026 iterative polish
 
@@ -80,8 +107,9 @@ Collections default to list. A single local preference remembers grid/list acros
 supported pages and browser sessions; explicit layout in a URL takes precedence.
 List appears first in the view controls.
 Section tabs retain known library totals while the next collection request loads,
-without retaining the previous section's results. Count labels reserve space to
-keep tab geometry stable through loading and use fresh response totals when available.
+without retaining the previous section's results. Count labels use their natural
+width beside the section label, with a smaller gap than the space between tabs.
+They use normal weight (400), muted text color, and fresh response totals when available.
 Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
@@ -117,11 +145,30 @@ collection width share one 180 ms easing timeline, including immediate collectio
 expansion when closing begins, with reduced-motion support. New styling issues may
 be resolved iteratively without waiting for a comprehensive redesign.
 Workspace and inspector headers share one height so their horizontal dividers align.
+The desktop sidebar brand row uses that same height, centering the logo, wordmark,
+and collapse control with the workspace header in expanded and collapsed layouts.
 Neutral buttons and sidebar navigation share a visible hover background that is
 less emphasized than selection in both appearance modes, including the sidebar toggle.
 Selected controls retain their selection background while hovered.
 
 ## Visual and writing principles
+
+The owner approved the twelve findings in the [October 12 visual audit](../planning/visual-ui-audit.md).
+Inspectors share a 54px topbar, with independently scrolling content below it.
+Use 22px/500 item titles, 11px/600 section headings, and 12px body/metadata/history
+text. Tabs stretch only within a bounded header; a generic tablist cannot inherit
+the full inspector height. Check loaded content geometry, not only tab semantics.
+
+Book list headings and rows share one responsive column definition at the pane
+width. Hide the same metadata column from both; keep visible ratings under Rating.
+Common toolbar order is Search, optional source/show, Filters, Sort, Direction,
+and optional List/Grid. Reveal the selected section tab on narrow headers without
+moving keyboard focus. Format counts consistently with collection summaries.
+
+Music Album/Artist grids wrap identity text and use concise observations/time
+summaries; complete metadata stays in lists and inspectors. Article technical
+Reader relationships/IDs use the installed shadcn Collapsible, with one default
+original/Reader action and distinct relationship links retained inside it.
 
 Use Readwise Reader for polish, density, hierarchy, and contextual browsing, and
 Letterboxd for media-forward collections and rich item information. Avoid Ryot's
@@ -147,8 +194,8 @@ Books, Movies, Articles, Podcasts, Songs, YouTube videos. This is the owner's
 rough priority order, not a commitment to identical behavior across types.
 
 Queue membership is source-specific: Movies use the Letterboxd watchlist;
-Articles use Readwise Inbox, Later, and Shortlist; Books use Hardcover Want to
-Read and Currently Reading until a supported completed read exists;
+Articles use Readwise Inbox, Later, and Shortlist; Books use active Hardcover
+Want to Read and Currently Reading statuses independently of retained reads;
 Podcasts use Spotify library episodes without playback activity; Videos use
 YouTube Watch Later.
 Songs have no Queue. Songs also need a distinct presentation for their much
@@ -320,8 +367,9 @@ and Uncial Antiqua (G–L) with that screenshot and the current Cormorant baseli
 The owner requested these references before another change, then selected
 **H — Fondamento 400**. Its calligraphic strokes and angled terminals fit the
 provided lettering reference. After checking the wordmark in the app, the owner
-chose to remove it entirely and retain only the symbol. Both font rounds remain
-saved as historical references.
+chose to remove it entirely and retain only the symbol. The later Library heading
+review restored the system-font wordmark described above; that is the current
+production treatment. Both custom-font rounds remain saved as historical references.
 
 ## Provisional theme: Graphite
 

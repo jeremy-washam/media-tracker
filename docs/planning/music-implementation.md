@@ -5,6 +5,14 @@
 - Scope: Spotify-backed Songs Library vertical slice, including Tracks, Albums, Artists, ingestion, replay, browsing, and inspection
 - Primary sources: owner-provided Spotify Extended Streaming History plus the authorized Spotify Web API
 
+Current presentation (reviewed 2026-10-12) follows the
+[UI foundation](../design/ui-foundation.md): Tracks is a list, Albums/Artists
+support list/grid, and list is the shared default unless saved or explicit URL
+state overrides it. The pre-implementation assessment and delivery stages below
+are historical; operational catalog resume/progress is now implemented. Scheduled
+catalog refresh, long-list virtualization, and the remaining hardening are still
+follow-ups.
+
 ## Current catalog-backfill decision (2026-09-21)
 
 The accepted interim retention decision is [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md):
@@ -76,8 +84,8 @@ own selected values, page across the full filtered result, and remain URL-backed
 
 The following hardening still remains beyond the current slice:
 
-- finish operational recovery of the durable exact-ID catalog backfill and add
-  scheduled, rate-aware refresh of Spotify track, album, and artist metadata;
+- add scheduled, rate-aware refresh of Spotify track, album, and artist metadata;
+  durable exact-ID backfill start/resume and progress reporting are implemented;
 - add explicit export/API overlap diagnostics and virtualize long Track/Artist
   stacks;
 - replace or remove superseded Spotify API metadata, artwork, search terms, and

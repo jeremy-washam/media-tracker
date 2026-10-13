@@ -54,6 +54,10 @@ Unit-test pure normalization and identifier logic. Add fixture-based contract
 tests for connectors and integration tests for repository constraints. End-to-end
 tests should cover critical user flows rather than reproduce lower-level tests.
 
+Vitest runs at most four workers to bound database-fixture load on shared
+development and CI hosts. Keep test assertions and timeouts intact when
+diagnosing contention; adjust worker concurrency before weakening a check.
+
 ## Error handling
 
 - Return stable machine-readable API error codes and safe human messages.

@@ -1,8 +1,9 @@
 # Media catalog reconnaissance
 
-- Status: Research and recommendations; credentialed TMDB and YouTube Data API
-  probes complete, with production catalog persistence still pending
+- Status: Research plus implemented TMDB/YouTube catalog caches and shared
+  Spotify exact-ID backfill; additional provider recommendations remain proposals
 - Last verified: 2026-09-21
+- Implementation reviewed: 2026-10-12 against repository code and local Library
 - Scope: Coverage across the six existing media types, search and identity matching,
   metadata/artwork, and API constraints
 - Evidence: Official public documentation, existing repository source reports,
@@ -25,7 +26,19 @@ with equally useful identities, metadata, artwork, and retention terms.
 These are fit assessments, not measured coverage rankings. Books, movies, and
 songs have useful catalog entities; video coverage is platform-specific;
 podcasts need both show and episode identities; articles are primarily URL-based.
-Songs remain a secondary, deferred ingestion type in the current product plan.
+Music ingestion and Tracks/Albums/Artists browsing are implemented. Additional
+portable catalog providers remain proposals.
+
+Current production code includes conservative TMDB movie/TV identity matching,
+expiring TMDB/YouTube caches and durable refresh jobs, and resumable Spotify
+track/episode backfill. Catalog acquisition never creates owner history, and
+browse API handlers never initiate a catalog-provider request. See
+[ADR 0012](../decisions/0012-refreshable-provider-catalog-cache.md),
+[ADR 0013](../decisions/0013-tmdb-letterboxd-match-evidence.md), and
+[ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md).
+The remaining provider comparisons describe research, not installed connectors.
+This local implementation review does not reverify provider policies or change
+the September 21 research date.
 
 ## Movies
 

@@ -1,8 +1,12 @@
 # Web
 
 The desktop React/Vite client consumes the REST API and contains no provider
-credentials. History uses server-side type filters, complete counts, and cursor
-pagination. Connections displays every account lineage, coverage, attempts,
+credentials. The root redirects to Books Archive. Library exposes 16 sections
+across Books, Movies, Articles, Podcasts, Music, and Videos, with server-side
+search/filter/sort, complete counts, cursor pagination, and contextual inspectors.
+The legacy History component is not routed. Chat and Recaps remain disabled
+navigation; Settings has no production route.
+Connections displays every account lineage, coverage, attempts,
 incomplete-import progress, and resumable Spotify/YouTube imports. Use an
 existing YouTube card for later snapshots of the same account.
 
@@ -42,7 +46,9 @@ syncs or catalog jobs.
 
 ## Branding
 
-The sidebar uses the compact J2 house-and-waterfall symbol without a wordmark.
+The expanded sidebar pairs the 30px compact J2 house-and-waterfall symbol with a
+20px, weight-500 system-font Imladris wordmark. The collapsed sidebar hides the
+wordmark.
 Interface text keeps system typography; no brand font is loaded.
 The symbol follows the active light/dark text color; the SVG favicon follows
 system appearance. Brand assets are in [the brand asset notes](src/assets/brand/README.md).
@@ -64,7 +70,7 @@ instructions and source locations are in [saved mockups](../../docs/design/mocku
 Use shadcn/ui with Base UI (`base-nova`) for new interface work. Tailwind v4
 and the `@/*` alias are configured in Vite and TypeScript. Components are owned
 source in `src/components/ui`, with the class-name helper in `src/lib/utils.ts`.
-Button, Input, Textarea, Select, Input Group, Toggle/Toggle Group, Tabs, Checkbox, Tooltip, Sheet, Alert, Badge, Skeleton, and Field are installed.
+Button, Input, Textarea, Select, Input Group, Toggle/Toggle Group, Tabs, Checkbox, Tooltip, Sheet, Alert, Badge, Skeleton, Field, Collapsible, Separator, and Spinner are installed.
 Library toolbars compose these actual primitives at their shared 32px default height. LibrarySelect composes the
 actual shadcn Select for all collection sorting and single-choice filters.
 Pass explicit string-valued options and onValueChange; do not use native
@@ -95,14 +101,31 @@ The CLI currently imports the `cn` package directly; normalize generated imports
 to `@/lib/utils`, our existing `clsx`/`tailwind-merge` helper, and remove the
 redundant dependency if the CLI adds it.
 
-`src/components.css` contains provisional neutral light/dark semantic tokens
+`src/components.css` contains the selected Graphite light/dark semantic tokens
 and animation utilities. It is imported by the operational `src/styles.css`,
 which already loads Tailwind. Apply `.dark` to a containing element for dark
-component tokens. No theme switcher or existing screen migration is included.
-Future entries should import Tailwind and this stylesheet once; the theme
-specimen keeps its own styles while exploration is ongoing. Update the shared
-tokens after selecting a theme rather than hardcoding colors in components.
+component tokens. The shell provides a light/dark appearance control, remembers
+the choice, and uses system appearance when no preference is saved. Production
+screens use these tokens; the separate specimen retains the alternative-theme
+comparison. Future entries should import Tailwind and this stylesheet once.
+Keep component colors on the shared semantic tokens.
 
 ## Production UI guardrails
 
+Loaded inspector geometry, responsive Book columns, compact filter typography,
+toolbar order, mobile selected-tab visibility, and Article source disclosure
+are covered by `tests/e2e/visual-consistency.spec.ts`. InspectorHeader composes
+the shared bounded topbar; scrolling content stays below it. Reader provenance
+uses the installed shadcn Base UI Collapsible. See the
+[visual audit acceptance](../../docs/planning/visual-ui-audit.md) for all twelve
+approved findings and their resolutions.
+
 The root and web AGENTS.md require installed shadcn/ui Base UI controls, their supported variants, and interaction/visual verification. ESLint rejects raw button/input/select/textarea markup and handcrafted tab roles in production feature/page code and the shell. Media row/card and inspector backdrop buttons are deliberately centralized in library-controls.tsx; ordinary actions use Button. Explanatory hints use Hint, which composes Tooltip. FileUploadButton, Notice, and LoadingState compose installed Input/Button, Alert, and Skeleton without replacing their primitives. Historical design studies remain separate references. See docs/planning/shadcn-ui-audit.md for the audit and acceptance evidence.
+
+## Library infinite scrolling
+
+Library collections compose `CollectionPagination` for automatic cursor loading,
+Spinner/status, next-page Alert/Retry, completion, and a keyboard loading fallback.
+`useCollectionScroll` owns the collection viewport ref and anchors a visible item
+across presentation changes and same-session cached navigation. Query keys exclude
+presentation state. Facet-option and inspector pagination remain explicit.

@@ -2,6 +2,12 @@
 
 Owner-approved follow-up to the [baseline QA](ui-polish-baseline-qa.md).
 
+This records the follow-up before the later October 12 shadcn migration. Native
+sort/channel selectors and the 11px toolbar measurements below are historical;
+current controls use the installed Base UI Select and 32px shadcn primitives.
+See the [component audit](shadcn-ui-audit.md) and
+[UI foundation](../design/ui-foundation.md) for the current implementation.
+
 | Item      | Change                                                                                                                                                |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Toolbar   | Native sort menus throughout; Filters and Sort share the same font size                                                                               |

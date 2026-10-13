@@ -6,9 +6,9 @@ Imladris is a private, single-user ledger of media consumption. It imports
 history from existing services, preserves the source evidence, and presents a
 normalized view suitable for browsing and, later, evidence-backed LLM queries.
 
-The first milestone is ingestion. Recommendations, a centralized queue, and a
-native iOS client are deliberately deferred, but the system should not make
-those features expensive to add.
+The first milestone is ingestion. Recommendations, manually managed Queue, and
+a native iOS client are deliberately deferred. Read-only source-derived Queue
+views are implemented in the six-media Library.
 
 ## System shape
 
@@ -110,7 +110,8 @@ after payload reconnaissance.
 
 Source imports and resumable chunks run through HTTP; hourly polling runs in the
 deployed scheduled handler. The queue consumer handles bounded Reader article-
-content acquisition; other generalized queue work remains deferred. Local cron
+content acquisition/indexing, TMDB and YouTube catalog refresh, and resumable
+Spotify catalog backfill; generalized replay/recovery jobs remain deferred. Local cron
 triggers are invoked manually. Generalized CLI replay,
 export, and recovery remain deferred. Browser APIs provide keyset-paginated
 History and sync runs, complete media counts, and all connection lineages.
@@ -125,6 +126,21 @@ are rebuildable query models, not new sources of truth. Books Queue membership
 is derived from active Hardcover statuses 1 and 2; it is not a generic editable
 queue. Media-specific repositories keep these browse semantics out of route
 handlers and the pure domain package.
+
+All six Library families now have production routes, typed collection/detail/
+History APIs, and rebuildable browse projections. Movies combines Letterboxd
+personal state with a refreshable TMDB catalog. Podcasts combines Spotify and
+eligible Reader history with saved-episode Queue and saved-show Following.
+Music aggregates identified Spotify playback observations into Tracks, Albums,
+and Artists without a minimum listening threshold. Videos combines immutable
+Takeout watches and Watch Later with expiring public catalog metadata and
+Channels rollups; there is no YouTube Following surface. The generic media API
+remains available, but the legacy History screen is no longer routed. Chat,
+Recaps, manual Library writes, and arbitrary catalog discovery remain deferred.
+
+The browser query cache and bounded first-page persistence are documented in
+the [web README](../../apps/web/README.md#library-loading-and-caching). They store
+private Library metadata locally; D1/R2 remain authoritative.
 
 Articles is the third complete Library vertical slice. Reader v3 documents own
 current Article state; retained canonical Archive occurrences preserve history,

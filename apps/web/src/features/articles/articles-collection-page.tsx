@@ -1,3 +1,6 @@
+import { CollectionPagination } from '@/components/collection-pagination'
+import { useCollectionScroll } from '@/components/collection-scroll'
+import { articlesQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -11,6 +14,7 @@ import { FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   InputGroup,
   InputGroupAddon,
@@ -23,7 +27,7 @@ import {
   useInspectorPresence,
   useLibrarySectionCounts,
 } from '../../components/library-hooks'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -43,13 +47,8 @@ import {
   fetchArticleHighlights,
   fetchArticleHistory,
   fetchArticles,
-  type ArticlesRequest,
 } from './articles-api'
-import {
-  articleCollectionQuerySearch,
-  normalizedForArticleSection,
-  type ArticlesRouteSearch,
-} from './articles-route-search'
+import { normalizedForArticleSection, type ArticlesRouteSearch } from './articles-route-search'
 
 type Section = 'archive' | 'queue' | 'feed'
 
@@ -122,19 +121,11 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
     () => setDraft(null),
   )
   const inspectorItem = useInspectorPresence(search.item)
-  const request = useMemo<ArticlesRequest>(
-    () => ({ section, ...articleCollectionQuerySearch(search), limit: 50 }),
-    [section, search],
-  )
-  const articles = useInfiniteQuery({
-    queryKey: ['articles', request],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      fetchArticles({ ...request, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const queryOptions = articlesQueryOptions(section, search)
+  const articles = useInfiniteQuery(queryOptions)
   const pages = articles.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
+  const collectionRef = useCollectionScroll(queryOptions.queryKey, 'list', items.length)
   const summary = pages[0]
   const sectionCounts = useLibrarySectionCounts('articles', summary, (page) => page.sectionCounts)
   const sort = defaultSort(section, search),
@@ -161,7 +152,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
   const close = () => {
     const target = selectedRef.current
     update({ item: undefined })
-    requestAnimationFrame(() => target?.focus())
+    requestAnimationFrame(() => target?.focus({ preventScroll: true }))
   }
   return (
     <FlatTabs
@@ -171,7 +162,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
       className={`books-page articles-page articles-density-expanded`}
       aria-labelledby="articles-title"
     >
-      <FlatTabsContent value={section} className="books-collection">
+      <FlatTabsContent value={section} className="books-collection" ref={collectionRef}>
         <h1 className="sr-only" id="articles-title">
           Articles
         </h1>
@@ -184,7 +175,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
               activeProps={{ 'aria-current': 'page', className: 'active' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
-              <span>{sectionCounts?.[target] ?? '—'}</span>
+              <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
@@ -297,7 +288,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
         {articles.isPending ? (
           <LoadingState className="books-loading">Loading articles…</LoadingState>
         ) : null}
-        {articles.isError ? (
+        {articles.isError && !articles.isFetchNextPageError ? (
           <Notice className="books-state books-state-error">
             <h2>Articles could not be loaded</h2>
             <p>{articles.error.message}</p>
@@ -341,17 +332,12 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             ))}
           </div>
         ) : null}
-        {articles.hasNextPage ? (
-          <Button
-            variant="outline"
-            className="load-more"
-            type="button"
-            disabled={articles.isFetchingNextPage}
-            onClick={() => void articles.fetchNextPage()}
-          >
-            {articles.isFetchingNextPage ? 'Loading…' : 'Load more articles'}
-          </Button>
-        ) : null}
+        <CollectionPagination
+          query={articles}
+          scrollRef={collectionRef}
+          itemCount={items.length}
+          label="articles"
+        />
       </FlatTabsContent>
       {inspectorItem ? (
         <>
@@ -385,6 +371,7 @@ function ArticleRow({
 }) {
   return (
     <MediaRowButton
+      data-collection-item={item.id}
       ref={ref}
       type="button"
       className={selected ? 'article-row selected' : 'article-row'}
@@ -872,6 +859,8 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
                     <LoadingState>Loading history…</LoadingState>
                   ) : history.isError ? (
                     <Notice>History could not be loaded: {history.error.message}</Notice>
+                  ) : history.data?.pages.every((page) => page.data.length === 0) ? (
+                    <p>No archive history.</p>
                   ) : (
                     history.data?.pages
                       .flatMap((page) => page.data)
@@ -1047,24 +1036,30 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
           <dt>Last observed</dt>
           <dd>{formatDate(article.source.sourceRefreshedAt) ?? 'Unknown'}</dd>
         </dl>
-        <h4>Reader relationships</h4>
-        <ul className="article-relationships">
-          {article.readerRelationships.map((relationship) => (
-            <li key={relationship.documentId}>
-              <span>
-                {relationship.available
-                  ? relationship.location
-                  : `Unavailable · last known ${relationship.location}`}
-              </span>
-              <small>{relationship.documentId}</small>
-              {relationship.readerUrl ? (
-                <a href={relationship.readerUrl} target="_blank" rel="noopener noreferrer">
-                  Open in Reader
-                </a>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <Collapsible className="article-source-details">
+          <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
+            Reader source details <ChevronRight aria-hidden="true" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ul className="article-relationships">
+              {article.readerRelationships.map((relationship) => (
+                <li key={relationship.documentId}>
+                  <span>
+                    {relationship.available
+                      ? relationship.location
+                      : `Unavailable · last known ${relationship.location}`}
+                  </span>
+                  <small>Reader ID: {relationship.documentId}</small>
+                  {relationship.readerUrl && relationship.readerUrl !== article.links.reader ? (
+                    <a href={relationship.readerUrl} target="_blank" rel="noopener noreferrer">
+                      Open in Reader <ExternalLink aria-hidden="true" />
+                    </a>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
         <div className="article-source-links">
           {article.links.original ? (
             <a href={article.links.original} target="_blank" rel="noopener noreferrer">

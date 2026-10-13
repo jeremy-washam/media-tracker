@@ -1,3 +1,6 @@
+import { CollectionPagination } from '@/components/collection-pagination'
+import { useCollectionScroll } from '@/components/collection-scroll'
+import { moviesQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -29,7 +32,7 @@ import {
   useInspectorPresence,
   useLibrarySectionCounts,
 } from '../../components/library-hooks'
-import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -48,7 +51,7 @@ import {
 
 import type { MovieCollectionItem, MovieDetail, MovieHistoryEntry } from '@media-tracker/contracts'
 
-import { fetchMovie, fetchMovieHistory, fetchMovies, type MoviesRequest } from './movies-api'
+import { fetchMovie, fetchMovieHistory } from './movies-api'
 import {
   movieCollectionQuerySearch,
   normalizedForMovieCollection,
@@ -178,29 +181,14 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
   const closeInspector = () => {
     const target = selectedRef.current
     updateSearch({ item: undefined })
-    requestAnimationFrame(() => target?.focus())
+    requestAnimationFrame(() => target?.focus({ preventScroll: true }))
   }
 
-  const request = useMemo<MoviesRequest>(
-    () => ({
-      collection,
-      ...movieCollectionQuerySearch(search),
-      limit: 48,
-    }),
-    [collection, search],
-  )
-  const movies = useInfiniteQuery({
-    queryKey: ['movies', request],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      fetchMovies(
-        { ...request, ...(pageParam === undefined ? {} : { cursor: pageParam }) },
-        signal,
-      ),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const queryOptions = moviesQueryOptions(collection, search)
+  const movies = useInfiniteQuery(queryOptions)
   const pages = movies.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
+  const collectionRef = useCollectionScroll(queryOptions.queryKey, view, items.length)
   const summary = pages[0]
   const sectionCounts = useLibrarySectionCounts('movies', summary, (page) => page.membershipCounts)
   const count = summary?.filteredCount ?? 0
@@ -216,7 +204,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
       className={`books-page movies-page movies-view-${view}`}
       aria-labelledby="movies-title"
     >
-      <FlatTabsContent value={collection} className="books-collection">
+      <FlatTabsContent value={collection} className="books-collection" ref={collectionRef}>
         <h1 className="sr-only" id="movies-title">
           Movies
         </h1>
@@ -226,14 +214,14 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             search={normalizedForMovieCollection(search, 'archive')}
             activeProps={{ 'aria-current': 'page', className: 'active' }}
           >
-            Archive <span>{sectionCounts?.archiveItems ?? '—'}</span>
+            Archive <span>{sectionCounts?.archiveItems?.toLocaleString() ?? '—'}</span>
           </Link>
           <Link
             to="/library/movies/queue"
             search={normalizedForMovieCollection(search, 'queue')}
             activeProps={{ 'aria-current': 'page', className: 'active' }}
           >
-            Queue <span>{sectionCounts?.queueItems ?? '—'}</span>
+            Queue <span>{sectionCounts?.queueItems?.toLocaleString() ?? '—'}</span>
           </Link>
         </CollectionTabList>
         <div className="books-toolbar">
@@ -361,7 +349,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
         {movies.isPending ? (
           <LoadingState className="books-loading">Loading movies…</LoadingState>
         ) : null}
-        {movies.isError ? (
+        {movies.isError && !movies.isFetchNextPageError ? (
           <Notice className="books-state books-state-error">
             <h2>Movies could not be loaded</h2>
             <p>{movies.error.message}</p>
@@ -412,17 +400,12 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             ))}
           </div>
         ) : null}
-        {movies.hasNextPage ? (
-          <Button
-            variant="outline"
-            className="load-more"
-            type="button"
-            disabled={movies.isFetchingNextPage}
-            onClick={() => void movies.fetchNextPage()}
-          >
-            {movies.isFetchingNextPage ? 'Loading…' : 'Load more movies'}
-          </Button>
-        ) : null}
+        <CollectionPagination
+          query={movies}
+          scrollRef={collectionRef}
+          itemCount={items.length}
+          label="movies"
+        />
       </FlatTabsContent>
       {inspectorItem ? (
         <>
@@ -462,6 +445,7 @@ function MovieResult({
   if (view === 'grid') {
     return (
       <MediaCard
+        data-collection-item={movie.id}
         type="button"
         ref={buttonRef}
         className={selected ? 'movie-card selected' : 'movie-card'}
@@ -486,6 +470,7 @@ function MovieResult({
         : 'Added date unknown'
   return (
     <MediaRowButton
+      data-collection-item={movie.id}
       type="button"
       ref={buttonRef}
       className={selected ? 'movie-row selected' : 'movie-row'}
@@ -831,7 +816,8 @@ function MovieInspector({
           <TabsList variant="line" className="inspector-tabs" aria-label="Movie information">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">
-              History{movie.data ? ` (${movie.data.archive.lifetimeWatchCount})` : ''}
+              History
+              {movie.data ? ` (${movie.data.archive.lifetimeWatchCount.toLocaleString()})` : ''}
             </TabsTrigger>
           </TabsList>
           <Button

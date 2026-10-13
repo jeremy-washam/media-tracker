@@ -1,4 +1,9 @@
+import { installDefaultApiMocks } from './default-api-mocks'
 import { expect, test, type Page } from '@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+  await installDefaultApiMocks(page)
+})
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/library/books?*', (route) =>

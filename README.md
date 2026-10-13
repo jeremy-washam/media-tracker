@@ -2,15 +2,21 @@
 
 Imladris is a private, single-user ledger that consolidates personal media
 history from Letterboxd, Hardcover, Spotify, Readwise Reader, and YouTube. The
-initial goal is trustworthy historical backfill and ongoing synchronization.
-Future work includes a centralized queue, evidence-backed LLM search, and
-possibly an iOS client.
+foundation is trustworthy historical backfill and ongoing synchronization.
+The desktop Library now browses all six media types with source-derived Queue
+views, search, filters, pagination, and contextual inspectors. Future work
+includes manual Queue management, evidence-backed LLM search, Chat, Recaps,
+and possibly an iOS client.
 
-All five initial sources have local ingestion paths: Readwise Archive polling,
-Hardcover Read-shelf reconciliation, Letterboxd export/RSS ingestion, Spotify
-podcast export/saved-episode ingestion, and manual YouTube Takeout imports.
-History supports server-side media-type filtering, complete counts, and cursor
-pagination. Connections shows each account, source coverage, incomplete imports,
+All five initial sources have local ingestion paths: all-location Readwise
+document/highlight polling, Hardcover Want to Read/Currently Reading/Read
+reconciliation, Letterboxd export/RSS ingestion, Spotify podcast/song exports
+and saved-library/player/recent-track polling, and manual YouTube Takeout
+imports. Library has 16 sections: Books and Movies Archive/Queue, Articles
+Archive/Queue/Feed, Podcasts Archive/Queue/Following, Music Tracks/Albums/Artists,
+and Videos Archive/Queue/Channels. The root opens Books Archive; the legacy
+History page is unmounted, while its generic media API remains available.
+Connections shows each account, source coverage, incomplete imports,
 resume controls, and recent sync attempts. This is a locally validated MVP, not a
 production deployment or a completed recovery toolset.
 
@@ -71,8 +77,9 @@ Provider credentials are required only for their respective sync actions.
 Deployed Cron Triggers poll Readwise, Hardcover, Letterboxd, and Spotify hourly;
 `wrangler dev --test-scheduled` exposes a manual test endpoint and does not run
 an unattended hourly schedule. YouTube has no automatic history sync. The
-IDs in `apps/api/wrangler.jsonc` are local placeholders and must be replaced
-before remote deployment.
+IDs in `apps/api/wrangler.jsonc` are local placeholders. Hosted deployment uses
+a separate ignored `apps/api/wrangler.production.jsonc`; generate and validate
+it through the deployment runbook rather than repurposing the local config.
 
 ## Upgrading an existing local database
 

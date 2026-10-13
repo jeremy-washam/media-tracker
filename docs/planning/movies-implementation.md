@@ -4,6 +4,11 @@ Status: Letterboxd slice, refreshable TMDB enrichment, and full local catalog
 backfill implemented; real-data visual acceptance complete; final UX iteration remains
 Last updated: 2026-09-21
 
+Current presentation (reviewed 2026-10-12) follows the
+[UI foundation](../design/ui-foundation.md). The September delivery sequence and
+validation records below retain their original context; later polish owns
+control composition, layout defaults, density, and inspector motion.
+
 The evidence-aware follow-up backfill resolved all seven local export/RSS
 identity collisions and matched Letterboxd-logged series through separate TMDB
 TV identities without changing their Library section. The current local
@@ -107,7 +112,8 @@ reopened during implementation unless real source behavior contradicts them.
 
 ### Grid and list
 
-- Grid is the default layout.
+- List is the default layout. A shared saved preference persists across supported
+  Library pages, and the Movies URL `view` parameter takes precedence.
 - A grid card contains poster, title, release year, and director names only.
 - Archive list columns are Movie, Director, Last watched, and Your rating.
 - Queue list columns are Movie, Director, Added, and Your rating.

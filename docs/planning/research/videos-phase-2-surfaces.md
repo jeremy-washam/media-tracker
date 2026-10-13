@@ -1,8 +1,8 @@
 # Videos Phase 2 surface specification
 
-> Presentation update (2026-10-04): [UI polish](../ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
+> Current presentation (reviewed 2026-10-12): the [UI foundation](../../design/ui-foundation.md) and [shadcn audit](../shadcn-ui-audit.md) supersede conflicting layout, density, typography, rating, and control details below. This is the retained September surface contract; the per-media implementation plan records delivered behavior and remaining hardening.
 
-> October 12 follow-up: native channel filtering searches and pages the existing Channels collection so every named Library channel is reachable. See [follow-up results](../ui-polish-followup.md).
+> October 12 follow-up: channel filtering searches and pages the existing Channels collection so every named Library channel is reachable. Its selector now composes shadcn Select; the earlier native-selector result is recorded in [follow-up results](../ui-polish-followup.md).
 
 - Date: 2026-09-20
 - Status: Historical owner-approved baseline; production implementation shipped.

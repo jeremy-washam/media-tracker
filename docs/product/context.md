@@ -39,9 +39,13 @@ Lists, Feed, and Explorations are future possibilities; Explorations may be part
 of Chat. See the [desktop UI foundation](../design/ui-foundation.md) for accepted
 behavior, writing preferences, open questions, and the seven layout studies.
 
-These are product/design decisions, not claims that Chat, artifacts, Queue,
-catalog integrations, or Recaps are implemented. The ingestion ledger remains
-the trustworthy data foundation.
+Library is now implemented across all six media types, including source-derived
+Queue, Reader Feed, Podcast Following, Music Tracks/Albums/Artists, Video
+Channels, and imported-item inspectors. TMDB/YouTube enrichment and shared
+Spotify catalog backfill are also implemented. Chat, saved artifacts, Recaps,
+manual Queue management, and arbitrary catalog discovery remain future work.
+See the [implementation plan](../planning/implementation-plan.md) for current
+delivery status. The ingestion ledger remains the trustworthy data foundation.
 
 ## Longer-term learning concept
 
@@ -107,7 +111,14 @@ service APIs?
 
 ## Current implementation priority
 
-The first implementation phase is an ingestion-first personal media ledger. It should backfill and then continuously sync consumption history, where the source services permit it, from:
+The ingestion-first foundation and initial read-only Library slices are
+implemented locally. Remaining work includes per-media hardening, private
+deployment gates, generalized recovery, and the proposed Chat/Recaps surfaces.
+Source-derived Queue remains read-only; local intent and write-back require
+their own future conflict model. Hosted provisioning and deployment are pending.
+
+The original ingestion sequence backfills and then synchronizes consumption
+history, where the source services permit it, from:
 
 - Letterboxd for films;
 - Hardcover for books;
@@ -119,7 +130,10 @@ Use official APIs, webhooks, RSS feeds, and user data exports as appropriate. Pr
 
 ## Capabilities beyond the ingestion milestone
 
-- A centralized queue of content to consume later. The local application should be the reliable source of truth. Mirror queue changes to upstream services such as Letterboxd's watchlist when an official, dependable integration permits it, but upstream bidirectional sync is not critical.
+- Manual local Queue intent beyond the implemented source-derived views. The
+  eventual local application should be authoritative for that intent. Mirror
+  changes upstream only when a dependable integration permits it; bidirectional
+  sync is not critical. Current imported Queue state remains source-owned.
 - LLM-assisted search over the owner's saved media, history, metadata, notes, highlights, and authorized full text. Arbitrary natural-language queries should return traceable answers grounded in stored records and source provenance rather than opaque unsupported responses.
 - An iOS application. Mobile is not an initial priority, and the owner dislikes
   mobile apps, so avoid making the native client foundational. Keep the backend

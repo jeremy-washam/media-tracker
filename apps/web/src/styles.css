@@ -667,6 +667,18 @@ a:focus-visible {
   padding: 0 4px 16px;
 }
 
+/* Desktop branding occupies the same top row as the workspace header. */
+.app-frame > .app-sidebar {
+  padding-top: 0;
+}
+
+.app-frame > .app-sidebar .app-brand {
+  min-height: var(--workspace-header-height);
+  flex: 0 0 var(--workspace-header-height);
+  padding-block: 0;
+  margin-bottom: 12px;
+}
+
 .app-brand > a {
   min-width: 0;
   flex: 1;
@@ -948,8 +960,7 @@ a:focus-visible {
 }
 
 .books-tabs span {
-  min-width: 6ch;
-  text-align: right;
+  font-weight: 400;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -2177,12 +2188,12 @@ a:focus-visible {
   }
 }
 
-.spotify-library-page .date-filter label:has(input[type='checkbox']) {
+.spotify-library-page .date-filter label:has([data-slot='checkbox']) {
   display: flex;
   align-items: center;
   gap: 7px;
   margin-top: 9px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .library-inline-filter,
@@ -2342,17 +2353,6 @@ a:focus-visible {
   border-left: 1px solid var(--line);
   background: var(--surface);
   padding: 20px;
-}
-
-.media-inspector > .inspector-tab-root > header {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.media-inspector > .inspector-tab-root > .spotify-inspector-topbar {
-  justify-content: space-between;
-  min-height: 32px;
-  border-bottom: 1px solid var(--line);
 }
 
 .spotify-history-list li {
@@ -3269,7 +3269,7 @@ select {
   gap: 0;
 }
 .flat-tabs-list[data-slot='tabs-list'] {
-  height: 100%;
+  height: 32px;
   padding: 0;
   gap: 15px;
 }
@@ -3349,4 +3349,248 @@ select {
 .app-workspace:has(.books-collection) .workspace-header {
   overflow: hidden;
   scrollbar-gutter: stable;
+}
+
+/* Visual audit: shared inspector layout and content hierarchy. */
+.workspace-header-tabs .flat-tabs-list,
+.inspector-topbar .flat-tabs-list {
+  height: 100%;
+}
+.media-inspector {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.inspector-scroll {
+  overscroll-behavior: contain;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.inspector-hero {
+  margin: 0 0 22px;
+  align-items: start;
+}
+.inspector-hero h2,
+.inspector-book-heading h2 {
+  margin: 4px 0 5px;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.inspector-hero p,
+.inspector-book-heading p,
+.inspector-section p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.inspector-hero p,
+.inspector-book-heading p {
+  color: var(--muted-foreground);
+  margin-bottom: 10px;
+}
+.inspector-hero .eyebrow,
+.inspector-book-heading > div > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+.inspector-section h3,
+.media-inspector h3 {
+  margin: 0 0 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.detail-list dt,
+.detail-list dd {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-inspector dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr);
+  gap: 8px 14px;
+  padding: 5px 0;
+}
+.media-inspector dd {
+  margin: 0;
+  text-align: left;
+}
+.media-inspector .inspector-tab-panel {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-inspector .history-list li strong,
+.media-inspector .history-list li span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-inspector .inspector-scroll > [role='status'] {
+  font-size: 12px;
+}
+.inspector-section a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.inspector-section a svg,
+.media-inspector a svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+.article-source-details {
+  margin: 16px 0;
+}
+.article-source-details [data-slot='collapsible-trigger'] {
+  font-size: 12px;
+}
+.article-source-details [data-slot='collapsible-trigger'][data-panel-open] > svg {
+  transform: rotate(90deg);
+}
+.article-relationships li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.article-relationships small {
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.article-source-links {
+  gap: 12px 16px;
+  font-size: 12px;
+}
+
+/* One column definition for Book headings and row cells, at the actual pane width. */
+.books-list {
+  --book-columns: var(--library-row-cover-width) minmax(0, 1fr) 74px 120px 64px 14px;
+  --book-column-gap: 14px;
+}
+.books-list .book-row,
+.books-list .book-list-head {
+  grid-template-columns: var(--book-columns);
+  gap: var(--book-column-gap);
+  padding-inline: 12px;
+}
+.book-head-title {
+  grid-column: span 2;
+}
+.books-list .book-row-context {
+  display: block;
+  white-space: nowrap;
+}
+@container library-collection (max-width: 650px) {
+  .books-list {
+    --book-columns: var(--library-row-cover-width) minmax(0, 1fr) 110px 64px 14px;
+    --book-column-gap: 10px;
+  }
+  .books-list .book-row-year,
+  .books-list .book-head-year {
+    display: none;
+  }
+}
+@container library-collection (max-width: 480px) {
+  .books-list {
+    --book-columns: var(--library-row-cover-width) minmax(0, 1fr) 64px 14px;
+  }
+  .books-list .book-row-context,
+  .books-list .book-head-context {
+    display: none;
+  }
+}
+
+/* Filter typography uses one compact scale; primitives retain their appearance. */
+.filter-panel,
+.filter-panel label,
+.filter-panel [data-slot='field-label'],
+.filter-panel [data-slot='input'],
+.filter-panel [data-slot='select-trigger'],
+.filter-panel [data-slot='button'] {
+  font-size: 12px;
+}
+.filter-panel .library-inline-filter {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.filter-panel-grid {
+  align-items: start;
+}
+.filter-panel fieldset > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.filter-panel fieldset > label:has([data-slot='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+}
+.filter-panel .library-inline-filter > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Grid summaries stay readable without changing the detailed list or inspector. */
+.music-grid-summary {
+  display: none;
+}
+.music-grid .spotify-result-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+}
+.music-grid .spotify-result {
+  align-items: flex-start;
+}
+.music-grid .spotify-result-copy strong,
+.music-grid .spotify-result-copy > span,
+.music-grid .spotify-result-copy > .music-grid-summary {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+.music-grid .music-list-summary {
+  display: none;
+}
+.music-grid .music-grid-summary {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.books-collection {
+  overflow-anchor: none;
+}
+
+/* Pagination occupies the same quiet footer space in every Library layout. */
+.collection-pagination {
+  padding-block: 16px 24px;
+  text-align: center;
+  overflow-anchor: none;
+}
+.collection-pagination-status {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.inspector-scroll .history-list strong,
+.inspector-scroll .history-list time,
+.inspector-scroll .history-list small,
+.inspector-scroll .history-list p {
+  font-size: 12px;
 }

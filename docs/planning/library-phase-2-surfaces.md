@@ -1,9 +1,9 @@
 # Library Phase 2 surface specification
 
-> Presentation update (2026-10-04): [UI polish](ui-polish.md) supersedes conflicting layout, density, typography, rating, and control details below. Source semantics remain unchanged.
+> Current presentation (reviewed 2026-10-12): the [UI foundation](../design/ui-foundation.md) and [shadcn audit](shadcn-ui-audit.md) supersede conflicting layout, density, typography, rating, and control details below. Music counting follows the later immediate-admission decision in the [Music implementation](music-implementation.md).
 
 - Date: 2026-09-20
-- Status: Owner review complete; Books, Letterboxd-backed Movies, and Readwise-backed Articles are shipped, and other media remain implementation baselines
+- Status: Owner review complete; all six initial Library implementations are present locally, with remaining hardening tracked in their implementation plans
 - Scope: Exact production Library fields, sections, search, filters, sorts, and
   inspectors for all six media types
 - Governing decisions: [Phase 1 decision register](library-phase-1-decisions.md)
@@ -33,17 +33,23 @@ and provider-policy requirements:
 
 | Media    | Local views               | Collection presentation                       | Default      |
 | -------- | ------------------------- | --------------------------------------------- | ------------ |
-| Books    | Archive, Queue            | Cover grid or Readwise-style compact list     | Archive grid |
-| Movies   | Archive, Queue            | Poster grid or compact list                   | Archive grid |
-| Articles | Archive, Queue, Feed      | Compact rows only                             | Archive      |
-| Podcasts | Archive, Queue, Following | Episode rows; Following show grid             | Archive      |
-| Music    | Tracks, Albums, Artists   | Dense track table; album grid; artist list    | Tracks       |
+| Books    | Archive, Queue            | Cover grid or Readwise-style list             | Archive list |
+| Movies   | Archive, Queue            | Poster grid or list                           | Archive list |
+| Articles | Archive, Queue, Feed      | One expanded row style                        | Archive      |
+| Podcasts | Archive, Queue, Following | Episode rows; Following list/grid             | Archive      |
+| Music    | Tracks, Albums, Artists   | Track rows; Albums/Artists list/grid          | Tracks       |
 | Videos   | Archive, Queue, Channels  | Video list or grid; activity-derived channels | Archive list |
 
 Views represent different relationships or rollups. They do not create new
 canonical media types. Archive and Queue remain independent. Podcast Following
 never implies Archive or Queue. Music Albums/Artists and Video Channels are
 activity-derived rollups, not canonical items or saved/followed claims.
+
+Supported layouts default to list, with a shared saved preference across Library
+pages and sessions. Explicit URL layout/view takes precedence. Presentation
+changes retain loaded pages. Collections automatically fetch later cursor pages
+near the scroll boundary, with shared loading/retry/completion and a keyboard
+fallback; facet options and inspector History remain explicitly paginated.
 
 ### Collection rules
 
@@ -104,9 +110,9 @@ the larger declared `read_count` when Hardcover lacks individual evidence.
 
 ### Queue collection
 
-Queue contains current Hardcover Want to Read and Currently Reading
-relationships until a supported completed read moves the work into Archive. It
-uses the same sparse grid. The list adds publication date and **Added to
+Queue contains active Hardcover Want to Read and Currently Reading
+relationships, independently from supported finished reads in Archive. It
+supports grid/list with the shared list default. The list adds publication date and **Added to
 Hardcover** date.
 
 Queue cards omit dates, format, progress, ratings, and community metadata. A
@@ -171,15 +177,17 @@ Detailed contract: [Articles Phase 2](research/articles-phase-2-surfaces.md)
 
 ### Shared row identity
 
-Articles uses compact rows only. The restrained default contains:
+Articles uses one expanded row style without a density toggle or type badge.
+The row contains:
 
-1. 4:3 thumbnail or subtype glyph;
+1. square artwork when available;
 2. title;
 3. author and publication;
 4. the view-defining relationship fact and date.
 
-An optional expanded density may add subtype, reading time, progress, published
-date, and prior-Archive context. Tags never appear in the standard row.
+Supported reading time, publication date, and section context appear as metadata.
+Tags never appear in the standard row. The earlier restrained/expanded option
+was superseded by October polish.
 
 Reader videos and podcasts route to their respective media types. Tweets,
 EPUBs, notes, highlights, and unknown categories remain source evidence rather
@@ -289,7 +297,8 @@ Detailed contract: [Movies Phase 2](research/movies-phase-2-surfaces.md)
 
 ### Collection presentation
 
-Movies supports poster grid and compact list, with grid as the default.
+Movies supports poster grid and list, with list as the shared default unless
+saved or explicit URL state selects grid.
 
 Grid cards in both views show only:
 
@@ -469,19 +478,21 @@ Detailed contract: [Music Phase 2](research/music-phase-2-surfaces.md)
 
 ### Membership and qualification
 
-- Tracks contains one item per Spotify track URI with at least one qualifying
-  playback.
-- Export observations qualify at `ms_played >= 30,000`.
-- Recently Played API events qualify immediately despite unavailable duration.
-- Every qualifying and excluded observation remains traceable.
+- Tracks contains one item per Spotify track URI with at least one identified,
+  non-conflicting playback observation.
+- Every identified export observation counts immediately, including skipped
+  and zero-duration rows. There is no minimum listening threshold.
+- Identified Recently Played API events count immediately despite unavailable duration.
+- Every counted and unresolved source observation remains traceable.
 - API-only events increase playback count but contribute no observed duration
   until deterministic reconciliation with an export.
-- The interface says **qualifying playback**, never completed listen or full
-  play.
+- The interface says **playback observations** and **observed time**, never
+  completed listens or full plays.
 
-### Tracks table
+### Tracks list
 
-Tracks is a dense, virtualized table showing:
+Tracks uses rows. Long-list virtualization remains a follow-up; the original
+field contract below describes the available collection/inspector facts:
 
 1. optional small album art, title, and explicit marker;
 2. ordered track artists;
@@ -544,11 +555,11 @@ therefore not additive.
 
 ### Music counts
 
-- Tracks: **N tracks · M qualifying playbacks · H observed**.
-- Albums: **N albums · T tracks heard · M qualifying playbacks · H observed**.
-- Artists: **N artists · T tracks heard · M qualifying playbacks · H observed**.
+- Tracks: track count, playback-observation count, and supported observed time.
+- Albums: album/track counts, playback-observation count, and supported observed time.
+- Artists: artist/track counts, playback-observation count, and supported observed time.
 
-When any qualifying playback lacks duration, disclose that count. Also disclose
+When any counted observation lacks duration, disclose that count. Also disclose
 latest complete export, last recent-play poll, incomplete imports, unresolved
 album/artist identities, and potential export/API overlap.
 
@@ -569,10 +580,10 @@ Album and Artist inspectors show period/lifetime listening aggregates, bounded
 top tracks/releases, exact identities, and coverage. “View all” navigates to
 Tracks with the exact filter.
 
-History shows qualifying occurrences newest first with timestamp, source,
-duration availability, qualification rule, skipped state, current-period match,
-and reconciliation. An **Excluded observations** mode exposes sub-30-second and
-zero-duration export rows without inflating counts. Full history is keyset-
+History shows playback observations newest first with timestamp, source,
+duration availability, skipped state, current-period match, and reconciliation.
+Zero-duration and sub-30-second export rows are ordinary counted observations;
+there is no threshold-based Excluded observations mode. Full history is keyset-
 paginated; the browser never receives the entire export.
 
 Saved-track/album state, followed artists, popularity, genre affinity,
@@ -706,5 +717,5 @@ Owner review is complete. The real-data review artifact remains intentionally
 separate from production and may evolve after implementation begins. Before
 coding, synchronize each detailed contract with this accepted baseline and use
 sanitized fixtures for automated tests. TMDB and YouTube credentialed probes
-remain additive provider gates; their absence must not block honest local-only
-Library rendering.
+and public enrichment are implemented. Missing credentials or catalog results
+still must not block honest local-only Library rendering.

@@ -1,3 +1,7 @@
+import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
+import { CollectionPagination } from '@/components/collection-pagination'
+import { useCollectionScroll } from '@/components/collection-scroll'
+import { videosQueryOptions } from '../../library-queries'
 import { MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -24,7 +28,7 @@ import {
   useInspectorPresence,
   useLibrarySectionCounts,
 } from '../../components/library-hooks'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -45,11 +49,7 @@ import {
   fetchVideoHistory,
   fetchVideos,
 } from './videos-api'
-import {
-  normalizeVideoSearch,
-  videoQuerySearch,
-  type VideosRouteSearch,
-} from './videos-route-search'
+import { normalizeVideoSearch, type VideosRouteSearch } from './videos-route-search'
 
 type View = 'archive' | 'queue' | 'channels'
 
@@ -95,15 +95,10 @@ export function VideosCollectionPage({ view }: { view: View }) {
   )
   const inspectorItem = useInspectorPresence(search.item)
   const channelInspectorItem = useInspectorPresence(search.channelItem)
-  const request = useMemo(() => ({ view, ...videoQuerySearch(search), limit: 50 }), [view, search])
-  const result = useInfiniteQuery({
-    queryKey: ['videos', request],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      fetchVideos({ ...request, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const queryOptions = videosQueryOptions(view, search)
+  const result = useInfiniteQuery(queryOptions)
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
+  const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
   const summary = result.data?.pages[0]
   const sectionCounts = useLibrarySectionCounts('videos', summary, (page) => page.sectionCounts)
   const sorts: [string, string][] =
@@ -142,7 +137,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
       data-inspector-open={Boolean(search.item || search.channelItem)}
       className={`books-page videos-page videos-${layout}`}
     >
-      <FlatTabsContent value={view} className="books-collection">
+      <FlatTabsContent value={view} className="books-collection" ref={collectionRef}>
         <h1 className="sr-only">Videos</h1>
         <CollectionTabList aria-label="Video sections">
           {(['archive', 'queue', 'channels'] as const).map((target) => (
@@ -153,7 +148,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
               activeProps={{ className: 'active', 'aria-current': 'page' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
-              <span>{sectionCounts?.[target] ?? '—'}</span>
+              <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
@@ -204,6 +199,15 @@ export function VideosCollectionPage({ view }: { view: View }) {
               ) : null}
             </InputGroup>
           </form>
+          <Button
+            variant="outline"
+            type="button"
+            className="toolbar-button"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            <SlidersHorizontal aria-hidden="true" /> Filters
+          </Button>
           <label className="books-sort">
             <span className="sr-only">Sort videos</span>
             <LibrarySelect
@@ -240,15 +244,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
               <ArrowDown aria-hidden="true" />
             )}
           </Button>
-          <Button
-            variant="outline"
-            type="button"
-            className="toolbar-button"
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((value) => !value)}
-          >
-            <SlidersHorizontal aria-hidden="true" /> Filters
-          </Button>
+
           {view !== 'channels' ? (
             <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
           ) : null}
@@ -274,7 +270,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
             Takeout coverage: Watch Later {summary.coverage.watchLater}.
           </p>
         ) : null}
-        {result.isError ? (
+        {result.isError && !result.isFetchNextPageError ? (
           <Notice className="books-state books-state-error">
             <h2>Videos could not be loaded</h2>
             <p>{result.error.message}</p>
@@ -308,17 +304,12 @@ export function VideosCollectionPage({ view }: { view: View }) {
             ))}
           </div>
         ) : null}
-        {result.hasNextPage ? (
-          <Button
-            variant="outline"
-            className="load-more"
-            type="button"
-            disabled={result.isFetchingNextPage}
-            onClick={() => void result.fetchNextPage()}
-          >
-            {result.isFetchingNextPage ? 'Loading…' : 'Load more'}
-          </Button>
-        ) : null}
+        <CollectionPagination
+          query={result}
+          scrollRef={collectionRef}
+          itemCount={items.length}
+          label={view === 'channels' ? 'channels' : 'videos'}
+        />
       </FlatTabsContent>
       {inspectorItem ? (
         <VideoInspector id={inspectorItem} onClose={() => update({ item: undefined })} />
@@ -745,6 +736,7 @@ function VideoItem({
   if (item.kind === 'channel') {
     return (
       <MediaRowButton
+        data-collection-item={item.id}
         type="button"
         className={`video-channel-row ${selected ? 'selected' : ''}`}
         onClick={onSelect}
@@ -768,6 +760,7 @@ function VideoItem({
   }
   return (
     <MediaRowButton
+      data-collection-item={item.id}
       type="button"
       className={`video-result ${selected ? 'selected' : ''}`}
       onClick={onSelect}
@@ -831,180 +824,182 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
-        <header>
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            onClick={onClose}
-            aria-label="Close inspector"
-          >
-            <X />
-          </Button>
-        </header>
-        {detail.isPending ? (
-          <LoadingState>Loading…</LoadingState>
-        ) : detail.isError ? (
-          <Notice>{detail.error.message}</Notice>
-        ) : detail.data ? (
-          <>
-            <div className="inspector-hero video-inspector-hero">
-              <span className="video-thumbnail">
-                {detail.data.imageUrl ? <img src={detail.data.imageUrl} alt="" /> : <PlaySquare />}
-              </span>
-              <div>
-                <span className="eyebrow">Video</span>
-                <h2>{detail.data.title}</h2>
-                <p>{detail.data.channelTitle ?? 'Channel unavailable'}</p>
+        <InspectorHeader onClose={onClose}>
+          <TabsList variant="line" className="inspector-tabs" aria-label="Video details">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="history">Watch history</TabsTrigger>
+            <TabsTrigger value="channel">Channel</TabsTrigger>
+          </TabsList>
+        </InspectorHeader>
+        <div className="inspector-scroll">
+          {detail.isPending ? (
+            <InspectorStatePanels values={['details', 'history', 'channel']}>
+              <LoadingState>Loading…</LoadingState>
+            </InspectorStatePanels>
+          ) : detail.isError ? (
+            <InspectorStatePanels values={['details', 'history', 'channel']}>
+              <Notice>{detail.error.message}</Notice>
+            </InspectorStatePanels>
+          ) : detail.data ? (
+            <>
+              <div className="inspector-hero video-inspector-hero">
+                <span className="video-thumbnail">
+                  {detail.data.imageUrl ? (
+                    <img src={detail.data.imageUrl} alt="" />
+                  ) : (
+                    <PlaySquare />
+                  )}
+                </span>
+                <div>
+                  <span className="eyebrow">Video</span>
+                  <h2>{detail.data.title}</h2>
+                  <p>{detail.data.channelTitle ?? 'Channel unavailable'}</p>
+                </div>
               </div>
-            </div>
-            <TabsList variant="line" className="inspector-tabs" aria-label="Video details">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="history">Watch history</TabsTrigger>
-              <TabsTrigger value="channel">Channel</TabsTrigger>
-            </TabsList>
-            {
-              <TabsContent value="details" className="inspector-tab-panel">
-                <section>
-                  <h3>Activity</h3>
-                  <dl>
-                    <div>
-                      <dt>Latest watch</dt>
-                      <dd>
-                        {detail.data.inArchive ? date(detail.data.date) : 'No supported watches'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Supported watches</dt>
-                      <dd>{detail.data.watchCount.toLocaleString()}</dd>
-                    </div>
-                    <div>
-                      <dt>Watch Later</dt>
-                      <dd>
-                        {detail.data.inQueue
-                          ? `${detail.data.queueAccountCount} account${detail.data.queueAccountCount === 1 ? '' : 's'}`
-                          : 'Not in Queue'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Format</dt>
-                      <dd>
-                        {detail.data.formats.length
-                          ? detail.data.formats
-                              .map((value) => value.replaceAll('_', ' '))
-                              .join(', ')
-                          : 'Unknown'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Published</dt>
-                      <dd>{date(detail.data.publishedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Category</dt>
-                      <dd>{detail.data.categoryTitle ?? 'Unknown'}</dd>
-                    </div>
-                    <div>
-                      <dt>Captions</dt>
-                      <dd>
-                        {detail.data.captionAvailable === null
-                          ? 'Unknown'
-                          : detail.data.captionAvailable
-                            ? 'Available'
-                            : 'Not reported'}
-                      </dd>
-                    </div>
-                  </dl>
-                  {detail.data.description ? <p>{detail.data.description}</p> : null}
-                  {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
-                  {detail.data.queueRelationships.length ? (
-                    <div>
-                      <h3>Watch Later</h3>
-                      <ul className="history-list">
-                        {detail.data.queueRelationships.map((relationship) => (
-                          <li
-                            key={`${relationship.connectionLabel}:${relationship.addedAt ?? 'unknown'}`}
-                          >
-                            <strong>{relationship.connectionLabel}</strong>
-                            <span>Added {date(relationship.addedAt)}</span>
+
+              {
+                <TabsContent value="details" className="inspector-tab-panel">
+                  <section>
+                    <h3>Activity</h3>
+                    <dl>
+                      <div>
+                        <dt>Latest watch</dt>
+                        <dd>
+                          {detail.data.inArchive ? date(detail.data.date) : 'No supported watches'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Supported watches</dt>
+                        <dd>{detail.data.watchCount.toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt>Watch Later</dt>
+                        <dd>
+                          {detail.data.inQueue
+                            ? `${detail.data.queueAccountCount} account${detail.data.queueAccountCount === 1 ? '' : 's'}`
+                            : 'Not in Queue'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Format</dt>
+                        <dd>
+                          {detail.data.formats.length
+                            ? detail.data.formats
+                                .map((value) => value.replaceAll('_', ' '))
+                                .join(', ')
+                            : 'Unknown'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Published</dt>
+                        <dd>{date(detail.data.publishedAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>Category</dt>
+                        <dd>{detail.data.categoryTitle ?? 'Unknown'}</dd>
+                      </div>
+                      <div>
+                        <dt>Captions</dt>
+                        <dd>
+                          {detail.data.captionAvailable === null
+                            ? 'Unknown'
+                            : detail.data.captionAvailable
+                              ? 'Available'
+                              : 'Not reported'}
+                        </dd>
+                      </div>
+                    </dl>
+                    {detail.data.description ? <p>{detail.data.description}</p> : null}
+                    {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
+                    {detail.data.queueRelationships.length ? (
+                      <div>
+                        <h3>Watch Later</h3>
+                        <ul className="history-list">
+                          {detail.data.queueRelationships.map((relationship) => (
+                            <li
+                              key={`${relationship.connectionLabel}:${relationship.addedAt ?? 'unknown'}`}
+                            >
+                              <strong>{relationship.connectionLabel}</strong>
+                              <span>Added {date(relationship.addedAt)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                      Open on YouTube <ExternalLink />
+                    </a>
+                  </section>
+                </TabsContent>
+              }
+              {
+                <TabsContent value="history" className="inspector-tab-panel">
+                  <section>
+                    <h3>Watch history</h3>
+                    <ol className="history-list">
+                      {history.data?.pages
+                        .flatMap((page) => page.data)
+                        .map((entry) => (
+                          <li key={entry.id}>
+                            <strong>{date(entry.occurredAt)}</strong>
+                            <span>
+                              {entry.connectionLabel}
+                              {entry.product === 'youtube_music' ? ' · YouTube Music' : ''}
+                            </span>
                           </li>
                         ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                    Open on YouTube <ExternalLink />
-                  </a>
-                </section>
-              </TabsContent>
-            }
-            {
-              <TabsContent value="history" className="inspector-tab-panel">
-                <section>
-                  <h3>Watch history</h3>
-                  <ol className="history-list">
-                    {history.data?.pages
-                      .flatMap((page) => page.data)
-                      .map((entry) => (
-                        <li key={entry.id}>
-                          <strong>{date(entry.occurredAt)}</strong>
-                          <span>
-                            {entry.connectionLabel}
-                            {entry.product === 'youtube_music' ? ' · YouTube Music' : ''}
-                          </span>
-                        </li>
-                      ))}
-                  </ol>
-                  {history.hasNextPage ? (
-                    <Button
-                      variant="outline"
-                      className="load-more"
-                      type="button"
-                      onClick={() => void history.fetchNextPage()}
-                    >
-                      Load more history
-                    </Button>
-                  ) : null}
-                </section>
-              </TabsContent>
-            }
-            {
-              <TabsContent value="channel" className="inspector-tab-panel">
-                <section>
-                  <h3>Channel</h3>
-                  {detail.data.channelId === null ? (
-                    <p>This Takeout record did not provide an exact channel identity.</p>
-                  ) : channel.isPending ? (
-                    <LoadingState>Loading…</LoadingState>
-                  ) : channel.data ? (
-                    <>
-                      <p>{channel.data.title}</p>
-                      <p>
-                        {countLabel(channel.data.archiveVideoCount, 'archived video')} ·{' '}
-                        {countLabel(channel.data.watchCount, 'watch')}
-                      </p>
-                      <ChannelPreview
-                        title="Recently watched"
-                        items={channelArchive.data?.data.slice(0, 5) ?? []}
-                        pending={channelArchive.isPending}
-                      />
-                      <ChannelPreview
-                        title="Recently queued"
-                        items={channelQueue.data?.data.slice(0, 5) ?? []}
-                        pending={channelQueue.isPending}
-                      />
-                      <a href={channel.data.canonicalUrl} target="_blank" rel="noreferrer">
-                        Open channel <ExternalLink />
-                      </a>
-                    </>
-                  ) : (
-                    <p>Channel details are unavailable.</p>
-                  )}
-                </section>
-              </TabsContent>
-            }
-          </>
-        ) : null}
+                    </ol>
+                    {history.hasNextPage ? (
+                      <Button
+                        variant="outline"
+                        className="load-more"
+                        type="button"
+                        onClick={() => void history.fetchNextPage()}
+                      >
+                        Load more history
+                      </Button>
+                    ) : null}
+                  </section>
+                </TabsContent>
+              }
+              {
+                <TabsContent value="channel" className="inspector-tab-panel">
+                  <section>
+                    <h3>Channel</h3>
+                    {detail.data.channelId === null ? (
+                      <p>This Takeout record did not provide an exact channel identity.</p>
+                    ) : channel.isPending ? (
+                      <LoadingState>Loading…</LoadingState>
+                    ) : channel.data ? (
+                      <>
+                        <p>{channel.data.title}</p>
+                        <p>
+                          {countLabel(channel.data.archiveVideoCount, 'archived video')} ·{' '}
+                          {countLabel(channel.data.watchCount, 'watch')}
+                        </p>
+                        <ChannelPreview
+                          title="Recently watched"
+                          items={channelArchive.data?.data.slice(0, 5) ?? []}
+                          pending={channelArchive.isPending}
+                        />
+                        <ChannelPreview
+                          title="Recently queued"
+                          items={channelQueue.data?.data.slice(0, 5) ?? []}
+                          pending={channelQueue.isPending}
+                        />
+                        <a href={channel.data.canonicalUrl} target="_blank" rel="noreferrer">
+                          Open channel <ExternalLink />
+                        </a>
+                      </>
+                    ) : (
+                      <p>Channel details are unavailable.</p>
+                    )}
+                  </section>
+                </TabsContent>
+              }
+            </>
+          ) : null}
+        </div>
       </Tabs>
     </aside>
   )
@@ -1061,127 +1056,125 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
-        <header>
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            onClick={onClose}
-            aria-label="Close inspector"
-          >
-            <X />
-          </Button>
-        </header>
-        {detail.isPending ? (
-          <LoadingState>Loading…</LoadingState>
-        ) : detail.isError ? (
-          <Notice>{detail.error.message}</Notice>
-        ) : detail.data ? (
-          <>
-            <div className="inspector-hero">
-              <span className="video-channel-avatar">
-                {detail.data.imageUrl ? <img src={detail.data.imageUrl} alt="" /> : <UserRound />}
-              </span>
-              <div>
-                <span className="eyebrow">Channel</span>
-                <h2>{detail.data.title}</h2>
-                <p>{countLabel(detail.data.archiveVideoCount, 'archived video')}</p>
+        <InspectorHeader onClose={onClose}>
+          <TabsList variant="line" className="inspector-tabs" aria-label="Channel details">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="library">Library</TabsTrigger>
+          </TabsList>
+        </InspectorHeader>
+        <div className="inspector-scroll">
+          {detail.isPending ? (
+            <InspectorStatePanels values={['details', 'library']}>
+              <LoadingState>Loading…</LoadingState>
+            </InspectorStatePanels>
+          ) : detail.isError ? (
+            <InspectorStatePanels values={['details', 'library']}>
+              <Notice>{detail.error.message}</Notice>
+            </InspectorStatePanels>
+          ) : detail.data ? (
+            <>
+              <div className="inspector-hero">
+                <span className="video-channel-avatar">
+                  {detail.data.imageUrl ? <img src={detail.data.imageUrl} alt="" /> : <UserRound />}
+                </span>
+                <div>
+                  <span className="eyebrow">Channel</span>
+                  <h2>{detail.data.title}</h2>
+                  <p>{countLabel(detail.data.archiveVideoCount, 'archived video')}</p>
+                </div>
               </div>
-            </div>
-            <TabsList variant="line" className="inspector-tabs" aria-label="Channel details">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="library">Library</TabsTrigger>
-            </TabsList>
-            {
-              <TabsContent value="details" className="inspector-tab-panel">
-                <section>
-                  <h3>Activity</h3>
-                  <dl>
-                    <div>
-                      <dt>Archived videos</dt>
-                      <dd>{detail.data.archiveVideoCount.toLocaleString()}</dd>
-                    </div>
-                    <div>
-                      <dt>Supported watches</dt>
-                      <dd>{detail.data.watchCount.toLocaleString()}</dd>
-                    </div>
-                    <div>
-                      <dt>Queued videos</dt>
-                      <dd>{detail.data.queueVideoCount.toLocaleString()}</dd>
-                    </div>
-                    <div>
-                      <dt>Latest watch</dt>
-                      <dd>{date(detail.data.date)}</dd>
-                    </div>
-                  </dl>
-                  {detail.data.description ? <p>{detail.data.description}</p> : null}
-                  {detail.data.country ? <p>Country: {detail.data.country}</p> : null}
-                  {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
-                  <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                    Open on YouTube <ExternalLink />
-                  </a>
-                </section>
-              </TabsContent>
-            }
-            {
-              <TabsContent value="library" className="inspector-tab-panel">
-                <section>
-                  <h3>Library</h3>
-                  <Tabs
-                    value={membership}
-                    onValueChange={(value) => setMembership(value as typeof membership)}
-                  >
-                    <TabsList variant="line" className="inspector-tabs">
-                      <TabsTrigger value="archive">Archive</TabsTrigger>
-                      <TabsTrigger value="queue">Queue</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value={membership} className="inspector-tab-panel">
-                      {library.isPending ? <LoadingState>Loading videos…</LoadingState> : null}
-                      {library.isError ? <Notice>{library.error.message}</Notice> : null}
-                      {library.isSuccess &&
-                      library.data.pages.every((page) => page.data.length === 0) ? (
-                        <p>
-                          {membership === 'queue' ? 'No queued videos.' : 'No archived videos.'}
-                        </p>
-                      ) : null}
-                      <ol className="history-list">
-                        {library.data?.pages
-                          .flatMap((page) => page.data)
-                          .map((item) => (
-                            <li key={item.id} className="channel-library-video">
-                              <span className="video-thumbnail">
-                                {item.imageUrl ? (
-                                  <img src={item.imageUrl} alt="" loading="lazy" />
-                                ) : (
-                                  <PlaySquare aria-hidden="true" />
-                                )}
-                              </span>
-                              <strong>{item.title}</strong>
-                              <span>
-                                {membership === 'archive'
-                                  ? `Watched ${date(item.date)}`
-                                  : `Added ${date(item.date)}`}
-                              </span>
-                            </li>
-                          ))}
-                      </ol>
-                      {library.hasNextPage ? (
-                        <Button
-                          variant="outline"
-                          className="load-more"
-                          type="button"
-                          onClick={() => void library.fetchNextPage()}
-                        >
-                          Load more videos
-                        </Button>
-                      ) : null}
-                    </TabsContent>
-                  </Tabs>
-                </section>
-              </TabsContent>
-            }
-          </>
-        ) : null}
+
+              {
+                <TabsContent value="details" className="inspector-tab-panel">
+                  <section>
+                    <h3>Activity</h3>
+                    <dl>
+                      <div>
+                        <dt>Archived videos</dt>
+                        <dd>{detail.data.archiveVideoCount.toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt>Supported watches</dt>
+                        <dd>{detail.data.watchCount.toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt>Queued videos</dt>
+                        <dd>{detail.data.queueVideoCount.toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt>Latest watch</dt>
+                        <dd>{date(detail.data.date)}</dd>
+                      </div>
+                    </dl>
+                    {detail.data.description ? <p>{detail.data.description}</p> : null}
+                    {detail.data.country ? <p>Country: {detail.data.country}</p> : null}
+                    {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
+                    <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
+                      Open on YouTube <ExternalLink />
+                    </a>
+                  </section>
+                </TabsContent>
+              }
+              {
+                <TabsContent value="library" className="inspector-tab-panel">
+                  <section>
+                    <h3>Library</h3>
+                    <Tabs
+                      value={membership}
+                      onValueChange={(value) => setMembership(value as typeof membership)}
+                    >
+                      <TabsList variant="line" className="inspector-tabs">
+                        <TabsTrigger value="archive">Archive</TabsTrigger>
+                        <TabsTrigger value="queue">Queue</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value={membership} className="inspector-tab-panel">
+                        {library.isPending ? <LoadingState>Loading videos…</LoadingState> : null}
+                        {library.isError ? <Notice>{library.error.message}</Notice> : null}
+                        {library.isSuccess &&
+                        library.data.pages.every((page) => page.data.length === 0) ? (
+                          <p>
+                            {membership === 'queue' ? 'No queued videos.' : 'No archived videos.'}
+                          </p>
+                        ) : null}
+                        <ol className="history-list">
+                          {library.data?.pages
+                            .flatMap((page) => page.data)
+                            .map((item) => (
+                              <li key={item.id} className="channel-library-video">
+                                <span className="video-thumbnail">
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                  ) : (
+                                    <PlaySquare aria-hidden="true" />
+                                  )}
+                                </span>
+                                <strong>{item.title}</strong>
+                                <span>
+                                  {membership === 'archive'
+                                    ? `Watched ${date(item.date)}`
+                                    : `Added ${date(item.date)}`}
+                                </span>
+                              </li>
+                            ))}
+                        </ol>
+                        {library.hasNextPage ? (
+                          <Button
+                            variant="outline"
+                            className="load-more"
+                            type="button"
+                            onClick={() => void library.fetchNextPage()}
+                          >
+                            Load more videos
+                          </Button>
+                        ) : null}
+                      </TabsContent>
+                    </Tabs>
+                  </section>
+                </TabsContent>
+              }
+            </>
+          ) : null}
+        </div>
       </Tabs>
     </aside>
   )

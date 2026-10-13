@@ -18,6 +18,28 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
+## Current checkout status (2026-10-12)
+
+The initial Library implementations for all six media types are present across
+16 routed sections, with Connections as the seventeenth production route. The
+root opens Books Archive. Source-derived Queue, Reader Feed, Podcast Following,
+Music Tracks/Albums/Artists, and Video Channels are implemented; manual Queue
+management, Chat, Recaps, Settings, and generalized replay/export/recovery remain
+deferred. TMDB/YouTube catalog caches and shared Spotify exact-ID backfill are
+implemented. The [UI foundation](../design/ui-foundation.md) owns the subsequent
+list defaults, expanded Article rows, shadcn controls, branding, and motion.
+The [Music implementation](music-implementation.md) supersedes earlier
+30-second/excluded-observation proposals with immediate song counting.
+
+Private Access checks, usage limiters, production packaging, deployment helpers,
+and local snapshot/restore rehearsal are in the checkout. Hosted provisioning
+and deployment remain pending, as do the cache-freshness launch gates in the
+[deployment runbook](deployment.md) and
+[storage efficiency plan](storage-efficiency-plan.md). The
+[documentation audit](documentation-audit.md) records the code/live-app comparison.
+Historical milestone sections below retain their original delivery context;
+their deferrals do not override this current status.
+
 ## 1. Product and architectural boundaries
 
 These are fixed unless explicitly revisited:
@@ -70,11 +92,16 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm test:e2e
-pnpm db:generate
 pnpm db:migrate:local
 pnpm db:migrate:remote
+pnpm build:production
+pnpm deployment:snapshot
 pnpm deploy
 ```
+
+There is no root `db:generate` script. Migrations are ordered SQL files; local
+and remote application use the scripts above. Follow the private deployment
+runbook before running remote migration or deployment commands.
 
 ## 3. Phase 0: Architecture decisions and safeguards
 
@@ -758,7 +785,9 @@ The ingestion follow-ups identified on September 14 were:
    controls, and persisted sync activity are implemented.
 2. Add provenance inspection, richer metadata, and search to the browsing UI.
 3. Add periodic export reminders and broader replay/export/recovery tooling.
-   The CLI and queue consumer remain placeholders, not operational recovery paths.
+   Generalized replay/export/recovery remain unimplemented. The CLI now has
+   guarded deployment helpers and the queue processes Reader content plus
+   TMDB/YouTube/Spotify catalog jobs; neither is a generalized recovery path.
 
 The MVP retains exact raw pages and respects idempotency and cursor safety, but
 defers generalized replay infrastructure, multipart upload orchestration, and
@@ -801,7 +830,7 @@ inspector behavior. Production delivery should:
    Podcasts, Songs, YouTube videos. Preserve one item with multiple occurrences
    and the per-media occurrence semantics in the approved contracts. The
    [Movies implementation plan](movies-implementation.md) records the shipped
-   Letterboxd-only vertical slice and the remaining TMDB credential gate. The
+   Letterboxd vertical slice plus implemented TMDB enrichment and local backfill. The
    [Articles implementation plan](articles-implementation.md) records the
    shipped Readwise-backed Archive, Queue, Feed, annotation, and selective-text
    vertical slice. The coordinated remaining plans cover

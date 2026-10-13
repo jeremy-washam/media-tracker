@@ -5,6 +5,12 @@
 - Scope: Spotify- and Reader-backed Library > Podcasts Archive, Queue, Following,
   episode/show inspectors, and best-effort current-player evidence
 
+Current presentation (reviewed 2026-10-12) follows the
+[UI foundation](../design/ui-foundation.md). Archive and Queue use rows; Following
+supports list/grid with shared saved and explicit URL preferences. The
+pre-implementation assessment and delivery stages below are September snapshots,
+not the current route inventory. Hosted deployment remains pending.
+
 The catalog-expiry design language retained later in this historical plan is
 superseded for the private deployment by [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md).
 The owner chose indefinite Spotify API catalog retention despite the documented

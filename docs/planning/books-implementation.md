@@ -3,6 +3,11 @@
 Status: Implemented and validated locally
 Last updated: 2026-09-20
 
+Current presentation (reviewed 2026-10-12) follows the
+[UI foundation](../design/ui-foundation.md). The September delivery sequence and
+validation records below are historical where later polish supersedes them;
+source identity, latest-read filters, and provenance rules remain authoritative.
+
 ## Purpose
 
 Books is the first production Library vertical slice. Shipping it means more than
@@ -67,8 +72,8 @@ implementation unless validation exposes a genuine contradiction.
 
 - Books has exactly two collection views: Archive and Queue.
 - There is no All view and no Reading view.
-- Hardcover Want to Read and Currently Reading both remain in Queue until the
-  book is completed.
+- Hardcover Want to Read and Currently Reading determine Queue from active
+  statuses 1 and 2, independently from retained finished reads.
 - Queue membership and Archive membership are independent. Completing a book
   does not imply that an upstream Queue/status record has disappeared.
 - A book can therefore be present in both Archive and Queue if the source data
@@ -86,7 +91,8 @@ implementation unless validation exposes a genuine contradiction.
 
 ### Grid and list
 
-- Grid is the default layout.
+- List is the default layout. A shared saved preference persists across supported
+  Library pages, and an explicit URL layout takes precedence.
 - A grid card contains cover, title, and author only.
 - The Readwise-style list may additionally show series and publication year.
 - Archive rows may show latest finished date and personal rating.

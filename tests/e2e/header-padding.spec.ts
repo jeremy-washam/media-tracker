@@ -1,3 +1,4 @@
+import { installDefaultApiMocks } from './default-api-mocks'
 import { expect, test } from '@playwright/test'
 import {
   booksResponse,
@@ -7,6 +8,10 @@ import {
   musicResponse,
   videosResponse,
 } from './ui-fixtures'
+
+test.beforeEach(async ({ page }) => {
+  await installDefaultApiMocks(page)
+})
 
 const collections = [
   { media: 'books', section: 'archive', response: booksResponse },
@@ -95,4 +100,49 @@ for (const dark of [false, true]) {
         .toBe(true)
     })
   }
+}
+
+for (const dark of [false, true]) {
+  test(`centers desktop branding with the header in ${dark ? 'dark' : 'light'} appearance`, async ({
+    page,
+  }) => {
+    await page.addInitScript((dark) => {
+      localStorage.setItem('media-tracker:dark', String(dark))
+      localStorage.setItem('media-tracker:sidebar-collapsed', 'false')
+    }, dark)
+    await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
+    await page.goto('/library/books/archive')
+    const aligned = () =>
+      page.evaluate(() => {
+        const header = document.querySelector<HTMLElement>('.workspace-header')!
+        const sidebar = document.querySelector<HTMLElement>('.app-frame > .app-sidebar')!
+        const brand = sidebar.querySelector<HTMLElement>('.app-brand')!
+        const headerRect = header.getBoundingClientRect()
+        const brandRect = brand.getBoundingClientRect()
+        const center = headerRect.top + headerRect.height / 2
+        const targets = [sidebar.querySelector<HTMLElement>('.sidebar-collapse')!]
+        if (!sidebar.closest('.sidebar-collapsed')) {
+          targets.push(
+            sidebar.querySelector<HTMLElement>('.app-brand-mark')!,
+            sidebar.querySelector<HTMLElement>('.app-brand-wordmark')!,
+          )
+        }
+        return (
+          Math.abs(brandRect.top - headerRect.top) < 1 &&
+          Math.abs(brandRect.height - headerRect.height) < 1 &&
+          targets.every((element) => {
+            const rect = element.getBoundingClientRect()
+            return Math.abs(rect.top + rect.height / 2 - center) < 1
+          })
+        )
+      })
+    for (const width of [1280, 1024]) {
+      await page.setViewportSize({ width, height: 768 })
+      await expect.poll(aligned, { message: `Expanded branding centered at ${width}px` }).toBe(true)
+      await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+      await expect.poll(aligned, { message: `Collapsed control centered at ${width}px` }).toBe(true)
+      await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
+      await expect.poll(aligned).toBe(true)
+    }
+  })
 }
