@@ -82,6 +82,7 @@ List appears first in the view controls.
 Section tabs retain known library totals while the next collection request loads,
 without retaining the previous section's results. Count labels reserve space to
 keep tab geometry stable through loading and use fresh response totals when available.
+Tab counts use normal weight (400) and muted text color as secondary information.
 Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
