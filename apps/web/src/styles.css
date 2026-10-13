@@ -667,6 +667,18 @@ a:focus-visible {
   padding: 0 4px 16px;
 }
 
+/* Desktop branding occupies the same top row as the workspace header. */
+.app-frame > .app-sidebar {
+  padding-top: 0;
+}
+
+.app-frame > .app-sidebar .app-brand {
+  min-height: var(--workspace-header-height);
+  flex: 0 0 var(--workspace-header-height);
+  padding-block: 0;
+  margin-bottom: 12px;
+}
+
 .app-brand > a {
   min-width: 0;
   flex: 1;
