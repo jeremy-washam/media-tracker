@@ -14,6 +14,9 @@ export const ApiErrorCodeSchema = z.enum([
   'NOT_FOUND',
   'INTERNAL_ERROR',
   'SERVICE_UNAVAILABLE',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'RATE_LIMITED',
 ])
 
 export const ApiErrorSchema = z.object({

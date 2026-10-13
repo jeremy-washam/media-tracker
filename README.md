@@ -92,12 +92,21 @@ lineage. No real source data needs to be deleted to retry an import.
 
 ## Remaining limitations
 
-Songs and audiobooks, source deletion reconciliation beyond Reader moves,
-generalized replay, app-wide export/recovery commands, webhooks, and production
-Access setup remain deferred. The CLI and queue consumer are placeholders;
-imports currently use HTTP requests and polling uses scheduled handlers.
+Audiobooks, generalized replay, app-wide remote export/recovery commands,
+webhooks, and production Access provisioning remain deferred. Music is
+implemented. Imports use HTTP requests, polling uses scheduled handlers, and
+queues handle selective Reader content and catalog jobs. Deployment helpers and
+a local snapshot/restore rehearsal are available; they do not provide the full
+operational recovery toolset.
 
 ## Checks
+
+Private hosting preparation, Access authentication, production asset packaging,
+and the local data-transfer rehearsal are documented in the
+[deployment runbook](docs/planning/deployment.md). Use `pnpm build:production`
+for hosted artifacts and `pnpm deploy` only after configuring the ignored real
+production target. The CLI's deployment helpers do not implement generalized
+replay/export/recovery.
 
 ```sh
 pnpm check

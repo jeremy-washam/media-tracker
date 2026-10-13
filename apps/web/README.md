@@ -6,9 +6,39 @@ pagination. Connections displays every account lineage, coverage, attempts,
 incomplete-import progress, and resumable Spotify/YouTube imports. Use an
 existing YouTube card for later snapshots of the same account.
 
+`pnpm build:production` at the repository root prepares the hosted app. The web
+package's deployment-mode build writes `dist-production`, excludes all private
+samples and design entries, and copies only allowlisted public assets. Local
+builds retain the studies and specimen. See the [deployment runbook](../../docs/planning/deployment.md).
+
 During local development Vite serves `http://127.0.0.1:5173` and proxies `/api`
 to the local Worker at `http://127.0.0.1:8787`. Import chunks are driven by the
 browser; reopening Connections offers Resume import if a previous run stopped.
+
+## Library loading and caching
+
+Library queries stay fresh for 10 minutes, and inactive in-memory results are
+retained for 30 minutes. After the current page finishes its initial collection
+request, the client prefetches the first page of every remaining Library section,
+Connections, and sync activity with at most two background requests at a time.
+It pauses launching background work while a foreground query is loading, while
+the tab is hidden, or while the browser is offline. Prefetch failures fall back
+to normal fetching when the section is opened.
+
+Only the default, unfiltered first page of each of the 16 Library sections is
+saved in browser local storage. Reloads restore those pages before rendering,
+preserving their original fetch times. Results older than 10 minutes refresh in
+the background when opened; snapshots older than 24 hours are discarded. The
+cache is versioned, bounded to 2 million characters, and validated against the
+API response schemas. Filters, subsequent pages, inspectors, content, and
+operational status are not persisted. Storage failures leave normal browsing
+available. This cache contains private Library metadata on the owner's browser.
+
+Completed or failed import/sync attempts invalidate Library results along with
+the existing connection/activity caches. Invalidated entries are removed from
+the persisted snapshot. Connections and sync activity retain five-second polling;
+health retains 30-second polling. Opening the Library does not start provider
+syncs or catalog jobs.
 
 ## Branding
 

@@ -19,6 +19,11 @@
 
 ## Planning
 
+- [Private deployment](planning/deployment.md): authentication, production
+  packaging, account prerequisites, snapshot/restore rehearsal, and cutover
+- [Storage efficiency plan](planning/storage-efficiency-plan.md): measured
+  compaction options, database choices, cache freshness, usage budgets, and
+  migration/deployment acceptance gates
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
 - [October UI polish](planning/ui-polish.md): approved iterative fixes, browser

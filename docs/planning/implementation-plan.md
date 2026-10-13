@@ -1,6 +1,6 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-09-21
+Last updated: 2026-10-12
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
@@ -647,6 +647,21 @@ Importing the same source data twice produces the same final database state.
 ```
 
 ## 15. Deployment and operations
+
+The [storage efficiency plan](storage-efficiency-plan.md) adds the owner's
+October 12 priority: $5/month is acceptable; reduce amplification and measure
+usage rather than force Free. It recommends one paid D1 initially, copy-rehearsed
+compact references/evidence layouts, cache maintenance while ingestion is paused,
+and bounded job budgets. Further database splits and historical interpretation
+archival require demonstrated benefits and explicit recovery boundaries. This
+is a proposed plan, not an applied schema or retention-policy change.
+
+The [private deployment runbook](deployment.md) records the October 12
+preparation: Worker-side owner authentication, an app-only production bundle,
+guarded production configuration, paused cutover, and a local D1/R2 transfer and
+restore rehearsal. Account activation, remote transfer, hosted verification,
+and production sync cutover remain pending. The local database requires Workers
+Paid at its current size. This preparation is not a deployed application.
 
 ### Production resources
 

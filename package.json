@@ -11,10 +11,12 @@
   },
   "scripts": {
     "build": "pnpm --filter @media-tracker/domain build && pnpm --filter @media-tracker/db build && pnpm --filter @media-tracker/contracts build && pnpm --filter @media-tracker/web build && pnpm --filter @media-tracker/api build && pnpm --filter @media-tracker/cli build",
+    "build:production": "pnpm build && pnpm --filter @media-tracker/web build:production && pnpm --filter @media-tracker/api build:production",
     "check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test",
     "db:migrate:local": "pnpm --filter @media-tracker/api exec wrangler d1 migrations apply media-tracker --local",
     "db:migrate:remote": "pnpm --filter @media-tracker/api exec wrangler d1 migrations apply media-tracker --remote",
-    "deploy": "pnpm build && pnpm --filter @media-tracker/api deploy",
+    "deploy": "pnpm build:production && pnpm --filter @media-tracker/api deploy",
+    "deployment:snapshot": "python3 scripts/deployment/snapshot.py",
     "dev": "concurrently --kill-others --names api,web --prefix-colors magenta,cyan \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:api": "pnpm --filter @media-tracker/api dev",
     "dev:web": "pnpm --filter @media-tracker/web dev",

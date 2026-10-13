@@ -6,6 +6,13 @@ The Hono REST API and Cloudflare request, queue, and scheduled-event entry point
 bindings. The placeholder resource IDs are suitable only for local development;
 replace them with provisioned Cloudflare resources before deployment.
 
+Production uses a separate ignored `wrangler.production.jsonc` and the app-only
+`apps/web/dist-production` bundle. All requests pass through Access JWT/owner
+verification; only explicit local loopback requests can bypass authentication.
+The first deployment has sync, imports, cron, and queue processing paused until
+data transfer is verified. Follow the [deployment runbook](../../docs/planning/deployment.md)
+for target generation, account activation, backups, secrets, and cutover.
+
 ## Readwise MVP sync
 
 Apply the local D1 migration, then copy `.dev.vars.example` to `.dev.vars` and

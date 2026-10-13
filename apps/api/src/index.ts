@@ -1,6 +1,8 @@
 import { SyncJobSchema } from '@media-tracker/contracts'
 
 import app from './app'
+import { authorizeRequest, privateAccessError } from './access'
+import { limitApiUsage } from './usage-limits'
 import { syncHardcover } from './hardcover-sync'
 import { syncLetterboxdRss } from './letterboxd-rss-sync'
 import { syncReadwiseArchive } from './readwise-sync'
@@ -18,8 +20,21 @@ import type { SyncJob } from '@media-tracker/contracts'
 import type { Bindings } from './env'
 
 const worker = {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Bindings, context: ExecutionContext) {
+    const denied = await authorizeRequest(request, env)
+    if (denied) return denied
+    if (env.SYNC_ENABLED === 'false' && !['GET', 'HEAD', 'OPTIONS'].includes(request.method))
+      return privateAccessError(503, 'Sync is paused during deployment.')
+    const pathname = new URL(request.url).pathname
+    if (pathname === '/__scheduled' && env.AUTH_MODE !== 'local')
+      return new Response('Not found', { status: 404 })
+    if (pathname !== '/api' && !pathname.startsWith('/api/')) return env.ASSETS.fetch(request)
+    const limited = await limitApiUsage(request, env)
+    if (limited) return limited
+    return app.fetch(request, env, context)
+  },
   scheduled(_controller, env, context) {
+    if (env.SYNC_ENABLED === 'false') return
     console.info(
       JSON.stringify({
         level: 'info',
@@ -187,6 +202,10 @@ const worker = {
     }
   },
   async queue(batch, env) {
+    if (env.SYNC_ENABLED === 'false') {
+      batch.retryAll({ delaySeconds: 300 })
+      return
+    }
     for (const message of batch.messages) {
       const result = SyncJobSchema.safeParse(message.body)
 
