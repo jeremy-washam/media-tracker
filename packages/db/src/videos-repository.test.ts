@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { VideosQuerySchema } from '../../contracts/src/videos'
 import type {
   DatabaseAllResult,
   DatabaseClient,
@@ -20,6 +21,7 @@ class SqliteStatement implements DatabaseStatement {
   #values: readonly DatabaseValue[] = []
   constructor(private readonly statement: StatementSync) {}
   bind(...values: readonly DatabaseValue[]) {
+    if (values.length > 100) throw new Error('simulated D1 statement bind-variable ceiling')
     this.#values = values
     return this
   }
@@ -470,12 +472,12 @@ describe('SqlVideosRepository', () => {
         .map(([query]) => query)
         .find(
           (query) =>
-            (query.includes('SELECT COUNT(*) value') || query.includes('COUNT(*) OVER()')) &&
+            (query.includes('SELECT COUNT(*) value') || query.includes('COUNT(*) FILTER')) &&
             query.includes(table),
         )!
       const plan = database
         .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all(clockNow, ...params, ...(view === 'channels' ? [51] : []))
+        .all(clockNow, ...params)
         .map((row) => row.detail)
         .join('\n')
       expect(plan).toContain('LIST SUBQUERY')
@@ -488,6 +490,189 @@ describe('SqlVideosRepository', () => {
     ).toBe('video-1')
     expect((await repository.listVideos(input({ q: 'no match anywhere' }))).data).toEqual([])
     prepare.mockRestore()
+  })
+
+  it('paginates a contract-valid twelve-token search with eighty channel selections within D1 limits', async () => {
+    await seedPublishedCatalog()
+    const q = 'one two three four five six seven eight nine ten eleven twelve'
+    database
+      .prepare(
+        `UPDATE youtube_video_catalog_profiles SET current_title=? WHERE lookup_state='current'`,
+      )
+      .run(q)
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
+      VALUES('catalog-2','youtube','succeeded','${later}','${later}')`)
+    await repository.rebuild(later)
+    const selection = input({
+      q,
+      channel: ['channel-1', 'channel-3', ...Array.from({ length: 78 }, (_, i) => `unused-${i}`)],
+      limit: 1,
+    })
+    expect(VideosQuerySchema.safeParse(selection).success).toBe(true)
+    const first = await repository.listVideos(selection)
+    expect(first.data.map((row) => row.id)).toEqual(['video-1'])
+    expect(first.nextCursor).not.toBeNull()
+    const secondSelection = input({ ...selection, cursor: first.nextCursor! })
+    expect(VideosQuerySchema.safeParse(secondSelection).success).toBe(true)
+    const second = await repository.listVideos(secondSelection)
+    expect(second.data.map((row) => row.id)).toEqual(['video-3'])
+    expect(second).toMatchObject({ totalCount: 2, filteredCount: 2, nextCursor: null })
+  })
+
+  it('bounds repeated account, channel, category and format filters while preserving Archive and Queue results', async () => {
+    await seedPublishedCatalog()
+    const q = 'one two three four five six seven eight nine ten eleven twelve'
+    database
+      .prepare(
+        `UPDATE youtube_video_catalog_profiles SET current_title=?,lookup_state='current',
+      channel_id='channel-1',category_id='22',live_broadcast_content='live' WHERE media_item_id IN ('video-1','video-2')`,
+      )
+      .run(q)
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
+      VALUES('catalog-2','youtube','succeeded','${later}','${later}')`)
+    await repository.rebuild(later)
+    for (const view of ['archive', 'queue'] as const) {
+      const selection = input({
+        view,
+        q,
+        sort: 'relevance',
+        account: ['youtube-1'],
+        channel: ['channel-1'],
+        category: ['22'],
+        format: ['youtube_music', 'live'],
+        ...(view === 'archive'
+          ? { watchedFrom: '2023-01-01', watchedTo: '2025-12-31' }
+          : { addedFrom: '2026-01-01', addedTo: '2026-12-31' }),
+      })
+      const expected = await repository.listVideos(selection)
+      expect(expected.data.map((row) => row.id)).toEqual([
+        view === 'archive' ? 'video-1' : 'video-2',
+      ])
+      const largeSelection = input({
+        ...selection,
+        account: [...Array<string>(200).fill('youtube-1'), 'quoted"account'],
+        channel: [...Array<string>(200).fill('channel-1'), 'quoted"channel'],
+        category: [...Array<string>(200).fill('22'), 'quoted"category'],
+        format: [...Array<'live'>(200).fill('live'), 'youtube_music'],
+      })
+      expect(await repository.listVideos(largeSelection)).toEqual(expected)
+    }
+  })
+
+  it('guards channel branch scans and counts source membership across publication expiry modes', async () => {
+    await seedPublishedCatalog()
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
+      VALUES('catalog-2','youtube','succeeded','${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET expires_at='2026-10-19T00:00:00.000Z' WHERE media_item_id='video-3'`)
+    await repository.rebuild(later)
+    const prepare = vi.spyOn(client, 'prepare')
+    for (const [at, ids, catalog] of [
+      [now, ['channel-1', 'channel-3'], 'current'],
+      ['2026-10-19T00:00:00.000Z', ['channel-1'], 'partial'],
+      ['2026-10-20T12:00:00.000Z', ['channel-1'], 'not_configured'],
+    ] as const) {
+      clockNow = at
+      prepare.mockClear()
+      const result = await repository.listVideos(input({ view: 'channels' }))
+      expect(result.data.map((row) => row.id)).toEqual(ids)
+      expect(result.coverage.catalog).toBe(catalog)
+      expect(
+        prepare.mock.calls.filter(([sql]) => sql.includes('SELECT COUNT(*) section_channels')),
+      ).toHaveLength(catalog === 'partial' ? 0 : 1)
+      const pageSql = prepare.mock.calls
+        .map(([sql]) => sql)
+        .find((sql) => sql.includes('FROM paged'))!
+      const legacySql = pageSql
+        .replace(
+          'FROM read_channel_mode mode CROSS JOIN main.video_library_projection p',
+          'FROM main.video_library_projection p',
+        )
+        .replace(
+          'FROM read_channel_mode mode CROSS JOIN main.video_channel_projection',
+          'FROM main.video_channel_projection',
+        )
+        .replace(
+          'FROM read_channel_mode mode CROSS JOIN youtube_published_channel_aggregates',
+          'FROM youtube_published_channel_aggregates',
+        )
+        .replaceAll('mode.mode=', '(SELECT mode FROM read_channel_mode)=')
+      expect(database.prepare(pageSql).all(at, 51)).toEqual(database.prepare(legacySql).all(at, 51))
+      const plan = database
+        .prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .all(at, 51)
+        .map((row) => String(row.detail))
+      const modeScan = plan.findIndex((detail) => detail === 'SCAN mode')
+      const videoScan = plan.findIndex((detail) => /^(?:SCAN|SEARCH) p(?: USING|$)/.test(detail))
+      expect(modeScan).toBeGreaterThanOrEqual(0)
+      expect(videoScan).toBeGreaterThan(modeScan)
+      const coverageSql = prepare.mock.calls
+        .map(([sql]) => sql)
+        .find((sql) => sql.includes('total_count') && sql.includes('cached_count'))!
+      const coveragePlan = database
+        .prepare(`EXPLAIN QUERY PLAN ${coverageSql}`)
+        .all(at)
+        .map((row) => String(row.detail))
+      expect(coveragePlan.some((detail) => /^SEARCH (?:vp|cp|category) /.test(detail))).toBe(false)
+      const empty = await repository.listVideos(
+        input({ view: 'channels', q: 'no matching channel' }),
+      )
+      expect(empty).toMatchObject({
+        data: [],
+        totalCount: 0,
+        filteredCount: 0,
+        sectionCounts: { channels: ids.length },
+      })
+    }
+    prepare.mockRestore()
+  })
+
+  it('reuses complete source rollups and grouped facets without changing filtered or expired results', async () => {
+    await seedPublishedCatalog()
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
+      VALUES('catalog-2','youtube','succeeded','${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET expires_at='2026-10-19T00:00:00.000Z' WHERE media_item_id='video-3'`)
+    await repository.rebuild(later)
+    for (const at of [now, '2026-10-19T00:00:00.000Z', '2026-10-20T12:00:00.000Z']) {
+      clockNow = at
+      for (const view of ['archive', 'queue'] as const) {
+        const complete = await repository.listVideos(input({ view }))
+        const observations = await repository.listVideos(input({ view, account: ['youtube-1'] }))
+        expect(complete).toEqual(observations)
+        const dated = await repository.listVideos(
+          input({
+            view,
+            account: ['youtube-1'],
+            ...(view === 'archive'
+              ? { watchedFrom: '2020-01-01', watchedTo: '2029-12-31' }
+              : { addedFrom: '2020-01-01', addedTo: '2029-12-31' }),
+          }),
+        )
+        expect(complete).toEqual(dated)
+        const fullOverlay = await repository.listVideos(
+          input({
+            view,
+            channel: ['channel-1', 'channel-3', '__unknown__'],
+          }),
+        )
+        expect(complete).toEqual(fullOverlay)
+      }
+      for (const format of [['youtube_music'], ['youtube_music', 'live']] as const) {
+        const complete = await repository.listVideos(input({ format }))
+        const observations = await repository.listVideos(
+          input({
+            format,
+            account: ['youtube-1'],
+            watchedFrom: '2020-01-01',
+            watchedTo: '2029-12-31',
+          }),
+        )
+        expect(complete).toEqual(observations)
+        expect(complete.data[0]).toMatchObject({
+          watchCount: 2,
+          matchingWatchCount: format.length === 1 ? 1 : 2,
+        })
+      }
+    }
   })
 
   it('counts overlapping Takeout evidence once per canonical watch occurrence', async () => {
@@ -518,9 +703,17 @@ describe('SqlVideosRepository', () => {
     ])
     await repository.rebuild(later)
 
-    expect((await repository.listVideos(input())).data[0]?.watchCount).toBe(2)
+    const complete = await repository.listVideos(input())
+    expect(complete.data[0]).toMatchObject({ watchCount: 2, matchingWatchCount: 2 })
+    expect(complete).toEqual(await repository.listVideos(input({ account: ['youtube-1'] })))
     expect(await repository.listHistory('video-1', 25)).toMatchObject({ totalCount: 2 })
     expect((await repository.listHistory('video-1', 25)).data).toHaveLength(2)
+    database.exec("UPDATE archive_entries SET upstream_state='removed' WHERE id='archive-3'")
+    await repository.rebuild(later)
+    const active = await repository.listVideos(input())
+    expect(active).toMatchObject({ totalCount: 1, occurrenceCount: 2 })
+    expect(active.data[0]).toMatchObject({ id: 'video-1', watchCount: 2, matchingWatchCount: 2 })
+    expect(active).toEqual(await repository.listVideos(input({ account: ['youtube-1'] })))
   })
 
   it('paginates collections by stable keys and rejects stale projection generations', async () => {

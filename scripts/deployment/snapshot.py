@@ -332,7 +332,8 @@ def create_bundle(database_path, metadata_path, blobs_path, destination):
                 count += 1
             views[name] = {'count': count, 'sha256': digest.hexdigest()}
         files = writer.finish()
-        manifest = {'version': 1, 'schema': {'path': schema.name, 'sha256': checksum(schema)}, 'indexes': {'path': indexes.name, 'sha256': checksum(indexes)}, 'data': files, 'tables': inventory, 'views': views, 'objects': objects, 'referencesVerified': references, 'migrations': migrations, 'sequences': sequences, 'databaseBytes': snapshot.stat().st_size}
+        backups = {name: {'path': name, 'sha256': checksum(destination / name), 'bytes': (destination / name).stat().st_size} for name in ('database.sqlite', 'r2-metadata.sqlite')}
+        manifest = {'version': 2, 'backups': backups, 'schema': {'path': schema.name, 'sha256': checksum(schema)}, 'indexes': {'path': indexes.name, 'sha256': checksum(indexes)}, 'data': files, 'tables': inventory, 'views': views, 'objects': objects, 'referencesVerified': references, 'migrations': migrations, 'sequences': sequences, 'databaseBytes': snapshot.stat().st_size}
         (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         return manifest
     finally:
@@ -341,12 +342,21 @@ def create_bundle(database_path, metadata_path, blobs_path, destination):
 
 def rehearse(directory):
     manifest = json.loads((directory / 'manifest.json').read_text())
+    # Version 1 bundles did not hash retained SQLite backups. Require a fresh
+    # strict manifest rather than reporting those unverified backups as passed.
+    if manifest.get('version') != 2:
+        raise ValueError('Strict backup verification requires a version 2 snapshot manifest')
+    backups = manifest.get('backups', {})
+    for name in ('database.sqlite', 'r2-metadata.sqlite'):
+        item = backups.get(name)
+        if not isinstance(item, dict) or item.get('path') != name or not item.get('sha256') or not isinstance(item.get('bytes'), int):
+            raise ValueError('Strict backup verification requires both retained SQLite backup hashes and sizes')
     target = directory / 'restored.sqlite'
     if target.exists():
         raise ValueError('Restore target already exists; use a fresh bundle for a new rehearsal')
-    for item in [manifest['schema'], *manifest['data'], manifest['indexes'], *manifest['objects'].values()]:
+    for item in [*backups.values(), manifest['schema'], *manifest['data'], manifest['indexes'], *manifest['objects'].values()]:
         path = (directory / item['path']).resolve()
-        if directory.resolve() not in path.parents or checksum(path) != item['sha256']:
+        if directory.resolve() not in path.parents or not path.is_file() or checksum(path) != item['sha256'] or ('bytes' in item and path.stat().st_size != item['bytes']):
             raise ValueError('Bundle checksum or path validation failed')
     db = sqlite3.connect(target)
     try:
@@ -380,7 +390,7 @@ def rehearse(directory):
         expected_sequences = [tuple(row) for row in manifest.get('sequences', [])]
         if expected_sequences and sequence_state(db, manifest['tables']) != expected_sequences:
             raise ValueError('Restored ID allocator state differs from the snapshot')
-        report = {'status': 'passed', 'tablesVerified': len(manifest['tables']), 'viewsVerified': len(manifest.get('views', {})), 'objectsVerified': len(manifest['objects']), 'referencesVerified': references, 'rowsVerified': sum(item['count'] for item in manifest['tables'].values()), 'sequencesVerified': len(expected_sequences), 'existingArticleChunkHashMismatches': manifest['tables'].get('article_content_search', {}).get('existingChunkHashMismatches', 0), 'remoteValidation': 'not performed'}
+        report = {'status': 'passed', 'backupsVerified': 2, 'tablesVerified': len(manifest['tables']), 'viewsVerified': len(manifest.get('views', {})), 'objectsVerified': len(manifest['objects']), 'referencesVerified': references, 'rowsVerified': sum(item['count'] for item in manifest['tables'].values()), 'sequencesVerified': len(expected_sequences), 'existingArticleChunkHashMismatches': manifest['tables'].get('article_content_search', {}).get('existingChunkHashMismatches', 0), 'remoteValidation': 'not performed'}
         (directory / 'rehearsal.json').write_text(json.dumps(report, indent=2) + '\n')
         return report
     finally:

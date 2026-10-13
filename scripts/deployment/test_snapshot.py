@@ -59,6 +59,9 @@ class SnapshotTests(unittest.TestCase):
         manifest = self.bundle()
         report = rehearse(self.output)
         self.assertEqual(report['status'], 'passed')
+        self.assertEqual(manifest['version'], 2)
+        self.assertEqual(report['backupsVerified'], 2)
+        self.assertEqual(set(manifest['backups']), {'database.sqlite', 'r2-metadata.sqlite'})
         self.assertEqual(report['referencesVerified'], 2)
         self.assertEqual(report['tablesVerified'], 7)
         db = sqlite3.connect(self.output / 'restored.sqlite')
@@ -134,6 +137,82 @@ class SnapshotTests(unittest.TestCase):
         manifest = self.bundle()
         (self.output / manifest['data'][0]['path']).write_text('SELECT 1;')
         with self.assertRaisesRegex(ValueError, 'checksum'):
+            rehearse(self.output)
+
+    def test_rejects_corrupt_retained_backups_before_restore(self):
+        self.bundle()
+        for name in ('database.sqlite', 'r2-metadata.sqlite'):
+            with self.subTest(backup=name):
+                path = self.output / name
+                original = path.read_bytes()
+                # Preserve length so the digest, not just the size, detects damage.
+                path.write_bytes(b'corrupt!' + original[8:])
+                with self.assertRaisesRegex(ValueError, 'checksum'):
+                    rehearse(self.output)
+                self.assertFalse((self.output / 'restored.sqlite').exists())
+                self.assertFalse((self.output / 'rehearsal.json').exists())
+                path.write_bytes(original)
+
+    def test_rejects_deleted_retained_backups_before_restore(self):
+        self.bundle()
+        for name in ('database.sqlite', 'r2-metadata.sqlite'):
+            with self.subTest(backup=name):
+                path = self.output / name
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, 'checksum'):
+                    rehearse(self.output)
+                self.assertFalse((self.output / 'restored.sqlite').exists())
+                self.assertFalse((self.output / 'rehearsal.json').exists())
+                path.write_bytes(original)
+
+    def test_rejects_legacy_manifests_without_strict_backup_verification(self):
+        manifest = self.bundle()
+        manifest['version'] = 1
+        del manifest['backups']
+        (self.output / 'manifest.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'version 2'):
+            rehearse(self.output)
+        self.assertFalse((self.output / 'restored.sqlite').exists())
+
+    def test_requires_hashes_for_both_retained_backups(self):
+        manifest = self.bundle()
+        for name in ('database.sqlite', 'r2-metadata.sqlite'):
+            with self.subTest(backup=name):
+                digest = manifest['backups'][name].pop('sha256')
+                (self.output / 'manifest.json').write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(ValueError, 'both retained SQLite backup hashes'):
+                    rehearse(self.output)
+                self.assertFalse((self.output / 'restored.sqlite').exists())
+                manifest['backups'][name]['sha256'] = digest
+
+    def test_failed_data_file_rolls_back_its_rows_and_keeps_prior_files_committed(self):
+        manifest = self.bundle()
+        statements = [
+            f"INSERT INTO article_content_manifests VALUES('committed','content/text','{self.text_hash}');\n",
+            f"INSERT INTO article_content_chunks VALUES('committed',0,0,1,'{self.text_hash}');\n"
+            "INSERT INTO article_content_search_map VALUES(99,'missing',0);\n",
+        ]
+        manifest['data'] = []
+        for index, sql in enumerate(statements):
+            path = self.output / 'data' / f'{index:05d}.sql'
+            contents = sql.encode()
+            path.write_bytes(contents)
+            manifest['data'].append({'path': str(path.relative_to(self.output)), 'sha256': hashlib.sha256(contents).hexdigest(), 'bytes': len(contents)})
+        (self.output / 'manifest.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, 'FOREIGN KEY'):
+            rehearse(self.output)
+        db = sqlite3.connect(self.output / 'restored.sqlite')
+        try:
+            self.assertEqual(db.execute('SELECT id FROM article_content_manifests').fetchall(), [('committed',)])
+            self.assertEqual(db.execute('SELECT count(*) FROM article_content_chunks').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM article_content_search_map').fetchone()[0], 0)
+        finally:
+            db.close()
+        self.assertFalse((self.output / 'rehearsal.json').exists())
+        # Resume support remains deferred; retries must never report a partial
+        # destination as a successful complete restore.
+        with self.assertRaisesRegex(ValueError, 'Restore target already exists'):
             rehearse(self.output)
 
     def test_rejects_live_journals(self):

@@ -463,3 +463,42 @@ ignored under `.private/deployment/analysis-evidence/` and `analysis-catalog/`.
 No private data is embedded in this document. Implementation must be staged
 sequentially across shared schema/contracts/writers despite parallel analysis;
 unrelated UX work in the shared checkout remains outside this plan's edit scope.
+
+## October 13 review follow-up
+
+Three independent reviewers reran required checks, compared baseline/migrated
+evidence constraints, tested malformed restores and reproduced the Channel query
+costs. The fixes remove unnecessary source-count overlays and inactive grouping
+scans, and compress selected-filter bindings to avoid D1's 100-parameter limit on
+later pages. The existing per-token expiry search remains.
+
+Migration 0029 and ADR 0017 enforce insert-only evidence replay without changing
+retained facts. Snapshot version 2 hashes both physical backups before verifying
+the logical restore. Scheduled metrics distinguish individual providers rather
+than combining all work in one cron summary. Old code cannot resume canonical
+writes against the compact view; rollback requires compatible code or restoring
+the old database. Full-data hosted costs, interrupted remote transfer/resume and
+provider budgets remain to be validated before deployment.
+
+The post-review full-copy restore verified 94 tables, one compatibility view,
+1,798,348 physical/application-and-search rows, 18,126 objects, 18,253 references
+and both retained SQLite backup hashes. All original evidence tuples remained
+equal. Fresh restored storage is 1,168,744,448 bytes (267,116,544 bytes below the
+original allocated snapshot). All 29 migrations applied to an empty native local
+D1 instance; a synthetic native check preserved original evidence under
+`INSERT OR REPLACE` with recursive triggers both off and on.
+
+Read-only full-copy comparisons after the fixes matched complete responses and
+facets in valid, partial-expiry and fully expired states. Against the first
+implementation, local median process CPU fell from 95.49 to 43.20 ms for valid
+Channels, 486.81 to 167.12 ms for Archive, and 70.61 to 24.15 ms for Queue.
+Dynamic partial-expiry grouping remains a single pass. Unfiltered matching uses
+source rollups only when account/date/source-format predicates do not require
+observation scans; filtered paths retain their original occurrence semantics.
+
+Against the prepublication implementation on the original snapshot, valid Archive
+improved from 306.26 to 168.45 ms. Channels changed from 30.11 to 37.90 ms: about
+7.8 ms remains for clock-valid channel-name sorting and publication generations.
+This measured correctness overhead is retained; avoidable scans were removed.
+These are local SQLite process-CPU measurements, not Worker CPU or D1 billing
+metadata. Hosted cost/latency validation remains a deployment gate.

@@ -204,6 +204,10 @@ checks database and foreign-key integrity, and requires all current migrations.
 The live Library remains untouched. Pause local writes for the final cutover
 snapshot; a development rehearsal is not that final snapshot.
 
+Version 2 manifests require SHA-256 hashes and sizes for both retained SQLite
+backups. Rehearsal rejects old unhashed manifests; regenerate a new bundle rather
+than treating an old physical backup as verified.
+
 The ignored private bundle contains the SQLite backup; final schema; ordered
 SQL files capped at 4 MiB with statements below D1's 100 KB limit; indexes and
 triggers and compatibility views; migration names/checksums; and content-addressed R2 objects preserving
@@ -276,7 +280,10 @@ After configuration, a dry run is available:
 pnpm --filter @media-tracker/cli start deployment deploy --dry-run
 ```
 
-Worker code rollback does not restore D1/R2 data. Pause writes before any data
+Worker code rollback does not restore D1/R2 data. Code predating migration 0027
+cannot write its UPSERT through the compact evidence view. Rollback across that
+boundary requires compatible writer code or restoration of the pre-migration
+database before resuming writes. Pause writes before any data
 restore. Do not resume local Spotify rotation against an obsolete copy of the
 hosted grant. Account activation, MFA enrollment, remote transfer, hosted smoke
 testing, and final cutover are still required after local preparation.
@@ -358,3 +365,23 @@ and latency measurements, plus a quiet-host comparison, remain mandatory before
 adopting this cache implementation in production. Provider daily acquisition and
 retry budgets also remain activation gates; all production background controls
 remain off by default.
+
+## October 13 independent review fixes
+
+The review identified avoidable catalog joins in source membership counting,
+inactive Channel grouping scans, and an accepted second-page filter request
+exceeding D1's 100-parameter limit. The fixes use physical source counting,
+mode-first Channel branches and one JSON-array binding per selected filter.
+They preserve dynamic grouping for partial expiry and the existing query contract.
+
+Forward migration 0029 hardens evidence insertion against replacement, as recorded
+in ADR 0017. Version 2 snapshot manifests verify both retained SQLite backups,
+in addition to SQL payloads, objects, restored records and search positions.
+Scheduled provider jobs now have independent usage scopes and cloned bindings,
+including failure reporting. Native `first()` remains explicitly unmeasured.
+
+These changes do not enable background work or deploy private data. Full-size
+remote transfer/resume, remote performance and cleanup throughput, provider
+budgets and account activation remain deployment gates. The full-copy restore now verifies both physical backup hashes. Local query
+comparisons and the remaining correctness overhead are recorded in the storage
+plan; final release checks include the integrated UI revision.

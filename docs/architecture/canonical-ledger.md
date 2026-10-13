@@ -252,7 +252,10 @@ evidence ID, role and linking timestamp is retained. Canonical writers use the
 physical table, while reconciliation may insert through the view. These private
 keys do not replace domain/API IDs. See
 [ADR 0016](../decisions/0016-compact-evidence-references.md) for allocation,
-constraints and restore ordering.
+constraints and restore ordering. [ADR 0017](../decisions/0017-evidence-insert-only-replay.md)
+defines append-or-replay insertion: an existing tuple retains its original ID and
+timestamp under every insertion conflict mode, while a new tuple cannot reuse an
+existing evidence ID. Parent and connection validation precede replay suppression.
 
 ### Source-derived Queue model
 

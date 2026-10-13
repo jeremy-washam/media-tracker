@@ -136,3 +136,9 @@ run, with additional FTS/index/state writes. Cleanup starts two days before
 expiry to leave headroom and can reduce enrichment early. Both maintenance and
 provider work default off in the production template. Follow the deployment
 runbook's import, freshness, backlog and usage gates before activation.
+
+Scheduled provider work reports separate aggregate usage scopes for each history
+sync and catalog job. Each operation receives cloned bindings; reports run in
+`finally`, including failed operations. Queue messages and HTTP requests retain
+their independent scopes. Available D1 metadata remains partial because native
+`first()` does not return it.

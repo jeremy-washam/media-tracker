@@ -31,6 +31,7 @@ const migrationNames = [
   '0015_songs_library.sql',
   '0027_compact_archive_evidence.sql',
   '0028_evidence_view_parent_guard.sql',
+  '0029_evidence_insert_only_replay.sql',
 ]
 const migration = migrationNames
   .map((name) =>

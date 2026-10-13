@@ -19,6 +19,7 @@ const migration = [
   '0014_podcasts_library.sql',
   '0027_compact_archive_evidence.sql',
   '0028_evidence_view_parent_guard.sql',
+  '0029_evidence_insert_only_replay.sql',
 ]
   .map((name) =>
     readFileSync(

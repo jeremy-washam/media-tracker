@@ -42,3 +42,9 @@ remains unmeasured; result coverage must accompany observed row counts.
 Migration 0028 explicitly rejects missing evidence parents even when a caller
 uses `INSERT OR IGNORE` through the compatibility view. Valid duplicate roles
 remain idempotent.
+
+Migration 0029 enforces append-or-replay evidence insertion even under
+`INSERT OR REPLACE`. Existing tuple IDs/timestamps are preserved; new tuples with
+reused IDs abort. Ordinary duplicate tuple INSERT is now a no-op. Required fields,
+roles and parent/connection constraints are checked before replay suppression.
+See ADR 0017.

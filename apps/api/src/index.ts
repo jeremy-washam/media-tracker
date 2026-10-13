@@ -21,6 +21,19 @@ import type { SyncJob } from '@media-tracker/contracts'
 
 import type { Bindings } from './env'
 
+async function scheduledJob<Result>(
+  env: Bindings,
+  scope: string,
+  operation: (bindings: Bindings) => Promise<Result>,
+): Promise<Result> {
+  const usage = jobUsage(env, scope)
+  try {
+    return await operation(usage.env)
+  } finally {
+    usage.report()
+  }
+}
+
 const worker = {
   async fetch(request: Request, env: Bindings, context: ExecutionContext) {
     const denied = await authorizeRequest(request, env)
@@ -40,8 +53,6 @@ const worker = {
       context.waitUntil(maintainCatalog(env))
     // The frequent cleanup schedule must never increase provider polling cadence.
     if (controller.cron === MAINTENANCE_CRON || env.SYNC_ENABLED === 'false') return
-    const usage = jobUsage(env, 'scheduled_sync')
-    env = usage.env
     console.info(
       JSON.stringify({
         level: 'info',
@@ -59,7 +70,7 @@ const worker = {
       )
     } else {
       tasks.push(() =>
-        syncLetterboxdRss(env)
+        scheduledJob(env, 'scheduled_letterboxd', syncLetterboxdRss)
           .then((result) => {
             console.info(
               JSON.stringify({
@@ -93,7 +104,7 @@ const worker = {
       )
     } else {
       tasks.push(() =>
-        syncHardcover(env)
+        scheduledJob(env, 'scheduled_hardcover', syncHardcover)
           .then((result) => {
             console.info(
               JSON.stringify({
@@ -127,7 +138,7 @@ const worker = {
       )
     } else {
       tasks.push(() =>
-        syncReadwiseArchive(env)
+        scheduledJob(env, 'scheduled_readwise', syncReadwiseArchive)
           .then((result) => {
             console.info(
               JSON.stringify({
@@ -160,7 +171,7 @@ const worker = {
       )
     } else {
       tasks.push(() =>
-        syncSpotifySavedEpisodes(env)
+        scheduledJob(env, 'scheduled_spotify', syncSpotifySavedEpisodes)
           .then((result) => {
             console.info(
               JSON.stringify({
@@ -186,16 +197,18 @@ const worker = {
       )
     }
     if (env.CATALOG_AUTO_REFRESH === 'true' && env.TMDB_API_READ_TOKEN !== undefined)
-      tasks.push(() => startTmdbCatalogRefresh(env).then(() => undefined))
-    if (env.CATALOG_AUTO_REFRESH === 'true' && env.YOUTUBE_API_KEY !== undefined)
-      tasks.push(() => startYoutubeCatalogRefresh(env).then(() => undefined))
-    tasks.push(() => resumeSpotifyCatalogBackfill(env))
-    if (tasks.length > 0) {
-      context.waitUntil(
-        tasks
-          .reduce((chain, task) => chain.then(task), Promise.resolve())
-          .finally(() => usage.report()),
+      tasks.push(() =>
+        scheduledJob(env, 'scheduled_tmdb_catalog', startTmdbCatalogRefresh).then(() => undefined),
       )
+    if (env.CATALOG_AUTO_REFRESH === 'true' && env.YOUTUBE_API_KEY !== undefined)
+      tasks.push(() =>
+        scheduledJob(env, 'scheduled_youtube_catalog', startYoutubeCatalogRefresh).then(
+          () => undefined,
+        ),
+      )
+    tasks.push(() => scheduledJob(env, 'scheduled_spotify_catalog', resumeSpotifyCatalogBackfill))
+    if (tasks.length > 0) {
+      context.waitUntil(tasks.reduce((chain, task) => chain.then(task), Promise.resolve()))
     }
   },
   async queue(batch, env) {

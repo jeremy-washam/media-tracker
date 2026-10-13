@@ -30,6 +30,7 @@ const migrationSql = [
   '0020_tmdb_match_evidence.sql',
   '0027_compact_archive_evidence.sql',
   '0028_evidence_view_parent_guard.sql',
+  '0029_evidence_insert_only_replay.sql',
 ].map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
 const migrations = migrationSql.join('\n')
 

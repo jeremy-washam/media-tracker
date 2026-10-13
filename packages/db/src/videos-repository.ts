@@ -394,24 +394,25 @@ export class SqlVideosRepository {
         LEFT JOIN youtube_published_categories category ON category.category_id=vp.category_id AND category.region_code='US'
           AND category.expires_at>(SELECT at FROM read_clock)
       ),
+      -- CROSS JOIN keeps the mode guard ahead of each potentially large scan.
       video_channel_groups AS (
 SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
           SUM(p.archive_active) archive_video_count,
           SUM(p.watch_occurrence_count) watch_occurrence_count,MAX(p.latest_watched_at) latest_watched_at,
           SUM(p.queue_active) queue_video_count,MAX(p.projection_generation) projection_generation,
           MAX(p.updated_at) updated_at,MAX(COALESCE(vp.channel_title,p.display_channel_title)) channel_title
-          FROM main.video_library_projection p
+          FROM read_channel_mode mode CROSS JOIN main.video_library_projection p
           LEFT JOIN youtube_published_video_profiles vp ON vp.media_item_id=p.media_item_id
             AND vp.expires_at>(SELECT at FROM read_clock)
-          WHERE (SELECT mode FROM read_channel_mode)='dynamic' AND COALESCE(vp.channel_id,p.channel_id) IS NOT NULL AND (p.archive_active=1 OR p.queue_active=1)
+          WHERE mode.mode='dynamic' AND COALESCE(vp.channel_id,p.channel_id) IS NOT NULL AND (p.archive_active=1 OR p.queue_active=1)
           GROUP BY COALESCE(vp.channel_id,p.channel_id) UNION ALL
           SELECT channel_id,archive_video_count,watch_occurrence_count,latest_watched_at,
             queue_video_count,projection_generation,updated_at,display_title
-          FROM main.video_channel_projection
-          WHERE (SELECT mode FROM read_channel_mode)='owner' AND (archive_video_count>0 OR queue_video_count>0)
+          FROM read_channel_mode mode CROSS JOIN main.video_channel_projection
+          WHERE mode.mode='owner' AND (archive_video_count>0 OR queue_video_count>0)
           UNION ALL SELECT channel_id,archive_video_count,watch_occurrence_count,latest_watched_at,
             queue_video_count,projection_generation,updated_at,channel_title
-          FROM youtube_published_channel_aggregates WHERE (SELECT mode FROM read_channel_mode)='published'
+          FROM read_channel_mode mode CROSS JOIN youtube_published_channel_aggregates WHERE mode.mode='published'
 
       ),
       video_channel_projection AS NOT MATERIALIZED (
@@ -1349,13 +1350,13 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
       const known = input.channel.filter((value) => value !== '__unknown__')
       clauses.push(
         `(${[
-          known.length > 0 ? `p.channel_id IN (${placeholders(known)})` : null,
+          known.length > 0 ? 'p.channel_id IN (SELECT value FROM json_each(?))' : null,
           input.channel.includes('__unknown__') ? 'p.channel_id IS NULL' : null,
         ]
           .filter(Boolean)
           .join(' OR ')})`,
       )
-      values.push(...known)
+      if (known.length > 0) values.push(JSON.stringify(known))
     }
     if (input.published === 'unknown') clauses.push('p.published_at IS NULL')
     if (input.published === 'range') {
@@ -1389,8 +1390,8 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
         clauses.push("p.availability_state IN ('not_configured','pending','stale','error')")
     }
     if (input.category?.length) {
-      clauses.push(`p.category_id IN (${placeholders(input.category)})`)
-      values.push(...input.category)
+      clauses.push('p.category_id IN (SELECT value FROM json_each(?))')
+      values.push(JSON.stringify(input.category))
     }
     if (input.overlap === 'overlap')
       clauses.push(input.view === 'archive' ? 'p.queue_active=1' : 'p.archive_active=1')
@@ -1400,12 +1401,14 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     if (input.watchCount === 'rewatched') clauses.push('p.watch_occurrence_count>1')
     if (input.view === 'archive') {
       const occurrence = this.watchPredicate(input, true)
-      clauses.push(
-        `EXISTS(SELECT 1 FROM youtube_watch_observations w
+      if (this.hasWatchFilters(input)) {
+        clauses.push(
+          `EXISTS(SELECT 1 FROM youtube_watch_observations w
           JOIN archive_entries a ON a.id=w.archive_entry_id
           WHERE ${occurrence.sql})`,
-      )
-      values.push(...occurrence.values)
+        )
+        values.push(...occurrence.values)
+      }
       const formats = this.formatClauses(input, occurrence)
       if (formats.sql) {
         clauses.push(formats.sql)
@@ -1414,8 +1417,10 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     }
     if (input.view === 'queue') {
       const relationship = this.queuePredicate(input, true)
-      clauses.push(`EXISTS(SELECT 1 FROM queue_entries q WHERE ${relationship.sql})`)
-      values.push(...relationship.values)
+      if (this.hasQueueFilters(input)) {
+        clauses.push(`EXISTS(SELECT 1 FROM queue_entries q WHERE ${relationship.sql})`)
+        values.push(...relationship.values)
+      }
       if (input.format?.length) {
         const alternatives: string[] = []
         if (input.format.includes('youtube_music'))
@@ -1428,9 +1433,9 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
         const live = input.format.filter((value) =>
           ['live', 'upcoming', 'recorded_live'].includes(value),
         )
-        if (live.length) alternatives.push(`p.live_state IN (${placeholders(live)})`)
+        if (live.length) alternatives.push('p.live_state IN (SELECT value FROM json_each(?))')
         clauses.push(`(${alternatives.length ? alternatives.join(' OR ') : '1=0'})`)
-        values.push(...live)
+        if (live.length) values.push(JSON.stringify(live))
       }
     }
     return { where: clauses.join(' AND '), values }
@@ -1456,8 +1461,8 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
       ['live', 'upcoming', 'recorded_live'].includes(value),
     )
     if (live.length) {
-      alternatives.push(`p.live_state IN (${placeholders(live)})`)
-      values.push(...live)
+      alternatives.push('p.live_state IN (SELECT value FROM json_each(?))')
+      values.push(JSON.stringify(live))
     }
     return { sql: `(${alternatives.length ? alternatives.join(' OR ') : '1=0'})`, values }
   }
@@ -1467,8 +1472,8 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const values: DatabaseValue[] = []
     if (correlateMedia) clauses.push('w.media_item_id=p.media_item_id')
     if (input.account?.length) {
-      clauses.push(`w.connection_id IN (${placeholders(input.account)})`)
-      values.push(...input.account)
+      clauses.push('w.connection_id IN (SELECT value FROM json_each(?))')
+      values.push(JSON.stringify(input.account))
     }
     const dates: string[] = []
     if (input.watchedFrom) {
@@ -1496,13 +1501,28 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     return { sql: clauses.join(' AND '), values }
   }
 
+  private hasWatchFilters(input: VideosListInput) {
+    return Boolean(
+      input.account?.length ||
+      input.watchedFrom ||
+      input.watchedTo ||
+      input.watchedUnknown ||
+      (input.format?.includes('youtube_music') &&
+        input.format.every((format) => format === 'youtube_music')),
+    )
+  }
+
+  private hasQueueFilters(input: VideosListInput) {
+    return Boolean(input.account?.length || input.addedFrom || input.addedTo || input.addedUnknown)
+  }
+
   private queuePredicate(input: VideosListInput, correlateMedia: boolean) {
     const clauses = ["q.relationship_type='youtube_watch_later'", "q.upstream_state='active'"]
     const values: DatabaseValue[] = []
     if (correlateMedia) clauses.push('q.media_item_id=p.media_item_id')
     if (input.account?.length) {
-      clauses.push(`q.connection_id IN (${placeholders(input.account)})`)
-      values.push(...input.account)
+      clauses.push('q.connection_id IN (SELECT value FROM json_each(?))')
+      values.push(JSON.stringify(input.account))
     }
     const dates: string[] = []
     if (input.addedFrom) {
@@ -1527,6 +1547,30 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
   }
 
   private matchingCte(input: VideosListInput) {
+    // The source projection already holds complete active-membership rollups.
+    // Re-read observations only when a source filter changes those rollups.
+    if (input.view === 'archive' && !this.hasWatchFilters(input)) {
+      return {
+        sql: `matching AS (
+          SELECT media_item_id,latest_watched_at reference_date,
+            watch_occurrence_count matching_watch_count,watch_account_count matching_watch_account_count,
+            0 matching_queue_count,0 matching_queue_account_count
+          FROM main.video_library_projection WHERE archive_active=1
+        )`,
+        values: [] as DatabaseValue[],
+      }
+    }
+    if (input.view === 'queue' && !this.hasQueueFilters(input)) {
+      return {
+        sql: `matching AS (
+          SELECT media_item_id,latest_queue_added_at reference_date,
+            0 matching_watch_count,0 matching_watch_account_count,
+            queue_relationship_count matching_queue_count,queue_account_count matching_queue_account_count
+          FROM main.video_library_projection WHERE queue_active=1
+        )`,
+        values: [] as DatabaseValue[],
+      }
+    }
     if (input.view === 'archive') {
       const predicate = this.watchPredicate(input, false)
       return {
@@ -1675,7 +1719,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const read = (query: string, values: readonly DatabaseValue[] = []) =>
       this.readStatement(query, values, at)
 
-    const clauses = ['p.library_active=1']
+    const clauses = ['1=1']
     const values: DatabaseValue[] = []
     if (input.q) {
       const search = liveSearchPredicate('video_channel_search', 'p.channel_id', input.q)
@@ -1698,43 +1742,65 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
               ? 'queue_video_count'
               : 'watch_occurrence_count'
     const generationRow = await read(
-      `SELECT CAST(COALESCE(MAX(projection_generation),0) AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) generation FROM main.video_library_projection`,
-    ).first<{ generation: number | string }>()
+      `SELECT CAST(COALESCE(MAX(projection_generation),0) AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) generation,
+         (SELECT mode FROM read_channel_mode) channel_mode FROM main.video_library_projection`,
+    ).first<{ generation: number | string; channel_mode: string }>()
     const generation = generationRow?.generation ?? 0
     if (requestedCursor !== null && requestedCursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
     const page = pageClause(requestedCursor, direction)
-    const orderFields =
-      sort === 'relevance' && input.q
-        ? ',p.display_title'
-        : sort === 'watchedAt'
-          ? ',p.latest_watched_at'
-          : sort === 'queueCount'
-            ? ',p.queue_video_count'
-            : sort === 'channel'
-              ? ''
-              : ',p.watch_occurrence_count'
+    // Dynamic association aggregation must run once; cached numeric counts are cheap.
+    // This hint changes query shape only. Every statement still checks the live mode.
+    const includeCounts = generationRow?.channel_mode === 'dynamic'
+    const readCount = () =>
+      read(
+        `SELECT COUNT(*) section_channels,COUNT(*) FILTER (WHERE ${where}) value FROM video_channel_groups p`,
+        values,
+      ).first<{ value: number; section_channels: number }>()
+    let count = includeCounts ? null : await readCount()
     const rows = await read(
-      `WITH filtered AS (
-         SELECT p.channel_id,p.normalized_title${orderFields},COUNT(*) OVER() total_count FROM video_channel_projection p WHERE ${where}
+      `WITH channel_keys AS (
+         SELECT grouped.*,
+           COALESCE(cp.current_title,grouped.channel_title,
+             (SELECT owner.display_title FROM main.video_channel_projection owner WHERE owner.channel_id=grouped.channel_id),'Channel unavailable') display_title,
+           LOWER(COALESCE(cp.current_title,grouped.channel_title,
+             (SELECT owner.display_title FROM main.video_channel_projection owner WHERE owner.channel_id=grouped.channel_id),'Channel unavailable')) normalized_title,
+           1 library_active
+         FROM video_channel_groups grouped
+         LEFT JOIN youtube_published_channel_profiles cp ON cp.channel_id=grouped.channel_id
+           AND cp.expires_at>(SELECT at FROM read_clock)
+       ), filtered AS (
+         SELECT p.*${includeCounts ? ',COUNT(*) OVER() total_count' : ''} FROM channel_keys p WHERE ${where}
        ), ordered AS (
          SELECT filtered.*,${order} sort_value,normalized_title stable_title,channel_id stable_id
          FROM filtered
        ), paged AS (
          SELECT * FROM ordered WHERE ${page.sql}
          ORDER BY (sort_value IS NULL),sort_value ${direction.toUpperCase()},normalized_title,stable_id LIMIT ?
-       ) SELECT p.*,paged.total_count,paged.sort_value,(SELECT COUNT(*) FROM video_channel_groups) section_channels
-       FROM paged JOIN video_channel_projection p ON p.channel_id=paged.channel_id
+       ) SELECT paged.channel_id,paged.display_title,paged.normalized_title,
+         COALESCE(CASE WHEN cp.custom_url IS NOT NULL THEN 'https://www.youtube.com/'||cp.custom_url END,
+           owner.canonical_url,'https://www.youtube.com/channel/'||paged.channel_id) canonical_url,
+         cp.thumbnail_url image_url,1 library_active,
+         EXISTS(SELECT 1 FROM youtube_channel_subscriptions s WHERE s.channel_id=paged.channel_id AND s.upstream_state='active') following_active,
+         (SELECT COUNT(*) FROM youtube_channel_subscriptions s WHERE s.channel_id=paged.channel_id AND s.upstream_state='active') subscription_count,
+         paged.archive_video_count,paged.watch_occurrence_count,paged.latest_watched_at,paged.queue_video_count,
+         CAST(paged.projection_generation AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) projection_generation,
+         paged.updated_at,paged.sort_value${includeCounts ? ',paged.total_count,(SELECT COUNT(*) FROM video_channel_groups) section_channels' : ''}
+       FROM paged LEFT JOIN main.video_channel_projection owner ON owner.channel_id=paged.channel_id
+       LEFT JOIN youtube_published_channel_profiles cp ON cp.channel_id=paged.channel_id
+         AND cp.expires_at>(SELECT at FROM read_clock)
        ORDER BY (paged.sort_value IS NULL),paged.sort_value ${direction.toUpperCase()},paged.normalized_title,paged.stable_id`,
       [...values, ...orderValues, ...page.values, input.limit + 1],
     ).all<Row>()
-    const emptyPageCount = rows.results.length
-      ? null
-      : await read(
-          `SELECT COUNT(*) value FROM video_channel_projection p WHERE ${where}`,
-          values,
-        ).first<{ value: number }>()
-    const total = Number(rows.results[0]?.total_count ?? emptyPageCount?.value ?? 0)
+    if (count === null) {
+      count = rows.results.length
+        ? {
+            value: Number(rows.results[0]?.total_count ?? 0),
+            section_channels: Number(rows.results[0]?.section_channels ?? 0),
+          }
+        : await readCount()
+    }
+    const total = count?.value ?? 0
     const hasMore = rows.results.length > input.limit
     const visibleRows = rows.results.slice(0, input.limit)
     const last = visibleRows.at(-1)
@@ -1758,7 +1824,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
         values,
         undefined,
         at,
-        rows.results[0]?.section_channels as number | undefined,
+        count?.section_channels ?? 0,
       )),
     }
   }
@@ -1778,7 +1844,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const counts = await read(
       `SELECT (SELECT COUNT(*) FROM main.video_library_projection WHERE archive_active=1) archive,
         (SELECT COUNT(*) FROM main.video_library_projection WHERE queue_active=1) queue,
-        ${knownChannels === undefined ? '(SELECT COUNT(*) FROM video_channel_projection WHERE library_active=1)' : '?'} channels,
+        ${knownChannels === undefined ? '(SELECT COUNT(*) FROM video_channel_groups)' : '?'} channels,
         (SELECT COUNT(DISTINCT archive_entry_id) FROM youtube_watch_observations) occurrences`,
       knownChannels === undefined ? [] : [knownChannels],
     ).first<{ archive: number; queue: number; channels: number; occurrences: number }>()
@@ -1804,7 +1870,20 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
       view === 'channels'
         ? { results: [] as { value: string; label: string; count: number }[] }
         : await read(
-            `SELECT COALESCE(p.channel_id,'__unknown__') value,
+            ownerOnly
+              ? `WITH facet_groups AS (
+                 SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
+                   MAX(COALESCE(vp.channel_title,p.display_channel_title)) historical_label,COUNT(*) count
+                 FROM main.video_library_projection p
+                 LEFT JOIN youtube_published_video_profiles vp ON vp.media_item_id=p.media_item_id
+                   AND vp.expires_at>(SELECT at FROM read_clock)
+                 WHERE ${where} GROUP BY COALESCE(vp.channel_id,p.channel_id)
+               ) SELECT COALESCE(grouped.channel_id,'__unknown__') value,
+                 COALESCE(cp.current_title,grouped.historical_label,'Channel unavailable') label,grouped.count
+               FROM facet_groups grouped LEFT JOIN youtube_published_channel_profiles cp
+                 ON cp.channel_id=grouped.channel_id AND cp.expires_at>(SELECT at FROM read_clock)
+               ORDER BY label LIMIT 500`
+              : `SELECT COALESCE(p.channel_id,'__unknown__') value,
               COALESCE(MAX(p.display_channel_title),'Channel unavailable') label,COUNT(*) count
              FROM video_library_projection p WHERE ${where}
              GROUP BY COALESCE(p.channel_id,'__unknown__') ORDER BY label LIMIT 500`,
@@ -1814,7 +1893,18 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
       view === 'channels'
         ? { results: [] as { value: string; label: string; count: number }[] }
         : await read(
-            `SELECT p.category_id value,MAX(p.category_title) label,COUNT(*) count
+            ownerOnly
+              ? `WITH facet_groups AS (
+                 SELECT vp.category_id,COUNT(*) count FROM main.video_library_projection p
+                 JOIN youtube_published_video_profiles vp ON vp.media_item_id=p.media_item_id
+                   AND vp.expires_at>(SELECT at FROM read_clock)
+                 WHERE ${where} AND vp.category_id IS NOT NULL GROUP BY vp.category_id
+               ) SELECT grouped.category_id value,category.title label,grouped.count
+               FROM facet_groups grouped JOIN youtube_published_categories category
+                 ON category.category_id=grouped.category_id AND category.region_code='US'
+                   AND category.expires_at>(SELECT at FROM read_clock)
+               ORDER BY label LIMIT 100`
+              : `SELECT p.category_id value,MAX(p.category_title) label,COUNT(*) count
              FROM video_library_projection p WHERE ${where} AND p.category_id IS NOT NULL
              GROUP BY p.category_id ORDER BY label LIMIT 100`,
             values,
@@ -1866,7 +1956,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     }
     const catalog = await read(
       `SELECT
-         (SELECT COUNT(*) FROM video_library_projection) total_count,
+         (SELECT COUNT(*) FROM main.video_library_projection) total_count,
          (SELECT COUNT(*) FROM youtube_video_catalog_profiles
            WHERE expires_at>(SELECT at FROM read_clock)) cached_count,
          EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state IN ('pending','running')) active_job,

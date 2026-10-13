@@ -11,6 +11,14 @@ const compactMigration = readFileSync(
   new URL('../migrations/0027_compact_archive_evidence.sql', import.meta.url),
   'utf8',
 )
+const parentGuardMigration = readFileSync(
+  new URL('../migrations/0028_evidence_view_parent_guard.sql', import.meta.url),
+  'utf8',
+)
+const insertOnlyMigration = readFileSync(
+  new URL('../migrations/0029_evidence_insert_only_replay.sql', import.meta.url),
+  'utf8',
+)
 const at = '2026-01-01T00:00:00Z'
 const roles = ['admission', 'occurrence_time', 'metadata', 'rating', 'review', 'removal']
 
@@ -268,5 +276,237 @@ describe('compact evidence migration and compatibility boundary', () => {
     )
     expect(archivePlan).not.toContain('SCAN evidence')
     expect(sourcePlan).not.toContain('SCAN evidence')
+  })
+
+  describe.each([0, 1])('insert-only replay with recursive_triggers=%i', (recursiveTriggers) => {
+    beforeEach(() => {
+      database.exec(`PRAGMA recursive_triggers=${recursiveTriggers}`)
+      database.exec(compactMigration)
+      database.exec(parentGuardMigration)
+    })
+
+    function insert(
+      boundary: 'view' | 'physical',
+      policy: '' | 'OR IGNORE' | 'OR REPLACE' | 'targeted',
+      id: string | null,
+      archive: string,
+      source: string,
+      role: string | null,
+      linkedAt: string | null,
+    ) {
+      const table =
+        boundary === 'view' ? 'archive_entry_evidence' : 'archive_entry_evidence_storage'
+      const values =
+        boundary === 'view'
+          ? [id, archive, source, role, linkedAt]
+          : [
+              id,
+              key(database, 'archive_entries', archive) ?? null,
+              key(database, 'source_records', source) ?? null,
+              role,
+              linkedAt,
+            ]
+      const columns =
+        boundary === 'view'
+          ? 'id,archive_entry_id,source_record_id,role,linked_at'
+          : 'id,archive_storage_id,source_storage_id,role,linked_at'
+      const conflict =
+        policy === 'targeted'
+          ? 'ON CONFLICT(archive_storage_id,source_storage_id,role) DO NOTHING'
+          : ''
+      return database
+        .prepare(
+          `INSERT ${policy === 'targeted' ? '' : policy} INTO ${table}(${columns})
+          VALUES(?,?,?,?,?) ${conflict}`,
+        )
+        .run(...values)
+    }
+
+    it('migrates retained values unchanged and makes every valid duplicate-role insert a no-op', () => {
+      const before = evidence(database)
+      const parents = database.prepare('SELECT * FROM archive_entries ORDER BY id').all()
+      const sources = database.prepare('SELECT * FROM source_records ORDER BY id').all()
+      database.exec(insertOnlyMigration)
+      expect(evidence(database)).toEqual(before)
+      for (const boundary of ['view', 'physical'] as const) {
+        for (const policy of ['', 'OR IGNORE', 'OR REPLACE'] as const) {
+          for (const role of roles) {
+            insert(boundary, policy, `replacement:${role}`, 'archive-1', 'source-1', role, at)
+          }
+          // The incoming ID belongs to a different retained role. Replay of an
+          // existing pair/role still takes precedence and changes neither link.
+          insert(
+            boundary,
+            policy,
+            'legacy:review',
+            'archive-1',
+            'source-1',
+            'admission',
+            '2026-02-01T00:00:00Z',
+          )
+        }
+      }
+      insert('physical', 'targeted', 'new-id', 'archive-1', 'source-1', 'admission', at)
+      insert('physical', 'targeted', 'legacy:review', 'archive-1', 'source-1', 'admission', at)
+      expect(evidence(database)).toEqual(before)
+      expect(database.prepare('SELECT * FROM archive_entries ORDER BY id').all()).toEqual(parents)
+      expect(database.prepare('SELECT * FROM source_records ORDER BY id').all()).toEqual(sources)
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    })
+
+    it('rejects IDs reused for new pairs under every policy while permitting new evidence', () => {
+      database.exec(insertOnlyMigration)
+      addArchive(database, 'new-archive')
+      const before = evidence(database)
+      for (const boundary of ['view', 'physical'] as const) {
+        for (const policy of ['', 'OR IGNORE', 'OR REPLACE'] as const) {
+          expect(() =>
+            insert(
+              boundary,
+              policy,
+              'legacy:admission',
+              'new-archive',
+              'source-1',
+              'admission',
+              at,
+            ),
+          ).toThrow('UNIQUE')
+        }
+      }
+      expect(() =>
+        insert(
+          'physical',
+          'targeted',
+          'legacy:admission',
+          'new-archive',
+          'source-1',
+          'admission',
+          at,
+        ),
+      ).toThrow('UNIQUE')
+      expect(evidence(database)).toEqual(before)
+      insert('view', 'OR IGNORE', 'new-link', 'new-archive', 'source-1', 'admission', at)
+      insert('physical', 'OR REPLACE', 'new-role', 'new-archive', 'source-1', 'metadata', at)
+      expect(evidence(database)).toHaveLength(before.length + 2)
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    })
+
+    it.each(['view', 'physical'] as const)(
+      'continues a mixed INSERT SELECT after replay suppression through the %s boundary',
+      (boundary) => {
+        database.exec(insertOnlyMigration)
+        addArchive(database, 'archive-reconciled')
+        const before = evidence(database)
+        const metadata = before.find((row) => row.id === 'legacy:metadata')!
+        const table =
+          boundary === 'view' ? 'archive_entry_evidence' : 'archive_entry_evidence_storage'
+        const columns =
+          boundary === 'view'
+            ? 'id,archive_entry_id,source_record_id,role,linked_at'
+            : 'id,archive_storage_id,source_storage_id,role,linked_at'
+        const archiveReference = (id: string) =>
+          boundary === 'view' ? id : (key(database, 'archive_entries', id) as number)
+        const sourceReference =
+          boundary === 'view' ? 'source-1' : (key(database, 'source_records', 'source-1') as number)
+        database
+          .prepare(
+            `INSERT OR IGNORE INTO ${table}(${columns})
+            SELECT ?,?,?,role,? FROM archive_entry_evidence WHERE id='legacy:admission'
+            UNION ALL
+            SELECT ?,?,?,role,linked_at FROM archive_entry_evidence WHERE id='legacy:metadata'`,
+          )
+          .run(
+            'replayed-different-id',
+            archiveReference('archive-1'),
+            sourceReference,
+            '2026-02-01T00:00:00Z',
+            'reconciled:metadata',
+            archiveReference('archive-reconciled'),
+            sourceReference,
+          )
+        expect(evidence(database).filter((row) => row.id !== 'reconciled:metadata')).toEqual(before)
+        expect(
+          database
+            .prepare("SELECT * FROM archive_entry_evidence WHERE id='reconciled:metadata'")
+            .get(),
+        ).toEqual({
+          ...metadata,
+          id: 'reconciled:metadata',
+          archive_entry_id: 'archive-reconciled',
+        })
+        expect(evidence(database)).toHaveLength(before.length + 1)
+        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+      },
+    )
+
+    it('rejects malformed required fields under REPLACE instead of suppressing them as replay', () => {
+      database.exec(insertOnlyMigration)
+      const before = evidence(database)
+      for (const boundary of ['view', 'physical'] as const) {
+        for (const [id, role, linkedAt] of [
+          [null, 'admission', at],
+          ['legacy:admission', 'admission', null],
+          ['new-id', 'admission', null],
+          ['new-id', null, at],
+          ['new-id', 'invalid', at],
+        ]) {
+          expect(() =>
+            insert(boundary, 'OR REPLACE', id!, 'archive-1', 'source-1', role!, linkedAt!),
+          ).toThrow()
+        }
+      }
+      expect(evidence(database)).toEqual(before)
+    })
+
+    it('validates parents and matching connections before suppressing replay', () => {
+      database.exec(insertOnlyMigration)
+      const before = evidence(database)
+      for (const boundary of ['view', 'physical'] as const) {
+        for (const policy of ['OR IGNORE', 'OR REPLACE'] as const) {
+          for (const [archive, source] of [
+            ['missing', 'source-1'],
+            ['archive-1', 'missing'],
+            ['missing', 'missing'],
+          ]) {
+            expect(() =>
+              insert(boundary, policy, 'new-id', archive!, source!, 'admission', at),
+            ).toThrow('existing parents')
+          }
+          expect(() =>
+            insert(boundary, policy, 'new-id', 'archive-1', 'source-2', 'admission', at),
+          ).toThrow('connection')
+        }
+      }
+      for (const policy of ['OR IGNORE', 'OR REPLACE']) {
+        expect(() =>
+          database.exec(`INSERT ${policy} INTO archive_entry_evidence_storage
+            (archive_storage_id,source_storage_id,role,id,linked_at)
+            VALUES(999999,999999,'admission','missing-numeric-parents','${at}')`),
+        ).toThrow('existing parents')
+      }
+      // Parent connection updates were already possible in the old schema. A
+      // repeated pair must still recheck lineage rather than bypass this check.
+      database.exec("UPDATE archive_entries SET connection_id='connection-2' WHERE id='archive-1'")
+      for (const boundary of ['view', 'physical'] as const) {
+        expect(() =>
+          insert(boundary, 'OR IGNORE', 'new-id', 'archive-1', 'source-1', 'admission', at),
+        ).toThrow('connection')
+      }
+      database.exec("UPDATE archive_entries SET connection_id='connection-1' WHERE id='archive-1'")
+      expect(evidence(database)).toEqual(before)
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    })
+
+    it('retains update/delete protection at both boundaries', () => {
+      database.exec(insertOnlyMigration)
+      const before = evidence(database)
+      for (const table of ['archive_entry_evidence', 'archive_entry_evidence_storage']) {
+        expect(() => database.exec(`UPDATE OR REPLACE ${table} SET linked_at='changed'`)).toThrow(
+          'immutable',
+        )
+        expect(() => database.exec(`DELETE FROM ${table}`)).toThrow('cannot be deleted')
+      }
+      expect(evidence(database)).toEqual(before)
+    })
   })
 })
