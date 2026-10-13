@@ -71,7 +71,7 @@ async function persistResponse(input: {
   response: { bytes: Uint8Array; contentType: string }
   at: ReturnType<typeof utcInstant>
 }): Promise<RawObject> {
-  const ledger = createLedgerRepository(input.env.DB)
+  const ledger = createLedgerRepository(input.env.DB, input.env.DATABASE_USAGE_OBSERVER)
   const acquisitionKey = `spotify:${input.runId}:catalog:${input.kind}:${input.id}`
   const existing = await ledger.findRawObject(
     input.connectionId as RawObject['connectionId'],
@@ -112,7 +112,7 @@ async function responseForCandidate(input: {
   id: string
   accessToken: string
 }): Promise<{ bytes: Uint8Array; contentType: string; raw: RawObject }> {
-  const ledger = createLedgerRepository(input.env.DB)
+  const ledger = createLedgerRepository(input.env.DB, input.env.DATABASE_USAGE_OBSERVER)
   const existing = await ledger.findRawObject(
     input.connectionId as RawObject['connectionId'],
     `spotify:${input.runId}:catalog:${input.kind}:${input.id}`,
@@ -159,7 +159,7 @@ async function recordResponse(input: {
     upstreamState: 'active',
     errorCode: null,
   }
-  await createLedgerRepository(input.env.DB).commit({
+  await createLedgerRepository(input.env.DB, input.env.DATABASE_USAGE_OBSERVER).commit({
     sourceRecords: [record],
     rawObjects: [{ ...input.raw, processingStatus: 'processed', lastParserVersion: parserVersion }],
   })
@@ -168,13 +168,13 @@ async function recordResponse(input: {
 export async function startSpotifyCatalogBackfill(env: Bindings): Promise<string> {
   if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_REFRESH_TOKEN || !env.TOKEN_ENCRYPTION_KEY)
     throw new Error('Spotify catalog credentials are not configured')
-  const jobs = createSpotifyCatalogJobsRepository(env.DB)
+  const jobs = createSpotifyCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const active = await jobs.findActive()
   if (active !== null) {
     await env.SYNC_QUEUE.send(message(active.id))
     return active.id
   }
-  const ledger = createLedgerRepository(env.DB)
+  const ledger = createLedgerRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const connection = await ledger.findConnectionBySource('spotify')
   if (connection === null) throw new Error('Run the Spotify library sync before catalog backfill')
   const at = utcInstant(new Date().toISOString())
@@ -197,9 +197,12 @@ export async function startSpotifyCatalogBackfill(env: Bindings): Promise<string
 }
 
 export async function spotifyCatalogJobStatus(env: Bindings, id: string) {
-  const job = await createSpotifyCatalogJobsRepository(env.DB).find(id)
+  const job = await createSpotifyCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER).find(id)
   if (job === null) return null
-  const backlog = await createSpotifyLibraryRepository(env.DB).catalogBacklogCounts()
+  const backlog = await createSpotifyLibraryRepository(
+    env.DB,
+    env.DATABASE_USAGE_OBSERVER,
+  ).catalogBacklogCounts()
   return {
     jobId: job.id,
     provider: 'spotify' as const,
@@ -216,7 +219,10 @@ export async function spotifyCatalogJobStatus(env: Bindings, id: string) {
 }
 
 export async function resumeSpotifyCatalogBackfill(env: Bindings): Promise<void> {
-  const job = await createSpotifyCatalogJobsRepository(env.DB).findActive()
+  const job = await createSpotifyCatalogJobsRepository(
+    env.DB,
+    env.DATABASE_USAGE_OBSERVER,
+  ).findActive()
   if (job !== null && (job.nextAttemptAt === null || job.nextAttemptAt <= new Date().toISOString()))
     await env.SYNC_QUEUE.send(message(job.id))
 }
@@ -226,12 +232,12 @@ export async function processSpotifyCatalogBackfill(
   queueJob: SyncJob,
 ): Promise<void> {
   if (queueJob.operation !== 'refresh_spotify_catalog' || !queueJob.catalogJobId) return
-  const jobs = createSpotifyCatalogJobsRepository(env.DB)
+  const jobs = createSpotifyCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const current = await jobs.find(queueJob.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
   const at = new Date().toISOString()
   if (!(await jobs.reserve(current.id, current.phase, at, afterSeconds(at, 300)))) return
-  const library = createSpotifyLibraryRepository(env.DB)
+  const library = createSpotifyLibraryRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   let requested = 0
   let returned = 0
   let unavailable = 0
@@ -262,7 +268,7 @@ export async function processSpotifyCatalogBackfill(
         })
         await env.SYNC_QUEUE.send(message(current.id))
       } else {
-        await createLedgerRepository(env.DB).saveSyncRun({
+        await createLedgerRepository(env.DB, env.DATABASE_USAGE_OBSERVER).saveSyncRun({
           id: syncRunId(current.syncRunId),
           connectionId: current.connectionId as SyncRun['connectionId'],
           kind: 'backfill',
@@ -373,7 +379,7 @@ export async function processSpotifyCatalogBackfill(
       error.status !== 401 &&
       error.status !== 429
     ) {
-      await createLedgerRepository(env.DB).saveSyncRun({
+      await createLedgerRepository(env.DB, env.DATABASE_USAGE_OBSERVER).saveSyncRun({
         id: syncRunId(current.syncRunId),
         connectionId: current.connectionId as SyncRun['connectionId'],
         kind: 'backfill',

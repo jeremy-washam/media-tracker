@@ -115,10 +115,19 @@ it('bounds Movie occurrence counts and dates by media identity and state after a
         FROM media_items p WHERE p.id='movie'`,
       expected,
     }))
-    const before = database.prepare('SELECT * FROM archive_entries ORDER BY id').all()
+    // Later migrations may add internal storage columns. Compare every original
+    // ledger column rather than treating an additive physical field as data loss.
+    const originalColumns = database
+      .prepare('PRAGMA table_info(archive_entries)')
+      .all()
+      .map((column) => `"${String(column.name)}"`)
+      .join(',')
+    const stableRows = () =>
+      database.prepare(`SELECT ${originalColumns} FROM archive_entries ORDER BY id`).all()
+    const before = stableRows()
     for (const { sql, expected } of queries) expect(database.prepare(sql).get()).toEqual(expected)
     for (const name of names.filter((name) => name >= '0025_')) apply(name)
-    expect(database.prepare('SELECT * FROM archive_entries ORDER BY id').all()).toEqual(before)
+    expect(stableRows()).toEqual(before)
     for (const { sql, expected } of queries) {
       const plan = database
         .prepare(`EXPLAIN QUERY PLAN ${sql}`)

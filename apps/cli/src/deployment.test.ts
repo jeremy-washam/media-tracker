@@ -50,4 +50,15 @@ describe('deployment safeguards', () => {
       expect(() => validateProductionConfiguration(configuration)).toThrow()
     }
   })
+  it('permits only an explicitly enabled maintenance schedule during a paused cutover', () => {
+    const configuration = productionConfiguration(settings)
+    configuration.triggers.crons = ['*/5 * * * *']
+    expect(() => validateProductionConfiguration(configuration)).toThrow()
+    configuration.vars.MAINTENANCE_ENABLED = 'true'
+    expect(() => validateProductionConfiguration(configuration)).not.toThrow()
+    configuration.triggers.crons = ['0 * * * *']
+    expect(() => validateProductionConfiguration(configuration)).toThrow()
+    configuration.triggers.crons = ['*/5 * * * *', '*/5 * * * *']
+    expect(() => validateProductionConfiguration(configuration)).toThrow()
+  })
 })

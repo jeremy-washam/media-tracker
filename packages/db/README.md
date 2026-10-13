@@ -24,3 +24,21 @@ D1 and the encryption secret together; ciphertext alone cannot recover a grant.
 History and sync-run queries use keyset pagination. Archive updates explicitly
 distinguish partial observations from rating/review snapshots and latest-play
 evidence. Superseded fallbacks retain admission and removal evidence.
+
+Migration 0027 preserves public text IDs and all evidence role rows while using
+private immutable integer parent keys in `archive_entry_evidence_storage`.
+`archive_entry_evidence` remains the original five-column compatibility view.
+Canonical UPSERTs target physical storage; reconciliation can use the view's
+insert trigger. Install UNIQUE foreign-key parent indexes before records, then
+restore physical records before views and immutable triggers,
+and verify logical evidence fingerprints. See ADR 0016 and the private deployment
+runbook before migrating retained data.
+
+`D1DatabaseClient` accepts an optional aggregate usage observer. It forwards
+native result metadata once per operation/batch and preserves persistence
+results/errors even when reporting fails. Native `first()` has no metadata and
+remains unmeasured; result coverage must accompany observed row counts.
+
+Migration 0028 explicitly rejects missing evidence parents even when a caller
+uses `INSERT OR IGNORE` through the compatibility view. Valid duplicate roles
+remain idempotent.

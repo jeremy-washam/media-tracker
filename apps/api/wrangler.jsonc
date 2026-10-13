@@ -12,6 +12,7 @@
     "ACCESS_AUD": "",
     "OWNER_EMAIL": "",
     "SYNC_ENABLED": "true",
+    "MAINTENANCE_ENABLED": "false",
   },
   "assets": {
     "directory": "../web/dist",

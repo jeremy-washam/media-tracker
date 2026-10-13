@@ -1,7 +1,8 @@
 # Storage efficiency and predictable usage
 
 - Date: 2026-10-12
-- Status: proposed implementation plan; no production schema or retention change
+- Status: local implementation in isolated worktree; production migration and
+  activation pending. No retention change.
 - Owner preference: Workers Paid at $5/month is acceptable. Reduce unnecessary
   data amplification and measure ongoing usage; Free is an option, not a target
   that overrides correctness or simplicity.
@@ -27,6 +28,107 @@ rehearse compact references/evidence layouts, choose the validated layout,
 then deploy and enable bounded background work. Storage work can follow the
 first deployment if its migration is not ready; the existing paid database fits.
 Cache freshness and private access are launch gates in either sequence.
+
+## Local implementation scope
+
+The first slice implements aggregate D1 metadata reporting for HTTP requests,
+scheduled jobs and queue messages; a dedicated bounded cache-maintenance mode;
+clock-safe YouTube publication/search; and compact separate-role evidence
+references with forward migrations. See
+[ADR 0015](../decisions/0015-clock-safe-youtube-publication.md) and
+[ADR 0016](../decisions/0016-compact-evidence-references.md).
+
+`first()` remains native and unmeasured. Logs report measurement coverage and
+wall time, not complete billable usage or Worker CPU. Batch metadata is counted
+once. Request/job observers are isolated; logs include aggregate counts and route
+patterns, without SQL, parameters, source payloads or private titles.
+
+All work is isolated on `codex/storage-efficiency`; primary UI changes and the
+live local ledger are untouched. Full-copy measurement and restore results are recorded
+below. Remote D1 metadata, account activation, private rollout
+and per-provider daily acquisition budgets remain deployment gates. Thumbnail
+grouping is deferred from this first slice: its measured 5.4 MB benefit is small
+relative to evidence compaction, and the new publication boundary needs its own
+refresh-write benchmark before that change is justified.
+
+## October 12 isolated implementation acceptance
+
+Validated against the existing private deployment snapshot and a separate fresh
+restore. The running local app and primary UI checkout were not migrated.
+
+| Measurement                                                |                          Result |
+| ---------------------------------------------------------- | ------------------------------: |
+| Original allocated snapshot                                |             1,435,860,992 bytes |
+| Original fresh logical restore                             |             1,391,333,376 bytes |
+| Migrated copy after copy-only VACUUM                       |             1,133,998,080 bytes |
+| New fresh logical restore                                  |             1,168,740,352 bytes |
+| New restore saving versus original allocated snapshot      |       267,120,640 bytes (18.6%) |
+| New restore saving versus original fresh restore           |       222,593,024 bytes (16.0%) |
+| Evidence structures before / compact after copy VACUUM     | 498,814,976 / 167,923,712 bytes |
+| Additional occupied pages for clock-safe cache publication |                83,324,928 bytes |
+
+The restore matched 1,798,347 physical/application-and-search rows across 94
+tables, one compatibility view, 18,126 objects, 18,253 supported object references,
+both ID allocator states and every search token position. All 476,297 original
+evidence IDs/roles/linking timestamps matched, as did every original source and
+Archive parent field and eight other identity/history/reference tables. Foreign
+keys and SQLite integrity passed. The 26 pre-existing Article chunk-locator/hash
+inconsistencies remain reported; this change does not repair them.
+
+Logical row count increased by 292,715 because publication snapshots and
+origin-specific search/bookkeeping protect expiry correctness. These are
+rebuildable caches, not extra consumption events. Evidence keeps one row per
+role; compact keys remove repeated text and indexes without deleting history or
+adding permanent identity-dictionary rows. Whole-database bytes, not row count
+alone, establish the storage benefit. The new database still exceeds D1 Free's
+500 MB per-database limit.
+
+The initial separate restore exposed an explicit-parent-key index ordering bug.
+The exporter now installs UNIQUE indexes referenced by foreign keys in schema
+before records, and views before their write triggers after physical records.
+Ten synthetic snapshot/recovery cases and the corrected full restore passed.
+
+All 28 final migrations also applied to an empty local native D1 instance, and
+eight Worker/native-D1 health/browse/search/missing-detail checks passed on a
+separate port. Production package builds and Worker dry runs passed; 82 browser
+regressions passed on isolated ports. The first full test run had one five-second
+large-import timeout under contention; its isolated 19-test suite passed without
+changing assertions or timeout. The final `pnpm check` passed formatting,
+typechecking, lint and all 310 tests across 51 files.
+
+A new, synthetic-only remote D1 rehearsal verified all 27 migrations, compact
+view constraints/key allocation/idempotency, native batch rollback, actual
+publication statements, clock-based search/detail fallback, bounded maintenance,
+foreign keys and integrity. The temporary database was deleted and absence
+confirmed. Native metadata reported 16,455 reads/803 writes for a 93.5 KB file
+import, 126 reads/48 writes for publication, and 73 reads/21 writes for maintenance.
+A final forward migration, 0028, explicitly rejects missing public parents even
+under an outer `INSERT OR IGNORE`; nullable scalar lookups alone could otherwise
+silently omit invalid links. Another synthetic remote D1 import verified that
+guard, valid duplicate-role replay and valid new-role insertion (614 reads/118
+writes for import). That temporary database was also deleted and absence
+confirmed. The independent full restore was repeated with all 28 migrations.
+These tiny-fixture figures are not a full-data bootstrap or steady-state forecast.
+REST `/query` rejected unchanged nested `CASE ... END` trigger DDL; official D1
+file `/import` applied that SQL successfully. Use the tested file-import transport,
+not naive statement splitting, for the release transfer.
+
+**Performance remains a release gate.** Local Archive comparisons were close,
+but Channels retained additional CPU cost. Concurrent Node/Playwright activity
+and memory compression distorted wall timings; local process CPU is neither
+Worker CPU nor D1 billed reads. Repeat representative full-data queries on a
+quiet host and a paid D1 rehearsal, compare native read/write metadata and latency,
+and address a confirmed regression before deployment. No hosted performance
+acceptance is claimed. Partial association expiry intentionally uses a dynamic
+fallback; include that condition in the measurement.
+
+Maintenance has 430,920 eventual logical cache/bookkeeping deletions at this
+snapshot scale, below nominal two-day capacity of 576,000 at 1,000 every five
+minutes. Missed schedules, index writes and growth remain separate concerns.
+R2 and Access were freshly confirmed disabled in the account; enable them in the
+dashboard and confirm Workers Paid before a full private deployment. No private
+data upload, Worker publication, billing change or retained-history deletion
+occurred during this implementation.
 
 ## Measured baseline and independent reviews
 
@@ -169,8 +271,8 @@ remote import before committing to a Free rollout schedule.
 
 ## Mandatory catalog freshness gate
 
-The current paused configuration disables scheduled work and has no cron.
-`apps/api/src/index.ts` returns before the YouTube expiry purge when
+The pre-change paused configuration disabled scheduled work and had no cron.
+The original `apps/api/src/index.ts` returned before the YouTube expiry purge when
 `SYNC_ENABLED=false`. Videos list/search read stored projections and FTS that
 can retain expired catalog overlays; the detail query's description expiry
 check does not protect all returned fields. Rebuild correctly excludes expired
@@ -184,9 +286,9 @@ serve source-backed fallbacks even when maintenance is late. Keep source and
 catalog search distinguishable so an expired catalog title cannot remain a hit.
 Do not merely hide an expired item: its owner's history remains available.
 
-The production deploy guard currently forbids all cron/consumers during paused
-cutover. Amend it only for an explicitly defined maintenance mode with tested
-job routing; never use that exception to resume provider ingestion or token
+The pre-change production guard forbade all cron/consumers during paused
+cutover. The local implementation permits only explicitly enabled dedicated
+maintenance with tested job routing; never use that exception to resume provider ingestion or token
 rotation. Clock tests must cross expiry with sync paused and provider fetch
 configured to throw. Assert source fallback, no stale overlay, correct search,
 and unchanged membership/history. Test maintenance interruption and resume.
@@ -214,9 +316,9 @@ Measure bytes, query cost and growth independently of logical row count:
 | Queue operations, retries, age and backlog       | Queue/job diagnostics                           | Stop retry storms; preserve resumable jobs                         |
 | Provider calls, content bytes, no-op syncs       | Connector aggregate summaries                   | Tune cadence and per-run/per-day limits                            |
 
-The portable DB result types currently omit D1 metadata; the adapter forwards
-results without emitting usage metrics. Add an optional aggregate observer at
-the adapter/runtime boundary. Keep domain code platform-independent. Do not
+The portable DB result types retain a platform-neutral boundary. The D1
+adapter now emits available result metadata through an optional aggregate
+observer at the adapter/runtime boundary. Domain code remains platform-independent. Do not
 log SQL parameters, raw payloads, private titles, tokens, or per-record output.
 Use route patterns and job types. Do not convert bounded `first()` calls into
 unbounded result buffering just to collect metadata; use platform aggregates
@@ -354,8 +456,9 @@ Separate copy-level, local runtime and remote acceptance results. Restore an
 independent destination and verify source-object references and checksums.
 Pause ingestion before cutover and do not resume an obsolete local Spotify grant.
 
-This planning task ran aggregate audits and copy-only layout comparisons, not
-production migrations or application validation. Experiment artifacts remain
+The initial planning analysis used aggregate audits and copy-only layout
+comparisons. Subsequent isolated implementation and validation are recorded
+above; no production migration was performed. Experiment artifacts remain
 ignored under `.private/deployment/analysis-evidence/` and `analysis-catalog/`.
 No private data is embedded in this document. Implementation must be staged
 sequentially across shared schema/contracts/writers despite parallel analysis;

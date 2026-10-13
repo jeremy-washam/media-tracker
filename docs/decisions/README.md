@@ -20,5 +20,9 @@ Accepted decisions:
 13. [TMDB matching for Letterboxd title collisions and series](./0013-tmdb-letterboxd-match-evidence.md)
 14. [Interim Spotify catalog retention](./0014-spotify-catalog-retention-interim.md)
 
+15. [Clock-safe YouTube publication and bounded maintenance](./0015-clock-safe-youtube-publication.md)
+
+16. [Compact physical evidence references](./0016-compact-evidence-references.md)
+
 ADRs are append-only records of consequential technical choices. If a decision
 changes, add a new ADR that supersedes the old one rather than rewriting history.

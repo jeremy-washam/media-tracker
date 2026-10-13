@@ -245,6 +245,15 @@ overlapping export or RSS record can support the same Archive occurrence by
 adding evidence rather than creating a duplicate occurrence or overwriting its
 only provenance link.
 
+Physical storage uses private immutable integer keys on the existing source and
+Archive parents and a separate-role `WITHOUT ROWID` evidence table. The public
+five-column `archive_entry_evidence` boundary remains a compatibility view; every
+evidence ID, role and linking timestamp is retained. Canonical writers use the
+physical table, while reconciliation may insert through the view. These private
+keys do not replace domain/API IDs. See
+[ADR 0016](../decisions/0016-compact-evidence-references.md) for allocation,
+constraints and restore ordering.
+
 ### Source-derived Queue model
 
 Queue remains separate from Archive. Migration 0006 implements the narrow

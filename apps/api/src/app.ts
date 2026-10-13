@@ -604,7 +604,10 @@ app.openapi(healthRoute, (context) => {
 app.openapi(mediaRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createLedgerRepository(context.env.DB).listMediaPage({
+    const page = await createLedgerRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listMediaPage({
       limit: query.limit,
       ...(query.type === undefined ? {} : { type: query.type }),
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
@@ -619,7 +622,10 @@ app.openapi(mediaRoute, async (context) => {
 
 app.openapi(mediaDetailRoute, async (context) => {
   const id = context.req.valid('param').id
-  const item = await createLedgerRepository(context.env.DB).findMedia(mediaItemId(id))
+  const item = await createLedgerRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findMedia(mediaItemId(id))
 
   if (item !== null) return context.json(MediaSummarySchema.parse(item), 200)
 
@@ -638,7 +644,10 @@ app.openapi(mediaDetailRoute, async (context) => {
 app.openapi(booksRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createBooksRepository(context.env.DB).listBooks({
+    const page = await createBooksRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listBooks({
       collection: query.collection,
       ...(query.q === undefined ? {} : { q: query.q }),
       formats: query.format,
@@ -671,7 +680,10 @@ app.openapi(booksRoute, async (context) => {
 
 app.openapi(bookDetailRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
-  const book = await createBooksRepository(context.env.DB).findBook(id)
+  const book = await createBooksRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findBook(id)
   if (book !== null) return context.json(BookDetailSchema.parse(book), 200)
   return context.json(
     ApiErrorSchema.parse({
@@ -689,7 +701,10 @@ app.openapi(bookHistoryRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
   const query = context.req.valid('query')
   try {
-    const history = await createBooksRepository(context.env.DB).listBookHistory(id, {
+    const history = await createBooksRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listBookHistory(id, {
       limit: query.limit,
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
     })
@@ -705,7 +720,10 @@ app.openapi(bookHistoryRoute, async (context) => {
 app.openapi(articlesRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const repository = createArticlesRepository(context.env.DB)
+    const repository = createArticlesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    )
     const page = await repository.listArticles({
       section: query.section,
       ...(query.q === undefined ? {} : { q: query.q }),
@@ -754,7 +772,10 @@ app.openapi(articlesRoute, async (context) => {
 
 app.openapi(articleDetailRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
-  const article = await createArticlesRepository(context.env.DB).findArticle(id)
+  const article = await createArticlesRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findArticle(id)
   if (article !== null) return context.json(ArticleDetailSchema.parse(article), 200)
   return context.json(
     ApiErrorSchema.parse({
@@ -772,7 +793,10 @@ app.openapi(articleHistoryRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
   const query = context.req.valid('query')
   try {
-    const result = await createArticlesRepository(context.env.DB).listArticleHistory(id, {
+    const result = await createArticlesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listArticleHistory(id, {
       limit: query.limit,
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
     })
@@ -788,7 +812,10 @@ app.openapi(articleHighlightsRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
   const query = context.req.valid('query')
   try {
-    const result = await createArticlesRepository(context.env.DB).listArticleHighlights(id, {
+    const result = await createArticlesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listArticleHighlights(id, {
       limit: query.limit,
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
     })
@@ -803,7 +830,10 @@ app.openapi(articleHighlightsRoute, async (context) => {
 app.openapi(moviesRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createMoviesRepository(context.env.DB).listMovies({
+    const page = await createMoviesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listMovies({
       collection: query.collection,
       ...(query.q === undefined ? {} : { q: query.q }),
       watchedMode: query.watched,
@@ -838,7 +868,10 @@ app.openapi(moviesRoute, async (context) => {
 
 app.openapi(movieDetailRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
-  const movie = await createMoviesRepository(context.env.DB).findMovie(id)
+  const movie = await createMoviesRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findMovie(id)
   if (movie !== null) return context.json(MovieDetailSchema.parse(movie), 200)
   return context.json(
     ApiErrorSchema.parse({
@@ -856,7 +889,10 @@ app.openapi(movieHistoryRoute, async (context) => {
   const id = context.req.valid('param').mediaItemId
   const query = context.req.valid('query')
   try {
-    const history = await createMoviesRepository(context.env.DB).listMovieHistory(id, {
+    const history = await createMoviesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listMovieHistory(id, {
       limit: query.limit,
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
       watchedMode: query.watched,
@@ -884,7 +920,10 @@ app.openapi(tmdbCatalogSyncRoute, async (context) => {
       }),
       503,
     )
-  const job = await startTmdbCatalogRefresh(context.env)
+  const job = await startTmdbCatalogRefresh({
+    ...context.env,
+    DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+  })
   return context.json(
     CatalogSyncResponseSchema.parse({
       jobId: job.id,
@@ -901,7 +940,10 @@ app.openapi(tmdbCatalogSyncRoute, async (context) => {
 app.openapi(podcastsRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const repository = createSpotifyLibraryRepository(context.env.DB)
+    const repository = createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    )
     const page = await repository.listPodcasts({
       view: query.view,
       ...(query.q === undefined ? {} : { q: query.q }),
@@ -936,7 +978,10 @@ app.openapi(podcastsRoute, async (context) => {
 app.openapi(podcastFilterOptionsRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createSpotifyLibraryRepository(context.env.DB).listPodcastFilterOptions(
+    const page = await createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listPodcastFilterOptions(
       {
         view: query.view,
         ...(query.q === undefined ? {} : { q: query.q }),
@@ -969,7 +1014,10 @@ app.openapi(podcastFilterOptionsRoute, async (context) => {
 
 app.openapi(podcastDetailRoute, async (context) => {
   const { kind, id } = context.req.valid('param')
-  const repository = createSpotifyLibraryRepository(context.env.DB)
+  const repository = createSpotifyLibraryRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  )
   const item =
     kind === 'shows' ? await repository.findPodcastShow(id) : await repository.findPodcast(id)
   if (item !== null) return context.json(PodcastDetailSchema.parse(item), 200)
@@ -989,11 +1037,10 @@ app.openapi(podcastHistoryRoute, async (context) => {
   const { id } = context.req.valid('param')
   const query = context.req.valid('query')
   try {
-    const page = await createSpotifyLibraryRepository(context.env.DB).listPodcastHistory(
-      id,
-      query.limit,
-      query.cursor,
-    )
+    const page = await createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listPodcastHistory(id, query.limit, query.cursor)
     return context.json(PodcastHistoryResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
@@ -1005,7 +1052,10 @@ app.openapi(podcastHistoryRoute, async (context) => {
 app.openapi(musicRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const repository = createSpotifyLibraryRepository(context.env.DB)
+    const repository = createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    )
     const page = await repository.listMusic({
       view: query.view,
       ...(query.q === undefined ? {} : { q: query.q }),
@@ -1038,7 +1088,10 @@ app.openapi(musicRoute, async (context) => {
 app.openapi(musicFilterOptionsRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createSpotifyLibraryRepository(context.env.DB).listMusicFilterOptions(
+    const page = await createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listMusicFilterOptions(
       {
         view: query.view,
         ...(query.q === undefined ? {} : { q: query.q }),
@@ -1069,10 +1122,10 @@ app.openapi(musicFilterOptionsRoute, async (context) => {
 
 app.openapi(musicDetailRoute, async (context) => {
   const { kind, id } = context.req.valid('param')
-  const item = await createSpotifyLibraryRepository(context.env.DB).findMusic(
-    id,
-    kind === 'tracks' ? 'track' : kind === 'albums' ? 'album' : 'artist',
-  )
+  const item = await createSpotifyLibraryRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findMusic(id, kind === 'tracks' ? 'track' : kind === 'albums' ? 'album' : 'artist')
   if (item !== null) return context.json(MusicDetailSchema.parse(item), 200)
   return context.json(
     ApiErrorSchema.parse({
@@ -1090,7 +1143,10 @@ app.openapi(musicHistoryRoute, async (context) => {
   const { kind, id } = context.req.valid('param')
   const query = context.req.valid('query')
   try {
-    const page = await createSpotifyLibraryRepository(context.env.DB).listMusicHistory(
+    const page = await createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listMusicHistory(
       id,
       kind === 'tracks' ? 'track' : kind === 'albums' ? 'album' : 'artist',
       query.limit,
@@ -1107,7 +1163,10 @@ app.openapi(musicHistoryRoute, async (context) => {
 app.openapi(videosRoute, async (context) => {
   const query = context.req.valid('query')
   try {
-    const page = await createVideosRepository(context.env.DB).listVideos({
+    const page = await createVideosRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listVideos({
       view: query.view,
       ...(query.q === undefined ? {} : { q: query.q }),
       account: query.account,
@@ -1143,7 +1202,10 @@ app.openapi(videosRoute, async (context) => {
 
 app.openapi(videoDetailRoute, async (context) => {
   const id = context.req.valid('param').id
-  const item = await createVideosRepository(context.env.DB).findVideo(id)
+  const item = await createVideosRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findVideo(id)
   if (item !== null) return context.json(VideoDetailSchema.parse(item), 200)
   return context.json(
     ApiErrorSchema.parse({
@@ -1161,11 +1223,10 @@ app.openapi(videoHistoryRoute, async (context) => {
   const id = context.req.valid('param').id
   const query = context.req.valid('query')
   try {
-    const page = await createVideosRepository(context.env.DB).listHistory(
-      id,
-      query.limit,
-      query.cursor,
-    )
+    const page = await createVideosRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listHistory(id, query.limit, query.cursor)
     return context.json(VideoHistoryResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
@@ -1176,7 +1237,10 @@ app.openapi(videoHistoryRoute, async (context) => {
 
 app.openapi(videoChannelDetailRoute, async (context) => {
   const id = context.req.valid('param').id
-  const item = await createVideosRepository(context.env.DB).findChannel(id)
+  const item = await createVideosRepository(
+    context.env.DB,
+    context.get('databaseUsageObserver'),
+  ).findChannel(id)
   if (item !== null) return context.json(VideoChannelDetailSchema.parse(item), 200)
   return context.json(
     ApiErrorSchema.parse({
@@ -1194,12 +1258,10 @@ app.openapi(videoChannelLibraryRoute, async (context) => {
   const id = context.req.valid('param').id
   const query = context.req.valid('query')
   try {
-    const page = await createVideosRepository(context.env.DB).listChannelVideos(
-      id,
-      query.membership,
-      query.limit,
-      query.cursor,
-    )
+    const page = await createVideosRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listChannelVideos(id, query.membership, query.limit, query.cursor)
     return context.json(VideoChannelLibraryResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
@@ -1220,7 +1282,10 @@ app.openapi(youtubeCatalogSyncRoute, async (context) => {
       }),
       503,
     )
-  const job = await startYoutubeCatalogRefresh(context.env)
+  const job = await startYoutubeCatalogRefresh({
+    ...context.env,
+    DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+  })
   return context.json(
     CatalogSyncResponseSchema.parse({
       jobId: job.id,
@@ -1237,7 +1302,12 @@ app.openapi(youtubeCatalogSyncRoute, async (context) => {
 app.openapi(readwiseSyncRoute, async (context) => {
   try {
     return context.json(
-      ReadwiseSyncResponseSchema.parse(await syncReadwiseArchive(context.env)),
+      ReadwiseSyncResponseSchema.parse(
+        await syncReadwiseArchive({
+          ...context.env,
+          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+        }),
+      ),
       200,
     )
   } catch (error) {
@@ -1257,7 +1327,15 @@ app.openapi(readwiseSyncRoute, async (context) => {
 
 app.openapi(hardcoverSyncRoute, async (context) => {
   try {
-    return context.json(HardcoverSyncResponseSchema.parse(await syncHardcover(context.env)), 200)
+    return context.json(
+      HardcoverSyncResponseSchema.parse(
+        await syncHardcover({
+          ...context.env,
+          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+        }),
+      ),
+      200,
+    )
   } catch (error) {
     if (!(error instanceof HardcoverTokenMissingError)) throw error
     return context.json(
@@ -1294,7 +1372,12 @@ app.openapi(letterboxdImportRoute, async (context) => {
       throw new LetterboxdImportError('Letterboxd exports must be 25 MB or smaller.')
     }
     return context.json(
-      LetterboxdImportResponseSchema.parse(await importLetterboxdExport(context.env, archive)),
+      LetterboxdImportResponseSchema.parse(
+        await importLetterboxdExport(
+          { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+          archive,
+        ),
+      ),
       200,
     )
   } catch (error) {
@@ -1315,7 +1398,12 @@ app.openapi(letterboxdImportRoute, async (context) => {
 app.openapi(letterboxdSyncRoute, async (context) => {
   try {
     return context.json(
-      LetterboxdRssSyncResponseSchema.parse(await syncLetterboxdRss(context.env)),
+      LetterboxdRssSyncResponseSchema.parse(
+        await syncLetterboxdRss({
+          ...context.env,
+          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+        }),
+      ),
       200,
     )
   } catch (error) {
@@ -1354,7 +1442,12 @@ app.openapi(spotifyImportRoute, async (context) => {
       throw new SpotifyImportError('Spotify exports must be 25 MB or smaller.')
     }
     return context.json(
-      SpotifyImportResponseSchema.parse(await importSpotifyExtendedHistory(context.env, archive)),
+      SpotifyImportResponseSchema.parse(
+        await importSpotifyExtendedHistory(
+          { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+          archive,
+        ),
+      ),
       200,
     )
   } catch (error) {
@@ -1377,7 +1470,7 @@ app.openapi(spotifyImportContinueRoute, async (context) => {
     return context.json(
       SpotifyImportResponseSchema.parse(
         await continueSpotifyExtendedHistoryImport(
-          context.env,
+          { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
           context.req.valid('param').importId,
         ),
       ),
@@ -1401,7 +1494,12 @@ app.openapi(spotifyImportContinueRoute, async (context) => {
 app.openapi(spotifySyncRoute, async (context) => {
   try {
     return context.json(
-      SpotifySyncResponseSchema.parse(await syncSpotifySavedEpisodes(context.env)),
+      SpotifySyncResponseSchema.parse(
+        await syncSpotifySavedEpisodes({
+          ...context.env,
+          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+        }),
+      ),
       200,
     )
   } catch (error) {
@@ -1435,14 +1533,23 @@ app.openapi(spotifyCatalogSyncRoute, async (context) => {
       }),
       503,
     )
-  const id = await startSpotifyCatalogBackfill(context.env)
-  const status = await spotifyCatalogJobStatus(context.env, id)
+  const id = await startSpotifyCatalogBackfill({
+    ...context.env,
+    DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+  })
+  const status = await spotifyCatalogJobStatus(
+    { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+    id,
+  )
   if (status === null) throw new Error('Created Spotify catalog job was not found')
   return context.json(SpotifyCatalogJobResponseSchema.parse(status), 202)
 })
 
 app.openapi(spotifyCatalogJobRoute, async (context) => {
-  const status = await spotifyCatalogJobStatus(context.env, context.req.valid('param').jobId)
+  const status = await spotifyCatalogJobStatus(
+    { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+    context.req.valid('param').jobId,
+  )
   if (status === null)
     return context.json(
       ApiErrorSchema.parse({
@@ -1482,11 +1589,15 @@ app.openapi(youtubeImportRoute, async (context) => {
     const connectionLabel = context.req.query('connectionLabel')
     return context.json(
       YoutubeImportResponseSchema.parse(
-        await importYoutubeTakeout(context.env, archive, {
-          ...(connectionKey === undefined ? {} : { connectionKey }),
-          ...(connectionId === undefined ? {} : { connectionId }),
-          ...(connectionLabel === undefined ? {} : { connectionLabel }),
-        }),
+        await importYoutubeTakeout(
+          { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+          archive,
+          {
+            ...(connectionKey === undefined ? {} : { connectionKey }),
+            ...(connectionId === undefined ? {} : { connectionId }),
+            ...(connectionLabel === undefined ? {} : { connectionLabel }),
+          },
+        ),
       ),
       200,
     )
@@ -1512,11 +1623,15 @@ app.openapi(youtubeImportContinueRoute, async (context) => {
     const connectionLabel = context.req.query('connectionLabel')
     return context.json(
       YoutubeImportResponseSchema.parse(
-        await continueYoutubeTakeoutImport(context.env, context.req.valid('param').importId, {
-          ...(connectionKey === undefined ? {} : { connectionKey }),
-          ...(connectionId === undefined ? {} : { connectionId }),
-          ...(connectionLabel === undefined ? {} : { connectionLabel }),
-        }),
+        await continueYoutubeTakeoutImport(
+          { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+          context.req.valid('param').importId,
+          {
+            ...(connectionKey === undefined ? {} : { connectionKey }),
+            ...(connectionId === undefined ? {} : { connectionId }),
+            ...(connectionLabel === undefined ? {} : { connectionLabel }),
+          },
+        ),
       ),
       200,
     )
@@ -1536,7 +1651,7 @@ app.openapi(youtubeImportContinueRoute, async (context) => {
 })
 
 app.openapi(connectionsRoute, async (context) => {
-  const repository = createLedgerRepository(context.env.DB)
+  const repository = createLedgerRepository(context.env.DB, context.get('databaseUsageObserver'))
   const connections = await repository.listConnections()
   const sources = ['readwise', 'hardcover', 'letterboxd', 'spotify', 'youtube'] as const
   const data = []
@@ -1574,7 +1689,10 @@ app.openapi(connectionsRoute, async (context) => {
 app.openapi(syncRunsRoute, async (context) => {
   const { limit, cursor } = context.req.valid('query')
   try {
-    const page = await createLedgerRepository(context.env.DB).listSyncRuns(limit, cursor)
+    const page = await createLedgerRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).listSyncRuns(limit, cursor)
     return context.json(SyncRunsResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid pagination cursor')

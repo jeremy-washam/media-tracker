@@ -114,3 +114,25 @@ disclosure and automatic refresh; it defaults off.
 Imports are HTTP-driven and stop when the browser stops requesting chunks. Use
 Resume import after reopening Connections. The queue consumer handles selective
 Reader article-content jobs; other generalized background work remains deferred.
+
+## Database usage and cache maintenance
+
+Requests and jobs report aggregate D1 rows read/written when native result
+metadata is available. `unmeasuredStatements` identifies missing coverage,
+including native `first()` calls; elapsed time is wall time rather than CPU.
+Observers are per request/job and never mutate shared Worker bindings. Reports
+omit SQL, parameters, private titles and payloads and use route templates.
+
+After applying migration 0026, YouTube source projections and published provider
+overlays remain separate. Every browse/detail/search request checks one current
+clock, so expired fields fall back to retained owner evidence even when sync and
+cleanup are paused. Refresh staging remains invisible until successful job
+publication.
+
+Set `MAINTENANCE_ENABLED=true` and attach only `*/5 * * * *` to enable bounded
+local cache deletion. This invocation makes no provider calls, including when
+`SYNC_ENABLED=true`. It removes at most 1,000 logical cache/bookkeeping rows per
+run, with additional FTS/index/state writes. Cleanup starts two days before
+expiry to leave headroom and can reduce enrichment early. Both maintenance and
+provider work default off in the production template. Follow the deployment
+runbook's import, freshness, backlog and usage gates before activation.

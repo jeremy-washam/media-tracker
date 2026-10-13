@@ -56,7 +56,7 @@ function jobMessage(jobId: string, cursor = ''): SyncJob {
 
 export async function startYoutubeCatalogRefresh(env: Bindings, at = new Date().toISOString()) {
   if (env.YOUTUBE_API_KEY === undefined) throw new Error('YOUTUBE_API_KEY is not configured')
-  const jobs = createCatalogJobsRepository(env.DB)
+  const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const active = await jobs.findActive('youtube')
   if (active !== null) {
     await env.SYNC_QUEUE.send(jobMessage(active.id, active.cursor ?? ''))
@@ -70,7 +70,7 @@ export async function startYoutubeCatalogRefresh(env: Bindings, at = new Date().
 export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob): Promise<void> {
   if (job.operation !== 'refresh_youtube_catalog' || job.catalogJobId === undefined) return
   const at = new Date().toISOString()
-  const jobs = createCatalogJobsRepository(env.DB)
+  const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const current = await jobs.find(job.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
   if ((current.cursor ?? '') !== (job.catalogCursor ?? '')) return
@@ -85,7 +85,7 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
     new Date(Date.parse(at) + 5 * 60_000).toISOString(),
   )
   if (!reserved) return
-  const repository = createVideosRepository(env.DB)
+  const repository = createVideosRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   let stage = 'candidate_query'
   try {
     const candidates = await repository.listYoutubeCatalogCandidates({

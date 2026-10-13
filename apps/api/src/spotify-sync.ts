@@ -783,7 +783,12 @@ async function syncAdditionalSpotifyLibrary(input: {
   try {
     // A durable exact-ID backfill owns the backlog while active. The older
     // opportunistic batch path remains for integrations with batch access.
-    if ((await createSpotifyCatalogJobsRepository(input.bindings.DB).findActive()) === null)
+    if (
+      (await createSpotifyCatalogJobsRepository(
+        input.bindings.DB,
+        input.bindings.DATABASE_USAGE_OBSERVER,
+      ).findActive()) === null
+    )
       catalogTracks = await syncTrackCatalog(input)
   } catch (error) {
     partialFailures.push('track_catalog')
@@ -812,8 +817,11 @@ export async function syncSpotifySavedEpisodes(
   const refreshToken = bindings.SPOTIFY_REFRESH_TOKEN?.trim()
   if (!clientId || !refreshToken) throw new SpotifyCredentialsMissingError()
 
-  const repository = createLedgerRepository(bindings.DB)
-  const spotifyRepository = createSpotifyLibraryRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const spotifyRepository = createSpotifyLibraryRepository(
+    bindings.DB,
+    bindings.DATABASE_USAGE_OBSERVER,
+  )
   const startedAt = now()
   const connection = await connectionForSync(repository, startedAt)
   const previousCursor = await repository.findSyncCursor(connection.id, 'saved-episodes')

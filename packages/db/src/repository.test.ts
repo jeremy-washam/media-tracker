@@ -255,6 +255,12 @@ describe('canonical ledger migration and repository', () => {
     database.exec(migration)
     database.exec(
       readFileSync(
+        new URL('../migrations/0027_compact_archive_evidence.sql', import.meta.url),
+        'utf8',
+      ),
+    )
+    database.exec(
+      readFileSync(
         new URL('../migrations/0022_spotify_catalog_backfill.sql', import.meta.url),
         'utf8',
       ),
@@ -395,6 +401,53 @@ describe('canonical ledger migration and repository', () => {
       consumed_at_basis: 'source_asserted',
       consumed_at_precision: 'instant',
     })
+  })
+
+  it('preserves pair-role evidence on replay and rejects an ID reused for another pair atomically', async () => {
+    const data = fixtures()
+    await repository.saveConnection(data.connection)
+    await repository.saveSyncRun(data.runningSyncRun)
+    await repository.commit({
+      syncRun: data.succeededSyncRun,
+      rawObjects: [data.rawObject],
+      sourceRecords: [data.sourceRecord],
+      mediaItems: [data.mediaItem],
+      externalIdentities: [data.identity],
+      archiveEntries: [{ entry: data.archiveEntry, evidence: [data.evidence] }],
+    })
+    const original = database.prepare('SELECT * FROM archive_entry_evidence').all()
+    await repository.commit({
+      archiveEntries: [
+        {
+          entry: data.archiveEntry,
+          evidence: [
+            {
+              ...data.evidence,
+              id: archiveEntryEvidenceId('replayed-different-id'),
+              linkedAt: later,
+            },
+          ],
+        },
+      ],
+    })
+    expect(database.prepare('SELECT * FROM archive_entry_evidence').all()).toEqual(original)
+    const otherEntry = {
+      ...data.archiveEntry,
+      id: archiveEntryId('other-archive'),
+      sourceOccurrenceKey: 'other-occurrence',
+    }
+    await expect(
+      repository.commit({
+        archiveEntries: [
+          {
+            entry: otherEntry,
+            evidence: [{ ...data.evidence, archiveEntryId: otherEntry.id }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('UNIQUE')
+    expect(count(database, 'archive_entries')).toBe(1)
+    expect(database.prepare('SELECT * FROM archive_entry_evidence').all()).toEqual(original)
   })
 
   it('adds new evidence to an existing occurrence without replacing its lineage', async () => {

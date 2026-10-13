@@ -53,6 +53,45 @@ def tables(database):
     return ordinary, virtual
 
 
+def foreign_key_indexes(database, ordinary):
+    # Explicit UNIQUE indexes can be parent keys. They must exist before any
+    # child insert while foreign keys remain enabled during restore.
+    required = {}
+    for child in ordinary:
+        references = {}
+        for row in database.execute('PRAGMA foreign_key_list(' + identifier(child) + ')'):
+            references.setdefault((row[0], row[2]), []).append((row[1], row[4]))
+        for (_, parent), columns in references.items():
+            target = tuple(column for _, column in sorted(columns))
+            if parent not in ordinary or any(column is None for column in target):
+                continue
+            for index in database.execute('PRAGMA index_list(' + identifier(parent) + ')').fetchall():
+                name = index[1]
+                if not index[2] or index[4]:
+                    continue
+                indexed = tuple(row[2] for row in database.execute('PRAGMA index_info(' + identifier(name) + ')'))
+                if indexed != target:
+                    continue
+                definition = database.execute("SELECT sql FROM sqlite_schema WHERE type='index' AND name=?", (name,)).fetchone()
+                if definition and definition[0]:
+                    required[name] = definition[0]
+    return dict(sorted(required.items()))
+
+
+def export_schema(database, ordinary, virtual, destination):
+    schema = destination / 'schema.sql'
+    early_indexes = foreign_key_indexes(database, ordinary)
+    schema.write_text(';\n'.join(list(ordinary.values()) + list(virtual.values()) + list(early_indexes.values())) + ';\n')
+    indexes = destination / 'indexes-and-triggers.sql'
+    views = {name: sql for name, sql in database.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' AND sql IS NOT NULL ORDER BY name") if not name.startswith(('sqlite_', '_cf_', '_mf_'))}
+    definitions = list(views.values()) + [sql for name, sql in database.execute("SELECT name,sql FROM sqlite_schema WHERE type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name") if name not in early_indexes and not name.startswith(('sqlite_', '_cf_', '_mf_'))]
+    sequences = sequence_state(database, ordinary)
+    for name, seq in sequences:
+        definitions += ['DELETE FROM sqlite_sequence WHERE name=' + literal(name), 'INSERT INTO sqlite_sequence(name,seq) VALUES(' + literal(name) + ',' + literal(seq) + ')']
+    indexes.write_text(';\n'.join(definitions) + (';\n' if definitions else ''))
+    return schema, indexes, views, sequences
+
+
 def table_order(database, ordinary):
     pending = set(ordinary)
     result = []
@@ -66,14 +105,14 @@ def table_order(database, ordinary):
     return result
 
 
-def rows(database, table, virtual=False):
+def rows(database, table, virtual=False, view=False):
     info = database.execute('PRAGMA table_info(' + identifier(table) + ')').fetchall()
     columns = [row[1] for row in info]
     keys = [row[1] for row in sorted(info, key=lambda row: row[5]) if row[5]]
     if virtual:
         columns.insert(0, 'rowid')
         keys = ['rowid']
-    order = ','.join(identifier(key) for key in (keys or ['rowid']))
+    order = ','.join(identifier(key) for key in (columns if view else (keys or ['rowid'])))
     selected = ','.join(identifier(column) for column in columns)
     return columns, database.execute(f'SELECT {selected} FROM {identifier(table)} ORDER BY {order}')
 
@@ -274,14 +313,7 @@ def create_bundle(database_path, metadata_path, blobs_path, destination):
             migrations = [{'name': path.name, 'sha256': checksum(path)} for path in expected]
         objects = copy_r2(metadata_path, blobs_path, destination)
         references = verify_references(db, objects)
-        schema = destination / 'schema.sql'
-        schema.write_text(';\n'.join(list(ordinary.values()) + list(virtual.values())) + ';\n')
-        indexes = destination / 'indexes-and-triggers.sql'
-        definitions = [sql for name, sql in db.execute("SELECT name,sql FROM sqlite_schema WHERE type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name") if not name.startswith(('sqlite_', '_cf_', '_mf_'))]
-        sequences = sequence_state(db, ordinary)
-        for name, seq in sequences:
-            definitions += ['DELETE FROM sqlite_sequence WHERE name=' + literal(name), 'INSERT INTO sqlite_sequence(name,seq) VALUES(' + literal(name) + ',' + literal(seq) + ')']
-        indexes.write_text(';\n'.join(definitions) + (';\n' if definitions else ''))
+        schema, indexes, view_definitions, sequences = export_schema(db, ordinary, virtual, destination)
         writer = SqlFiles(destination / 'data')
         inventory = {}
         for name in table_order(db, ordinary):
@@ -291,8 +323,16 @@ def create_bundle(database_path, metadata_path, blobs_path, destination):
         for name in virtual:
             inventory[name] = (export_content_search(db, objects, destination, writer) if name == 'article_content_search' else export_table(db, name, writer, virtual=True))
             inventory[name]['vocabularySha256'] = vocabulary(db, name)
+        views = {}
+        for name in view_definitions:
+            digest = hashlib.sha256()
+            count = 0
+            for row in rows(db, name, view=True)[1]:
+                hash_row(digest, row)
+                count += 1
+            views[name] = {'count': count, 'sha256': digest.hexdigest()}
         files = writer.finish()
-        manifest = {'version': 1, 'schema': {'path': schema.name, 'sha256': checksum(schema)}, 'indexes': {'path': indexes.name, 'sha256': checksum(indexes)}, 'data': files, 'tables': inventory, 'objects': objects, 'referencesVerified': references, 'migrations': migrations, 'sequences': sequences, 'databaseBytes': snapshot.stat().st_size}
+        manifest = {'version': 1, 'schema': {'path': schema.name, 'sha256': checksum(schema)}, 'indexes': {'path': indexes.name, 'sha256': checksum(indexes)}, 'data': files, 'tables': inventory, 'views': views, 'objects': objects, 'referencesVerified': references, 'migrations': migrations, 'sequences': sequences, 'databaseBytes': snapshot.stat().st_size}
         (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         return manifest
     finally:
@@ -328,11 +368,19 @@ def rehearse(directory):
                 raise ValueError(f'Restored {name} differs from the snapshot')
             if expected['virtual'] and vocabulary(db, name) != expected['vocabularySha256']:
                 raise ValueError(f'Restored {name} search terms differ from the snapshot')
+        for name, expected in manifest.get('views', {}).items():
+            digest = hashlib.sha256()
+            count = 0
+            for row in rows(db, name, view=True)[1]:
+                hash_row(digest, row)
+                count += 1
+            if count != expected['count'] or digest.hexdigest() != expected['sha256']:
+                raise ValueError(f'Restored {name} compatibility view differs from the snapshot')
         references = verify_references(db, manifest['objects'])
         expected_sequences = [tuple(row) for row in manifest.get('sequences', [])]
         if expected_sequences and sequence_state(db, manifest['tables']) != expected_sequences:
             raise ValueError('Restored ID allocator state differs from the snapshot')
-        report = {'status': 'passed', 'tablesVerified': len(manifest['tables']), 'objectsVerified': len(manifest['objects']), 'referencesVerified': references, 'rowsVerified': sum(item['count'] for item in manifest['tables'].values()), 'sequencesVerified': len(expected_sequences), 'existingArticleChunkHashMismatches': manifest['tables'].get('article_content_search', {}).get('existingChunkHashMismatches', 0), 'remoteValidation': 'not performed'}
+        report = {'status': 'passed', 'tablesVerified': len(manifest['tables']), 'viewsVerified': len(manifest.get('views', {})), 'objectsVerified': len(manifest['objects']), 'referencesVerified': references, 'rowsVerified': sum(item['count'] for item in manifest['tables'].values()), 'sequencesVerified': len(expected_sequences), 'existingArticleChunkHashMismatches': manifest['tables'].get('article_content_search', {}).get('existingChunkHashMismatches', 0), 'remoteValidation': 'not performed'}
         (directory / 'rehearsal.json').write_text(json.dumps(report, indent=2) + '\n')
         return report
     finally:

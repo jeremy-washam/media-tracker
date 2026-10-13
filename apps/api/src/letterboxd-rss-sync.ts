@@ -191,8 +191,8 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
     throw new LetterboxdRssConfigurationError()
   }
 
-  const repository = createLedgerRepository(bindings.DB)
-  const moviesRepository = createMoviesRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const moviesRepository = createMoviesRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const startedAt = instantNow()
   const connection = await connectionForSync(repository, startedAt)
   const runId = syncRunId(ulid())

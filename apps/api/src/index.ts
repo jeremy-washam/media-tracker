@@ -3,12 +3,14 @@ import { SyncJobSchema } from '@media-tracker/contracts'
 import app from './app'
 import { authorizeRequest, privateAccessError } from './access'
 import { limitApiUsage } from './usage-limits'
+import { jobUsage } from './usage-metrics'
+import { maintainCatalog, MAINTENANCE_CRON } from './catalog-maintenance'
 import { syncHardcover } from './hardcover-sync'
 import { syncLetterboxdRss } from './letterboxd-rss-sync'
 import { syncReadwiseArchive } from './readwise-sync'
 import { acquireReadwiseArticleContent, indexReadwiseArticleContent } from './readwise-content'
 import { syncSpotifySavedEpisodes } from './spotify-sync'
-import { createArticlesRepository, createVideosRepository } from './env'
+import { createArticlesRepository } from './env'
 import { processTmdbCatalogRefresh, startTmdbCatalogRefresh } from './tmdb-catalog'
 import { processYoutubeCatalogRefresh, startYoutubeCatalogRefresh } from './youtube-catalog'
 import { TmdbApiError } from '@media-tracker/connector-tmdb'
@@ -33,8 +35,13 @@ const worker = {
     if (limited) return limited
     return app.fetch(request, env, context)
   },
-  scheduled(_controller, env, context) {
-    if (env.SYNC_ENABLED === 'false') return
+  scheduled(controller, env, context) {
+    if (controller.cron === MAINTENANCE_CRON && env.MAINTENANCE_ENABLED === 'true')
+      context.waitUntil(maintainCatalog(env))
+    // The frequent cleanup schedule must never increase provider polling cadence.
+    if (controller.cron === MAINTENANCE_CRON || env.SYNC_ENABLED === 'false') return
+    const usage = jobUsage(env, 'scheduled_sync')
+    env = usage.env
     console.info(
       JSON.stringify({
         level: 'info',
@@ -183,22 +190,12 @@ const worker = {
     if (env.CATALOG_AUTO_REFRESH === 'true' && env.YOUTUBE_API_KEY !== undefined)
       tasks.push(() => startYoutubeCatalogRefresh(env).then(() => undefined))
     tasks.push(() => resumeSpotifyCatalogBackfill(env))
-    tasks.push(() =>
-      createVideosRepository(env.DB)
-        .purgeExpiredYoutubeCatalog(new Date().toISOString())
-        .then(() => undefined)
-        .catch((error: unknown) => {
-          console.error(
-            JSON.stringify({
-              level: 'error',
-              event: 'youtube.catalog_expiry_purge_failed',
-              errorName: error instanceof Error ? error.name : 'UnknownError',
-            }),
-          )
-        }),
-    )
     if (tasks.length > 0) {
-      context.waitUntil(tasks.reduce((chain, task) => chain.then(task), Promise.resolve()))
+      context.waitUntil(
+        tasks
+          .reduce((chain, task) => chain.then(task), Promise.resolve())
+          .finally(() => usage.report()),
+      )
     }
   },
   async queue(batch, env) {
@@ -221,92 +218,100 @@ const worker = {
         continue
       }
 
-      if (
-        result.data.operation === 'acquire_article_content' ||
-        result.data.operation === 'index_article_content'
-      ) {
-        try {
-          if (result.data.operation === 'acquire_article_content')
-            await acquireReadwiseArticleContent(env, result.data)
-          else await indexReadwiseArticleContent(env, result.data)
-          message.ack()
-        } catch (error) {
-          await createArticlesRepository(env.DB).failContentJob(
-            result.data.idempotencyKey,
-            new Date().toISOString(),
-            error instanceof Error ? error.name : 'UnknownError',
-          )
-          console.error(
-            JSON.stringify({
-              level: 'error',
-              event: 'readwise.content_failed',
-              messageId: message.id,
-              errorName: error instanceof Error ? error.name : 'UnknownError',
-            }),
-          )
-          message.retry()
-        }
-        continue
-      }
-
-      if (
-        result.data.operation === 'refresh_tmdb_catalog' ||
-        result.data.operation === 'refresh_youtube_catalog'
-      ) {
-        try {
-          if (result.data.operation === 'refresh_tmdb_catalog')
-            await processTmdbCatalogRefresh(env, result.data)
-          else await processYoutubeCatalogRefresh(env, result.data)
-          message.ack()
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              level: 'error',
-              event: 'catalog.refresh_failed',
-              provider: result.data.source,
-              messageId: message.id,
-              errorName: error instanceof Error ? error.name : 'UnknownError',
-            }),
-          )
-          if (
-            (error instanceof TmdbApiError && error.retryable) ||
-            (error instanceof YoutubeApiError && error.retryable)
-          )
+      const usage = jobUsage(env, result.data.operation)
+      try {
+        if (
+          result.data.operation === 'acquire_article_content' ||
+          result.data.operation === 'index_article_content'
+        ) {
+          try {
+            if (result.data.operation === 'acquire_article_content')
+              await acquireReadwiseArticleContent(usage.env, result.data)
+            else await indexReadwiseArticleContent(usage.env, result.data)
+            message.ack()
+          } catch (error) {
+            await createArticlesRepository(
+              usage.env.DB,
+              usage.env.DATABASE_USAGE_OBSERVER,
+            ).failContentJob(
+              result.data.idempotencyKey,
+              new Date().toISOString(),
+              error instanceof Error ? error.name : 'UnknownError',
+            )
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                event: 'readwise.content_failed',
+                messageId: message.id,
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+              }),
+            )
             message.retry()
-          else message.ack()
+          }
+          continue
         }
-        continue
-      }
 
-      if (result.data.operation === 'refresh_spotify_catalog') {
-        try {
-          await processSpotifyCatalogBackfill(env, result.data)
-          message.ack()
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              level: 'error',
-              event: 'spotify.catalog_queue_failed',
-              messageId: message.id,
-              errorName: error instanceof Error ? error.name : 'UnknownError',
-            }),
-          )
-          message.retry()
+        if (
+          result.data.operation === 'refresh_tmdb_catalog' ||
+          result.data.operation === 'refresh_youtube_catalog'
+        ) {
+          try {
+            if (result.data.operation === 'refresh_tmdb_catalog')
+              await processTmdbCatalogRefresh(usage.env, result.data)
+            else await processYoutubeCatalogRefresh(usage.env, result.data)
+            message.ack()
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                event: 'catalog.refresh_failed',
+                provider: result.data.source,
+                messageId: message.id,
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+              }),
+            )
+            if (
+              (error instanceof TmdbApiError && error.retryable) ||
+              (error instanceof YoutubeApiError && error.retryable)
+            )
+              message.retry()
+            else message.ack()
+          }
+          continue
         }
-        continue
-      }
 
-      console.info(
-        JSON.stringify({
-          level: 'info',
-          event: 'queue.placeholder_received',
-          messageId: message.id,
-          idempotencyKey: result.data.idempotencyKey,
-          source: result.data.source,
-          operation: result.data.operation,
-        }),
-      )
-      message.ack()
+        if (result.data.operation === 'refresh_spotify_catalog') {
+          try {
+            await processSpotifyCatalogBackfill(usage.env, result.data)
+            message.ack()
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                event: 'spotify.catalog_queue_failed',
+                messageId: message.id,
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+              }),
+            )
+            message.retry()
+          }
+          continue
+        }
+
+        console.info(
+          JSON.stringify({
+            level: 'info',
+            event: 'queue.placeholder_received',
+            messageId: message.id,
+            idempotencyKey: result.data.idempotencyKey,
+            source: result.data.source,
+            operation: result.data.operation,
+          }),
+        )
+        message.ack()
+      } finally {
+        usage.report()
+      }
     }
   },
 } satisfies ExportedHandler<Bindings, SyncJob>

@@ -6,6 +6,7 @@ export type {
   DatabaseValue,
 } from './database'
 export { D1DatabaseClient } from './d1'
+export type { DatabaseUsage, DatabaseUsageObserver } from './d1'
 export type {
   ArchiveEntryWrite,
   ArchiveOccurrenceReference,

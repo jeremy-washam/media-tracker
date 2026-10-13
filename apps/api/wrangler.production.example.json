@@ -18,6 +18,7 @@
     "ACCESS_AUD": "",
     "OWNER_EMAIL": "",
     "SYNC_ENABLED": "false",
+    "MAINTENANCE_ENABLED": "false",
     "CATALOG_AUTO_REFRESH": "false"
   },
   "d1_databases": [

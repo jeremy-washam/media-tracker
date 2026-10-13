@@ -4,16 +4,78 @@ function statement(database: DatabaseClient, query: string, values: readonly Dat
   return database.prepare(query).bind(...values)
 }
 
-function ftsQuery(value: string) {
-  return (value.normalize('NFKC').match(/[\p{L}\p{N}]+/gu) ?? [])
-    .slice(0, 12)
-    .map((token) => `"${token}"*`)
-    .join(' AND ')
-}
+const publishedCatalogTables = [
+  [
+    'youtube_video_catalog_profiles',
+    'youtube_published_video_profiles',
+    'media_item_id,video_id,lookup_state,current_title,description,channel_id,channel_title,published_at,duration_ms,category_id,tags_json,caption_available,definition,projection,live_broadcast_content,actual_start_at,actual_end_at,fetched_at,checked_at,expires_at',
+  ],
+  [
+    'youtube_channel_catalog_profiles',
+    'youtube_published_channel_profiles',
+    'channel_id,current_title,description,custom_url,country,thumbnail_url,fetched_at,checked_at,expires_at',
+  ],
+  [
+    'youtube_categories',
+    'youtube_published_categories',
+    'category_id,region_code,title,fetched_at,expires_at',
+  ],
+  [
+    'youtube_video_thumbnails',
+    'youtube_published_thumbnails',
+    'video_id,variant,url,width,height,fetched_at,expires_at',
+  ],
+] as const
+
+const youtubeSearchRebuildSql = [
+  `DELETE FROM video_search`,
+  `INSERT INTO video_search(media_item_id,titles,channel_titles,origin_kind,origin_key,expires_at)
+ SELECT p.media_item_id,
+   COALESCE((SELECT GROUP_CONCAT(DISTINCT w.historical_title) FROM youtube_watch_observations w WHERE w.media_item_id=p.media_item_id),p.display_title),
+   COALESCE((SELECT GROUP_CONCAT(DISTINCT w.historical_channel_title) FROM youtube_watch_observations w WHERE w.media_item_id=p.media_item_id),p.display_channel_title,''),
+   'owner',p.media_item_id,NULL FROM video_library_projection p`,
+  `INSERT INTO video_search(media_item_id,titles,channel_titles,origin_kind,origin_key,expires_at)
+ SELECT p.media_item_id,COALESCE(v.current_title,'')||' '||COALESCE(v.description,'')||' '||COALESCE(v.tags_json,''),
+ COALESCE(v.channel_title,''),'video',v.media_item_id,v.expires_at
+ FROM video_library_projection p JOIN youtube_published_video_profiles v ON v.media_item_id=p.media_item_id`,
+  `INSERT INTO video_search(media_item_id,titles,channel_titles,origin_kind,origin_key,expires_at)
+ SELECT DISTINCT p.media_item_id,'',c.current_title||' '||COALESCE(c.custom_url,''),'channel',c.channel_id,CASE WHEN c.channel_id=p.channel_id THEN c.expires_at ELSE MIN(c.expires_at,v.expires_at) END
+ FROM video_library_projection p LEFT JOIN youtube_published_video_profiles v ON v.media_item_id=p.media_item_id
+ JOIN youtube_published_channel_profiles c ON c.channel_id=p.channel_id OR c.channel_id=v.channel_id`,
+  `INSERT INTO video_search(media_item_id,titles,channel_titles,origin_kind,origin_key,expires_at)
+ SELECT p.media_item_id,c.title,'','category',c.category_id,MIN(c.expires_at,v.expires_at)
+ FROM video_library_projection p JOIN youtube_published_video_profiles v ON v.media_item_id=p.media_item_id
+ JOIN youtube_published_categories c ON c.category_id=v.category_id AND c.region_code='US'`,
+  `DELETE FROM video_channel_search`,
+  `INSERT INTO video_channel_search(channel_id,titles,origin_kind,origin_key,expires_at)
+ SELECT p.channel_id,COALESCE((SELECT GROUP_CONCAT(DISTINCT a.title) FROM youtube_channel_assertions a WHERE a.channel_id=p.channel_id),p.display_title),
+ 'owner',p.channel_id,NULL FROM video_channel_projection p`,
+  `INSERT INTO video_channel_search(channel_id,titles,origin_kind,origin_key,expires_at)
+ SELECT c.channel_id,c.current_title||' '||COALESCE(c.custom_url,'')||' '||COALESCE(c.description,''),
+ 'channel',c.channel_id,c.expires_at FROM youtube_published_channel_profiles c`,
+  `INSERT INTO video_channel_search(channel_id,titles,origin_kind,origin_key,expires_at)
+ SELECT v.channel_id,COALESCE(v.channel_title,''),'video',v.media_item_id,v.expires_at
+ FROM youtube_published_video_profiles v WHERE v.channel_id IS NOT NULL`,
+  `DELETE FROM youtube_search_expiry`,
+  `INSERT INTO youtube_search_expiry(document_kind,document_rowid,expires_at)
+    SELECT 'video',rowid,expires_at FROM video_search WHERE expires_at IS NOT NULL`,
+  `INSERT INTO youtube_search_expiry(document_kind,document_rowid,expires_at)
+    SELECT 'channel',rowid,expires_at FROM video_channel_search WHERE expires_at IS NOT NULL`,
+] as const
+
+const youtubeChannelAggregateSql = `INSERT INTO youtube_published_channel_aggregates(
+ channel_id,channel_title,archive_video_count,watch_occurrence_count,latest_watched_at,queue_video_count,projection_generation,updated_at,expires_at)
+ SELECT COALESCE(v.channel_id,p.channel_id),MAX(COALESCE(v.channel_title,p.display_channel_title)),
+ SUM(p.archive_active),SUM(p.watch_occurrence_count),MAX(p.latest_watched_at),SUM(p.queue_active),MAX(p.projection_generation),MAX(p.updated_at),
+ (SELECT MIN(expires_at) FROM youtube_published_video_profiles WHERE channel_id IS NOT NULL AND expires_at>?)
+ FROM video_library_projection p LEFT JOIN youtube_published_video_profiles v ON v.media_item_id=p.media_item_id AND v.expires_at>?
+ WHERE COALESCE(v.channel_id,p.channel_id) IS NOT NULL AND (p.archive_active=1 OR p.queue_active=1)
+ AND EXISTS(SELECT 1 FROM youtube_published_video_profiles WHERE channel_id IS NOT NULL AND expires_at>?)
+ GROUP BY COALESCE(v.channel_id,p.channel_id)`
 
 interface DetailCursor {
   key: string
-  generation: number
+  generation: number | string
   primary: string | null
   id: string
 }
@@ -24,7 +86,12 @@ function detailCursor(value: string | undefined, key: string): DetailCursor | nu
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<DetailCursor>
     if (
       parsed.key !== key ||
-      !Number.isInteger(parsed.generation) ||
+      !(
+        Number.isInteger(parsed.generation) ||
+        (typeof parsed.generation === 'string' &&
+          /^\d+:\d+:(?:none|[\dTZ:.-]+)$/.test(parsed.generation) &&
+          parsed.generation.length < 80)
+      ) ||
       (parsed.primary !== null && typeof parsed.primary !== 'string') ||
       typeof parsed.id !== 'string'
     )
@@ -41,7 +108,7 @@ function encodeDetailCursor(value: DetailCursor) {
 
 interface CollectionCursor {
   key: string
-  generation: number
+  generation: number | string
   primary: string | number | null
   title: string
   id: string
@@ -53,7 +120,12 @@ function collectionCursor(value: string | undefined, key: string): CollectionCur
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<CollectionCursor>
     if (
       parsed.key !== key ||
-      !Number.isInteger(parsed.generation) ||
+      !(
+        Number.isInteger(parsed.generation) ||
+        (typeof parsed.generation === 'string' &&
+          /^\d+:\d+:(?:none|[\dTZ:.-]+)$/.test(parsed.generation) &&
+          parsed.generation.length < 80)
+      ) ||
       (parsed.primary !== null &&
         typeof parsed.primary !== 'string' &&
         typeof parsed.primary !== 'number') ||
@@ -84,6 +156,24 @@ function pageClause(value: CollectionCursor | null, direction: 'asc' | 'desc') {
     sql: `(sort_value IS NULL OR sort_value${operator}? OR (sort_value=? AND ${tie}))`,
     values: [value.primary, value.primary, value.title, value.title, value.id] as DatabaseValue[],
   }
+}
+
+function liveSearchPredicate(
+  table: 'video_search' | 'video_channel_search',
+  id: string,
+  query: string,
+) {
+  const tokens = (query.normalize('NFKC').match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, 12)
+  const values: DatabaseValue[] = []
+  const predicates = tokens.map((token) => {
+    values.push(`"${token}"*`)
+    return `${id} IN (SELECT s.${table === 'video_search' ? 'media_item_id' : 'channel_id'}
+      FROM ${table} s ${table === 'video_search' ? 'JOIN video_library_projection eligible ON eligible.media_item_id=s.media_item_id' : ''}
+      WHERE ${table} MATCH ?
+      AND (s.expires_at IS NULL OR s.expires_at>(SELECT at FROM read_clock))
+      ${table === 'video_search' ? "AND (s.origin_kind<>'channel' OR s.origin_key=eligible.channel_id)" : ''})`
+  })
+  return { sql: predicates.length ? predicates.join(' AND ') : '0=1', values }
 }
 
 function placeholders(values: readonly unknown[]) {
@@ -235,7 +325,158 @@ export interface YoutubeCategoryProjection {
 type Row = Record<string, null | number | string>
 
 export class SqlVideosRepository {
-  constructor(private readonly database: DatabaseClient) {}
+  constructor(
+    private readonly database: DatabaseClient,
+    private readonly clock: () => string = () => new Date().toISOString(),
+  ) {}
+
+  private readStatement(query: string, values: readonly DatabaseValue[] = [], at = this.clock()) {
+    const ctes = `read_clock(at) AS (VALUES (?)),
+      read_generation(revision,deadline) AS (
+        SELECT (SELECT revision FROM youtube_publication_state WHERE singleton_id=1),
+          COALESCE((SELECT MIN(deadline) FROM (
+            SELECT MIN(expires_at) deadline FROM youtube_published_video_profiles WHERE expires_at>(SELECT at FROM read_clock)
+            UNION ALL SELECT MIN(expires_at) FROM youtube_published_channel_profiles WHERE expires_at>(SELECT at FROM read_clock)
+            UNION ALL SELECT MIN(expires_at) FROM youtube_published_categories WHERE expires_at>(SELECT at FROM read_clock)
+            UNION ALL SELECT MIN(expires_at) FROM youtube_published_thumbnails WHERE expires_at>(SELECT at FROM read_clock)
+          )),'none')
+      ),
+      read_channel_mode(mode) AS (
+        SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM youtube_published_video_profiles
+          WHERE channel_id IS NOT NULL AND expires_at>(SELECT at FROM read_clock)) THEN 'owner'
+          WHEN (SELECT association_revision=channel_aggregate_revision FROM youtube_publication_state WHERE singleton_id=1)
+            AND EXISTS(SELECT 1 FROM youtube_published_channel_aggregates WHERE expires_at>(SELECT at FROM read_clock)) THEN 'published'
+          ELSE 'dynamic' END
+      ),
+      video_library_projection AS NOT MATERIALIZED (
+        SELECT p.media_item_id,p.video_id,
+          COALESCE(vp.current_title,p.display_title) display_title,
+          LOWER(COALESCE(vp.current_title,p.display_title)) normalized_title,
+          COALESCE(vp.channel_id,p.channel_id) channel_id,
+          COALESCE(cp.current_title,vp.channel_title,p.display_channel_title) display_channel_title,
+          LOWER(COALESCE(cp.current_title,vp.channel_title,p.display_channel_title)) normalized_channel_title,
+          p.canonical_url,
+          (SELECT t.url FROM youtube_published_thumbnails t WHERE t.video_id=p.video_id
+            AND t.expires_at>(SELECT at FROM read_clock)
+            ORDER BY CASE t.variant WHEN 'medium' THEN 0 WHEN 'high' THEN 1
+              WHEN 'standard' THEN 2 WHEN 'maxres' THEN 3 WHEN 'default' THEN 4 ELSE 5 END,
+              COALESCE(t.width,0)*COALESCE(t.height,0) DESC LIMIT 1) image_url,
+          vp.published_at,vp.duration_ms,
+          CASE WHEN vp.lookup_state='current' THEN 'available'
+            WHEN vp.lookup_state='unavailable' THEN 'unavailable'
+            WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state IN ('pending','running')) THEN 'pending'
+            WHEN EXISTS(SELECT 1 FROM youtube_published_video_profiles WHERE media_item_id=p.media_item_id)
+              OR EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state='succeeded') THEN 'stale'
+            WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state='failed') THEN 'error'
+            ELSE 'not_configured' END availability_state,
+          CASE WHEN vp.lookup_state='current' THEN 'current'
+            WHEN vp.lookup_state='error' THEN 'error'
+            WHEN EXISTS(SELECT 1 FROM youtube_published_video_profiles WHERE media_item_id=p.media_item_id)
+              OR EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state='succeeded') THEN 'stale'
+            WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state='failed') THEN 'error'
+            ELSE 'not_configured' END metadata_state,
+          p.source_format,p.archive_active,p.watch_occurrence_count,p.watch_account_count,
+          p.latest_watched_at,p.queue_active,p.queue_relationship_count,p.queue_account_count,
+          p.latest_queue_added_at,
+          CAST(p.projection_generation AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) projection_generation,p.updated_at,
+          CASE WHEN category.category_id IS NOT NULL THEN vp.category_id END category_id,
+          category.title category_title,vp.caption_available,vp.definition,
+          vp.projection projection_kind,
+          CASE WHEN vp.live_broadcast_content='live' THEN 'live'
+            WHEN vp.live_broadcast_content='upcoming' THEN 'upcoming'
+            WHEN vp.actual_start_at IS NOT NULL AND vp.actual_end_at IS NOT NULL THEN 'recorded_live' END live_state,
+          vp.checked_at catalog_checked_at,vp.expires_at catalog_expires_at
+        FROM main.video_library_projection p
+        LEFT JOIN youtube_published_video_profiles vp ON vp.media_item_id=p.media_item_id
+          AND vp.expires_at>(SELECT at FROM read_clock)
+        LEFT JOIN youtube_published_channel_profiles cp ON cp.channel_id=COALESCE(vp.channel_id,p.channel_id)
+          AND cp.expires_at>(SELECT at FROM read_clock)
+        LEFT JOIN youtube_published_categories category ON category.category_id=vp.category_id AND category.region_code='US'
+          AND category.expires_at>(SELECT at FROM read_clock)
+      ),
+      video_channel_groups AS (
+SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
+          SUM(p.archive_active) archive_video_count,
+          SUM(p.watch_occurrence_count) watch_occurrence_count,MAX(p.latest_watched_at) latest_watched_at,
+          SUM(p.queue_active) queue_video_count,MAX(p.projection_generation) projection_generation,
+          MAX(p.updated_at) updated_at,MAX(COALESCE(vp.channel_title,p.display_channel_title)) channel_title
+          FROM main.video_library_projection p
+          LEFT JOIN youtube_published_video_profiles vp ON vp.media_item_id=p.media_item_id
+            AND vp.expires_at>(SELECT at FROM read_clock)
+          WHERE (SELECT mode FROM read_channel_mode)='dynamic' AND COALESCE(vp.channel_id,p.channel_id) IS NOT NULL AND (p.archive_active=1 OR p.queue_active=1)
+          GROUP BY COALESCE(vp.channel_id,p.channel_id) UNION ALL
+          SELECT channel_id,archive_video_count,watch_occurrence_count,latest_watched_at,
+            queue_video_count,projection_generation,updated_at,display_title
+          FROM main.video_channel_projection
+          WHERE (SELECT mode FROM read_channel_mode)='owner' AND (archive_video_count>0 OR queue_video_count>0)
+          UNION ALL SELECT channel_id,archive_video_count,watch_occurrence_count,latest_watched_at,
+            queue_video_count,projection_generation,updated_at,channel_title
+          FROM youtube_published_channel_aggregates WHERE (SELECT mode FROM read_channel_mode)='published'
+
+      ),
+      video_channel_projection AS NOT MATERIALIZED (
+        SELECT grouped.channel_id,
+          COALESCE(cp.current_title,grouped.channel_title,owner.display_title,'Channel unavailable') display_title,
+          LOWER(COALESCE(cp.current_title,grouped.channel_title,owner.display_title,'Channel unavailable')) normalized_title,
+          COALESCE(CASE WHEN cp.custom_url IS NOT NULL THEN 'https://www.youtube.com/'||cp.custom_url END,
+            owner.canonical_url,'https://www.youtube.com/channel/'||grouped.channel_id) canonical_url,
+          cp.thumbnail_url image_url,1 library_active,
+          EXISTS(SELECT 1 FROM youtube_channel_subscriptions s WHERE s.channel_id=grouped.channel_id AND s.upstream_state='active') following_active,
+          (SELECT COUNT(*) FROM youtube_channel_subscriptions s WHERE s.channel_id=grouped.channel_id AND s.upstream_state='active') subscription_count,
+          grouped.archive_video_count,grouped.watch_occurrence_count,grouped.latest_watched_at,
+          grouped.queue_video_count,CAST(grouped.projection_generation AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) projection_generation,grouped.updated_at
+        FROM video_channel_groups grouped
+        LEFT JOIN main.video_channel_projection owner ON owner.channel_id=grouped.channel_id
+        LEFT JOIN youtube_published_channel_profiles cp ON cp.channel_id=grouped.channel_id
+          AND cp.expires_at>(SELECT at FROM read_clock)
+      )`
+    let publishedQuery = query
+    for (const [staged, published] of publishedCatalogTables)
+      publishedQuery = publishedQuery.replaceAll(staged, published)
+    const sql = publishedQuery.trimStart().startsWith('WITH ')
+      ? `WITH ${ctes}, ${publishedQuery.trimStart().slice(5)}`
+      : `WITH ${ctes} ${publishedQuery}`
+    return statement(this.database, sql, [at, ...values])
+  }
+
+  private searchRebuildStatements(): DatabaseStatement[] {
+    return youtubeSearchRebuildSql.map((sql) => statement(this.database, sql))
+  }
+
+  private async publicationStatements(): Promise<DatabaseStatement[]> {
+    const latest = await statement(
+      this.database,
+      "SELECT id,state FROM catalog_refresh_jobs WHERE provider='youtube' ORDER BY created_at DESC,id DESC LIMIT 1",
+    ).first<{ id: string; state: string }>()
+    if (latest && latest.state !== 'succeeded') return []
+    const published = await statement(
+      this.database,
+      'SELECT last_published_job_id FROM youtube_publication_state WHERE singleton_id=1',
+    ).first<{ last_published_job_id: string | null }>()
+    if (latest && published?.last_published_job_id === latest.id) return []
+    // Every statement pins the completed job again inside the transaction. A
+    // newer job can stage and fail between the initial read and this batch.
+    const guard = latest
+      ? "NOT EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state IN ('pending','running')) AND (SELECT id FROM catalog_refresh_jobs WHERE provider='youtube' ORDER BY created_at DESC,id DESC LIMIT 1)=? AND (SELECT state FROM catalog_refresh_jobs WHERE id=?)='succeeded'"
+      : "NOT EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube')"
+    const guardValues: DatabaseValue[] = latest ? [latest.id, latest.id] : []
+    const writes = publishedCatalogTables.flatMap(([staged, published, columns]) => [
+      statement(this.database, `DELETE FROM ${published} WHERE ${guard}`, guardValues),
+      statement(
+        this.database,
+        `INSERT INTO ${published}(${columns}) SELECT ${columns} FROM ${staged} WHERE ${guard}`,
+        guardValues,
+      ),
+    ])
+    writes.push(
+      statement(
+        this.database,
+        `UPDATE youtube_publication_state SET revision=revision+1,association_revision=association_revision+1,last_published_job_id=? WHERE singleton_id=1 AND ${guard}`,
+        [latest?.id ?? null, ...guardValues],
+      ),
+    )
+    return writes
+  }
 
   async projectWatches(values: readonly YoutubeWatchProjection[]): Promise<void> {
     const writes: DatabaseStatement[] = []
@@ -664,22 +905,9 @@ export class SqlVideosRepository {
       JOIN raw_objects r ON r.id=sr.raw_object_id
       WHERE a.channel_id=c.channel_id AND a.url IS NOT NULL
       ORDER BY r.acquired_at DESC,a.source_record_id DESC LIMIT 1)`
+    const publication = await this.publicationStatements()
     await this.database.batch([
-      statement(
-        this.database,
-        `INSERT INTO youtube_channels(channel_id,latest_title,latest_url,first_observed_at,
-           last_observed_at,updated_at)
-         SELECT vp.channel_id,MAX(vp.channel_title),'https://www.youtube.com/channel/'||vp.channel_id,
-           MIN(vp.fetched_at),MAX(vp.checked_at),MAX(vp.checked_at)
-         FROM youtube_video_catalog_profiles vp
-         WHERE vp.channel_id IS NOT NULL AND vp.expires_at>?
-         GROUP BY vp.channel_id
-         ON CONFLICT(channel_id) DO UPDATE SET
-           latest_title=COALESCE(excluded.latest_title,youtube_channels.latest_title),
-           latest_url=COALESCE(youtube_channels.latest_url,excluded.latest_url),
-           last_observed_at=excluded.last_observed_at,updated_at=excluded.updated_at`,
-        [at],
-      ),
+      ...publication,
       statement(this.database, 'DELETE FROM video_library_projection'),
       statement(
         this.database,
@@ -698,7 +926,7 @@ export class SqlVideosRepository {
            COALESCE(cp.current_title,vp.channel_title,${latestVideoChannelTitle}),
            LOWER(COALESCE(cp.current_title,vp.channel_title,${latestVideoChannelTitle})),
            COALESCE(i.canonical_url,'https://www.youtube.com/watch?v='||i.external_id),
-           (SELECT t.url FROM youtube_video_thumbnails t WHERE t.video_id=i.external_id
+           (SELECT t.url FROM youtube_video_thumbnails t WHERE t.video_id=i.external_id AND 0
              ORDER BY CASE t.variant
                WHEN 'medium' THEN 0 WHEN 'high' THEN 1 WHEN 'standard' THEN 2
                WHEN 'maxres' THEN 3 WHEN 'default' THEN 4 ELSE 5 END,
@@ -740,10 +968,10 @@ export class SqlVideosRepository {
              ELSE NULL END,
            vp.checked_at,vp.expires_at
          FROM media_items m JOIN external_identities i ON i.media_item_id=m.id
-         LEFT JOIN youtube_video_catalog_profiles vp ON vp.media_item_id=m.id AND vp.expires_at>?
-         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=COALESCE(vp.channel_id,${latestChannelId}) AND cp.expires_at>?
+         LEFT JOIN youtube_video_catalog_profiles vp ON vp.media_item_id=m.id AND vp.expires_at>? AND 0
+         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=COALESCE(vp.channel_id,${latestChannelId}) AND cp.expires_at>? AND 0
          LEFT JOIN youtube_categories category ON category.category_id=vp.category_id
-           AND category.region_code='US' AND category.expires_at>?
+           AND category.region_code='US' AND category.expires_at>? AND 0
          WHERE m.type='video' AND i.namespace='youtube' AND i.external_type='video_id'
            AND i.scope='global' AND i.retired_at IS NULL
            AND (EXISTS(SELECT 1 FROM archive_entries a WHERE a.media_item_id=m.id AND a.upstream_state='active'
@@ -760,10 +988,10 @@ export class SqlVideosRepository {
            following_active,subscription_count,archive_video_count,watch_occurrence_count,
            latest_watched_at,queue_video_count,projection_generation,updated_at)
          SELECT c.channel_id,
-           COALESCE(cp.current_title,${latestChannelTitle},c.latest_title,'Channel unavailable'),
-           LOWER(COALESCE(cp.current_title,${latestChannelTitle},c.latest_title,'Channel unavailable')),
+           COALESCE(cp.current_title,${latestChannelTitle},'Channel unavailable'),
+           LOWER(COALESCE(cp.current_title,${latestChannelTitle},'Channel unavailable')),
            COALESCE(CASE WHEN cp.custom_url IS NOT NULL THEN 'https://www.youtube.com/'||cp.custom_url END,
-             ${latestChannelUrl},c.latest_url,'https://www.youtube.com/channel/'||c.channel_id),
+             ${latestChannelUrl},'https://www.youtube.com/channel/'||c.channel_id),
            cp.thumbnail_url,1,
            EXISTS(SELECT 1 FROM youtube_channel_subscriptions s WHERE s.channel_id=c.channel_id AND s.upstream_state='active'),
            (SELECT COUNT(*) FROM youtube_channel_subscriptions s WHERE s.channel_id=c.channel_id AND s.upstream_state='active'),
@@ -772,40 +1000,18 @@ export class SqlVideosRepository {
            (SELECT MAX(p.latest_watched_at) FROM video_library_projection p WHERE p.channel_id=c.channel_id),
            (SELECT COUNT(*) FROM video_library_projection p WHERE p.channel_id=c.channel_id AND p.queue_active=1),
            ?,? FROM youtube_channels c
-         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=c.channel_id AND cp.expires_at>?
+         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=c.channel_id AND cp.expires_at>? AND 0
          WHERE EXISTS(SELECT 1 FROM video_library_projection p WHERE p.channel_id=c.channel_id
            AND (p.archive_active=1 OR p.queue_active=1))`,
         [generation, at, at],
       ),
-      statement(this.database, 'DELETE FROM video_search'),
+      statement(this.database, 'DELETE FROM youtube_published_channel_aggregates'),
+      statement(this.database, youtubeChannelAggregateSql, [at, at, at]),
       statement(
         this.database,
-        `INSERT INTO video_search(media_item_id,titles,channel_titles)
-         SELECT p.media_item_id,
-           COALESCE((SELECT GROUP_CONCAT(DISTINCT w.historical_title) FROM youtube_watch_observations w
-             WHERE w.media_item_id=p.media_item_id),p.display_title) || ' ' ||
-             COALESCE(vp.current_title,'') || ' ' || COALESCE(vp.description,'') || ' ' ||
-             COALESCE(vp.tags_json,'') || ' ' || COALESCE(category.title,''),
-           COALESCE((SELECT GROUP_CONCAT(DISTINCT w.historical_channel_title) FROM youtube_watch_observations w
-             WHERE w.media_item_id=p.media_item_id),p.display_channel_title) || ' ' ||
-             COALESCE(cp.current_title,'') || ' ' || COALESCE(cp.custom_url,'')
-         FROM video_library_projection p
-         LEFT JOIN youtube_video_catalog_profiles vp ON vp.media_item_id=p.media_item_id AND vp.expires_at>?
-         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=p.channel_id AND cp.expires_at>?
-         LEFT JOIN youtube_categories category ON category.category_id=vp.category_id AND category.region_code='US' AND category.expires_at>?`,
-        [at, at, at],
+        'UPDATE youtube_publication_state SET channel_aggregate_revision=association_revision WHERE singleton_id=1',
       ),
-      statement(this.database, 'DELETE FROM video_channel_search'),
-      statement(
-        this.database,
-        `INSERT INTO video_channel_search(channel_id,titles)
-         SELECT p.channel_id,COALESCE((SELECT GROUP_CONCAT(DISTINCT a.title)
-           FROM youtube_channel_assertions a WHERE a.channel_id=p.channel_id),p.display_title) || ' ' ||
-           COALESCE(cp.current_title,'') || ' ' || COALESCE(cp.custom_url,'') || ' ' || COALESCE(cp.description,'')
-         FROM video_channel_projection p
-         LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=p.channel_id AND cp.expires_at>?`,
-        [at],
-      ),
+      ...this.searchRebuildStatements(),
     ])
   }
 
@@ -842,11 +1048,11 @@ export class SqlVideosRepository {
           this.database,
           `INSERT INTO youtube_channels(channel_id,latest_title,latest_url,first_observed_at,last_observed_at,updated_at)
            VALUES(?,?,?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET
-             latest_title=excluded.latest_title,last_observed_at=excluded.last_observed_at,
+             last_observed_at=excluded.last_observed_at,
              updated_at=excluded.updated_at`,
           [
             channel.channelId,
-            channel.title,
+            null,
             `https://www.youtube.com/channel/${channel.channelId}`,
             input.at,
             input.at,
@@ -922,9 +1128,14 @@ export class SqlVideosRepository {
              fetched_at,checked_at,expires_at,safe_error_code)
            VALUES(?,?,'unavailable',?,?,?,NULL) ON CONFLICT(media_item_id) DO UPDATE SET
              video_id=excluded.video_id,lookup_state='unavailable',checked_at=excluded.checked_at,
-             expires_at=excluded.expires_at,safe_error_code=NULL`,
+             expires_at=excluded.expires_at,fetched_at=excluded.fetched_at,safe_error_code=NULL,current_title=NULL,description=NULL,channel_id=NULL,channel_title=NULL,published_at=NULL,duration_ms=NULL,category_id=NULL,tags_json=NULL,caption_available=NULL,definition=NULL,projection=NULL,privacy_status=NULL,upload_status=NULL,embeddable=NULL,made_for_kids=NULL,region_restriction_json=NULL,live_broadcast_content=NULL,scheduled_start_at=NULL,actual_start_at=NULL,actual_end_at=NULL,etag=NULL`,
             [candidate.mediaItemId, candidate.videoId, input.at, input.at, input.expiresAt],
           ),
+        )
+        writes.push(
+          statement(this.database, 'DELETE FROM youtube_video_thumbnails WHERE video_id=?', [
+            candidate.videoId,
+          ]),
         )
         continue
       }
@@ -935,12 +1146,11 @@ export class SqlVideosRepository {
             `INSERT INTO youtube_channels(channel_id,latest_title,latest_url,first_observed_at,
                last_observed_at,updated_at) VALUES(?,?,?,?,?,?)
              ON CONFLICT(channel_id) DO UPDATE SET
-               latest_title=COALESCE(excluded.latest_title,youtube_channels.latest_title),
                latest_url=COALESCE(youtube_channels.latest_url,excluded.latest_url),
                last_observed_at=excluded.last_observed_at,updated_at=excluded.updated_at`,
             [
               video.channelId,
-              video.channelTitle,
+              null,
               `https://www.youtube.com/channel/${video.channelId}`,
               input.at,
               input.at,
@@ -1030,53 +1240,110 @@ export class SqlVideosRepository {
       await this.database.batch(writes.slice(offset, offset + 50))
   }
 
-  async purgeExpiredYoutubeCatalog(at: string): Promise<boolean> {
-    const expired = await statement(
+  /**
+   * Delete at most `limit` logical cache/bookkeeping rows, never owner history.
+   * Cleanup starts two days before logical expiry to leave bounded maintenance
+   * headroom under the provider's 30-day deadline. Cache richness may disappear
+   * early; request-time clocks reject expired publications even if this job fails.
+   * FTS/internal index writes are additional to this logical deletion budget.
+   */
+  async maintainYoutubeCatalog(
+    at: string,
+    limit = 1000,
+  ): Promise<{
+    deletedRows: number
+    deletedByTable: Record<string, number>
+    hasMore: boolean
+  }> {
+    if (!Number.isInteger(limit) || limit < 2 || limit > 1000)
+      throw new TypeError('YouTube maintenance limit must be between 2 and 1000')
+    const cleanupAt = new Date(Date.parse(at) + 2 * 24 * 60 * 60 * 1000).toISOString()
+    const tables = [
+      ...publishedCatalogTables.map(([, published]) => published),
+      'youtube_published_channel_aggregates',
+      'youtube_catalog_request_outcomes',
+      'youtube_video_thumbnails',
+      'youtube_video_catalog_profiles',
+      'youtube_channel_catalog_profiles',
+      'youtube_categories',
+    ]
+    let remaining = limit
+    const deletedByTable: Record<string, number> = {}
+    const documents = await statement(
       this.database,
-      `SELECT EXISTS(
-         SELECT 1 FROM youtube_video_catalog_profiles WHERE expires_at<=?
-         UNION ALL SELECT 1 FROM youtube_channel_catalog_profiles WHERE expires_at<=?
-         UNION ALL SELECT 1 FROM youtube_categories WHERE expires_at<=?
-         UNION ALL SELECT 1 FROM youtube_catalog_request_outcomes WHERE expires_at<=?
-       ) value`,
-      [at, at, at, at],
-    ).first<{ value: number }>()
-    if (expired?.value !== 1) return false
-    await this.database.batch([
-      statement(this.database, 'DELETE FROM youtube_catalog_request_outcomes WHERE expires_at<=?', [
-        at,
-      ]),
-      statement(this.database, 'DELETE FROM youtube_video_thumbnails WHERE expires_at<=?', [at]),
-      statement(this.database, 'DELETE FROM youtube_video_catalog_profiles WHERE expires_at<=?', [
-        at,
-      ]),
-      statement(this.database, 'DELETE FROM youtube_channel_catalog_profiles WHERE expires_at<=?', [
-        at,
-      ]),
-      statement(this.database, 'DELETE FROM youtube_categories WHERE expires_at<=?', [at]),
-    ])
-    await this.rebuild(at)
-    return true
+      'SELECT document_kind,document_rowid FROM youtube_search_expiry WHERE expires_at<=? ORDER BY expires_at,document_kind,document_rowid LIMIT ?',
+      [cleanupAt, Math.floor(remaining / 2) + 1],
+    ).all<{ document_kind: 'video' | 'channel'; document_rowid: number }>()
+    const visible = documents.results.slice(0, Math.floor(remaining / 2))
+    let hasMore = documents.results.length > visible.length
+    for (const kind of ['video', 'channel'] as const) {
+      const ids = visible
+        .filter((row) => row.document_kind === kind)
+        .map((row) => row.document_rowid)
+      if (!ids.length) continue
+      const table = kind === 'video' ? 'video_search' : 'video_channel_search'
+      for (let offset = 0; offset < ids.length; offset += 40) {
+        const chunk = ids.slice(offset, offset + 40)
+        await this.database.batch([
+          statement(
+            this.database,
+            `DELETE FROM ${table} WHERE expires_at<=? AND rowid IN (${placeholders(chunk)})`,
+            [cleanupAt, ...chunk],
+          ),
+          statement(
+            this.database,
+            `DELETE FROM youtube_search_expiry WHERE expires_at<=? AND document_kind=? AND document_rowid IN (${placeholders(chunk)})`,
+            [cleanupAt, kind, ...chunk],
+          ),
+          statement(
+            this.database,
+            'UPDATE youtube_publication_state SET revision=revision+1 WHERE singleton_id=1',
+          ),
+        ])
+      }
+      deletedByTable[table] = ids.length
+      deletedByTable.youtube_search_expiry =
+        (deletedByTable.youtube_search_expiry ?? 0) + ids.length
+      remaining -= ids.length * 2
+    }
+    for (const table of tables) {
+      const candidates = await statement(
+        this.database,
+        `SELECT rowid id FROM ${table} WHERE expires_at<=? ORDER BY expires_at,rowid LIMIT ?`,
+        [cleanupAt, Math.max(remaining, 1) + 1],
+      ).all<{ id: number }>()
+      const ids = candidates.results.slice(0, remaining).map((row) => row.id)
+      if (candidates.results.length > ids.length) hasMore = true
+      if (ids.length) {
+        await this.database.batch([
+          statement(
+            this.database,
+            `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE expires_at<=? ORDER BY expires_at,rowid LIMIT ?)`,
+            [cleanupAt, ids.length],
+          ),
+          statement(
+            this.database,
+            `UPDATE youtube_publication_state SET revision=revision+1${table === 'youtube_published_video_profiles' || table === 'youtube_published_channel_aggregates' ? ',association_revision=association_revision+1' : ''} WHERE singleton_id=1`,
+          ),
+        ])
+        deletedByTable[table] = ids.length
+        remaining -= ids.length
+      }
+    }
+    return { deletedRows: limit - remaining, deletedByTable, hasMore }
+  }
+
+  async purgeExpiredYoutubeCatalog(at: string, limit = 1000): Promise<boolean> {
+    return (await this.maintainYoutubeCatalog(at, limit)).deletedRows > 0
   }
 
   private videoClauses(input: VideosListInput) {
     const clauses = [input.view === 'archive' ? 'p.archive_active=1' : 'p.queue_active=1']
     const values: DatabaseValue[] = []
     if (input.q) {
-      const match = ftsQuery(input.q)
-      clauses.push(
-        `(${[
-          'p.video_id=?',
-          'p.canonical_url=?',
-          match.length > 0
-            ? 'p.media_item_id IN (SELECT s.media_item_id FROM video_search s WHERE video_search MATCH ?)'
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' OR ')})`,
-      )
-      values.push(input.q, input.q)
-      if (match.length > 0) values.push(match)
+      const search = liveSearchPredicate('video_search', 'p.media_item_id', input.q)
+      clauses.push(`(p.video_id=? OR p.canonical_url=? OR (${search.sql}))`)
+      values.push(input.q, input.q, ...search.values)
     }
     if (input.channel?.length) {
       const known = input.channel.filter((value) => value !== '__unknown__')
@@ -1288,12 +1555,30 @@ export class SqlVideosRepository {
     }
   }
 
+  private usesCatalogFilters(input: VideosListInput) {
+    return Boolean(
+      input.q ||
+      input.channel?.length ||
+      (input.published && input.published !== 'all') ||
+      (input.duration && input.duration !== 'any') ||
+      input.durationUnknown ||
+      (input.availability && input.availability !== 'any') ||
+      input.category?.length ||
+      input.format?.some((format) => format !== 'youtube_music'),
+    )
+  }
+
   async listVideos(input: VideosListInput) {
+    const at = this.clock()
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
     const key = JSON.stringify({ ...input, cursor: undefined })
     const requestedCursor = collectionCursor(input.cursor, key)
-    if (input.view === 'channels') return this.listChannels(input, requestedCursor, key)
+    if (input.view === 'channels') return this.listChannels(input, requestedCursor, key, at)
     const { where, values } = this.videoClauses(input)
     const matching = this.matchingCte(input)
+    const ownerOnly = !this.usesCatalogFilters(input)
     const sort = input.sort ?? (input.view === 'archive' ? 'watchedAt' : 'addedAt')
     const direction =
       input.direction ?? (['title', 'channel', 'relevance'].includes(sort) ? 'asc' : 'desc')
@@ -1313,33 +1598,48 @@ export class SqlVideosRepository {
                 : sort === 'duration'
                   ? 'duration_ms'
                   : 'reference_date'
-    const generationRow = await statement(
-      this.database,
-      'SELECT COALESCE(MAX(projection_generation),0) generation FROM video_library_projection',
-    ).first<{ generation: number }>()
+    const generationRow = await read(
+      `SELECT CAST(COALESCE(MAX(projection_generation),0) AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) generation FROM main.video_library_projection`,
+    ).first<{ generation: number | string }>()
     const generation = generationRow?.generation ?? 0
     if (requestedCursor !== null && requestedCursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
     const page = pageClause(requestedCursor, direction)
-    const count = await statement(
-      this.database,
-      `SELECT COUNT(*) value FROM video_library_projection p WHERE ${where}`,
+    const count = await read(
+      `SELECT COUNT(*) value FROM ${ownerOnly ? 'main.video_library_projection' : 'video_library_projection'} p WHERE ${where}`,
       values,
     ).first<{ value: number }>()
-    const rows = await statement(
-      this.database,
+    const orderFields =
+      sort === 'relevance' && input.q
+        ? ',p.video_id,p.display_title'
+        : sort === 'channel'
+          ? ',p.normalized_channel_title'
+          : sort === 'watchCount'
+            ? ',p.watch_occurrence_count'
+            : sort === 'publishedAt'
+              ? ',p.published_at'
+              : sort === 'duration'
+                ? ',p.duration_ms'
+                : ''
+    const ownerKeys =
+      ownerOnly && !['title', 'channel', 'relevance', 'publishedAt', 'duration'].includes(sort)
+    const rows = await read(
       `WITH ${matching.sql}, filtered AS (
-         SELECT p.*,matching.reference_date,matching.matching_watch_count,
+         SELECT p.media_item_id,${ownerKeys ? 'LOWER(COALESCE(vp.current_title,p.display_title))' : 'p.normalized_title'} normalized_title${orderFields},matching.reference_date,matching.matching_watch_count,
            matching.matching_watch_account_count,matching.matching_queue_count,
            matching.matching_queue_account_count
-         FROM video_library_projection p JOIN matching ON matching.media_item_id=p.media_item_id
+         FROM ${ownerKeys ? 'main.video_library_projection p LEFT JOIN youtube_published_video_profiles vp ON vp.media_item_id=p.media_item_id AND vp.expires_at>(SELECT at FROM read_clock)' : 'video_library_projection p'} JOIN matching ON matching.media_item_id=p.media_item_id
          WHERE ${where}
        ), ordered AS (
          SELECT filtered.*,${order} sort_value,normalized_title stable_title,media_item_id stable_id
          FROM filtered
-       ) SELECT * FROM ordered WHERE ${page.sql}
-       ORDER BY (sort_value IS NULL),sort_value ${direction.toUpperCase()},normalized_title,stable_id
-       LIMIT ?`,
+       ), paged AS (
+         SELECT * FROM ordered WHERE ${page.sql}
+         ORDER BY (sort_value IS NULL),sort_value ${direction.toUpperCase()},normalized_title,stable_id LIMIT ?
+       ) SELECT p.*,paged.reference_date,paged.matching_watch_count,paged.matching_watch_account_count,
+         paged.matching_queue_count,paged.matching_queue_account_count,paged.sort_value
+       FROM paged JOIN video_library_projection p ON p.media_item_id=paged.media_item_id
+       ORDER BY (paged.sort_value IS NULL),paged.sort_value ${direction.toUpperCase()},paged.normalized_title,paged.stable_id`,
       [...matching.values, ...values, ...orderValues, ...page.values, input.limit + 1],
     ).all<Row>()
     const total = count?.value ?? 0
@@ -1362,7 +1662,7 @@ export class SqlVideosRepository {
           : null,
       totalCount: total,
       filteredCount: total,
-      ...(await this.sharedEnvelope(input.view, where, values, matching)),
+      ...(await this.sharedEnvelope(input.view, where, values, matching, at, undefined, ownerOnly)),
     }
   }
 
@@ -1370,23 +1670,17 @@ export class SqlVideosRepository {
     input: VideosListInput,
     requestedCursor: CollectionCursor | null,
     key: string,
+    at: string,
   ) {
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
     const clauses = ['p.library_active=1']
     const values: DatabaseValue[] = []
     if (input.q) {
-      const match = ftsQuery(input.q)
-      clauses.push(
-        `(${[
-          'p.channel_id=?',
-          match.length > 0
-            ? 'p.channel_id IN (SELECT s.channel_id FROM video_channel_search s WHERE video_channel_search MATCH ?)'
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' OR ')})`,
-      )
-      values.push(input.q)
-      if (match.length > 0) values.push(match)
+      const search = liveSearchPredicate('video_channel_search', 'p.channel_id', input.q)
+      clauses.push(`(p.channel_id=? OR (${search.sql}))`)
+      values.push(input.q, ...search.values)
     }
     const where = clauses.join(' AND ')
     const sort = input.sort ?? 'watchCount'
@@ -1403,32 +1697,44 @@ export class SqlVideosRepository {
             : sort === 'queueCount'
               ? 'queue_video_count'
               : 'watch_occurrence_count'
-    const generationRow = await statement(
-      this.database,
-      'SELECT COALESCE(MAX(projection_generation),0) generation FROM video_channel_projection',
-    ).first<{ generation: number }>()
+    const generationRow = await read(
+      `SELECT CAST(COALESCE(MAX(projection_generation),0) AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) generation FROM main.video_library_projection`,
+    ).first<{ generation: number | string }>()
     const generation = generationRow?.generation ?? 0
     if (requestedCursor !== null && requestedCursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
     const page = pageClause(requestedCursor, direction)
-    const count = await statement(
-      this.database,
-      `SELECT COUNT(*) value FROM video_channel_projection p WHERE ${where}`,
-      values,
-    ).first<{ value: number }>()
-    const rows = await statement(
-      this.database,
+    const orderFields =
+      sort === 'relevance' && input.q
+        ? ',p.display_title'
+        : sort === 'watchedAt'
+          ? ',p.latest_watched_at'
+          : sort === 'queueCount'
+            ? ',p.queue_video_count'
+            : sort === 'channel'
+              ? ''
+              : ',p.watch_occurrence_count'
+    const rows = await read(
       `WITH filtered AS (
-         SELECT p.* FROM video_channel_projection p WHERE ${where}
+         SELECT p.channel_id,p.normalized_title${orderFields},COUNT(*) OVER() total_count FROM video_channel_projection p WHERE ${where}
        ), ordered AS (
          SELECT filtered.*,${order} sort_value,normalized_title stable_title,channel_id stable_id
          FROM filtered
-       ) SELECT * FROM ordered WHERE ${page.sql}
-       ORDER BY (sort_value IS NULL),sort_value ${direction.toUpperCase()},normalized_title,stable_id
-       LIMIT ?`,
+       ), paged AS (
+         SELECT * FROM ordered WHERE ${page.sql}
+         ORDER BY (sort_value IS NULL),sort_value ${direction.toUpperCase()},normalized_title,stable_id LIMIT ?
+       ) SELECT p.*,paged.total_count,paged.sort_value,(SELECT COUNT(*) FROM video_channel_groups) section_channels
+       FROM paged JOIN video_channel_projection p ON p.channel_id=paged.channel_id
+       ORDER BY (paged.sort_value IS NULL),paged.sort_value ${direction.toUpperCase()},paged.normalized_title,paged.stable_id`,
       [...values, ...orderValues, ...page.values, input.limit + 1],
     ).all<Row>()
-    const total = count?.value ?? 0
+    const emptyPageCount = rows.results.length
+      ? null
+      : await read(
+          `SELECT COUNT(*) value FROM video_channel_projection p WHERE ${where}`,
+          values,
+        ).first<{ value: number }>()
+    const total = Number(rows.results[0]?.total_count ?? emptyPageCount?.value ?? 0)
     const hasMore = rows.results.length > input.limit
     const visibleRows = rows.results.slice(0, input.limit)
     const last = visibleRows.at(-1)
@@ -1446,7 +1752,14 @@ export class SqlVideosRepository {
           : null,
       totalCount: total,
       filteredCount: total,
-      ...(await this.sharedEnvelope('channels', where, values)),
+      ...(await this.sharedEnvelope(
+        'channels',
+        where,
+        values,
+        undefined,
+        at,
+        rows.results[0]?.section_channels as number | undefined,
+      )),
     }
   }
 
@@ -1455,27 +1768,31 @@ export class SqlVideosRepository {
     where: string,
     values: DatabaseValue[],
     matching?: { sql: string; values: DatabaseValue[] },
+    at = this.clock(),
+    knownChannels?: number,
+    ownerOnly = false,
   ) {
-    const counts = await statement(
-      this.database,
-      `SELECT (SELECT COUNT(*) FROM video_library_projection WHERE archive_active=1) archive,
-        (SELECT COUNT(*) FROM video_library_projection WHERE queue_active=1) queue,
-        (SELECT COUNT(*) FROM video_channel_projection WHERE library_active=1) channels,
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
+    const counts = await read(
+      `SELECT (SELECT COUNT(*) FROM main.video_library_projection WHERE archive_active=1) archive,
+        (SELECT COUNT(*) FROM main.video_library_projection WHERE queue_active=1) queue,
+        ${knownChannels === undefined ? '(SELECT COUNT(*) FROM video_channel_projection WHERE library_active=1)' : '?'} channels,
         (SELECT COUNT(DISTINCT archive_entry_id) FROM youtube_watch_observations) occurrences`,
+      knownChannels === undefined ? [] : [knownChannels],
     ).first<{ archive: number; queue: number; channels: number; occurrences: number }>()
     const filteredOccurrences =
       view === 'archive' && matching
-        ? await statement(
-            this.database,
+        ? await read(
             `WITH ${matching.sql}
              SELECT COALESCE(SUM(matching.matching_watch_count),0) value
-             FROM video_library_projection p JOIN matching ON matching.media_item_id=p.media_item_id
+             FROM ${ownerOnly ? 'main.video_library_projection' : 'video_library_projection'} p JOIN matching ON matching.media_item_id=p.media_item_id
              WHERE ${where}`,
             [...matching.values, ...values],
           ).first<{ value: number }>()
         : null
-    const accounts = await statement(
-      this.database,
+    const accounts = await read(
       `SELECT c.id value,c.label label,COUNT(DISTINCT ${view === 'queue' ? 'q.media_item_id' : 'w.media_item_id'}) count
        FROM connections c ${
          view === 'queue'
@@ -1486,8 +1803,7 @@ export class SqlVideosRepository {
     const channels =
       view === 'channels'
         ? { results: [] as { value: string; label: string; count: number }[] }
-        : await statement(
-            this.database,
+        : await read(
             `SELECT COALESCE(p.channel_id,'__unknown__') value,
               COALESCE(MAX(p.display_channel_title),'Channel unavailable') label,COUNT(*) count
              FROM video_library_projection p WHERE ${where}
@@ -1497,14 +1813,13 @@ export class SqlVideosRepository {
     const categories =
       view === 'channels'
         ? { results: [] as { value: string; label: string; count: number }[] }
-        : await statement(
-            this.database,
+        : await read(
             `SELECT p.category_id value,MAX(p.category_title) label,COUNT(*) count
              FROM video_library_projection p WHERE ${where} AND p.category_id IS NOT NULL
              GROUP BY p.category_id ORDER BY label LIMIT 100`,
             values,
           ).all<{ value: string; label: string; count: number }>()
-    const coverage = await this.coverage()
+    const coverage = await this.coverage(at)
     return {
       sectionCounts: {
         archive: counts?.archive ?? 0,
@@ -1521,9 +1836,11 @@ export class SqlVideosRepository {
     }
   }
 
-  private async coverage() {
-    const rows = await statement(
-      this.database,
+  private async coverage(at = this.clock()) {
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
+    const rows = await read(
       `WITH kinds(component_kind) AS (VALUES ('watch_later')),
        ranked AS (
          SELECT c.connection_id,c.component_kind,c.status,
@@ -1547,12 +1864,11 @@ export class SqlVideosRepository {
       if (matches.every((row) => row.status === 'unknown')) return 'unknown' as const
       return 'partial' as const
     }
-    const catalog = await statement(
-      this.database,
+    const catalog = await read(
       `SELECT
          (SELECT COUNT(*) FROM video_library_projection) total_count,
          (SELECT COUNT(*) FROM youtube_video_catalog_profiles
-           WHERE expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) cached_count,
+           WHERE expires_at>(SELECT at FROM read_clock)) cached_count,
          EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state IN ('pending','running')) active_job,
          EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state='failed') failed_job`,
     ).first<{ total_count: number; cached_count: number; active_job: number; failed_job: number }>()
@@ -1638,10 +1954,12 @@ export class SqlVideosRepository {
   }
 
   async findVideo(id: string) {
-    const at = new Date().toISOString()
-    const row = await statement(
-      this.database,
-      `SELECT p.*,vp.description,vp.category_id catalog_category_id,
+    const at = this.clock()
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
+    const row = await read(
+      `SELECT p.*,vp.description,p.category_id catalog_category_id,
          vp.caption_available catalog_caption_available,vp.definition catalog_definition,
          vp.projection catalog_projection,vp.checked_at catalog_checked_at
        FROM video_library_projection p
@@ -1650,8 +1968,7 @@ export class SqlVideosRepository {
       [at, id],
     ).first<Row>()
     if (row === null) return null
-    const relationships = await statement(
-      this.database,
+    const relationships = await read(
       `SELECT c.label connection_label,q.added_at_value added_at FROM queue_entries q
        JOIN connections c ON c.id=q.connection_id WHERE q.media_item_id=?
          AND q.relationship_type='youtube_watch_later' AND q.upstream_state='active'
@@ -1682,9 +1999,11 @@ export class SqlVideosRepository {
   }
 
   async findChannel(id: string) {
-    const at = new Date().toISOString()
-    const row = await statement(
-      this.database,
+    const at = this.clock()
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
+    const row = await read(
       `SELECT p.*,cp.description,cp.custom_url,cp.country,cp.checked_at catalog_checked_at
        FROM video_channel_projection p
        LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=p.channel_id AND cp.expires_at>?
@@ -1705,18 +2024,20 @@ export class SqlVideosRepository {
   }
 
   async listHistory(id: string, limit: number, cursorValue?: string) {
+    const at = this.clock()
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
     const key = JSON.stringify({ id, limit })
     const cursor = detailCursor(cursorValue, key)
-    const generationRow = await statement(
-      this.database,
+    const generationRow = await read(
       'SELECT COUNT(*) generation FROM youtube_watch_observations WHERE media_item_id=?',
       [id],
-    ).first<{ generation: number }>()
+    ).first<{ generation: number | string }>()
     const generation = generationRow?.generation ?? 0
     if (cursor !== null && cursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
-    const count = await statement(
-      this.database,
+    const count = await read(
       'SELECT COUNT(DISTINCT archive_entry_id) value FROM youtube_watch_observations WHERE media_item_id=?',
       [id],
     ).first<{ value: number }>()
@@ -1727,8 +2048,7 @@ export class SqlVideosRepository {
             sql: '(occurred_at<? OR (occurred_at=? AND archive_entry_id>?))',
             values: [cursor.primary!, cursor.primary!, cursor.id] as DatabaseValue[],
           }
-    const rows = await statement(
-      this.database,
+    const rows = await read(
       `WITH ranked AS (
          SELECT w.*,ROW_NUMBER() OVER(PARTITION BY w.archive_entry_id
            ORDER BY r.acquired_at DESC,w.parser_version DESC,w.source_record_id DESC) position
@@ -1777,14 +2097,17 @@ export class SqlVideosRepository {
     limit: number,
     cursorValue?: string,
   ) {
+    const at = this.clock()
+    const read = (query: string, values: readonly DatabaseValue[] = []) =>
+      this.readStatement(query, values, at)
+
     const key = JSON.stringify({ channelId, membership, limit })
     const cursor = detailCursor(cursorValue, key)
     const column = membership === 'archive' ? 'archive_active' : 'queue_active'
     const date = membership === 'archive' ? 'latest_watched_at' : 'latest_queue_added_at'
-    const generationRow = await statement(
-      this.database,
-      'SELECT COALESCE(MAX(projection_generation),0) generation FROM video_library_projection',
-    ).first<{ generation: number }>()
+    const generationRow = await read(
+      `SELECT CAST(COALESCE(MAX(projection_generation),0) AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) generation FROM main.video_library_projection`,
+    ).first<{ generation: number | string }>()
     const generation = generationRow?.generation ?? 0
     if (cursor !== null && cursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
@@ -1800,13 +2123,11 @@ export class SqlVideosRepository {
               sql: `(${date} IS NULL OR ${date}<? OR (${date}=? AND media_item_id>?))`,
               values: [cursor.primary, cursor.primary, cursor.id] as DatabaseValue[],
             }
-    const count = await statement(
-      this.database,
+    const count = await read(
       `SELECT COUNT(*) value FROM video_library_projection WHERE channel_id=? AND ${column}=1`,
       [channelId],
     ).first<{ value: number }>()
-    const rows = await statement(
-      this.database,
+    const rows = await read(
       `SELECT * FROM video_library_projection WHERE channel_id=? AND ${column}=1
        AND ${page.sql} ORDER BY (${date} IS NULL),${date} DESC,media_item_id LIMIT ?`,
       [channelId, ...page.values, limit + 1],

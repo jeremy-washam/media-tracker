@@ -15,6 +15,7 @@ import {
   primaryKey,
   real,
   sqliteTable,
+  sqliteView,
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
@@ -168,6 +169,7 @@ export const sourceRecords = sqliteTable(
   'source_records',
   {
     id: text('id').primaryKey(),
+    storageId: integer('storage_id'),
     rawObjectId: text('raw_object_id').notNull(),
     connectionId: text('connection_id').notNull(),
     recordType: text('record_type').notNull(),
@@ -197,6 +199,11 @@ export const sourceRecords = sqliteTable(
       table.recordPath,
     ),
     index('source_records_logical_key_idx').on(table.connectionId, table.sourceRecordKey),
+    uniqueIndex('source_records_storage_id_unique').on(table.storageId),
+    check(
+      'source_records_storage_id_positive_integer',
+      sql`${table.storageId} IS NULL OR (typeof(${table.storageId}) = 'integer' AND ${table.storageId} > 0)`,
+    ),
     check(
       'source_records_temporal_complete',
       temporalCheck(
@@ -294,6 +301,7 @@ export const archiveEntries = sqliteTable(
   'archive_entries',
   {
     id: text('id').primaryKey(),
+    storageId: integer('storage_id'),
     mediaItemId: text('media_item_id')
       .notNull()
       .references(() => mediaItems.id, { onDelete: 'restrict' }),
@@ -325,6 +333,11 @@ export const archiveEntries = sqliteTable(
       foreignColumns: [externalIdentities.id, externalIdentities.mediaItemId],
       name: 'archive_entries_consumed_identity_media_item_fk',
     }).onDelete('restrict'),
+    uniqueIndex('archive_entries_storage_id_unique').on(table.storageId),
+    check(
+      'archive_entries_storage_id_positive_integer',
+      sql`${table.storageId} IS NULL OR (typeof(${table.storageId}) = 'integer' AND ${table.storageId} > 0)`,
+    ),
     uniqueIndex('archive_entries_connection_occurrence_unique').on(
       table.connectionId,
       table.sourceOccurrenceKey,
@@ -363,32 +376,38 @@ export const archiveEntries = sqliteTable(
   ],
 )
 
-export const archiveEntryEvidence = sqliteTable(
-  'archive_entry_evidence',
+// Migration 0027 manages this WITHOUT ROWID table and the compatibility view.
+export const archiveEntryEvidenceStorage = sqliteTable(
+  'archive_entry_evidence_storage',
   {
-    id: text('id').primaryKey(),
-    archiveEntryId: text('archive_entry_id')
+    id: text('id').notNull(),
+    archiveStorageId: integer('archive_storage_id')
       .notNull()
-      .references(() => archiveEntries.id, { onDelete: 'restrict' }),
-    sourceRecordId: text('source_record_id')
+      .references(() => archiveEntries.storageId, { onDelete: 'restrict' }),
+    sourceStorageId: integer('source_storage_id')
       .notNull()
-      .references(() => sourceRecords.id, { onDelete: 'restrict' }),
+      .references(() => sourceRecords.storageId, { onDelete: 'restrict' }),
     role: text('role', { enum: ARCHIVE_EVIDENCE_ROLES }).notNull(),
     linkedAt: text('linked_at').notNull(),
   },
   (table) => [
-    uniqueIndex('archive_entry_evidence_link_unique').on(
-      table.archiveEntryId,
-      table.sourceRecordId,
-      table.role,
-    ),
-    index('archive_entry_evidence_source_record_idx').on(table.sourceRecordId),
+    primaryKey({ columns: [table.archiveStorageId, table.sourceStorageId, table.role] }),
+    uniqueIndex('archive_entry_evidence_storage_id_unique').on(table.id),
+    index('archive_entry_evidence_storage_source_idx').on(table.sourceStorageId),
     check(
-      'archive_entry_evidence_role_valid',
+      'archive_entry_evidence_storage_role_valid',
       sql.raw(`role IN (${inList(ARCHIVE_EVIDENCE_ROLES)})`),
     ),
   ],
 )
+
+export const archiveEntryEvidence = sqliteView('archive_entry_evidence', {
+  id: text('id').notNull(),
+  archiveEntryId: text('archive_entry_id').notNull(),
+  sourceRecordId: text('source_record_id').notNull(),
+  role: text('role', { enum: ARCHIVE_EVIDENCE_ROLES }).notNull(),
+  linkedAt: text('linked_at').notNull(),
+}).existing()
 
 export const hardcoverBookWorks = sqliteTable(
   'hardcover_book_works',

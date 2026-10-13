@@ -128,6 +128,9 @@ class D1SqliteDatabase {
       '0022_spotify_catalog_backfill.sql',
       '0023_library_query_indexes.sql',
       '0024_archive_membership_lookup.sql',
+      '0026_youtube_clock_safe_publication.sql',
+      '0027_compact_archive_evidence.sql',
+      '0028_evidence_view_parent_guard.sql',
     ]) {
       this.database.exec(
         readFileSync(

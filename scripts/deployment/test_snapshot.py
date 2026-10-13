@@ -71,6 +71,51 @@ class SnapshotTests(unittest.TestCase):
         db.close()
         self.assertNotIn('metadata_search_data', manifest['tables'])
 
+    def test_restores_compatibility_views_and_their_write_triggers(self):
+        db = sqlite3.connect(self.database)
+        db.executescript("""
+          CREATE TABLE compact_links(id TEXT UNIQUE, owner_key INTEGER, role TEXT, linked_at TEXT, PRIMARY KEY(owner_key,role)) WITHOUT ROWID;
+          INSERT INTO compact_links VALUES('original',7,'time','2026-10-01');
+          CREATE VIEW public_links AS SELECT id,printf('owner-%d',owner_key) AS owner_id,role,linked_at FROM compact_links;
+          CREATE TRIGGER public_link_insert INSTEAD OF INSERT ON public_links BEGIN
+            INSERT INTO compact_links VALUES(NEW.id,CAST(substr(NEW.owner_id,7) AS INTEGER),NEW.role,NEW.linked_at);
+          END;
+          CREATE TRIGGER public_link_immutable INSTEAD OF UPDATE ON public_links BEGIN SELECT RAISE(ABORT,'immutable'); END;
+        """)
+        db.close()
+        manifest = self.bundle()
+        self.assertNotIn('public_links', manifest['tables'])
+        self.assertEqual(manifest['views']['public_links']['count'], 1)
+        self.assertEqual(rehearse(self.output)['viewsVerified'], 1)
+        db = sqlite3.connect(self.output / 'restored.sqlite')
+        self.assertEqual(db.execute('SELECT * FROM public_links').fetchall(), [('original','owner-7','time','2026-10-01')])
+        db.execute("INSERT INTO public_links VALUES('new','owner-8','admission','2026-10-02')")
+        self.assertEqual(db.execute('SELECT count(*) FROM compact_links').fetchone()[0], 2)
+        with self.assertRaisesRegex(sqlite3.IntegrityError, 'immutable'):
+            db.execute("UPDATE public_links SET linked_at='2026-10-03'")
+        db.close()
+
+    def test_installs_explicit_unique_parent_indexes_before_restoring_children(self):
+        db = sqlite3.connect(self.database)
+        db.executescript("""
+          CREATE TABLE parents(id TEXT PRIMARY KEY,storage_id INTEGER);
+          CREATE UNIQUE INDEX parent_storage_key ON parents(storage_id);
+          CREATE TABLE evidence(id TEXT PRIMARY KEY,parent_key INTEGER NOT NULL REFERENCES parents(storage_id));
+          INSERT INTO parents VALUES('retained',7);
+          INSERT INTO evidence VALUES('link',7);
+        """)
+        db.close()
+        manifest = self.bundle()
+        self.assertIn('CREATE UNIQUE INDEX parent_storage_key', (self.output / manifest['schema']['path']).read_text())
+        self.assertNotIn('CREATE UNIQUE INDEX parent_storage_key', (self.output / manifest['indexes']['path']).read_text())
+        self.assertEqual(rehearse(self.output)['status'], 'passed')
+        db = sqlite3.connect(self.output / 'restored.sqlite')
+        db.execute('PRAGMA foreign_keys=ON')
+        self.assertEqual(db.execute('SELECT * FROM evidence').fetchall(), [('link',7)])
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO evidence VALUES('missing',8)")
+        db.close()
+
     def test_rejects_missing_r2_evidence(self):
         (self.blobs / 'synthetic-blob').unlink()
         with self.assertRaisesRegex(ValueError, 'missing'):

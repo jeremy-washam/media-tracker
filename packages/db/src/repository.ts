@@ -466,10 +466,15 @@ function evidenceStatement(
 ): DatabaseStatement {
   return statement(
     database,
-    `INSERT INTO archive_entry_evidence (
-      id, archive_entry_id, source_record_id, role, linked_at
-    ) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(archive_entry_id, source_record_id, role) DO NOTHING`,
+    `INSERT INTO archive_entry_evidence_storage (
+      id, archive_storage_id, source_storage_id, role, linked_at
+    ) VALUES (
+      ?,
+      (SELECT storage_id FROM archive_entries WHERE id = ?),
+      (SELECT storage_id FROM source_records WHERE id = ?),
+      ?, ?
+    )
+    ON CONFLICT(archive_storage_id, source_storage_id, role) DO NOTHING`,
     [
       evidence.id,
       evidence.archiveEntryId,

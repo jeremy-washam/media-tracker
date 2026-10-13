@@ -650,11 +650,15 @@ Importing the same source data twice produces the same final database state.
 
 The [storage efficiency plan](storage-efficiency-plan.md) adds the owner's
 October 12 priority: $5/month is acceptable; reduce amplification and measure
-usage rather than force Free. It recommends one paid D1 initially, copy-rehearsed
+usage rather than force Free. The isolated local implementation adds scoped D1
+usage reporting, independent bounded maintenance, clock-safe YouTube publication
+and compact evidence references. Remote validation and activation remain pending.
+It recommends one paid D1 initially, copy-rehearsed
 compact references/evidence layouts, cache maintenance while ingestion is paused,
 and bounded job budgets. Further database splits and historical interpretation
 archival require demonstrated benefits and explicit recovery boundaries. This
-is a proposed plan, not an applied schema or retention-policy change.
+contains local code and forward migrations; the live ledger and production
+have not been migrated, and retention policy is unchanged.
 
 The [private deployment runbook](deployment.md) records the October 12
 preparation: Worker-side owner authentication, an app-only production bundle,

@@ -20,7 +20,9 @@ export async function refreshStoredSpotifyToken(bindings: Bindings, connectionId
       'Configure TOKEN_ENCRYPTION_KEY as a base64-encoded 32-byte key before Spotify sync',
     )
   }
-  const store = new SqlCredentialStore(new D1DatabaseClient(bindings.DB))
+  const store = new SqlCredentialStore(
+    new D1DatabaseClient(bindings.DB, bindings.DATABASE_USAGE_OBSERVER),
+  )
   const owner = crypto.randomUUID()
   if (!(await store.acquire(connectionId, owner, Date.now())))
     throw new Error('Spotify token refresh is already running; retry shortly')

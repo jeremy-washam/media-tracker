@@ -105,7 +105,7 @@ export async function acquireReadwiseArticleContent(
   if (!bindings.READWISE_TOKEN) throw new Error('Readwise is not configured')
   const documentId = job.documentId
   const token = bindings.READWISE_TOKEN
-  const repository = createArticlesRepository(bindings.DB)
+  const repository = createArticlesRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const attemptedAt = new Date().toISOString()
   const attemptNumber = await repository.startContentJob(job.idempotencyKey, attemptedAt)
   const acquisitionId = `${job.idempotencyKey}:attempt:${attemptNumber}`
@@ -254,7 +254,7 @@ export async function indexReadwiseArticleContent(
 ): Promise<void> {
   if (job.operation !== 'index_article_content' || !job.manifestId || job.nextOrdinal === undefined)
     return
-  const repository = createArticlesRepository(bindings.DB)
+  const repository = createArticlesRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const manifest = await repository.findContentManifest(job.manifestId)
   if (manifest === null) {
     await repository.failContentJob(

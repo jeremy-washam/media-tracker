@@ -277,8 +277,8 @@ async function syncHighlights(input: {
 export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseSyncResponse> {
   const token = bindings.READWISE_TOKEN
   if (!token) throw new ReadwiseTokenMissingError()
-  const repository = createLedgerRepository(bindings.DB)
-  const articles = createArticlesRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const articles = createArticlesRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const startedAt = instantNow()
   const connection = await connectionForSync(repository, startedAt)
   const previousCursor = await repository.findSyncCursor(connection.id, cursorName)
@@ -595,7 +595,10 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
       syncRunId: runId,
       rebuiltAt: finishedAt,
     })
-    const spotifyLibrary = createSpotifyLibraryRepository(bindings.DB)
+    const spotifyLibrary = createSpotifyLibraryRepository(
+      bindings.DB,
+      bindings.DATABASE_USAGE_OBSERVER,
+    )
     await spotifyLibrary.rebuildPodcastProjection()
     await spotifyLibrary.rebuildPodcastSearch()
     const contentTargets = await articles.reserveContentTargets(connection.id, runId, finishedAt)

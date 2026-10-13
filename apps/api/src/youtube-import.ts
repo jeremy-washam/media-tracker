@@ -249,8 +249,8 @@ async function importContext(
   archiveDigest: ArrayBuffer
   rawAlreadyExists: boolean
 }> {
-  const repository = createLedgerRepository(bindings.DB)
-  const videosRepository = createVideosRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const videosRepository = createVideosRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const startedAt = instantNow()
   const connection = await connectionForImport(repository, startedAt, options)
   const archiveHash = await checksum(archive)

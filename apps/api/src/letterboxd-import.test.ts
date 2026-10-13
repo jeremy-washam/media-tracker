@@ -34,6 +34,8 @@ const catalogMigrations = [
   '0018_videos_snapshot_head_backfill.sql',
   '0019_provider_catalog_caches.sql',
   '0020_tmdb_match_evidence.sql',
+  '0027_compact_archive_evidence.sql',
+  '0028_evidence_view_parent_guard.sql',
 ]
   .map((name) =>
     readFileSync(

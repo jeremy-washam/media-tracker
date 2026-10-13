@@ -10,6 +10,7 @@ import {
   SqlSpotifyCatalogJobsRepository,
   SqlVideosRepository,
   type CanonicalLedgerRepository,
+  type DatabaseUsageObserver,
 } from '@media-tracker/db'
 
 export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BUCKET'> {
@@ -21,6 +22,8 @@ export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BU
   OWNER_EMAIL?: string
   SYNC_ENABLED?: string
   CATALOG_AUTO_REFRESH?: string
+  MAINTENANCE_ENABLED?: string
+  DATABASE_USAGE_OBSERVER?: DatabaseUsageObserver
   HARDCOVER_TOKEN?: string
   LETTERBOXD_USERNAME?: string
   READWISE_TOKEN?: string
@@ -37,39 +40,70 @@ export interface AppEnv {
   Bindings: Bindings
   Variables: {
     requestId: string
+    databaseUsageObserver: DatabaseUsageObserver
+    databaseUsage: {
+      statements: number
+      measuredStatements: number
+      rowsRead: number
+      rowsWritten: number
+      elapsedMs: number
+      failedOperations: number
+    }
   }
 }
 
-export function createLedgerRepository(database: D1Database): CanonicalLedgerRepository {
-  return new SqlCanonicalLedgerRepository(new D1DatabaseClient(database))
+export function createLedgerRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): CanonicalLedgerRepository {
+  return new SqlCanonicalLedgerRepository(new D1DatabaseClient(database, observer))
 }
 
-export function createArticlesRepository(database: D1Database): SqlArticlesRepository {
-  return new SqlArticlesRepository(new D1DatabaseClient(database))
+export function createArticlesRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): SqlArticlesRepository {
+  return new SqlArticlesRepository(new D1DatabaseClient(database, observer))
 }
 
-export function createBooksRepository(database: D1Database): SqlBooksRepository {
-  return new SqlBooksRepository(new D1DatabaseClient(database))
+export function createBooksRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): SqlBooksRepository {
+  return new SqlBooksRepository(new D1DatabaseClient(database, observer))
 }
 
-export function createMoviesRepository(database: D1Database): SqlMoviesRepository {
-  return new SqlMoviesRepository(new D1DatabaseClient(database))
+export function createMoviesRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): SqlMoviesRepository {
+  return new SqlMoviesRepository(new D1DatabaseClient(database, observer))
 }
 
-export function createSpotifyLibraryRepository(database: D1Database): SqlSpotifyLibraryRepository {
-  return new SqlSpotifyLibraryRepository(new D1DatabaseClient(database))
+export function createSpotifyLibraryRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): SqlSpotifyLibraryRepository {
+  return new SqlSpotifyLibraryRepository(new D1DatabaseClient(database, observer))
 }
 
 export function createSpotifyCatalogJobsRepository(
   database: D1Database,
+  observer?: DatabaseUsageObserver,
 ): SqlSpotifyCatalogJobsRepository {
-  return new SqlSpotifyCatalogJobsRepository(new D1DatabaseClient(database))
+  return new SqlSpotifyCatalogJobsRepository(new D1DatabaseClient(database, observer))
 }
 
-export function createVideosRepository(database: D1Database): SqlVideosRepository {
-  return new SqlVideosRepository(new D1DatabaseClient(database))
+export function createVideosRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): SqlVideosRepository {
+  return new SqlVideosRepository(new D1DatabaseClient(database, observer))
 }
 
-export function createCatalogJobsRepository(database: D1Database): SqlCatalogJobsRepository {
-  return new SqlCatalogJobsRepository(new D1DatabaseClient(database))
+export function createCatalogJobsRepository(
+  database: D1Database,
+  observer?: DatabaseUsageObserver,
+): SqlCatalogJobsRepository {
+  return new SqlCatalogJobsRepository(new D1DatabaseClient(database, observer))
 }

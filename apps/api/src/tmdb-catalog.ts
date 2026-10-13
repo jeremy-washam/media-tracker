@@ -54,7 +54,7 @@ function jobMessage(jobId: string, cursor = ''): SyncJob {
 export async function startTmdbCatalogRefresh(env: Bindings, at = new Date().toISOString()) {
   if (env.TMDB_API_READ_TOKEN === undefined)
     throw new Error('TMDB_API_READ_TOKEN is not configured')
-  const jobs = createCatalogJobsRepository(env.DB)
+  const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const active = await jobs.findActive('tmdb')
   if (active !== null) {
     await env.SYNC_QUEUE.send(jobMessage(active.id, active.cursor ?? ''))
@@ -68,7 +68,7 @@ export async function startTmdbCatalogRefresh(env: Bindings, at = new Date().toI
 export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Promise<void> {
   if (job.operation !== 'refresh_tmdb_catalog' || job.catalogJobId === undefined) return
   const at = new Date().toISOString()
-  const jobs = createCatalogJobsRepository(env.DB)
+  const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const current = await jobs.find(job.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
   if ((current.cursor ?? '') !== (job.catalogCursor ?? '')) return
@@ -83,7 +83,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     new Date(Date.parse(at) + 5 * 60_000).toISOString(),
   )
   if (!reserved) return
-  const movies = createMoviesRepository(env.DB)
+  const movies = createMoviesRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   let stage = 'candidate_query'
   try {
     const candidates = await movies.listTmdbEnrichmentCandidates({

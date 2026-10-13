@@ -36,12 +36,12 @@ cutover configuration and a local D1/R2 snapshot/restore rehearsal. Contentless
 FTS token positions are preserved. The utility does not upload data or provide
 generalized replay/remote recovery.
 
-The proposed [storage efficiency plan](../planning/storage-efficiency-plan.md)
-retains one paid D1 initially and evaluates compact references/evidence with
-copy-only measurements. It also identifies a pending launch gate: paused sync
-currently stops YouTube cache expiry maintenance, while stored projections/FTS
-can retain expired overlays. Separate maintenance/freshness safeguards are
-planned; no schema, retention or runtime fix is implied by that document.
+The [storage efficiency plan](../planning/storage-efficiency-plan.md) retains one
+paid D1 initially and evaluates compact references/evidence on private copies.
+The local implementation makes YouTube publication clock-safe and separates
+bounded maintenance from provider sync, including paused deployment. See
+[ADR 0015](../decisions/0015-clock-safe-youtube-publication.md). Production
+migration, remote usage measurement and controlled activation remain launch gates.
 
 ## Package boundaries
 

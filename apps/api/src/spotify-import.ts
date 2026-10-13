@@ -262,8 +262,11 @@ function manifestKey(importId: string) {
   return `derived/spotify/${importId}.classified-${parserVersion}.json`
 }
 async function prepare(bindings: Bindings, archiveHash: string, archiveByteLength: number) {
-  const repository = createLedgerRepository(bindings.DB)
-  const spotifyRepository = createSpotifyLibraryRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const spotifyRepository = createSpotifyLibraryRepository(
+    bindings.DB,
+    bindings.DATABASE_USAGE_OBSERVER,
+  )
   const startedAt = instantNow()
   const { connection, hash: connectionHash } = await spotifyConnection(repository, startedAt)
   const acquisitionKey = `spotify:extended-history:sha256:${archiveHash}`

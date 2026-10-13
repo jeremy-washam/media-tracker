@@ -587,8 +587,8 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
   const token = bindings.HARDCOVER_TOKEN?.trim()
   if (token === undefined || token.length === 0) throw new HardcoverTokenMissingError()
 
-  const repository = createLedgerRepository(bindings.DB)
-  const booksRepository = createBooksRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const booksRepository = createBooksRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const startedAt = instantNow()
   const connection = await connectionForSync(repository, startedAt)
   const previousCursor = await repository.findSyncCursor(connection.id, 'library-books')

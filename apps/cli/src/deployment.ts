@@ -83,11 +83,18 @@ export function validateProductionConfiguration(
       throw new Error(`Missing or unsafe ${name} configuration`)
     namespaces.add(binding.namespace_id)
   }
-  if (
-    configuration.vars.SYNC_ENABLED === 'false' &&
-    (configuration.queues.consumers.length || configuration.triggers.crons.length)
-  )
-    throw new Error('Paused deployment must not attach consumers or cron')
+  if (!['true', 'false'].includes(configuration.vars.MAINTENANCE_ENABLED))
+    throw new Error('Explicit MAINTENANCE_ENABLED configuration is required')
+  if (configuration.vars.SYNC_ENABLED === 'false') {
+    const crons = configuration.triggers.crons
+    if (
+      configuration.queues.consumers.length ||
+      crons.length > 1 ||
+      crons.some((cron: string) => cron !== '*/5 * * * *') ||
+      (crons.length && configuration.vars.MAINTENANCE_ENABLED !== 'true')
+    )
+      throw new Error('Paused deployment permits only explicitly enabled cache maintenance')
+  }
 }
 
 export function runDeployment(args: string[]) {

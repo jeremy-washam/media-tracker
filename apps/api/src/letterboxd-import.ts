@@ -89,8 +89,8 @@ export async function importLetterboxdExport(
 ): Promise<LetterboxdImportResponse> {
   if (archive.byteLength === 0) throw new LetterboxdImportError('The Letterboxd export is empty')
 
-  const repository = createLedgerRepository(bindings.DB)
-  const moviesRepository = createMoviesRepository(bindings.DB)
+  const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
+  const moviesRepository = createMoviesRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const startedAt = instantNow()
   const connection = await connectionForImport(repository, startedAt)
   const runId = syncRunId(ulid())

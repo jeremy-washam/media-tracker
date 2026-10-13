@@ -29,6 +29,8 @@ const migrationNames = [
   '0013_article_content_attempts.sql',
   '0014_podcasts_library.sql',
   '0015_songs_library.sql',
+  '0027_compact_archive_evidence.sql',
+  '0028_evidence_view_parent_guard.sql',
 ]
 const migration = migrationNames
   .map((name) =>
@@ -154,7 +156,10 @@ function seedApiEpisode(database: DatabaseSync): void {
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'application/json', 1, '2026-01-01T00:00:00.000Z', 'processed', 'seed@1', NULL
     );
-    INSERT INTO source_records VALUES (
+    INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,
+      source_record_key,source_recorded_at_value,source_recorded_at_precision,
+      source_recorded_at_basis,observed_at,parser_version,content_sha256,disposition,
+      upstream_state,error_code) VALUES (
       'spotify-api-record', 'spotify-api-raw', 'spotify-api-connection',
       'saved_episode_observation', '$.items[0]', 'spotify:episode:episode123',
       NULL, NULL, NULL, '2026-01-01T00:00:00.000Z', 'seed@1', NULL,
@@ -171,7 +176,11 @@ function seedApiEpisode(database: DatabaseSync): void {
       'https://open.spotify.com/episode/episode123', 'spotify-api-record',
       'spotify-api-record', NULL
     );
-    INSERT INTO archive_entries VALUES (
+    INSERT INTO archive_entries(id,media_item_id,connection_id,consumed_identity_id,
+      source_occurrence_key,admission_reason,consumed_at_value,consumed_at_precision,
+      consumed_at_basis,source_recorded_at_value,source_recorded_at_precision,
+      source_recorded_at_basis,rating_value,rating_scale_minimum,rating_scale_maximum,
+      review_text,upstream_state,created_at,updated_at) VALUES (
       'spotify-api-archive', 'spotify-api-media', 'spotify-api-connection',
       'spotify-api-identity', 'episode:spotify:episode:episode123',
       'spotify_positive_resume_position', '2026-01-01T00:00:00.000Z', 'instant',

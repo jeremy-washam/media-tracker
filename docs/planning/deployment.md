@@ -177,8 +177,9 @@ pnpm --filter @media-tracker/cli start deployment configure .private/deployment/
 This generates ignored `apps/api/wrangler.production.jsonc` with mode 0600.
 Sync starts paused, with no cron or queue consumer, catalog auto-refresh off,
 and preview URLs disabled. The deploy wrapper rejects placeholder resources,
-missing identity, asset-authentication bypasses, and consumers/cron attached
-while paused. Provider credentials belong in Worker secrets; local secret files
+missing identity and asset-authentication bypasses. While paused, consumers and
+provider cron are forbidden; the only allowed cron is the explicitly enabled
+`*/5 * * * *` cache-maintenance schedule. Provider credentials belong in Worker secrets; local secret files
 are not uploaded automatically. The original token-encryption key must accompany
 copied encrypted Spotify credentials.
 
@@ -205,11 +206,12 @@ snapshot; a development rehearsal is not that final snapshot.
 
 The ignored private bundle contains the SQLite backup; final schema; ordered
 SQL files capped at 4 MiB with statements below D1's 100 KB limit; indexes and
-triggers; migration names/checksums; and content-addressed R2 objects preserving
+triggers and compatibility views; migration names/checksums; and content-addressed R2 objects preserving
 original keys, HTTP/custom metadata, lengths, and SHA-256 hashes. Cloudflare,
 Miniflare, and FTS shadow tables are excluded. ID allocator state is preserved.
-Application tables such as
-`article_content_search_map` remain included.
+UNIQUE indexes that serve as foreign-key parent keys are installed before
+records; remaining indexes and immutable triggers follow data. Application tables
+such as `article_content_search_map` remain included.
 
 Metadata FTS is rebuilt from stored inputs. Contentless Article FTS is rebuilt
 from exact normalized token positions because SQLite cannot return its original
@@ -219,7 +221,9 @@ Existing chunk hash/range mismatches are reported separately and never silently
 change source records.
 
 The rehearsal restores a fresh SQLite database, then compares every application
-table, search index, object, and supported evidence reference. It prints only
+table, compatibility-view row, search index, object, and supported evidence
+reference. Views are installed after physical records and before their write
+triggers; their logical digests are verified without double-counting physical rows. It prints only
 aggregate diagnostics. The bundle contains personal history and encrypted
 credentials and must stay private.
 
@@ -240,7 +244,8 @@ See [D1 import/export](https://developers.cloudflare.com/d1/best-practices/impor
    consumer, and catalog auto-refresh off. Verify private access first.
 4. Pause local sync/import writes and make a fresh final bundle. Keep independent
    private copies of the database, R2 evidence, and encryption key.
-5. Import schema, ordered records, then indexes/triggers into the empty remote
+5. Import schema (including required parent-key UNIQUE indexes), ordered records,
+   then views/remaining indexes/triggers into the empty remote
    target. Do not apply seed migrations before this full-schema import. Preserved
    `d1_migrations` rows allow subsequent normal migrations. Upload objects under
    their original keys and metadata. Remote import/upload and resume tooling must
@@ -251,11 +256,18 @@ See [D1 import/export](https://developers.cloudflare.com/d1/best-practices/impor
 7. Verify anonymous/wrong-user denial, authenticated assets/deep links, all
    Library counts/inspectors, search/excerpts, provenance, object integrity,
    foreign keys, and bounded import continuation. Inspect logs and traces.
-8. Enable sync, attach the consumer/dead-letter queue, and enable hourly cron.
-   Resume unfinished jobs explicitly. Catalog auto-refresh stays off unless
-   separately authorized. Verify an actual scheduled sync and queue delivery.
-9. Record the deployed version and a D1 recovery point. Test the independent
-   backup/restore procedure before calling hosted operation complete.
+8. Validate clock-safe catalog fallback at the launch clock. Enable
+   `MAINTENANCE_ENABLED=true` with only `*/5 * * * *`, retaining
+   `SYNC_ENABLED=false`, no consumer and catalog auto-refresh off. Observe a real
+   bounded cleanup, rows read/written and oldest expiry backlog. The maintenance
+   invocation makes no provider requests and never rotates credentials.
+9. Record explicit page/record/request/byte/retry and daily acquisition budgets
+   for each provider job before enabling it. Enable sync and consumer/hourly cron
+   deliberately, then verify actual delivery and resumability. The scheduled
+   Spotify backfill resume is an enrichment workload even when catalog
+   auto-refresh is off; it needs its own budget and activation review.
+10. Record the deployed version and a D1 recovery point. Test the independent
+    backup/restore procedure before calling hosted operation complete.
 
 `pnpm deploy` builds production assets and uses the validated ignored target.
 After configuration, a dry run is available:
@@ -312,3 +324,37 @@ formatting in concurrently edited UI components; a later workspace typecheck
 encountered unfinished JSX edits in the Library pages. Those frontend files
 were not changed by this work. This is not a fully green shared release, and
 the controls have not been deployed or tested against the remote account.
+
+## Isolated storage implementation verification
+
+The `codex/storage-efficiency` worktree contains migrations 0026/0027/0028, scoped usage
+reporting, bounded maintenance and corrected snapshot restore ordering. The
+original local ledger and UI checkout remain unchanged. Detailed measurements
+and the unresolved performance gate are in the
+[storage implementation acceptance](storage-efficiency-plan.md#october-12-isolated-implementation-acceptance).
+
+A full private copy and independent restore passed: 94 tables plus the evidence
+compatibility view, every original evidence tuple, 18,126 R2 objects and 18,253
+references. Fresh restored storage is 1,168,740,352 bytes versus the original
+1,435,860,992-byte snapshot. This is not a Free-plan fit or a reduction in the
+recurring plan fee. Cache publication adds occupied pages but preserves refresh
+isolation and current-clock expiry while provider sync is paused.
+
+The synthetic remote D1 database was created, tested and deleted. Official D1
+file import correctly handled all migration SQL including nested CASE trigger
+bodies; REST query transport did not. Keep schema, record and final view/trigger
+phases ordered, and verify full-size import/resume behavior on the release target.
+A second synthetic import verified the final missing-parent guard under outer
+`INSERT OR IGNORE`; its temporary database was also deleted. No Worker or private
+data was deployed. The October 12 account refresh confirmed
+R2 and Access still disabled; Workers Paid activation remains unconfirmed.
+
+Final `pnpm check` passed all 310 tests across 51 files, formatting, typechecking
+and lint. Production builds/dry run, 82 browser regressions, ten snapshot
+recovery cases and eight isolated native Worker browse/search checks passed.
+
+Local Channels measurements showed increased CPU cost. Full-data D1 read/write
+and latency measurements, plus a quiet-host comparison, remain mandatory before
+adopting this cache implementation in production. Provider daily acquisition and
+retry budgets also remain activation gates; all production background controls
+remain off by default.

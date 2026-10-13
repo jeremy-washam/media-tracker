@@ -151,8 +151,10 @@ describe('SqlVideosRepository', () => {
   let database: DatabaseSync
   let client: SqliteClient
   let repository: SqlVideosRepository
+  let clockNow: string
 
   beforeEach(async () => {
+    clockNow = now
     database = new DatabaseSync(':memory:')
     database.exec(migrations)
     database.exec(`
@@ -189,7 +191,7 @@ describe('SqlVideosRepository', () => {
         ('evidence-3','archive-3','watch-3','admission','${now}');
     `)
     client = new SqliteClient(database)
-    repository = new SqlVideosRepository(client)
+    repository = new SqlVideosRepository(client, () => clockNow)
     await repository.projectWatches([
       {
         sourceRecordId: 'watch-1',
@@ -313,6 +315,109 @@ describe('SqlVideosRepository', () => {
 
   afterEach(() => database.close())
 
+  async function seedPublishedCatalog() {
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
+      VALUES('catalog-1','youtube','running','${now}','${now}')`)
+    await repository.applyYoutubeCatalogBatch({
+      jobId: 'catalog-1',
+      at: now,
+      expiresAt: '2026-10-20T12:00:00.000Z',
+      requested: [
+        { mediaItemId: 'video-1', videoId: 'video-1' },
+        { mediaItemId: 'video-2', videoId: 'video-2' },
+        { mediaItemId: 'video-3', videoId: 'video-3' },
+      ],
+      videos: [
+        {
+          mediaItemId: 'video-1',
+          videoId: 'video-1',
+          title: 'Current Video Title',
+          description: 'Current description',
+          channelId: 'channel-1',
+          channelTitle: 'Current Channel',
+          publishedAt: '2020-01-01T00:00:00.000Z',
+          durationMs: 120000,
+          categoryId: '22',
+          tags: ['one', 'two'],
+          captionAvailable: true,
+          definition: 'hd',
+          projection: 'rectangular',
+          privacyStatus: 'public',
+          uploadStatus: 'processed',
+          embeddable: true,
+          madeForKids: false,
+          regionRestriction: null,
+          liveBroadcastContent: 'none',
+          scheduledStartAt: null,
+          actualStartAt: null,
+          actualEndAt: null,
+          thumbnails: {
+            high: { url: 'https://example.com/high.jpg', width: 480, height: 360 },
+            medium: { url: 'https://example.com/medium.jpg', width: 320, height: 180 },
+            maxres: { url: 'https://example.com/maxres.jpg', width: 1280, height: 720 },
+          },
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+          etag: 'etag-1',
+        },
+        {
+          mediaItemId: 'video-3',
+          videoId: 'video-3',
+          title: 'Current Video Without Channel Details',
+          description: '',
+          channelId: 'channel-3',
+          channelTitle: 'Channel From Video',
+          publishedAt: null,
+          durationMs: null,
+          categoryId: null,
+          tags: [],
+          captionAvailable: null,
+          definition: null,
+          projection: null,
+          privacyStatus: null,
+          uploadStatus: null,
+          embeddable: null,
+          madeForKids: null,
+          regionRestriction: null,
+          liveBroadcastContent: null,
+          scheduledStartAt: null,
+          actualStartAt: null,
+          actualEndAt: null,
+          thumbnails: {},
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+          etag: null,
+        },
+      ],
+      channels: [
+        {
+          channelId: 'channel-1',
+          title: 'Current Channel',
+          description: 'Channel description',
+          customUrl: '@current',
+          publishedAt: '2010-01-01T00:00:00.000Z',
+          country: 'US',
+          thumbnailUrl: 'https://example.com/channel.jpg',
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+          etag: 'channel-etag',
+        },
+      ],
+      categories: [
+        {
+          categoryId: '22',
+          regionCode: 'US',
+          title: 'People & Blogs',
+          assignable: true,
+          fetchedAt: now,
+          expiresAt: '2026-10-20T12:00:00.000Z',
+        },
+      ],
+    })
+    database.exec("UPDATE catalog_refresh_jobs SET state='succeeded' WHERE id='catalog-1'")
+    await repository.rebuild(now)
+  }
+
   it('keeps Archive and Queue independent and rolls up only exact channel identities', async () => {
     const archive = await repository.listVideos(input())
     const queue = await repository.listVideos(input({ view: 'queue' }))
@@ -363,10 +468,14 @@ describe('SqlVideosRepository', () => {
       expect(page.data.map((item) => item.id)).toEqual([expectedId])
       const sql = prepare.mock.calls
         .map(([query]) => query)
-        .find((query) => query.startsWith('SELECT COUNT(*) value') && query.includes(table))!
+        .find(
+          (query) =>
+            (query.includes('SELECT COUNT(*) value') || query.includes('COUNT(*) OVER()')) &&
+            query.includes(table),
+        )!
       const plan = database
         .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all(...params)
+        .all(clockNow, ...params, ...(view === 'channels' ? [51] : []))
         .map((row) => row.detail)
         .join('\n')
       expect(plan).toContain('LIST SUBQUERY')
@@ -851,106 +960,7 @@ describe('SqlVideosRepository', () => {
   })
 
   it('projects returned YouTube metadata and records successful omissions as unavailable', async () => {
-    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at)
-      VALUES('catalog-1','youtube','running','${now}','${now}')`)
-    await repository.applyYoutubeCatalogBatch({
-      jobId: 'catalog-1',
-      at: now,
-      expiresAt: '2026-10-20T12:00:00.000Z',
-      requested: [
-        { mediaItemId: 'video-1', videoId: 'video-1' },
-        { mediaItemId: 'video-2', videoId: 'video-2' },
-        { mediaItemId: 'video-3', videoId: 'video-3' },
-      ],
-      videos: [
-        {
-          mediaItemId: 'video-1',
-          videoId: 'video-1',
-          title: 'Current Video Title',
-          description: 'Current description',
-          channelId: 'channel-1',
-          channelTitle: 'Current Channel',
-          publishedAt: '2020-01-01T00:00:00.000Z',
-          durationMs: 120000,
-          categoryId: '22',
-          tags: ['one', 'two'],
-          captionAvailable: true,
-          definition: 'hd',
-          projection: 'rectangular',
-          privacyStatus: 'public',
-          uploadStatus: 'processed',
-          embeddable: true,
-          madeForKids: false,
-          regionRestriction: null,
-          liveBroadcastContent: 'none',
-          scheduledStartAt: null,
-          actualStartAt: null,
-          actualEndAt: null,
-          thumbnails: {
-            high: { url: 'https://example.com/high.jpg', width: 480, height: 360 },
-            medium: { url: 'https://example.com/medium.jpg', width: 320, height: 180 },
-            maxres: { url: 'https://example.com/maxres.jpg', width: 1280, height: 720 },
-          },
-          fetchedAt: now,
-          expiresAt: '2026-10-20T12:00:00.000Z',
-          etag: 'etag-1',
-        },
-        {
-          mediaItemId: 'video-3',
-          videoId: 'video-3',
-          title: 'Current Video Without Channel Details',
-          description: '',
-          channelId: 'channel-3',
-          channelTitle: 'Channel From Video',
-          publishedAt: null,
-          durationMs: null,
-          categoryId: null,
-          tags: [],
-          captionAvailable: null,
-          definition: null,
-          projection: null,
-          privacyStatus: null,
-          uploadStatus: null,
-          embeddable: null,
-          madeForKids: null,
-          regionRestriction: null,
-          liveBroadcastContent: null,
-          scheduledStartAt: null,
-          actualStartAt: null,
-          actualEndAt: null,
-          thumbnails: {},
-          fetchedAt: now,
-          expiresAt: '2026-10-20T12:00:00.000Z',
-          etag: null,
-        },
-      ],
-      channels: [
-        {
-          channelId: 'channel-1',
-          title: 'Current Channel',
-          description: 'Channel description',
-          customUrl: '@current',
-          publishedAt: '2010-01-01T00:00:00.000Z',
-          country: 'US',
-          thumbnailUrl: 'https://example.com/channel.jpg',
-          fetchedAt: now,
-          expiresAt: '2026-10-20T12:00:00.000Z',
-          etag: 'channel-etag',
-        },
-      ],
-      categories: [
-        {
-          categoryId: '22',
-          regionCode: 'US',
-          title: 'People & Blogs',
-          assignable: true,
-          fetchedAt: now,
-          expiresAt: '2026-10-20T12:00:00.000Z',
-        },
-      ],
-    })
-    database.prepare("DELETE FROM youtube_channels WHERE channel_id='channel-3'").run()
-    await repository.rebuild(now)
+    await seedPublishedCatalog()
     expect(await repository.findVideo('video-1')).toMatchObject({
       title: 'Current Video Title',
       description: 'Current description',
@@ -983,7 +993,7 @@ describe('SqlVideosRepository', () => {
       database
         .prepare("SELECT latest_title FROM youtube_channels WHERE channel_id='channel-3'")
         .get(),
-    ).toEqual({ latest_title: 'Channel From Video' })
+    ).toEqual({ latest_title: null })
     await expect(
       repository.listVideos(
         input({
@@ -1026,5 +1036,384 @@ describe('SqlVideosRepository', () => {
       title: 'Latest first title',
       availability: 'stale',
     })
+  })
+
+  it('falls back to complete historical rows, filters, facets and search at clock expiry without maintenance writes', async () => {
+    await seedPublishedCatalog()
+    expect((await repository.listVideos(input({ q: 'Earlier description' }))).data).toHaveLength(1)
+    expect(
+      (await repository.listVideos(input({ limit: 1, sort: 'title' }))).nextCursor,
+    ).not.toBeNull()
+    const cursor = (await repository.listVideos(input({ limit: 1, sort: 'title' }))).nextCursor!
+    const batches = client.batchCalls
+    clockNow = '2026-10-20T12:00:00.000Z'
+    const page = await repository.listVideos(input())
+    expect(page.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'video-1',
+          title: 'Latest first title',
+          channelTitle: 'Channel One',
+          imageUrl: null,
+          durationMs: null,
+        }),
+        expect.objectContaining({ id: 'video-3', title: 'Label only video', channelId: null }),
+      ]),
+    )
+    expect(page.occurrenceCount).toBe(3)
+    expect(page.facets.categories).toEqual([])
+    expect(page.coverage.catalog).toBe('not_configured')
+    expect((await repository.listVideos(input({ q: 'description' }))).data).toEqual([])
+    expect((await repository.listVideos(input({ q: 'Earlier first' }))).data).toHaveLength(1)
+    expect((await repository.listVideos(input({ duration: 'under5' }))).data).toEqual([])
+    expect((await repository.listVideos(input({ durationUnknown: true }))).data).toHaveLength(2)
+    expect((await repository.listVideos(input({ view: 'channels' }))).data).toEqual([
+      expect.objectContaining({
+        id: 'channel-1',
+        title: 'Channel One',
+        watchCount: 2,
+        imageUrl: null,
+      }),
+    ])
+    expect((await repository.listChannelVideos('channel-1', 'archive', 50)).totalCount).toBe(1)
+    expect((await repository.listHistory('video-1', 50)).totalCount).toBe(2)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      description: null,
+      categoryTitle: null,
+      captionAvailable: null,
+    })
+    expect(client.batchCalls).toBe(batches)
+    await expect(repository.listVideos(input({ limit: 1, sort: 'title', cursor }))).rejects.toThrow(
+      'stale',
+    )
+  })
+
+  it('expires channel, thumbnail and category publications independently of a still-current video profile', async () => {
+    await seedPublishedCatalog()
+    database.exec(
+      `INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-2','youtube','succeeded','${later}','${later}')`,
+    )
+    database.exec(
+      "UPDATE youtube_channel_catalog_profiles SET expires_at='2026-10-19T00:00:00.000Z'; UPDATE youtube_video_thumbnails SET expires_at='2026-10-19T00:00:00.000Z'; UPDATE youtube_categories SET expires_at='2026-10-19T00:00:00.000Z'",
+    )
+    await repository.rebuild(now)
+    clockNow = '2026-10-19T00:00:00.000Z'
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Current Video Title',
+      description: 'Current description',
+      channelTitle: 'Current Channel',
+      imageUrl: null,
+      categoryTitle: null,
+    })
+    expect(await repository.findChannel('channel-1')).toMatchObject({
+      title: 'Current Channel',
+      imageUrl: null,
+      description: null,
+      customUrl: null,
+    })
+    expect((await repository.listVideos(input({ q: 'People Blogs' }))).data).toEqual([])
+    expect((await repository.listVideos(input({ view: 'channels', q: 'publisher' }))).data).toEqual(
+      [],
+    )
+  })
+
+  it('keeps a valid published cache while a refresh runs or fails and publishes only after success', async () => {
+    await seedPublishedCatalog()
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-2','youtube','running','${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET current_title='Unpublished replacement',description='Unpublished replacement body';
+      UPDATE youtube_channel_catalog_profiles SET current_title='Unpublished channel';`)
+    await repository.rebuild(later)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Current Video Title',
+      description: 'Current description',
+    })
+    expect((await repository.listVideos(input({ q: 'Unpublished' }))).data).toEqual([])
+    database.exec("UPDATE catalog_refresh_jobs SET state='failed' WHERE id='catalog-2'")
+    await repository.rebuild(later)
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Current Video Title' })
+    clockNow = '2026-10-20T12:00:00.000Z'
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Latest first title',
+      description: null,
+    })
+    clockNow = now
+    database.exec("UPDATE catalog_refresh_jobs SET state='succeeded' WHERE id='catalog-2'")
+    await repository.rebuild(later)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Unpublished replacement',
+      description: 'Unpublished replacement body',
+    })
+    expect((await repository.listVideos(input({ q: 'Earlier replacement' }))).data).toHaveLength(1)
+  })
+
+  it('cleans a bounded aggregate amount of near-expiry cache data without rebuilding owner projections', async () => {
+    await seedPublishedCatalog()
+    clockNow = '2026-10-19T00:00:00.000Z'
+    const ownerBefore = database
+      .prepare('SELECT * FROM video_library_projection ORDER BY media_item_id')
+      .all()
+    const occurrencesBefore = database
+      .prepare('SELECT * FROM youtube_watch_observations ORDER BY source_record_id')
+      .all()
+    let remaining = true,
+      total = 0
+    for (let i = 0; i < 30 && remaining; i++) {
+      const result = await repository.maintainYoutubeCatalog(clockNow, 7)
+      expect(result.deletedRows).toBeLessThanOrEqual(7)
+      expect(result.deletedRows).toBe(
+        Object.values(result.deletedByTable).reduce((a, b) => a + b, 0),
+      )
+      total += result.deletedRows
+      remaining = result.hasMore
+    }
+    expect(remaining).toBe(false)
+    expect(total).toBeGreaterThan(0)
+    expect(
+      database.prepare('SELECT * FROM video_library_projection ORDER BY media_item_id').all(),
+    ).toEqual(ownerBefore)
+    expect(
+      database.prepare('SELECT * FROM youtube_watch_observations ORDER BY source_record_id').all(),
+    ).toEqual(occurrencesBefore)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Latest first title',
+      description: null,
+    })
+    expect((await repository.listVideos(input({ q: 'Earlier' }))).data).toHaveLength(1)
+    await expect(repository.maintainYoutubeCatalog(clockNow, 1001)).rejects.toThrow('limit')
+  })
+
+  it('uses one captured clock across rows, details and envelope queries', async () => {
+    await seedPublishedCatalog()
+    let calls = 0
+    const ticking = new SqlVideosRepository(client, () =>
+      ++calls === 1 ? now : '2026-11-01T00:00:00.000Z',
+    )
+    const page = await ticking.listVideos(input({ q: 'Earlier description' }))
+    expect(page.data).toEqual([
+      expect.objectContaining({ id: 'video-1', title: 'Current Video Title' }),
+    ])
+    expect(page.facets.categories).toEqual([{ value: '22', label: 'People & Blogs', count: 1 }])
+    expect(calls).toBe(1)
+    calls = 0
+    expect(await ticking.findVideo('video-1')).toMatchObject({
+      title: 'Current Video Title',
+      description: 'Current description',
+    })
+    expect(calls).toBe(1)
+  })
+
+  it('does not renew cached metadata or thumbnails for a successful unavailable response', async () => {
+    await seedPublishedCatalog()
+    database.exec(
+      `INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-2','youtube','running','${later}','${later}')`,
+    )
+    await repository.applyYoutubeCatalogBatch({
+      jobId: 'catalog-2',
+      at: later,
+      expiresAt: '2026-10-21T00:00:00.000Z',
+      requested: [{ mediaItemId: 'video-1', videoId: 'video-1' }],
+      videos: [],
+      channels: [],
+      categories: [],
+    })
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Current Video Title',
+      description: 'Current description',
+    })
+    database.exec("UPDATE catalog_refresh_jobs SET state='succeeded' WHERE id='catalog-2'")
+    await repository.rebuild(later)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      title: 'Latest first title',
+      description: null,
+      imageUrl: null,
+      availability: 'unavailable',
+      historyCount: 2,
+    })
+    expect((await repository.listVideos(input({ q: 'description' }))).data).toEqual([])
+  })
+
+  it('does not republish an unchanged completed job during owner rebuilds', async () => {
+    await seedPublishedCatalog()
+    const before = database.prepare('SELECT * FROM youtube_publication_state').get()
+    const published = database
+      .prepare('SELECT * FROM youtube_published_video_profiles ORDER BY media_item_id')
+      .all()
+    const prepare = vi.spyOn(client, 'prepare')
+    database.exec(
+      "UPDATE youtube_watch_observations SET historical_title='Updated historical assertion' WHERE source_record_id='watch-2'",
+    )
+    await repository.rebuild(later)
+    expect(
+      prepare.mock.calls.some(
+        ([sql]) =>
+          sql.startsWith('DELETE FROM youtube_published') &&
+          !sql.startsWith('DELETE FROM youtube_published_channel_aggregates'),
+      ),
+    ).toBe(false)
+    expect(database.prepare('SELECT * FROM youtube_publication_state').get()).toEqual(before)
+    expect(
+      database
+        .prepare('SELECT * FROM youtube_published_video_profiles ORDER BY media_item_id')
+        .all(),
+    ).toEqual(published)
+    expect((await repository.listVideos(input({ q: 'Updated assertion' }))).data).toHaveLength(1)
+    prepare.mockRestore()
+  })
+
+  it('pins publication to the exact completed job if a newer job stages then fails before the transaction', async () => {
+    await seedPublishedCatalog()
+    database.exec(
+      `INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-2','youtube','succeeded','${later}','${later}');UPDATE youtube_video_catalog_profiles SET current_title='Intended completed replacement'`,
+    )
+    const original = client.batch.bind(client)
+    const batch = vi.spyOn(client, 'batch').mockImplementationOnce(async (writes) => {
+      database.exec(
+        `INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-3','youtube','failed','2026-09-22','2026-09-22');UPDATE youtube_video_catalog_profiles SET current_title='Failed newer staging'`,
+      )
+      return original(writes)
+    })
+    await repository.rebuild(later)
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Current Video Title' })
+    expect((await repository.listVideos(input({ q: 'Failed newer' }))).data).toEqual([])
+    expect(
+      database.prepare('SELECT last_published_job_id FROM youtube_publication_state').get(),
+    ).toEqual({ last_published_job_id: 'catalog-1' })
+    batch.mockRestore()
+  })
+
+  it('advances cursor revision atomically when maintenance is interrupted between mutation batches', async () => {
+    await seedPublishedCatalog()
+    clockNow = '2026-10-19T00:00:00.000Z'
+    const before = database.prepare('SELECT revision FROM youtube_publication_state').get()!
+      .revision as number
+    client.failOnBatchCall = client.batchCalls + 2
+    await expect(repository.maintainYoutubeCatalog(clockNow, 1000)).rejects.toThrow(
+      'synthetic batch failure',
+    )
+    const after = database.prepare('SELECT revision FROM youtube_publication_state').get()!
+      .revision as number
+    expect(after).toBeGreaterThan(before)
+  })
+
+  it('expires a catalog-only channel association before a longer-lived channel profile and restores owner enrichment', async () => {
+    await seedPublishedCatalog()
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-2','youtube','succeeded','${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET channel_id='catalog-only',channel_title='Catalog association' WHERE media_item_id='video-1';
+      UPDATE youtube_channel_catalog_profiles SET current_title='Owner enrichment only',expires_at='2026-10-25T00:00:00.000Z' WHERE channel_id='channel-1';
+      INSERT INTO youtube_channel_catalog_profiles(channel_id,current_title,fetched_at,checked_at,expires_at) VALUES('catalog-only','Catalog exclusive channel','${now}','${now}','2026-10-25T00:00:00.000Z');`)
+    await repository.rebuild(later)
+    expect((await repository.listVideos(input({ q: 'Catalog exclusive' }))).data).toHaveLength(1)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      channelId: 'catalog-only',
+      channelTitle: 'Catalog exclusive channel',
+    })
+    clockNow = '2026-10-20T12:00:00.000Z'
+    expect((await repository.listVideos(input({ q: 'Catalog exclusive' }))).data).toEqual([])
+    expect((await repository.listVideos(input({ q: 'Owner enrichment' }))).data).toHaveLength(1)
+    expect(await repository.findVideo('video-1')).toMatchObject({
+      channelId: 'channel-1',
+      channelTitle: 'Owner enrichment only',
+    })
+    expect((await repository.listVideos(input({ view: 'channels' }))).data).toEqual([
+      expect.objectContaining({ id: 'channel-1', watchCount: 2 }),
+    ])
+    expect((await repository.listChannelVideos('catalog-only', 'archive', 50)).totalCount).toBe(0)
+  })
+
+  it('uses dynamic channel counts during partial expiry and cached owner counts after all associations expire', async () => {
+    await seedPublishedCatalog()
+    database.exec(
+      `INSERT INTO catalog_refresh_jobs(id,provider,state,created_at,updated_at) VALUES('catalog-2','youtube','succeeded','${later}','${later}');UPDATE youtube_video_catalog_profiles SET expires_at='2026-10-19T00:00:00.000Z' WHERE media_item_id='video-3'`,
+    )
+    await repository.rebuild(later)
+    expect((await repository.listVideos(input({ view: 'channels' }))).totalCount).toBe(2)
+    clockNow = '2026-10-19T00:00:00.000Z'
+    expect((await repository.listVideos(input({ view: 'channels' }))).data).toEqual([
+      expect.objectContaining({ id: 'channel-1', watchCount: 2 }),
+    ])
+    expect((await repository.listChannelVideos('channel-3', 'archive', 50)).totalCount).toBe(0)
+    clockNow = '2026-10-20T12:00:00.000Z'
+    expect((await repository.listVideos(input({ view: 'channels' }))).data).toEqual([
+      expect.objectContaining({ id: 'channel-1', watchCount: 2 }),
+    ])
+  })
+
+  it('upgrades a catalog-channel projection into a correct owner-channel baseline before clock expiry', async () => {
+    await seedPublishedCatalog()
+    const legacy = new DatabaseSync(':memory:')
+    try {
+      const prior = readdirSync(new URL('../migrations/', import.meta.url))
+        .filter((name) => name.endsWith('.sql') && name < '0026')
+        .sort()
+      legacy.exec(
+        prior
+          .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
+          .join('\n'),
+      )
+      for (const table of [
+        'connections',
+        'sync_runs',
+        'raw_objects',
+        'source_records',
+        'media_items',
+        'external_identities',
+        'archive_entries',
+        'archive_entry_evidence',
+        'queue_entries',
+        'queue_entry_evidence',
+        'youtube_channels',
+        'youtube_channel_assertions',
+        'youtube_watch_observations',
+        'youtube_channel_subscriptions',
+        'video_library_projection',
+        'video_channel_projection',
+        'catalog_refresh_jobs',
+        'youtube_video_catalog_profiles',
+        'youtube_channel_catalog_profiles',
+        'youtube_categories',
+        'youtube_video_thumbnails',
+        'youtube_catalog_request_outcomes',
+      ]) {
+        const cols = legacy
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((c) => String(c.name))
+        const quoted = cols.map((c) => `"${c}"`).join(',')
+        const insert = legacy.prepare(
+          `INSERT INTO ${table}(${quoted}) VALUES(${cols.map(() => '?').join(',')})`,
+        )
+        for (const row of database.prepare(`SELECT ${quoted} FROM ${table}`).all())
+          insert.run(...cols.map((c) => row[c]!))
+      }
+      legacy.exec(`INSERT INTO youtube_channels(channel_id,latest_title,first_observed_at,last_observed_at,updated_at) VALUES('catalog-only','Cached catalog title','${now}','${now}','${now}');
+        UPDATE video_library_projection SET channel_id='catalog-only',display_channel_title='Cached catalog title' WHERE media_item_id='video-1';
+        UPDATE youtube_video_catalog_profiles SET channel_id='catalog-only',channel_title='Cached catalog title' WHERE media_item_id='video-1';
+        DELETE FROM video_channel_projection;
+        INSERT INTO video_channel_projection(channel_id,display_title,normalized_title,canonical_url,library_active,following_active,subscription_count,archive_video_count,watch_occurrence_count,latest_watched_at,queue_video_count,projection_generation,updated_at) VALUES('catalog-only','Cached catalog title','cached catalog title','https://www.youtube.com/channel/catalog-only',1,0,0,1,2,'2025-01-02',0,1,'${now}');`)
+      const sourceBefore = legacy.prepare('SELECT * FROM source_records ORDER BY id').all()
+      legacy.exec(
+        readFileSync(
+          new URL('../migrations/0026_youtube_clock_safe_publication.sql', import.meta.url),
+          'utf8',
+        ),
+      )
+      expect(legacy.prepare('SELECT * FROM source_records ORDER BY id').all()).toEqual(sourceBefore)
+      const upgraded = new SqlVideosRepository(
+        new SqliteClient(legacy),
+        () => '2026-10-22T00:00:00.000Z',
+      )
+      expect((await upgraded.listVideos(input({ view: 'channels' }))).data).toEqual([
+        expect.objectContaining({
+          id: 'channel-1',
+          title: 'Channel One',
+          watchCount: 2,
+          archiveVideoCount: 1,
+        }),
+      ])
+      expect(await upgraded.findChannel('catalog-only')).toBeNull()
+      expect((await upgraded.listChannelVideos('channel-1', 'archive', 50)).totalCount).toBe(1)
+    } finally {
+      legacy.close()
+    }
   })
 })
