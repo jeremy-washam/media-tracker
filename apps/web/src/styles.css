@@ -961,8 +961,6 @@ a:focus-visible {
 
 .books-tabs span {
   font-weight: 400;
-  min-width: 6ch;
-  text-align: right;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }

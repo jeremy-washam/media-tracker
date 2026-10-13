@@ -80,9 +80,9 @@ Collections default to list. A single local preference remembers grid/list acros
 supported pages and browser sessions; explicit layout in a URL takes precedence.
 List appears first in the view controls.
 Section tabs retain known library totals while the next collection request loads,
-without retaining the previous section's results. Count labels reserve space to
-keep tab geometry stable through loading and use fresh response totals when available.
-Tab counts use normal weight (400) and muted text color as secondary information.
+without retaining the previous section's results. Count labels use their natural
+width beside the section label, with a smaller gap than the space between tabs.
+They use normal weight (400), muted text color, and fresh response totals when available.
 Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
