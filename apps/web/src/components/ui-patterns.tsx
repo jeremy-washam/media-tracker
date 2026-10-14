@@ -82,14 +82,7 @@ export function FileUploadButton({
       >
         {children}
       </PrimitiveButton>
-      <AppInput
-        ref={input}
-        type="file"
-        className="sr-only"
-        tabIndex={-1}
-        disabled={disabled}
-        {...props}
-      />
+      <AppInput ref={input} type="file" hidden tabIndex={-1} disabled={disabled} {...props} />
     </>
   )
 }
