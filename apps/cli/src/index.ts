@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { runDeployment } from './deployment'
+import { runDeployment } from './deployment.js'
 
 const help = `Imladris CLI
 

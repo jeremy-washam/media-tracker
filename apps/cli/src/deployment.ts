@@ -103,7 +103,7 @@ export function runDeployment(args: string[]) {
     if (existsSync(configurationPath))
       throw new Error('Production config already exists; edit it deliberately')
     const configuration = productionConfiguration(
-      JSON.parse(readFileSync(resolve(args[1]), 'utf8')),
+      JSON.parse(readFileSync(resolve(root, args[1]), 'utf8')),
     )
     validateProductionConfiguration(configuration)
     writeFileSync(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, {

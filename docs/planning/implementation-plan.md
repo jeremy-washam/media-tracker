@@ -32,8 +32,9 @@ The [Music implementation](music-implementation.md) supersedes earlier
 30-second/excluded-observation proposals with immediate song counting.
 
 Private Access checks, usage limiters, production packaging, deployment helpers,
-and local snapshot/restore rehearsal are in the checkout. Hosted provisioning
-and deployment remain pending, as do the cache-freshness launch gates in the
+and local snapshot/restore rehearsal are in the checkout. Empty hosted storage,
+queues, and an owner-only Access application are provisioned. Worker deployment
+and private data transfer remain pending, as do the hosted launch gates in the
 [deployment runbook](deployment.md) and
 [storage efficiency plan](storage-efficiency-plan.md). The
 [documentation audit](documentation-audit.md) records the code/live-app comparison.

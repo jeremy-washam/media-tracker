@@ -1,7 +1,8 @@
 # Private deployment preparation
 
-Status: local preparation and restore rehearsal. Production has not been
-provisioned or deployed.
+Status: local preparation and restore rehearsal accepted. The empty production
+database, private bucket, queues, and owner-only Access application are
+provisioned. The Worker and private data have not been deployed.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
@@ -411,3 +412,27 @@ deployment or billing change was performed. Remote import/resume, authenticated
 hosted validation, measured D1 costs and provider-job budgets remain deployment
 gates. The before-migration backup must be retained until hosted recovery is
 verified.
+
+## October 13 account provisioning
+
+The owner completed Workers Paid, R2, and Zero Trust onboarding. R2 and the
+Zero Trust organization were verified through the API; the connection lacks
+billing-subscription read permission, so Paid activation is owner-confirmed.
+An empty `media-tracker` D1 database, private `media-tracker-raw` R2 bucket,
+`media-tracker-sync` queue, and `media-tracker-sync-dead-letter` queue now exist.
+R2 public access is disabled. No private records or objects have been uploaded.
+
+A reusable owner-email Allow policy protects the entire production workers.dev
+hostname. Independent MFA is enabled for that application and policy with
+authenticator apps, biometrics, or security keys. The organization permits
+these methods without imposing global MFA on unrelated applications. Real
+resource identifiers and owner settings remain in ignored deployment files.
+
+The deployment CLI now imports its emitted JavaScript module explicitly and
+resolves relative settings paths from the repository root, matching the documented
+pnpm command. The compiled configure command was verified from the package
+working directory. The real configuration starts with sync, maintenance,
+provider refresh, cron, and queue consumers paused, and preview URLs disabled.
+Wrangler requires a separate browser OAuth authorization; connector access
+alone does not authenticate the CLI. Hosted authentication, remote transfer
+and resume, integrity, cost measurements, and recovery gates remain open.
