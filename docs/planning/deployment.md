@@ -13,7 +13,10 @@ names. A Cloudflare-provided `workers.dev` address is sufficient.
 
 In the target account, open Workers & Pages to initialize its subdomain, enable
 R2 with billing activation, and enable Access/Zero Trust with owner-only login
-and MFA. The current full-Library single-database layout requires Workers Paid:
+and MFA. Enable the App Launcher with a separate owner-only reusable policy so
+the owner can enroll an authenticator. The enrollment policy must not require
+the independent MFA device that it is intended to enroll; the application and
+its own policy must still enforce MFA. The current full-Library single-database layout requires Workers Paid:
 the October 12 database is
 about 1.4 GB; D1 Free permits 500 MB per database and Paid permits 10 GB. Workers
 Paid starts at $5/month with usage-based overages. Account billing activation
@@ -455,3 +458,19 @@ including spoofed identity headers. Browser-style health requests redirect to
 the configured Access login. The owner must verify the actual sign-in and MFA
 flow before private data transfer. Full-size import and resumability tooling,
 hosted data integrity, cost measurement, and recovery remain open gates.
+
+### MFA enrollment prerequisite
+
+The first owner sign-in encountered Cloudflare's disabled App Launcher screen.
+Independent MFA was enabled, but its enrollment application had not been created.
+The App Launcher is now enabled with its own reusable owner-email Allow policy
+and the same Cloudflare identity provider. It permits enrollment without an
+already-enrolled independent MFA device. The Imladris application and its
+separate owner policy continue to require MFA.
+
+The Launcher and `/AddMfaDevice` route now redirect unauthenticated requests
+to sign-in, and the hosted health route still redirects to Access. Owner
+enrollment and the authenticated health response remain pending. Do not upload
+private Library data before that flow is verified. See Cloudflare's
+[App Launcher setup](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/app-launcher/)
+and [authenticator enrollment](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/independent-mfa/#enroll-authenticators).
