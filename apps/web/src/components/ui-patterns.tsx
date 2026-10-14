@@ -7,12 +7,28 @@ import {
   type ReactNode,
 } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button as PrimitiveButton } from '@/components/ui/button'
+import { Input as PrimitiveInput } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+export function AppButton({ className, ...props }: ComponentProps<typeof PrimitiveButton>) {
+  return (
+    <PrimitiveButton
+      className={cn('text-[length:inherit] text-[color:inherit] font-normal', className)}
+      {...props}
+    />
+  )
+}
+export function AppInput({ className, ...props }: ComponentProps<typeof PrimitiveInput>) {
+  return (
+    <PrimitiveInput
+      className={cn('text-[length:inherit] md:text-[length:inherit]', className)}
+      {...props}
+    />
+  )
+}
 export function Notice({ children, className, ...props }: ComponentProps<typeof Alert>) {
   return (
     <Alert variant="destructive" className={cn('my-2', className)} {...props}>
@@ -51,13 +67,13 @@ export function FileUploadButton({
   disabled,
   buttonSize = 'default',
   ...props
-}: Omit<ComponentProps<typeof Input>, 'type'> & {
-  buttonSize?: ComponentProps<typeof Button>['size']
+}: Omit<ComponentProps<typeof PrimitiveInput>, 'type'> & {
+  buttonSize?: ComponentProps<typeof PrimitiveButton>['size']
 }) {
   const input = useRef<HTMLInputElement>(null)
   return (
     <>
-      <Button
+      <PrimitiveButton
         type="button"
         variant="outline"
         size={buttonSize}
@@ -65,8 +81,8 @@ export function FileUploadButton({
         onClick={() => input.current?.click()}
       >
         {children}
-      </Button>
-      <Input
+      </PrimitiveButton>
+      <AppInput
         ref={input}
         type="file"
         className="sr-only"

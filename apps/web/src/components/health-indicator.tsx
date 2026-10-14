@@ -1,3 +1,5 @@
+import shellStyles from '@/components/app-shell.module.css'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useQuery } from '@tanstack/react-query'
 
@@ -13,9 +15,9 @@ export function HealthIndicator() {
 
   if (health.isPending) {
     return (
-      <Badge variant="ghost" className="px-0 status-pill" aria-live="polite">
-        <span className="status-icon">
-          <span className="status-dot status-dot-pending" />
+      <Badge variant="ghost" className={cn('px-0', shellStyles['status-pill'])} aria-live="polite">
+        <span className={shellStyles['status-icon']}>
+          <span className={cn(shellStyles['status-dot'], shellStyles['status-dot-pending'])} />
         </span>
         Connecting to local API
       </Badge>
@@ -24,9 +26,13 @@ export function HealthIndicator() {
 
   if (health.isError) {
     return (
-      <Badge variant="ghost" className="px-0 status-pill status-pill-error" aria-live="polite">
-        <span className="status-icon">
-          <span className="status-dot status-dot-error" />
+      <Badge
+        variant="ghost"
+        className={cn('px-0', shellStyles['status-pill'], shellStyles['status-pill-error'])}
+        aria-live="polite"
+      >
+        <span className={shellStyles['status-icon']}>
+          <span className={cn(shellStyles['status-dot'], shellStyles['status-dot-error'])} />
         </span>
         Local API unavailable
       </Badge>
@@ -34,9 +40,9 @@ export function HealthIndicator() {
   }
 
   return (
-    <Badge variant="ghost" className="px-0 status-pill" aria-live="polite">
-      <span className="status-icon">
-        <span className="status-dot status-dot-ready" />
+    <Badge variant="ghost" className={cn('px-0', shellStyles['status-pill'])} aria-live="polite">
+      <span className={shellStyles['status-icon']}>
+        <span className={cn(shellStyles['status-dot'], shellStyles['status-dot-ready'])} />
       </span>
       Local API connected
     </Badge>

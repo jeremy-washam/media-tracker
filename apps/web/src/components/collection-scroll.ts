@@ -93,7 +93,7 @@ export function useCollectionScroll(queryKey: QueryKey, layout: string, itemCoun
       snapshot.current = capture(element)
     }
     const onLayoutActivation = (event: Event) => {
-      if ((event.target as HTMLElement).closest('.layout-toggle')) onScroll()
+      if ((event.target as HTMLElement).closest('[aria-label="Result layout"]')) onScroll()
     }
     let width = element.clientWidth
     const resize = new ResizeObserver(() => {

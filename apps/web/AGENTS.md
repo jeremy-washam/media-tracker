@@ -2,7 +2,7 @@
 
 Follow the root AGENTS.md UI component contract. Use installed shadcn/ui Base UI components for standard controls; compose them rather than reimplementing their appearance or accessibility.
 
-Before editing, read [UI foundation](../../docs/design/ui-foundation.md) and [web workflow](README.md). Use the configured registry and local cn utility. Preserve component defaults and use supported variants; app CSS should arrange components and media content.
+Before editing, read [UI foundation](../../docs/design/ui-foundation.md) and [web workflow](README.md). Use the configured registry and local cn utility. Preserve component defaults and use supported variants; plain CSS Modules should arrange components and media content. Keep global styles limited to tokens, document/accessibility defaults, and registered custom properties. Use Tailwind for small arrangements and keep standard control appearance in shared compositions and variants. Styling classes must not drive focus, scroll, or test identity; use refs, accessible names, and explicit structural/state attributes.
 
 The native media row/card and inspector backdrop wrappers in components/library-controls.tsx are deliberate application-specific exceptions. They do not authorize raw action buttons elsewhere. Design, specimen, and library-review studies are historical references outside production routes.
 

@@ -111,13 +111,13 @@ async function mockApi(
 }
 
 async function scrollToEnd(page: Page) {
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
 }
 
 function position(page: Page) {
-  return page.locator('.books-collection').evaluate((element) => {
+  return page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     const top = element.getBoundingClientRect().top
     const item = Array.from(element.querySelectorAll<HTMLElement>('[data-collection-item]')).find(
       (item) => item.getBoundingClientRect().bottom > top,
@@ -141,14 +141,16 @@ for (const [media, section] of sections) {
       })
     })
     await page.goto(`/library/${media}/${section}?layout=list`)
-    const items = page.locator('.books-collection [data-collection-item]')
+    const items = page.locator('[data-ui~="library-collection"] [data-collection-item]')
     await expect(items).toHaveCount(20)
     expect(cursors).toEqual([])
     await scrollToEnd(page)
     await expect(items).toHaveCount(40)
     expect(cursors).toEqual(['next'])
     await scrollToEnd(page)
-    await expect(page.locator('.collection-pagination [role="status"]')).toContainText('All 40')
+    await expect(page.locator('[data-ui~="collection-pagination"] [role="status"]')).toContainText(
+      'All 40',
+    )
     await page.waitForTimeout(200)
     expect(cursors).toEqual(['next'])
   })
@@ -180,7 +182,7 @@ test('preloads near the bottom once and preserves existing rows while a page is 
   try {
     await page.goto('/library/books/archive')
     await expect(page.locator('[data-collection-item]')).toHaveCount(30)
-    await page.locator('.books-collection').evaluate((element) => {
+    await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
       element.scrollTop = element.scrollHeight - element.clientHeight - 250
     })
     await expect.poll(() => requests).toBe(1)
@@ -213,7 +215,7 @@ test('continues filling a short pane without requiring a new scroll event', asyn
   await page.goto('/library/books/archive')
   await expect(page.locator('[data-collection-item]')).toHaveCount(3)
   expect(cursors).toEqual(['1', '2'])
-  await expect(page.locator('.collection-pagination [role="status"]')).toContainText(
+  await expect(page.locator('[data-ui~="collection-pagination"] [role="status"]')).toContainText(
     'All 3 books loaded',
   )
 })
@@ -235,7 +237,9 @@ test('keeps loaded results after failure and retries only the next page', async 
   await page.goto('/library/books/archive')
   await expect(page.locator('[data-collection-item]')).toHaveCount(20)
   await scrollToEnd(page)
-  const retry = page.locator('.collection-pagination').getByRole('button', { name: 'Try again' })
+  const retry = page
+    .locator('[data-ui~="collection-pagination"]')
+    .getByRole('button', { name: 'Try again' })
   // Wait for TanStack's initial attempt and three default retries to finish.
   // This separates the retry backoff from the UI assertion under parallel load.
   await expect.poll(() => attempts, { timeout: 20000 }).toBe(4)
@@ -311,16 +315,22 @@ test('anchors the same item when switching layouts and resets a new search', asy
   // Dispatch avoids Playwright scrolling the toolbar into view before activation.
   await page.getByRole('button', { name: 'Grid view' }).dispatchEvent('click')
   await expect(page).toHaveURL(/layout=grid/)
-  await expect(page.locator('.books-page')).toHaveClass(/books-layout-grid/)
+  await expect(page.locator('[data-ui~="library-workspace"]')).toHaveAttribute(
+    'data-layout',
+    'grid',
+  )
   const anchor = page.locator(`[data-collection-item="${before.item}"]`)
   const offset = await anchor.evaluate(
     (item) =>
       item.getBoundingClientRect().top -
-      item.closest('.books-collection')!.getBoundingClientRect().top,
+      item.closest('[data-ui~="library-collection"]')!.getBoundingClientRect().top,
   )
   expect(Math.abs(offset - before.offset)).toBeLessThan(1)
   await page.getByRole('button', { name: 'List view' }).dispatchEvent('click')
-  await expect(page.locator('.books-page')).toHaveClass(/books-layout-list/)
+  await expect(page.locator('[data-ui~="library-workspace"]')).toHaveAttribute(
+    'data-layout',
+    'list',
+  )
   const after = await position(page)
   expect(after.item).toBe(before.item)
   expect(Math.abs(after.offset - before.offset)).toBeLessThan(1)
@@ -378,7 +388,7 @@ for (const dark of [false, true]) {
           await expect(page.locator('[data-collection-item]')).toHaveCount(12)
           await scrollToEnd(page)
           await expect(page.getByText('Loading more books…')).toBeVisible()
-          const footer = page.locator('.collection-pagination')
+          const footer = page.locator('[data-ui~="collection-pagination"]')
           const bounds = await footer.boundingBox()
           expect(bounds!.x).toBeGreaterThanOrEqual(0)
           expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
@@ -456,9 +466,9 @@ test('browses twenty pages without duplicate requests or items', async ({ page }
   )
   expect(new Set(ids).size).toBe(960)
   await scrollToEnd(page)
-  await expect(page.locator('.collection-pagination').getByRole('status')).toContainText(
-    'All 960 books loaded',
-  )
+  await expect(
+    page.locator('[data-ui~="collection-pagination"]').getByRole('status'),
+  ).toContainText('All 960 books loaded')
   await testInfo.attach('long-collection', {
     contentType: 'application/json',
     body: JSON.stringify({
@@ -488,8 +498,10 @@ test('shares one cursor request between manual and automatic loading', async ({ 
   try {
     await page.goto('/library/books/archive')
     await expect(page.locator('[data-collection-item]')).toHaveCount(20)
-    await page.locator('.books-collection').evaluate((element) => {
-      const button = element.querySelector<HTMLButtonElement>('.collection-pagination button')!
+    await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
+      const button = element.querySelector<HTMLButtonElement>(
+        '[data-ui~="collection-pagination"] button',
+      )!
       button.click()
       button.click()
       element.scrollTop = element.scrollHeight

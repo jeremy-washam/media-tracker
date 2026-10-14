@@ -163,7 +163,7 @@ export function ConnectionsPage() {
   })
 
   return (
-    <section className={styles.page} aria-label="Connections">
+    <section className={styles.page} data-ui="connections-page" aria-label="Connections">
       {connections.isError ? (
         <Notice>
           <p>Connection status could not be loaded.</p>

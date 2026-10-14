@@ -1,5 +1,8 @@
+import { navigationItemVariants } from './navigation-variants'
+import shellStyles from '@/components/app-shell.module.css'
+import { cn } from '@/lib/utils'
 import { WorkspaceHeaderContext } from './workspace-header-context'
-import { Button } from '@/components/ui/button'
+import { AppButton as Button } from '@/components/ui-patterns'
 import { Hint, Notice } from '@/components/ui-patterns'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -75,36 +78,53 @@ export function AppShell() {
 
   const navigation = (collapsed: boolean, mobile: boolean) => (
     <aside
-      className={mobile ? 'app-sidebar mobile-sidebar' : 'app-sidebar'}
+      className={
+        mobile
+          ? cn(shellStyles['app-sidebar'], shellStyles['mobile-sidebar'])
+          : shellStyles['app-sidebar']
+      }
       aria-label="Primary navigation"
+      data-ui="app-sidebar"
     >
-      <div className="app-brand">
+      <div className={shellStyles['app-brand']} data-ui="app-brand">
         <Link
           to="/library/books/archive"
           aria-label="Imladris Books"
+          className="cursor-default"
           onClick={() => setMobileOpen(false)}
         >
-          <span className="app-brand-mark" aria-hidden="true" />
-          <strong className="app-brand-wordmark">Imladris</strong>
+          <span
+            className={shellStyles['app-brand-mark']}
+            aria-hidden="true"
+            data-ui="app-brand-mark"
+          />
+          <strong className={shellStyles['app-brand-wordmark']} data-ui="app-brand-wordmark">
+            Imladris
+          </strong>
         </Link>
         <Button
           variant="ghost"
           size="icon"
-          className="sidebar-collapse"
+          className={shellStyles['sidebar-collapse']}
           type="button"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={() => setCollapsed((value) => !value)}
+          data-ui="sidebar-collapse"
         >
           {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </Button>
       </div>
 
-      <nav className="global-navigation" aria-label="Application">
+      <nav
+        className={shellStyles['global-navigation']}
+        aria-label="Application"
+        data-ui="global-navigation"
+      >
         <UnavailableNavigation label="Chat" icon={MessageSquare} collapsed={collapsed} />
         <Hint content="Library">
           <Link
             to="/library/books/archive"
-            className={inLibrary ? 'active' : ''}
+            className={navigationItemVariants({ active: inLibrary, collapsed })}
             aria-current={inLibrary ? 'page' : undefined}
             aria-label="Library"
             onClick={() => setMobileOpen(false)}
@@ -116,13 +136,17 @@ export function AppShell() {
         <UnavailableNavigation label="Recaps" icon={ChartNoAxesColumn} collapsed={collapsed} />
       </nav>
 
-      <nav className="media-navigation" aria-label="Media types">
-        {!collapsed ? <span className="nav-heading">Media</span> : null}
+      <nav
+        className={shellStyles['media-navigation']}
+        aria-label="Media types"
+        data-ui="media-navigation"
+      >
+        {!collapsed ? <span className={shellStyles['nav-heading']}>Media</span> : null}
         <Hint content="Books">
           <Link
             to="/library/books/archive"
             activeOptions={{ includeSearch: false }}
-            className={inBooks ? 'active' : ''}
+            className={navigationItemVariants({ active: inBooks, collapsed })}
             aria-current={inBooks ? 'page' : undefined}
             aria-label="Books"
             onClick={() => setMobileOpen(false)}
@@ -135,7 +159,7 @@ export function AppShell() {
           <Link
             to="/library/movies/archive"
             activeOptions={{ includeSearch: false }}
-            className={inMovies ? 'active' : ''}
+            className={navigationItemVariants({ active: inMovies, collapsed })}
             aria-current={inMovies ? 'page' : undefined}
             aria-label="Movies"
             onClick={() => setMobileOpen(false)}
@@ -148,7 +172,7 @@ export function AppShell() {
           <Link
             to="/library/articles/archive"
             activeOptions={{ includeSearch: false }}
-            className={inArticles ? 'active' : ''}
+            className={navigationItemVariants({ active: inArticles, collapsed })}
             aria-current={inArticles ? 'page' : undefined}
             aria-label="Articles"
             onClick={() => setMobileOpen(false)}
@@ -161,7 +185,7 @@ export function AppShell() {
           <Link
             to="/library/podcasts/archive"
             activeOptions={{ includeSearch: false }}
-            className={inPodcasts ? 'active' : ''}
+            className={navigationItemVariants({ active: inPodcasts, collapsed })}
             aria-current={inPodcasts ? 'page' : undefined}
             aria-label="Podcasts"
             onClick={() => setMobileOpen(false)}
@@ -174,7 +198,7 @@ export function AppShell() {
           <Link
             to="/library/music/tracks"
             activeOptions={{ includeSearch: false }}
-            className={inMusic ? 'active' : ''}
+            className={navigationItemVariants({ active: inMusic, collapsed })}
             aria-current={inMusic ? 'page' : undefined}
             aria-label="Music"
             onClick={() => setMobileOpen(false)}
@@ -187,7 +211,7 @@ export function AppShell() {
           <Link
             to="/library/videos/archive"
             activeOptions={{ includeSearch: false }}
-            className={inVideos ? 'active' : ''}
+            className={navigationItemVariants({ active: inVideos, collapsed })}
             aria-current={inVideos ? 'page' : undefined}
             aria-label="Videos"
             onClick={() => setMobileOpen(false)}
@@ -201,11 +225,14 @@ export function AppShell() {
         ))}
       </nav>
 
-      <div className="sidebar-secondary">
+      <div className={shellStyles['sidebar-secondary']} data-ui="sidebar-secondary">
         <Hint content="Connections">
           <Link
             to="/connections"
-            activeProps={{ className: 'active' }}
+            className={navigationItemVariants({
+              active: location.pathname === '/connections',
+              collapsed,
+            })}
             aria-label="Connections"
             onClick={() => setMobileOpen(false)}
           >
@@ -216,7 +243,7 @@ export function AppShell() {
         <Hint content={dark ? 'Use light appearance' : 'Use dark appearance'}>
           <Button
             variant="ghost"
-            className="justify-start"
+            className={navigationItemVariants({ collapsed })}
             type="button"
             aria-label={dark ? 'Use light appearance' : 'Use dark appearance'}
             onClick={() => setDark((value) => !value)}
@@ -225,7 +252,7 @@ export function AppShell() {
             {!collapsed ? <span>{dark ? 'Light appearance' : 'Dark appearance'}</span> : null}
           </Button>
         </Hint>
-        <div className="sidebar-health">
+        <div className={shellStyles['sidebar-health']}>
           <HealthIndicator />
         </div>
       </div>
@@ -236,9 +263,20 @@ export function AppShell() {
     <WorkspaceHeaderContext value={headerTarget}>
       <TooltipProvider delay={300}>
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <div className={`app-frame ${collapsed ? 'sidebar-collapsed' : ''}`}>
+          <div
+            className={cn(
+              shellStyles['app-frame'],
+              collapsed ? shellStyles['sidebar-collapsed'] : undefined,
+            )}
+            data-ui="app-frame"
+            data-sidebar-collapsed={collapsed}
+          >
             {navigation(collapsed, false)}
-            <SheetContent side="left" className="navigation-sheet p-0" showCloseButton>
+            <SheetContent
+              side="left"
+              className={cn(shellStyles['navigation-sheet'], 'p-0')}
+              showCloseButton
+            >
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <SheetDescription className="sr-only">
                 Library and source connections
@@ -246,21 +284,22 @@ export function AppShell() {
               {navigation(false, true)}
             </SheetContent>
 
-            <div className="app-workspace">
-              <header className="workspace-header">
+            <div className={shellStyles['app-workspace']}>
+              <header className={shellStyles['workspace-header']} data-ui="workspace-header">
                 <SheetTrigger
                   render={
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="mobile-nav-trigger"
+                      className={shellStyles['mobile-nav-trigger']}
                       aria-label="Open navigation"
+                      data-ui="mobile-nav-trigger"
                     />
                   }
                 >
                   <Menu aria-hidden="true" />
                 </SheetTrigger>
-                <div className="workspace-breadcrumb">
+                <div className={shellStyles['workspace-breadcrumb']} data-ui="workspace-breadcrumb">
                   {inLibrary ? (
                     <>
                       <span>Library</span>
@@ -283,9 +322,13 @@ export function AppShell() {
                     <strong>Connections</strong>
                   )}
                 </div>
-                <div className="workspace-header-tabs" ref={setHeaderTarget} />
+                <div
+                  className={shellStyles['workspace-header-tabs']}
+                  ref={setHeaderTarget}
+                  data-ui="workspace-tabs"
+                />
               </header>
-              <main className="workspace-content">
+              <main className={shellStyles['workspace-content']}>
                 <Outlet />
               </main>
             </div>
@@ -302,7 +345,13 @@ function UnavailableNavigation({
   collapsed,
 }: DisabledNavigationItem & { collapsed: boolean }) {
   return (
-    <Button variant="ghost" type="button" disabled aria-label={`${label} — not available yet`}>
+    <Button
+      variant="ghost"
+      type="button"
+      disabled
+      aria-label={`${label} — not available yet`}
+      className={navigationItemVariants({ collapsed })}
+    >
       <Icon aria-hidden="true" />
       {!collapsed ? <span>{label}</span> : null}
       {!collapsed ? <small>Later</small> : null}
@@ -312,7 +361,7 @@ function UnavailableNavigation({
 
 export function RouteError({ error }: { error: Error }) {
   return (
-    <Notice className="route-state">
+    <Notice className={shellStyles['route-state']}>
       <h1>Something went wrong</h1>
       <p>{error.message}</p>
       <Link to="/library/books/archive">Return to Books</Link>
@@ -322,7 +371,7 @@ export function RouteError({ error }: { error: Error }) {
 
 export function NotFoundPage() {
   return (
-    <section className="route-state">
+    <section className={shellStyles['route-state']}>
       <h1>Page not found</h1>
       <p>This page does not exist in your media archive.</p>
       <Link to="/library/books/archive">Return to Books</Link>

@@ -24,17 +24,11 @@
   a {
     cursor: pointer;
   }
-  .app-brand a,
-  .global-navigation a,
-  .media-navigation a,
-  .sidebar-secondary a,
-  .books-tabs a {
-    cursor: default;
-  }
 }
 
 /* Approved Graphite production tokens. */
 :root {
+  --workspace-header-height: 54px;
   --radius: 0.35rem;
   --library-row-height: 101px;
   --library-row-cover-width: 60px;

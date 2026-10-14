@@ -41,19 +41,21 @@ for (const dark of [false, true]) {
       await page.goto(`/library/${media}/${section}`)
       const row = page
         .locator(
-          'button.book-row, button.movie-row, button.article-row, button.spotify-result, button.video-result',
+          'button[data-ui~="book-row"], button[data-ui~="movie-row"], button[data-ui~="article-row"], button[data-ui~="spotify-result"], button[data-ui~="video-result"]',
         )
         .first()
       await expect(row).toBeVisible()
       const aligned = () =>
         page.evaluate(() => {
-          const header = document.querySelector<HTMLElement>('.workspace-header')!
-          const breadcrumb = document.querySelector<HTMLElement>('.workspace-breadcrumb')!
-          const mobile = document.querySelector<HTMLElement>('.mobile-nav-trigger')!
-          const nav = document.querySelector<HTMLElement>('.workspace-header-tabs')!
-          const toolbar = document.querySelector<HTMLElement>('.books-toolbar')!
+          const header = document.querySelector<HTMLElement>('[data-ui~="workspace-header"]')!
+          const breadcrumb = document.querySelector<HTMLElement>(
+            '[data-ui~="workspace-breadcrumb"]',
+          )!
+          const mobile = document.querySelector<HTMLElement>('[data-ui~="mobile-nav-trigger"]')!
+          const nav = document.querySelector<HTMLElement>('[data-ui~="workspace-tabs"]')!
+          const toolbar = document.querySelector<HTMLElement>('[data-ui~="library-toolbar"]')!
           const row = document.querySelector<HTMLElement>(
-            'button.book-row, button.movie-row, button.article-row, button.spotify-result, button.video-result',
+            'button[data-ui~="book-row"], button[data-ui~="movie-row"], button[data-ui~="article-row"], button[data-ui~="spotify-result"], button[data-ui~="video-result"]',
           )!
           const leading = getComputedStyle(mobile).display === 'none' ? breadcrumb : mobile
           const left = toolbar.getBoundingClientRect().left
@@ -76,12 +78,12 @@ for (const dark of [false, true]) {
       await page.setViewportSize({ width: 1280, height: 768 })
       await page.addStyleTag({
         content:
-          '.books-collection::-webkit-scrollbar, .workspace-header::-webkit-scrollbar { width: 16px; }',
+          '[data-ui~="library-collection"]::-webkit-scrollbar, [data-ui~="workspace-header"]::-webkit-scrollbar { width: 16px; }',
       })
       await expect
         .poll(() =>
           page
-            .locator('.books-collection')
+            .locator('[data-ui~="library-collection"]')
             .evaluate((e) => (e as HTMLElement).offsetWidth - e.clientWidth),
         )
         .toBeGreaterThan(0)
@@ -89,10 +91,13 @@ for (const dark of [false, true]) {
         .poll(aligned, { message: 'matching edges with a reserved classic scrollbar gutter' })
         .toBe(true)
       await row.click()
-      await expect(page.locator('.books-page')).toHaveAttribute('data-inspector-open', 'true')
+      await expect(page.locator('[data-ui~="library-workspace"]')).toHaveAttribute(
+        'data-inspector-open',
+        'true',
+      )
       await expect.poll(aligned, { message: 'matching edges with the inspector open' }).toBe(true)
       await page
-        .locator('.book-inspector, .media-inspector')
+        .locator('[data-ui~="book-inspector"], [data-ui~="media-inspector"]')
         .getByRole('button', { name: 'Close inspector', exact: true })
         .click()
       await expect
@@ -114,17 +119,19 @@ for (const dark of [false, true]) {
     await page.goto('/library/books/archive')
     const aligned = () =>
       page.evaluate(() => {
-        const header = document.querySelector<HTMLElement>('.workspace-header')!
-        const sidebar = document.querySelector<HTMLElement>('.app-frame > .app-sidebar')!
-        const brand = sidebar.querySelector<HTMLElement>('.app-brand')!
+        const header = document.querySelector<HTMLElement>('[data-ui~="workspace-header"]')!
+        const sidebar = document.querySelector<HTMLElement>(
+          '[data-ui~="app-frame"] > [data-ui~="app-sidebar"]',
+        )!
+        const brand = sidebar.querySelector<HTMLElement>('[data-ui~="app-brand"]')!
         const headerRect = header.getBoundingClientRect()
         const brandRect = brand.getBoundingClientRect()
         const center = headerRect.top + headerRect.height / 2
-        const targets = [sidebar.querySelector<HTMLElement>('.sidebar-collapse')!]
-        if (!sidebar.closest('.sidebar-collapsed')) {
+        const targets = [sidebar.querySelector<HTMLElement>('[data-ui~="sidebar-collapse"]')!]
+        if (!sidebar.closest('[data-sidebar-collapsed="true"]')) {
           targets.push(
-            sidebar.querySelector<HTMLElement>('.app-brand-mark')!,
-            sidebar.querySelector<HTMLElement>('.app-brand-wordmark')!,
+            sidebar.querySelector<HTMLElement>('[data-ui~="app-brand-mark"]')!,
+            sidebar.querySelector<HTMLElement>('[data-ui~="app-brand-wordmark"]')!,
           )
         }
         return (
