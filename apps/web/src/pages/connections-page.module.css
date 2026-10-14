@@ -94,6 +94,17 @@
 .detailsContent p {
   margin: 8px 0 0;
 }
+.savedConnection {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.savedConnection h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
 .actions,
 .actionGroup {
   display: flex;

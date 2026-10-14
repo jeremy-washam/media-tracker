@@ -10,9 +10,14 @@ Connections uses compact source rows with bundled official logos and labeled
 connection-state icons. Sync/coverage summaries remain visible; Collapsible
 details retain source limitations and attempt/export dates. The account form
 follows the source rows. Standard actions use the small shadcn Button variant.
-Connections displays every account lineage, coverage, attempts,
-incomplete-import progress, and resumable Spotify/YouTube imports. Use an
-existing YouTube card for later snapshots of the same account.
+Connections preserves every account lineage, coverage, attempts,
+incomplete-import progress, and resumable Spotify/YouTube imports. Spotify has
+one source row and one set of Sync/Import actions, matching the API's first
+connection target. Additional Spotify records, including their exact Resume
+targets, appear in Details; a visible summary flags unfinished imports there.
+Do not delete or merge ledger records to deduplicate source presentation.
+YouTube keeps separate account rows; use the existing row for later snapshots
+of the same account.
 
 `pnpm build:production` at the repository root prepares the hosted app. The web
 package's deployment-mode build writes `dist-production`, excludes all private

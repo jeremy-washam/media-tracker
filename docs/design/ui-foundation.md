@@ -174,7 +174,12 @@ heading or Source coverage eyebrow. Source rows show bundled official app marks,
 Degraded status stays amber and reauthorization stays red. Actions use shadcn's
 small Button variant, while the account form pairs default 32px Input/Button
 controls; coverage explanations and attempt/export dates live in
-Collapsible details. Incomplete-import progress and Resume remain visible. The
+Collapsible details. Spotify uses one source row and one set of Sync/Import
+actions for the API's first connection target. Additional saved Spotify records
+retain their status, dates, coverage, import progress, and account-specific
+Resume action within Details; a visible summary flags unfinished imports there.
+Presentation grouping never deletes or merges source evidence. YouTube account
+lineages retain separate rows. Primary incomplete-import progress and Resume remain visible. The
 new YouTube account form sits below the sources; existing lineage imports keep
 their connection IDs. Page-owned layout is isolated in its CSS Module and wraps
 both copy and actions at narrow widths. Base native-control defaults live in the

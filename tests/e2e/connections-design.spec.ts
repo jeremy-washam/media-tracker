@@ -189,3 +189,119 @@ test('new account upload requires a nonempty label and preserves chooser behavio
   await page.keyboard.press('Enter')
   expect((await chooserPromise).isMultiple()).toBe(false)
 })
+
+for (const dark of [false, true]) {
+  test(`Spotify groups saved records without losing recovery in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    const primary = {
+      ...connections.find((connection) => connection.source === 'spotify')!,
+      label: 'Spotify',
+      status: 'connected',
+    }
+    const additional = {
+      ...primary,
+      id: 'synthetic-spotify-older',
+      status: 'degraded',
+      lastSuccessfulSyncAt: '2026-09-13T12:00:00.000Z',
+      lastExportAt: '2026-09-13T12:00:00.000Z',
+      incompleteImports: [
+        {
+          importId: 'synthetic-older-import',
+          status: 'failed',
+          nextOffset: 400,
+          totalRecords: 6416,
+        },
+      ],
+    }
+    const youtube = connections.find((connection) => connection.source === 'youtube')!
+    await page.route('**/api/connections', (route) =>
+      route.fulfill({
+        json: {
+          data: [
+            ...connections.filter((connection) => connection.source !== 'spotify'),
+            primary,
+            additional,
+            {
+              ...youtube,
+              id: 'synthetic-youtube-second',
+              label: 'Second YouTube account',
+              incompleteImports: [],
+            },
+          ],
+        },
+      }),
+    )
+    let resumeUrl = ''
+    await page.route(
+      '**/api/connections/spotify/import/synthetic-older-import/continue?*',
+      (route) => {
+        resumeUrl = route.request().url()
+        return route.fulfill({
+          json: {
+            syncRunId: 'synthetic-run',
+            importId: 'synthetic-older-import',
+            alreadyImported: false,
+            completed: true,
+            nextOffset: null,
+            totalPodcastSegments: 0,
+            totalArchiveEpisodes: 0,
+            archiveEpisodes: 0,
+            totalSongSegments: 0,
+            totalArchiveTracks: 0,
+            songObservations: 0,
+            sourceRecords: 0,
+            unresolvedPodcastSegments: 0,
+          },
+        })
+      },
+    )
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    await page.goto('/connections')
+    const spotify = page.locator('[data-source=spotify]')
+    await expect(spotify).toHaveCount(1)
+    await expect(spotify.getByRole('heading', { name: 'Spotify', exact: true })).toHaveCount(1)
+    await expect(spotify.getByRole('button', { name: 'Sync now', exact: true })).toHaveCount(1)
+    await expect(spotify.getByRole('button', { name: 'Import ZIP', exact: true })).toHaveCount(1)
+    await expect(spotify.getByText('Connected', { exact: true })).toBeVisible()
+    await expect(spotify.getByText(/Unfinished import needs attention/)).toBeVisible()
+    await expect(spotify.getByRole('button', { name: 'Resume import' })).toBeHidden()
+    await expect(page.locator('[data-source=youtube]')).toHaveCount(2)
+    const details = spotify.getByRole('button', { name: 'Details', exact: true })
+    await details.focus()
+    await page.keyboard.press('Enter')
+    await expect(details).toHaveAttribute('aria-expanded', 'true')
+    await expect(spotify.getByText('Needs attention', { exact: true })).toBeVisible()
+    await expect(spotify.getByText('Import failed: 400 / 6,416 records committed.')).toBeVisible()
+    await expect(spotify.getByText('Last completed export:', { exact: false })).toBeVisible()
+    for (const width of [1280, 1024, 390, 320]) {
+      await page.setViewportSize({ width, height: 844 })
+      await spotify.scrollIntoViewIfNeeded()
+      expect(await spotify.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+      expect(
+        await page
+          .getByRole('region', { name: 'Connections', exact: true })
+          .evaluate((el) => el.scrollWidth <= el.clientWidth),
+      ).toBe(true)
+      const resume = await spotify.getByRole('button', { name: 'Resume import' }).boundingBox()
+      expect(resume!.x).toBeGreaterThanOrEqual(0)
+      expect(resume!.x + resume!.width).toBeLessThanOrEqual(width)
+      if (width === 1280 || width === 320) {
+        await page.screenshot({
+          path: test.info().outputPath(`${dark ? 'dark' : 'light'}-${width}.png`),
+          animations: 'disabled',
+        })
+      }
+    }
+    await spotify.getByRole('button', { name: 'Resume import' }).click()
+    await expect.poll(() => resumeUrl).toContain('connectionId=synthetic-spotify-older')
+    await expect(details).toHaveAttribute('aria-expanded', 'true')
+    await details.focus()
+    await page.keyboard.press('Enter')
+    await expect(details).toHaveAttribute('aria-expanded', 'false')
+    await expect(details).toBeFocused()
+  })
+}

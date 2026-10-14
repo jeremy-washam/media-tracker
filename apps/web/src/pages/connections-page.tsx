@@ -173,126 +173,129 @@ export function ConnectionsPage() {
         </Notice>
       ) : null}
       <div className={styles.sources} aria-busy={connections.isPending}>
-        {(connections.data?.data ?? []).map((connection) => (
-          <ConnectionRow
-            key={connection.id ?? connection.source}
-            connection={connection}
-            resuming={resumed.isPending}
-            onResume={(input) => resumed.mutate(input)}
-          >
-            {connection.source === 'readwise' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                disabled={readwiseSync.isPending}
-                onClick={() => readwiseSync.mutate()}
-              >
-                {readwiseSync.isPending ? (
-                  <Spinner aria-hidden="true" />
-                ) : (
-                  <RefreshCw aria-hidden="true" />
-                )}
-                {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
-              </Button>
-            ) : connection.source === 'hardcover' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                disabled={hardcoverSync.isPending}
-                onClick={() => hardcoverSync.mutate()}
-              >
-                {hardcoverSync.isPending ? (
-                  <Spinner aria-hidden="true" />
-                ) : (
-                  <RefreshCw aria-hidden="true" />
-                )}
-                {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
-              </Button>
-            ) : connection.source === 'letterboxd' ? (
-              <div className={styles.actionGroup}>
+        {connectionRows(connections.data?.data ?? []).map(
+          ({ connection, additionalConnections }) => (
+            <ConnectionRow
+              key={connection.id ?? connection.source}
+              connection={connection}
+              additionalConnections={additionalConnections}
+              resuming={resumed.isPending}
+              onResume={(input) => resumed.mutate(input)}
+            >
+              {connection.source === 'readwise' ? (
                 <Button
                   variant="outline"
                   size="sm"
                   type="button"
-                  disabled={letterboxdSync.isPending}
-                  onClick={() => letterboxdSync.mutate()}
+                  disabled={readwiseSync.isPending}
+                  onClick={() => readwiseSync.mutate()}
                 >
-                  {letterboxdSync.isPending ? (
+                  {readwiseSync.isPending ? (
                     <Spinner aria-hidden="true" />
                   ) : (
                     <RefreshCw aria-hidden="true" />
                   )}
-                  {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
+                  {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
                 </Button>
-                <FileUploadButton
-                  buttonSize="sm"
-                  accept=".zip,application/zip"
-                  disabled={letterboxdImport.isPending}
-                  onChange={(event) => {
-                    const archive = event.currentTarget.files?.[0]
-                    if (archive !== undefined) letterboxdImport.mutate(archive)
-                    event.currentTarget.value = ''
-                  }}
-                >
-                  <Upload aria-hidden="true" />
-                  {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
-                </FileUploadButton>
-              </div>
-            ) : connection.source === 'spotify' ? (
-              <div className={styles.actionGroup}>
+              ) : connection.source === 'hardcover' ? (
                 <Button
                   variant="outline"
                   size="sm"
                   type="button"
-                  disabled={spotifySync.isPending}
-                  onClick={() => spotifySync.mutate()}
+                  disabled={hardcoverSync.isPending}
+                  onClick={() => hardcoverSync.mutate()}
                 >
-                  {spotifySync.isPending ? (
+                  {hardcoverSync.isPending ? (
                     <Spinner aria-hidden="true" />
                   ) : (
                     <RefreshCw aria-hidden="true" />
                   )}
-                  {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
+                  {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
                 </Button>
+              ) : connection.source === 'letterboxd' ? (
+                <div className={styles.actionGroup}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    disabled={letterboxdSync.isPending}
+                    onClick={() => letterboxdSync.mutate()}
+                  >
+                    {letterboxdSync.isPending ? (
+                      <Spinner aria-hidden="true" />
+                    ) : (
+                      <RefreshCw aria-hidden="true" />
+                    )}
+                    {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
+                  </Button>
+                  <FileUploadButton
+                    buttonSize="sm"
+                    accept=".zip,application/zip"
+                    disabled={letterboxdImport.isPending}
+                    onChange={(event) => {
+                      const archive = event.currentTarget.files?.[0]
+                      if (archive !== undefined) letterboxdImport.mutate(archive)
+                      event.currentTarget.value = ''
+                    }}
+                  >
+                    <Upload aria-hidden="true" />
+                    {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
+                  </FileUploadButton>
+                </div>
+              ) : connection.source === 'spotify' ? (
+                <div className={styles.actionGroup}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    disabled={spotifySync.isPending}
+                    onClick={() => spotifySync.mutate()}
+                  >
+                    {spotifySync.isPending ? (
+                      <Spinner aria-hidden="true" />
+                    ) : (
+                      <RefreshCw aria-hidden="true" />
+                    )}
+                    {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
+                  </Button>
+                  <FileUploadButton
+                    buttonSize="sm"
+                    accept=".zip,application/zip"
+                    disabled={spotifyImport.isPending}
+                    onChange={(event) => {
+                      const archive = event.currentTarget.files?.[0]
+                      if (archive !== undefined) spotifyImport.mutate(archive)
+                      event.currentTarget.value = ''
+                    }}
+                  >
+                    <Upload aria-hidden="true" />
+                    {spotifyImport.isPending ? 'Importing…' : 'Import ZIP'}
+                  </FileUploadButton>
+                </div>
+              ) : connection.source === 'youtube' ? (
                 <FileUploadButton
                   buttonSize="sm"
                   accept=".zip,application/zip"
-                  disabled={spotifyImport.isPending}
+                  disabled={
+                    youtubeImport.isPending || (connection.id === null && youtubeKey.trim() === '')
+                  }
                   onChange={(event) => {
                     const archive = event.currentTarget.files?.[0]
-                    if (archive !== undefined) spotifyImport.mutate(archive)
+                    if (archive !== undefined)
+                      youtubeImport.mutate({
+                        archive,
+                        ...(connection.id === null ? {} : { connectionId: connection.id }),
+                      })
                     event.currentTarget.value = ''
                   }}
                 >
                   <Upload aria-hidden="true" />
-                  {spotifyImport.isPending ? 'Importing…' : 'Import ZIP'}
+                  {youtubeImport.isPending ? 'Importing…' : 'Import Takeout'}
                 </FileUploadButton>
-              </div>
-            ) : connection.source === 'youtube' ? (
-              <FileUploadButton
-                buttonSize="sm"
-                accept=".zip,application/zip"
-                disabled={
-                  youtubeImport.isPending || (connection.id === null && youtubeKey.trim() === '')
-                }
-                onChange={(event) => {
-                  const archive = event.currentTarget.files?.[0]
-                  if (archive !== undefined)
-                    youtubeImport.mutate({
-                      archive,
-                      ...(connection.id === null ? {} : { connectionId: connection.id }),
-                    })
-                  event.currentTarget.value = ''
-                }}
-              >
-                <Upload aria-hidden="true" />
-                {youtubeImport.isPending ? 'Importing…' : 'Import Takeout'}
-              </FileUploadButton>
-            ) : null}
-          </ConnectionRow>
-        ))}
+              ) : null}
+            </ConnectionRow>
+          ),
+        )}
         {connections.isPending
           ? Array.from({ length: 5 }, (_, index) => (
               <div className={styles.skeletonRow} key={index} aria-hidden="true">
@@ -513,6 +516,18 @@ export function ConnectionsPage() {
 type Connection = ConnectionsResponse['data'][number]
 type ResumeInput = { source: 'spotify' | 'youtube'; importId: string; connectionId: string }
 
+function connectionRows(connections: readonly Connection[]) {
+  const spotify = connections.filter((connection) => connection.source === 'spotify')
+  return connections
+    .filter((connection) => connection.source !== 'spotify' || connection === spotify[0])
+    .map((connection) => ({
+      connection,
+      // The API's first Spotify record is also the target of Sync and Import ZIP.
+      // Keep other records available for recovery without repeating those actions.
+      additionalConnections: connection.source === 'spotify' ? spotify.slice(1) : [],
+    }))
+}
+
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -545,11 +560,13 @@ function ConnectionStatus({ status }: { status: Connection['status'] }) {
 
 function ConnectionRow({
   connection,
+  additionalConnections,
   children,
   resuming,
   onResume,
 }: {
   connection: Connection
+  additionalConnections: readonly Connection[]
   children: ReactNode
   resuming: boolean
   onResume: (input: ResumeInput) => void
@@ -589,6 +606,15 @@ function ConnectionRow({
             )}
           </span>
         </div>
+        {additionalConnections.length > 0 ? (
+          <p className={styles.accountName}>
+            {additionalConnections.length} additional saved connection
+            {additionalConnections.length === 1 ? '' : 's'} in Details
+            {additionalConnections.some((saved) => saved.incompleteImports.length > 0)
+              ? ' · Unfinished import needs attention'
+              : ''}
+          </p>
+        ) : null}
         <Collapsible className={styles.details}>
           <CollapsibleTrigger render={<Button variant="ghost" size="xs" />}>
             Details <ChevronDown aria-hidden="true" />
@@ -611,41 +637,99 @@ function ConnectionRow({
                 </time>
               </p>
             )}
+            {additionalConnections.map((saved, index) => (
+              <section className={styles.savedConnection} key={saved.id ?? index}>
+                <div className={styles.sourceHeading}>
+                  <h3>
+                    {saved.label !== sourceNames[saved.source]
+                      ? saved.label
+                      : `Additional saved connection ${index + 1}`}
+                  </h3>
+                  <ConnectionStatus status={saved.status} />
+                </div>
+                <p>
+                  {saved.coverage === null
+                    ? 'Not imported'
+                    : `${saved.coverage.replaceAll('_', ' ')} coverage`}
+                </p>
+                {saved.lastSuccessfulSyncAt === null ? (
+                  <p>No completed sync yet</p>
+                ) : (
+                  <p>
+                    Last synced:{' '}
+                    <time dateTime={saved.lastSuccessfulSyncAt}>
+                      {formatTimestamp(saved.lastSuccessfulSyncAt)}
+                    </time>
+                  </p>
+                )}
+                {saved.lastAttemptedSyncAt === null ? null : (
+                  <p>
+                    Last attempt:{' '}
+                    <time dateTime={saved.lastAttemptedSyncAt}>
+                      {formatTimestamp(saved.lastAttemptedSyncAt)}
+                    </time>
+                  </p>
+                )}
+                {saved.lastExportAt === null ? null : (
+                  <p>
+                    Last completed export:{' '}
+                    <time dateTime={saved.lastExportAt}>{formatTimestamp(saved.lastExportAt)}</time>
+                  </p>
+                )}
+                <PendingImports connection={saved} resuming={resuming} onResume={onResume} />
+              </section>
+            ))}
           </CollapsibleContent>
         </Collapsible>
-        {connection.incompleteImports.map((pending) => (
-          <div className={styles.pendingImport} key={pending.importId}>
-            <p>
-              Import {pending.status}: {pending.nextOffset.toLocaleString()}
-              {pending.totalRecords === null
-                ? ''
-                : ` / ${pending.totalRecords.toLocaleString()}`}{' '}
-              records committed.
-            </p>
-            {connection.id !== null &&
-            (connection.source === 'youtube' || connection.source === 'spotify') ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={resuming}
-                onClick={() =>
-                  onResume({
-                    source: connection.source as 'youtube' | 'spotify',
-                    importId: pending.importId,
-                    connectionId: connection.id!,
-                  })
-                }
-              >
-                <RefreshCw aria-hidden="true" />
-                Resume import
-              </Button>
-            ) : (
-              <p>Upload the same ZIP again to retry.</p>
-            )}
-          </div>
-        ))}
+        <PendingImports connection={connection} resuming={resuming} onResume={onResume} />
       </div>
       <div className={styles.actions}>{children}</div>
     </article>
+  )
+}
+
+function PendingImports({
+  connection,
+  resuming,
+  onResume,
+}: {
+  connection: Connection
+  resuming: boolean
+  onResume: (input: ResumeInput) => void
+}) {
+  return (
+    <>
+      {connection.incompleteImports.map((pending) => (
+        <div className={styles.pendingImport} key={pending.importId}>
+          <p>
+            Import {pending.status}: {pending.nextOffset.toLocaleString()}
+            {pending.totalRecords === null
+              ? ''
+              : ` / ${pending.totalRecords.toLocaleString()}`}{' '}
+            records committed.
+          </p>
+          {connection.id !== null &&
+          (connection.source === 'youtube' || connection.source === 'spotify') ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={resuming}
+              onClick={() =>
+                onResume({
+                  source: connection.source as 'youtube' | 'spotify',
+                  importId: pending.importId,
+                  connectionId: connection.id!,
+                })
+              }
+            >
+              <RefreshCw aria-hidden="true" />
+              Resume import
+            </Button>
+          ) : (
+            <p>Upload the same ZIP again to retry.</p>
+          )}
+        </div>
+      ))}
+    </>
   )
 }
