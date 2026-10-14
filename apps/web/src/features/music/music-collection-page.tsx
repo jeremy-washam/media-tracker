@@ -1,3 +1,4 @@
+import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
@@ -451,11 +452,11 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           </Notice>
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
-          <div className="books-state">
-            <Music2 />
-            <h2>No {view} yet</h2>
-            <p>Import Spotify Extended Streaming History or sync Spotify from Connections.</p>
-          </div>
+          <CollectionEmptyState
+            icon={Music2}
+            title={`No ${view} yet`}
+            description="Import Spotify Extended Streaming History or sync Spotify from Connections."
+          />
         ) : null}
         {items.length ? (
           <div className="spotify-result-grid">

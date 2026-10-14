@@ -97,7 +97,7 @@ their explicit pagination controls. Virtualization remains a measured follow-up.
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
 presentation details where they conflict. Use the platform system font throughout
 production UI. A global base-layer rule gives buttons, native selects, and app navigation
-(including collection tabs and sidebar navigation) the default cursor. Ordinary links
+(including collection tabs and sidebar navigation) the default cursor. Button-composed links also use the default cursor. Ordinary links
 use a pointer. Text inputs
 retain their text cursor; disabled and busy controls retain their specific cursors.
 The current Letterboxd reference
@@ -161,6 +161,12 @@ Selected controls retain their selection background while hovered.
 Sidebar footer rows share a 38px height. In the collapsed rail, the Connections
 icon, appearance icon, and health dot share the same horizontal center; hidden
 health text must not leave an extra flex gap.
+
+All 16 Library sections use `CollectionEmptyState` for empty collections. It owns
+the shared icon, heading, description, and shadcn outline action. Pages supply
+source-specific copy and existing filter-reset callbacks; empty collections link
+to Connections through Button's Base UI `render` API. Do not style ordinary links
+as buttons in collection CSS.
 
 ## Visual and writing principles
 

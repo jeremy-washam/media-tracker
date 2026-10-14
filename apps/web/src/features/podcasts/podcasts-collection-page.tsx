@@ -1,3 +1,4 @@
+import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
@@ -470,11 +471,11 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </Notice>
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
-          <div className="books-state">
-            <Headphones />
-            <h2>No {view === 'following' ? 'followed shows' : `episodes in ${view}`}</h2>
-            <p>Sync Spotify from Connections to populate this section.</p>
-          </div>
+          <CollectionEmptyState
+            icon={Headphones}
+            title={`No ${view === 'following' ? 'followed shows' : `episodes in ${view}`}`}
+            description="Sync Spotify from Connections to populate this section."
+          />
         ) : null}
         {items.length ? (
           <div className="spotify-result-grid">

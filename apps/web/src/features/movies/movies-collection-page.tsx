@@ -1,3 +1,4 @@
+import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
 import { moviesQueryOptions } from '../../library-queries'
@@ -359,29 +360,23 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           </Notice>
         ) : null}
         {!movies.isPending && !movies.isError && items.length === 0 ? (
-          <div className="books-state">
-            <Film aria-hidden="true" />
-            <h2>{filters || search.q ? 'No matching movies' : `No movies in ${collection}`}</h2>
-            <p>
-              {filters || search.q
+          <CollectionEmptyState
+            icon={Film}
+            title={filters || search.q ? 'No matching movies' : `No movies in ${collection}`}
+            description={
+              filters || search.q
                 ? 'Clear search or filters to broaden this view.'
-                : 'Import Letterboxd from Connections to populate this collection.'}
-            </p>
-            {filters || search.q ? (
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => {
-                  setDraftSearch(null)
-                  updateSearch(clearMovieFilters())
-                }}
-              >
-                Clear search and filters
-              </Button>
-            ) : (
-              <Link to="/connections">Open Connections</Link>
-            )}
-          </div>
+                : 'Import Letterboxd from Connections to populate this collection.'
+            }
+            onClear={
+              filters || search.q
+                ? () => {
+                    setDraftSearch(null)
+                    updateSearch(clearMovieFilters())
+                  }
+                : undefined
+            }
+          />
         ) : null}
         {items.length > 0 ? (
           <div className={view === 'grid' ? 'movies-grid' : 'movies-list'}>

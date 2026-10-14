@@ -1693,7 +1693,8 @@ a:focus-visible {
   color: var(--muted-foreground);
 }
 
-.books-state {
+.books-state,
+.collection-empty-state {
   min-height: 340px;
   display: flex;
   flex-direction: column;
@@ -1702,35 +1703,31 @@ a:focus-visible {
   padding: 40px;
   border: 1px dashed var(--border);
   border-radius: calc(var(--radius) * 1.5);
-  color: var(--muted-foreground);
+  color: var(--foreground);
   text-align: center;
 }
 
-.books-state > svg {
+.books-state > svg,
+.collection-empty-state > svg {
   width: 28px;
+  color: var(--muted-foreground);
   margin-bottom: 14px;
 }
 
-.books-state h2 {
+.books-state h2,
+.collection-empty-state h2 {
   margin: 0;
   color: var(--foreground);
   font-family: inherit;
   font-weight: 500;
 }
 
-.books-state p {
+.books-state p,
+.collection-empty-state p {
   max-width: 450px;
+  color: var(--muted-foreground);
   margin: 8px 0 16px;
   font-size: 12px;
-}
-.books-state a {
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--foreground);
-  background: var(--card);
-  font-size: 11px;
 }
 
 .load-more {

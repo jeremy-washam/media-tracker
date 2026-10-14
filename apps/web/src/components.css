@@ -6,6 +6,7 @@
 @layer base {
   button,
   [role='button'],
+  [data-slot='button'],
   [role='option'],
   select {
     cursor: default;
