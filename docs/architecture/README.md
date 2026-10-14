@@ -29,7 +29,9 @@ Production deployment must put the web application and normal API traffic
 behind Cloudflare Access. Worker-side token/owner checks and production asset
 exclusion are implemented. A paused Worker and owner-only Access application are
 provisioned; owner sign-in and MFA are confirmed. The database transfer is
-complete; private R2 transfer is in progress within verified included usage.
+complete; all private R2 objects are checksum/metadata verified within included
+usage. Full database/restore verification stopped on an authorization rejection
+and awaits a fresh management connection; checked tables matched.
 The owner approves the existing $5/month subscription with $0 additional
 charges. Full hosted Library validation is still pending. Missing
 Access configuration denies hosted requests. Local development bypasses

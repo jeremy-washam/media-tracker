@@ -164,6 +164,15 @@ class Cloudflare:
                 return expiry <= datetime.datetime.now(datetime.timezone.utc)
         return False
 
+    def oauth_seconds_remaining(self):
+        if os.environ.get('CLOUDFLARE_API_TOKEN') or not self.oauth_file.exists():
+            return None
+        for line in self.oauth_file.read_text().splitlines():
+            if line.strip().startswith('expiration_time ='):
+                expiry = datetime.datetime.fromisoformat(json.loads(line.split('=', 1)[1].strip()).replace('Z', '+00:00'))
+                return (expiry - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        return None
+
     def refresh_oauth(self):
         result = subprocess.run(['pnpm', '--filter', '@media-tracker/api', 'exec', 'wrangler', 'whoami'],
             cwd=Path(__file__).resolve().parents[2], capture_output=True, timeout=120)
@@ -188,6 +197,18 @@ class Cloudflare:
                     result = json.load(response)
             except urllib.error.HTTPError as error:
                 if error.code == 401 and not refreshed and self.oauth_expired():
+                    self.refresh_oauth()
+                    refreshed = True
+                    continue
+                remaining = self.oauth_seconds_remaining() if error.code in (401, 403) and not refreshed else None
+                if remaining is not None and 0 < remaining <= 180:
+                    # Cloudflare can reject a token shortly before its advertised
+                    # expiry. Let Wrangler perform its normal expired-token refresh.
+                    delay = remaining + 1
+                    while delay > 0:
+                        pause = min(30, delay)
+                        time.sleep(pause)
+                        delay -= pause
                     self.refresh_oauth()
                     refreshed = True
                     continue

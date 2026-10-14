@@ -474,6 +474,29 @@ class TransferTests(unittest.TestCase):
             remote.request('GET', 'synthetic')
         refresh.assert_not_called()
 
+    def test_near_expiry_authorization_rejection_refreshes_once_after_bounded_pause(self):
+        remote = Cloudflare('account','database',self.root/'never-read-oauth')
+        remote.token = lambda:'synthetic';remote.oauth_expired = lambda:False
+        remote.oauth_seconds_remaining = lambda:65
+        class Client:
+            calls = 0
+            def open(self,request,timeout):
+                self.calls += 1
+                if self.calls == 1:
+                    raise urllib.error.HTTPError(request.full_url,403,'expired early',Message(),io.BytesIO(b'PRIVATE RESPONSE'))
+                return io.BytesIO(b'{"success":true,"result":{}}')
+        remote.client = Client()
+        with patch('transfer.time.sleep') as sleep,patch('transfer.subprocess.run',return_value=SimpleNamespace(returncode=0)) as refresh:
+            remote.request('GET','synthetic')
+        refresh.assert_called_once()
+        self.assertTrue(all(call.args[0] <= 30 for call in sleep.call_args_list))
+        self.assertGreaterEqual(sum(call.args[0] for call in sleep.call_args_list),66)
+        self.assertEqual(remote.client.calls,2)
+        remote.client.calls = 0;remote.oauth_seconds_remaining = lambda:181
+        with patch('transfer.time.sleep'),patch('transfer.subprocess.run') as refresh,self.assertRaisesRegex(RuntimeError,'HTTP 403'):
+            remote.request('GET','synthetic')
+        refresh.assert_not_called()
+
     def test_management_and_r2_clients_disable_redirects(self):
         remote = Cloudflare('account','database',self.root / 'never-read-oauth')
         r2 = R2Transfer({'url':'https://media-tracker-transfer.synthetic.workers.dev'}, 'https://media-tracker-transfer.synthetic.workers.dev')

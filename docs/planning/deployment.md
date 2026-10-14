@@ -5,8 +5,11 @@ resources and paused Worker are provisioned, and the owner confirmed sign-in,
 MFA, the hosted health response, and the web interface. The private Library
 database transfer is complete: all 237 files, including final indexes and
 triggers, have matching native receipts. All 18,126 private R2 objects now have matching native SHA-256, size, and
-metadata. Full hosted database/restore verification is in progress within the
-spending gate below. Seeing the web interface
+metadata. Full hosted database/restore verification is paused after an authorization
+rejection. Checked tables matched the snapshot; the incomplete restore was
+removed, and usage accounting remains measured. Wrangler sign-in was renewed;
+the separate management connection requires owner authorization before obtaining
+a fresh Access/MFA proof and restarting. The spending gate remains in force. Seeing the web interface
 does not confirm a complete or validated Library cutover.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
@@ -661,3 +664,15 @@ a write-query count matching the receipts, and totals covering recorded usage.
 Record any external diagnostic reads separately; for this incident the sole
 manual receipt query read nine rows and wrote none. Never clear unrelated query
 uncertainty or treat an actual SQL failure as a completed import.
+
+### Authorization recovery during verification
+
+An October 14 verification pass stopped on an HTTP 403 shortly before the
+Wrangler token's advertised expiry. No failed-query charge or scratch table
+was left unresolved. The client now handles an authorization rejection within
+three minutes of OAuth expiry by waiting in intervals of at most 30 seconds,
+then letting Wrangler renew the expired token and retrying once. Unexpired
+permission denials outside that narrow window still stop without refreshing;
+static API tokens are never replaced. This does not broaden permissions or
+change billing limits. An independent management-connection renewal is needed
+when its Access/MFA attestation expires.

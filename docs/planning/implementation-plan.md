@@ -34,7 +34,8 @@ The [Music implementation](music-implementation.md) supersedes earlier
 Private Access checks, usage limiters, production packaging, deployment helpers,
 and local snapshot/restore rehearsal are in the checkout. Hosted storage,
 queues, and an owner-only Access application are provisioned. The paused Worker
-is published and private data transfer is in progress. Owner sign-in and MFA
+is published and private data transfer is complete. Full database/restore
+verification awaits renewed management authorization. Owner sign-in and MFA
 are confirmed; full transfer integrity and authenticated Library validation remain pending, along with the launch gates in the
 [deployment runbook](deployment.md) and
 [storage efficiency plan](storage-efficiency-plan.md). The
@@ -707,8 +708,9 @@ preparation: Worker-side owner authentication, an app-only production bundle,
 guarded production configuration, paused cutover, and a local D1/R2 transfer and
 restore rehearsal. The paused Worker and owner-only Access are deployed; owner
 sign-in, MFA, health, and the web interface are confirmed. The database copy is
-237 of 237 files complete, including indexes/triggers. Private R2 transfer,
-full hosted verification, and production sync cutover remain pending. Further remote
+237 of 237 files complete, including indexes/triggers. All 18,126 private R2
+objects are checksum/metadata verified. Full hosted database/restore verification
+awaits renewed management authorization; production sync remains off. Further remote
 work is paused at the spending gate. The local database requires Workers Paid
 at its current size; this is not yet a complete, validated Library deployment.
 
