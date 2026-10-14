@@ -457,3 +457,96 @@ test('Album grid wraps long identity text and keeps the concise playback summary
   }
   await expect(card.locator('.music-grid-summary')).toContainText('4 observations · 10 min')
 })
+
+// Empty collections must share the same primitive and geometry across every section.
+for (const dark of [false, true]) {
+  for (const [media, views, response] of [
+    ['books', ['archive', 'queue'], booksResponse([])],
+    ['movies', ['archive', 'queue'], moviesResponse([])],
+    ['articles', ['archive', 'queue', 'feed'], articlesResponse([])],
+    ['podcasts', ['archive', 'queue', 'following'], podcastsResponse([])],
+    ['music', ['tracks', 'albums', 'artists'], musicResponse([])],
+    ['videos', ['archive', 'queue', 'channels'], videosResponse([])],
+  ] as const) {
+    for (const view of views) {
+      test(`shared empty state ${media}/${view} in ${dark ? 'dark' : 'light'}`, async ({
+        page,
+      }) => {
+        await page.addInitScript(
+          (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+          dark,
+        )
+        await page.route(`**/api/library/${media}*`, (route) => {
+          if (new URL(route.request().url()).pathname === `/api/library/${media}`)
+            return route.fulfill({ json: response })
+          return route.fallback()
+        })
+        await page.goto(`/library/${media}/${view}`)
+        const state = page.locator('.collection-empty-state')
+        const action = state.locator('a[data-slot="button"]')
+        await expect(action).toHaveText('Open Connections')
+        await expect(action).toHaveAttribute('href', '/connections')
+        for (const width of [1280, 390]) {
+          await page.setViewportSize({ width, height: 844 })
+          await expect(action).toBeVisible()
+          const geometry = await action.evaluate((element) => {
+            const box = element.getBoundingClientRect()
+            const range = document.createRange()
+            range.selectNodeContents(element)
+            const text = range.getBoundingClientRect()
+            const state = element.closest('.collection-empty-state')!.getBoundingClientRect()
+            return {
+              height: box.height,
+              textCenterOffset: Math.abs((text.top + text.bottom - box.top - box.bottom) / 2),
+              centerOffset: Math.abs((box.left + box.right - state.left - state.right) / 2),
+              cursor: getComputedStyle(element).cursor,
+              color: getComputedStyle(element).color,
+              headingColor: getComputedStyle(
+                element.closest('.collection-empty-state')!.querySelector('h2')!,
+              ).color,
+              left: box.left,
+              right: box.right,
+            }
+          })
+          expect(geometry.height).toBe(32)
+          expect(geometry.textCenterOffset).toBeLessThanOrEqual(2)
+          expect(geometry.centerOffset).toBeLessThanOrEqual(1)
+          expect(geometry.cursor).toBe('default')
+          expect(geometry.color).toBe(geometry.headingColor)
+          expect(geometry.left).toBeGreaterThanOrEqual(0)
+          expect(geometry.right).toBeLessThanOrEqual(width)
+        }
+        await action.focus()
+        await expect(action).toBeFocused()
+        await page.keyboard.press('Enter')
+        await expect(page).toHaveURL(/\/connections$/)
+      })
+    }
+  }
+}
+
+for (const [media, response, label] of [
+  ['books', booksResponse, 'Clear search and facets'],
+  ['movies', moviesResponse, 'Clear search and filters'],
+  ['articles', articlesResponse, 'Clear search and filters'],
+] as const) {
+  test(`shared ${media} empty state preserves filter clearing`, async ({ page }) => {
+    await page.route(`**/api/library/${media}*`, (route) => {
+      const url = new URL(route.request().url())
+      if (url.pathname === `/api/library/${media}`)
+        return route.fulfill({ json: url.searchParams.get('q') ? response([]) : response() })
+      return route.fallback()
+    })
+    await page.goto(`/library/${media}/archive?q=missing&sort=title&direction=asc`)
+    const state = page.locator('.collection-empty-state')
+    await expect(state.getByRole('heading')).toHaveText(`No matching ${media}`)
+    const action = state.getByRole('button', { name: label })
+    await expect(action).toHaveCSS('cursor', 'default')
+    await expect(action).toHaveCSS('height', '32px')
+    await action.focus()
+    await page.keyboard.press('Enter')
+    await expect(state).toHaveCount(0)
+    expect(new URL(page.url()).searchParams.has('q')).toBe(false)
+    expect(new URL(page.url()).searchParams.get('sort')).toBe('title')
+  })
+}

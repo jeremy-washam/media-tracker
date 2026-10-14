@@ -1,3 +1,4 @@
+import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
 import { booksQueryOptions } from '../../library-queries'
@@ -366,34 +367,29 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           </Notice>
         ) : null}
         {!books.isPending && !books.isError && items.length === 0 ? (
-          <div className="books-state">
-            <BookOpen aria-hidden="true" />
-            <h2>{filters || search.q ? 'No matching books' : `No books in ${collection}`}</h2>
-            <p>
-              {filters || search.q
+          <CollectionEmptyState
+            icon={BookOpen}
+            title={filters || search.q ? 'No matching books' : `No books in ${collection}`}
+            description={
+              filters || search.q
                 ? 'Clear search or filters to broaden this view.'
-                : 'Sync Hardcover from Connections to populate this collection.'}
-            </p>
-            {filters || search.q ? (
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => {
-                  setDraftSearch(null)
-                  updateSearch({
-                    q: undefined,
-                    format: undefined,
-                    series: undefined,
-                    genre: undefined,
-                  })
-                }}
-              >
-                Clear search and facets
-              </Button>
-            ) : (
-              <Link to="/connections">Open Connections</Link>
-            )}
-          </div>
+                : 'Sync Hardcover from Connections to populate this collection.'
+            }
+            clearLabel="Clear search and facets"
+            onClear={
+              filters || search.q
+                ? () => {
+                    setDraftSearch(null)
+                    updateSearch({
+                      q: undefined,
+                      format: undefined,
+                      series: undefined,
+                      genre: undefined,
+                    })
+                  }
+                : undefined
+            }
+          />
         ) : null}
         {items.length > 0 ? (
           <div className={layout === 'grid' ? 'books-grid' : 'books-list'}>

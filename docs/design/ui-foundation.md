@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
 - Status: Index and all six initial Library slices implemented; further design remains open
-- Last updated: 2026-10-12
+- Last updated: 2026-10-13
 
 ## Purpose and scope
 
@@ -19,6 +19,14 @@ Desktop is the current focus; both light and dark modes are required. Aim for a 
 library with expressive artwork, readable typography, restrained controls, and
 clear selection state. Media metadata should serve the user's relationship to
 an item. Future Lists, Feed, and Explorations stay out of initial navigation.
+
+This document governs the desktop client. The owner now wants a separate mobile
+experience and genuine native iOS controls; the [native iOS plan](../planning/ios-app.md)
+owns that research and proposed delivery. Native navigation/detail presentation
+may be rethought while preserving accepted media semantics. Lists, Explorations,
+and Feed can appear as illustrative native prototype destinations to test future
+scale, without changing production desktop navigation or implying working services.
+The earlier mobile studies are disposable and are not approved design sources.
 
 ## Selected foundation: Index
 
@@ -89,7 +97,7 @@ their explicit pagination controls. Virtualization remains a measured follow-up.
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
 presentation details where they conflict. Use the platform system font throughout
 production UI. A global base-layer rule gives buttons, native selects, and app navigation
-(including collection tabs and sidebar navigation) the default cursor. Ordinary links
+(including collection tabs and sidebar navigation) the default cursor. Button-composed links also use the default cursor. Ordinary links
 use a pointer. Text inputs
 retain their text cursor; disabled and busy controls retain their specific cursors.
 The current Letterboxd reference
@@ -150,6 +158,15 @@ and collapse control with the workspace header in expanded and collapsed layouts
 Neutral buttons and sidebar navigation share a visible hover background that is
 less emphasized than selection in both appearance modes, including the sidebar toggle.
 Selected controls retain their selection background while hovered.
+Sidebar footer rows share a 38px height. In the collapsed rail, the Connections
+icon, appearance icon, and health dot share the same horizontal center; hidden
+health text must not leave an extra flex gap.
+
+All 16 Library sections use `CollectionEmptyState` for empty collections. It owns
+the shared icon, heading, description, and shadcn outline action. Pages supply
+source-specific copy and existing filter-reset callbacks; empty collections link
+to Connections through Button's Base UI `render` API. Do not style ordinary links
+as buttons in collection CSS.
 
 ## Visual and writing principles
 

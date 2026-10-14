@@ -6,9 +6,11 @@ Imladris is a private, single-user ledger of media consumption. It imports
 history from existing services, preserves the source evidence, and presents a
 normalized view suitable for browsing and, later, evidence-backed LLM queries.
 
-The first milestone is ingestion. Recommendations, manually managed Queue, and
-a native iOS client are deliberately deferred. Read-only source-derived Queue
-views are implemented in the six-media Library.
+The first milestone is ingestion. Recommendations and manually managed Queue
+remain deferred. Read-only source-derived Queue views are implemented in the
+six-media Library. A separate SwiftUI iOS client is now planned, with development
+setup next and no native implementation yet. The [native iOS plan](../planning/ios-app.md)
+records backend reuse, authentication gates, and the build/test workflow.
 
 ## System shape
 
@@ -25,12 +27,18 @@ External services and exports
 
 Production deployment must put the web application and normal API traffic
 behind Cloudflare Access. Worker-side token/owner checks and production asset
-exclusion are implemented; hosted Access is provisioned and owner sign-in/MFA
-has been confirmed. Missing
+exclusion are implemented. A paused Worker and owner-only Access application are
+provisioned; owner sign-in and MFA are confirmed. Private-data transfer is in
+progress, with full hosted Library validation still pending. Missing
 Access configuration denies hosted requests. Local development bypasses
 authentication only for explicit loopback requests.
 Hosted webhook/OAuth callback routes are deferred and will require their own
 authentication when introduced.
+
+The planned iOS client will consume the same HTTP API, including its OpenAPI 3.1
+description. Its Swift networking/models are separate from TypeScript packages.
+Native-compatible authentication still needs a documented and tested decision
+under ADR 0005; Managed OAuth is a research candidate, not an implemented flow.
 
 The [private deployment runbook](../planning/deployment.md) records paused
 cutover configuration and a local D1/R2 snapshot/restore rehearsal. Contentless

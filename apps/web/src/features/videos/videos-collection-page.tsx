@@ -1,3 +1,4 @@
+import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
@@ -277,11 +278,11 @@ export function VideosCollectionPage({ view }: { view: View }) {
           </Notice>
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
-          <div className="books-state">
-            <PlaySquare />
-            <h2>No {view} yet</h2>
-            <p>Import YouTube Takeout from Connections.</p>
-          </div>
+          <CollectionEmptyState
+            icon={PlaySquare}
+            title={`No ${view} yet`}
+            description="Import YouTube Takeout from Connections."
+          />
         ) : null}
         {items.length ? (
           <div className={view === 'channels' ? 'video-channel-list' : 'video-result-grid'}>

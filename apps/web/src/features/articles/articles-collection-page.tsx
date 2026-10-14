@@ -1,3 +1,4 @@
+import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
 import { articlesQueryOptions } from '../../library-queries'
@@ -298,24 +299,16 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           </Notice>
         ) : null}
         {!articles.isPending && !articles.isError && !items.length ? (
-          <div className="books-state">
-            <FileText aria-hidden="true" />
-            <h2>
-              {activeFilters || search.q ? 'No matching articles' : `No articles in ${section}`}
-            </h2>
-            <p>
-              {activeFilters || search.q
+          <CollectionEmptyState
+            icon={FileText}
+            title={activeFilters || search.q ? 'No matching articles' : `No articles in ${section}`}
+            description={
+              activeFilters || search.q
                 ? 'Clear search or filters to broaden this view.'
-                : 'Sync Readwise from Connections to populate this section.'}
-            </p>
-            {activeFilters || search.q ? (
-              <Button variant="outline" type="button" onClick={() => update(clearFilters())}>
-                Clear search and filters
-              </Button>
-            ) : (
-              <Link to="/connections">Open Connections</Link>
-            )}
-          </div>
+                : 'Sync Readwise from Connections to populate this section.'
+            }
+            onClear={activeFilters || search.q ? () => update(clearFilters()) : undefined}
+          />
         ) : null}
         {items.length ? (
           <div className="articles-list">

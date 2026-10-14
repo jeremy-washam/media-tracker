@@ -1,7 +1,7 @@
 # Long-Term Product Vision
 
 - Status: Initial surface scope agreed; longer-term concepts exploratory
-- Last updated: 2026-10-12
+- Last updated: 2026-10-13
 
 ## Purpose
 
@@ -14,6 +14,11 @@ Recaps. Index with a collapsible sidebar is the selected shell. See the
 [desktop UI foundation](../design/ui-foundation.md) for the agreed details.
 The longer-term discovery and recommendation ideas below remain exploratory;
 they are not commitments to build every described feature.
+
+The separate [native iOS plan](../planning/ios-app.md) now starts with development
+setup and a Books Library prototype. It considers Lists, Explorations, and Feed
+for future mobile navigation; their services remain exploratory/deferred. Sample
+native screens do not implement these primitives or alter the desktop scope.
 
 ## Durable product primitives
 

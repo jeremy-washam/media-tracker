@@ -28,7 +28,7 @@ The agreed initial interface beyond ingestion has three primary surfaces:
 - **Library:** browse imported items and full details, first by media type and
   then by Archive or Queue. Priority order: Books, Movies, Articles, Podcasts,
   Songs, YouTube videos. Show one item with all supported consumption history;
-  date filters match any occurrence. Initial Library is read-only. Reading,
+  collection date semantics follow each media family's accepted contract. Initial Library is read-only. Reading,
   watching, and listening inside the app are not in scope and may never be.
 - **Recaps:** browsable monthly and yearly rollups across media. The name is
   provisional; the workspace can later support general-purpose analytics.
@@ -115,7 +115,9 @@ The ingestion-first foundation and initial read-only Library slices are
 implemented locally. Remaining work includes per-media hardening, private
 deployment gates, generalized recovery, and the proposed Chat/Recaps surfaces.
 Source-derived Queue remains read-only; local intent and write-back require
-their own future conflict model. Hosted provisioning and deployment are pending.
+their own future conflict model. The October 13 deployment record shows a paused
+Worker published against empty storage; owner MFA verification and private-data
+transfer remain pending. See the [deployment runbook](../planning/deployment.md).
 
 The original ingestion sequence backfills and then synchronizes consumption
 history, where the source services permit it, from:
@@ -135,10 +137,14 @@ Use official APIs, webhooks, RSS feeds, and user data exports as appropriate. Pr
   changes upstream only when a dependable integration permits it; bidirectional
   sync is not critical. Current imported Queue state remains source-owned.
 - LLM-assisted search over the owner's saved media, history, metadata, notes, highlights, and authorized full text. Arbitrary natural-language queries should return traceable answers grounded in stored records and source provenance rather than opaque unsupported responses.
-- An iOS application. Mobile is not an initial priority, and the owner dislikes
-  mobile apps, so avoid making the native client foundational. Keep the backend
-  API-first, design the initial web client for desktop, and pursue mobile as a
-  separate experience later only if it provides clear value.
+- A separate iOS experience. On October 13, the owner requested a concrete native
+  development plan and workflow, prioritizing Library and genuine Apple Liquid
+  Glass. The researched direction is a SwiftUI client consuming the existing
+  API, with development setup and a small device proof next. Desktop retains its
+  own React/Vite interface; mobile is designed independently. Lists, Explorations,
+  and Feed inform future navigation but still need their own services. No native
+  implementation exists yet, and the earlier mobile studies are disposable.
+  See the [native iOS plan](../planning/ios-app.md) for milestones and open decisions.
 
 ## Technical foundation
 
