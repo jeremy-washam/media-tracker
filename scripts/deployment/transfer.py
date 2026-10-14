@@ -758,7 +758,7 @@ class R2Transfer:
             headers['Content-Length'] = str(path.stat().st_size)
             headers['X-Transfer-Metadata'] = base64.b64encode(json.dumps({'key': key, **metadata}, separators=(',', ':')).encode()).decode()
         else:
-            body = json.dumps({'key': key}).encode()
+            body = json.dumps({'keys': key} if route == '/heads' else {'key': key}).encode()
             headers['Content-Type'] = 'application/json'
         request = urllib.request.Request(self.settings['url'] + route, data=body, method='POST', headers=headers)
         try:
@@ -770,10 +770,20 @@ class R2Transfer:
         except urllib.error.HTTPError as error:
             if error.code == 404 and route == '/head':
                 return None
-            raise RuntimeError('Private R2 transfer failed (HTTP ' + str(error.code) + ')') from None
+            if self.usage_path is not None:
+                diagnostic = {'route': route, 'key': key, 'status': error.code, 'response': error.read(8192).decode('utf8', errors='replace')}
+                write_json(self.usage_path.parent / ('r2-error-' + uuid.uuid4().hex + '.json'), diagnostic)
+            raise RuntimeError('Private R2 transfer failed (HTTP ' + str(error.code) + '); inspect the private diagnostic') from None
         finally:
             if stream:
                 stream.close()
+
+    def heads(self, keys):
+        result = self.request('/heads', keys)
+        objects = result.get('objects') if isinstance(result, dict) else None
+        if not isinstance(objects, list) or len(objects) != len(keys):
+            raise ValueError('Incomplete private R2 batch confirmation')
+        return objects
 
     def matches(self, actual, expected):
         return actual is not None and actual.get('size') == expected['bytes'] and actual.get('sha256') == expected['sha256'] and actual.get('httpMetadata', {}) == expected['httpMetadata'] and actual.get('customMetadata', {}) == expected['customMetadata']
@@ -796,30 +806,62 @@ class R2Transfer:
 
 def transfer_r2(directory, manifest, r2, workers=4):
     completed = 0
+    missing = []
+    all_items = list(manifest['objects'].items())
+    batches = iter([all_items[start:start+16] for start in range(0, len(all_items), 16)])
+    def inspect(group):
+        actual = r2.heads([key for key, _ in group])
+        absent = []
+        for item, stored in zip(group, actual):
+            if stored is None:
+                absent.append(item)
+            elif not r2.matches(stored, item[1]):
+                raise ValueError('Existing remote R2 object differs; refusing to overwrite')
+        return len(group), absent
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    pending = set()
+    confirmed = 0
+    next_report = 250
+    try:
+        for _ in range(workers):
+            batch = next(batches, None)
+            if batch is not None:pending.add(pool.submit(inspect, batch))
+        while pending:
+            done, pending = concurrent.futures.wait(pending, return_when=concurrent.futures.FIRST_COMPLETED)
+            for future in done:
+                count, absent = future.result()
+                confirmed += count
+                completed += count - len(absent)
+                missing.extend(absent)
+                batch = next(batches, None)
+                if batch is not None:pending.add(pool.submit(inspect, batch))
+            if confirmed >= next_report or not pending:
+                print(json.dumps({'r2ObjectsInspected': confirmed, 'alreadyVerified': completed, 'total': len(all_items)}), flush=True)
+                next_report = confirmed + 250
+    finally:
+        for future in pending:future.cancel()
+        pool.shutdown(wait=True, cancel_futures=True)
     def copy(item):
         key, expected = item
         r2.copy(directory, key, expected)
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
     pending = set()
-    items = iter(manifest['objects'].items())
+    items = iter(missing)
     try:
         for _ in range(workers):
             item = next(items, None)
-            if item is not None:
-                pending.add(pool.submit(copy, item))
+            if item is not None:pending.add(pool.submit(copy, item))
         while pending:
             done, pending = concurrent.futures.wait(pending, return_when=concurrent.futures.FIRST_COMPLETED)
             for future in done:
                 future.result()
                 completed += 1
                 item = next(items, None)
-                if item is not None:
-                    pending.add(pool.submit(copy, item))
-                if completed % 250 == 0 or completed == len(manifest['objects']):
-                    print(json.dumps({'r2Objects': completed, 'total': len(manifest['objects'])}), flush=True)
+                if item is not None:pending.add(pool.submit(copy, item))
+                if completed % 250 == 0 or completed == len(all_items):
+                    print(json.dumps({'r2Objects': completed, 'total': len(all_items)}), flush=True)
     finally:
-        for future in pending:
-            future.cancel()
+        for future in pending:future.cancel()
         pool.shutdown(wait=True, cancel_futures=True)
     return completed
 

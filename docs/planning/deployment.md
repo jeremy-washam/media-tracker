@@ -4,8 +4,9 @@ Status: local preparation and restore rehearsal accepted. The production
 resources and paused Worker are provisioned, and the owner confirmed sign-in,
 MFA, the hosted health response, and the web interface. The private Library
 database transfer is complete: all 237 files, including final indexes and
-triggers, have matching native receipts. Private R2 uploads and full hosted
-verification remain pending and require the spending gate below. Seeing the web interface
+triggers, have matching native receipts. All 18,126 private R2 objects now have matching native SHA-256, size, and
+metadata. Full hosted database/restore verification is in progress within the
+spending gate below. Seeing the web interface
 does not confirm a complete or validated Library cutover.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
@@ -54,13 +55,21 @@ read and 6,917,466 rows written, conservatively including observed hosted reads.
 validation, Worker invocation, R2 operation, or other account activity. Its
 100-million-read/25-million-write deployment budget is an operation safeguard,
 not an account billing cap. The remaining R2 copy contains 18,126 objects and
-211,643,751 bytes. A clean first pass makes 54,378 helper Worker requests
-(HEAD, PUT, HEAD), before retries or independent verification. The temporary helper now has a 100 ms CPU ceiling and the client persists a
+211,643,751 bytes. The completed copy consumed 55,514 helper Worker attempts, including the
+interruption and resume, below the unchanged 60,000 limit. The first pass
+stopped automatically on HTTP 400. Batch metadata checks confirmed 17,003
+existing copies and uploaded the 1,123 missing objects without overwrites; the
+rejection did not recur. Batches are limited to 16 keys, so repeated metadata
+checks consume fewer Worker invocations. Every object still receives an exact
+checksum/size/metadata comparison. Authenticated failure diagnostics stay in
+private mode-0600 files; no object keys or payloads are printed. The temporary helper now has a 100 ms CPU ceiling and the client persists a
 60,000-request ceiling, bound to the exact endpoint and bundle. It reserves
 requests before network dispatch, counts lost responses, refuses a missing or
 mismatched ledger, and cannot reset its limit by restarting. Parallel uploads
 share the same serialized counter. The nominal configured ceiling is 6 million
-CPU milliseconds; runtime CPU limits have some flexibility and are not a hard
+CPU milliseconds. A batch can issue at most 16 Class B reads, so the 60,000
+invocation limit also bounds Class B reads below 960,000; each PUT invocation
+performs one Class A write. Both are below included R2 operation allowances; runtime CPU limits have some flexibility and are not a hard
 billing cap. Stop on unexpected usage or errors rather than raising the limit.
 
 An account-wide analytics read on October 14 reported 13,830,556 D1 reads and

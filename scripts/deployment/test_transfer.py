@@ -13,7 +13,7 @@ import unittest
 
 from snapshot import checksum
 import test_snapshot
-from transfer import R2_REQUEST_LIMIT, BUDGET, ImportStatusLost, NO_IMPORT, prepared_sql, Cloudflare, NoRedirect, RECEIPTS, R2Transfer, VOCAB_PREFIX, transfer_d1, verify_bundle, verify_remote, write_json
+from transfer import R2_REQUEST_LIMIT, BUDGET, ImportStatusLost, NO_IMPORT, prepared_sql, Cloudflare, NoRedirect, RECEIPTS, R2Transfer, VOCAB_PREFIX, transfer_r2, transfer_d1, verify_bundle, verify_remote, write_json
 
 
 class LocalRemote:
@@ -911,6 +911,27 @@ class TransferTests(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
             self.assertEqual(sum(pool.map(lambda _:reserve(),range(30))),5)
         self.assertEqual(json.loads(path.read_text())['requests'],R2_REQUEST_LIMIT)
+
+    def test_r2_resume_batches_existing_objects_and_writes_only_missing(self):
+        items = {str(i):{'bytes':i} for i in range(40)}
+        class Fake:
+            groups = []
+            copied = []
+            def heads(self,keys):
+                self.groups.append(keys)
+                return [None if key == '39' else items[key] for key in keys]
+            def matches(self,actual,expected):return actual == expected
+            def copy(self,directory,key,expected):self.copied.append(key)
+        r2 = Fake()
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(transfer_r2(self.root,{'objects':items},r2,4),40)
+        self.assertEqual(sorted(map(len,r2.groups)),[8,16,16])
+        self.assertEqual(r2.copied,['39'])
+        r2.groups.clear();r2.copied.clear();items['0']={'bytes':-1}
+        r2.heads = lambda keys:[{'bytes':int(key)} for key in keys]
+        with contextlib.redirect_stdout(io.StringIO()),self.assertRaisesRegex(ValueError,'differs'):
+            transfer_r2(self.root,{'objects':items},r2,4)
+        self.assertEqual(r2.copied,[])
 
     def test_r2_network_requests_require_persistent_accounting(self):
         url = 'https://media-tracker-transfer.synthetic.workers.dev'

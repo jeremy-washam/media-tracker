@@ -102,6 +102,42 @@ describe('temporary R2 transfer Worker', () => {
     })
   })
 
+  it('returns ordered bounded batch metadata without reading object bodies', async () => {
+    const { bucket, env, object } = setup()
+    bucket.head.mockResolvedValueOnce(object).mockResolvedValueOnce(null)
+    const response = await worker.fetch(
+      request('/heads', { keys: ['synthetic/key', 'missing'] }),
+      env,
+    )
+    const result = (await response.json()) as { objects: unknown[] }
+    expect(result.objects).toHaveLength(2)
+    expect(result.objects[0]).toMatchObject({ size: 3, sha256: digest })
+    expect(result.objects[1]).toBeNull()
+    expect(bucket.head.mock.calls.map(([key]) => key)).toEqual(['synthetic/key', 'missing'])
+    expect(bucket.get).not.toHaveBeenCalled()
+    expect(bucket.put).not.toHaveBeenCalled()
+    bucket.head.mockClear()
+    expect(
+      (await worker.fetch(request('/heads', { keys: Array(17).fill('synthetic/key') }), env))
+        .status,
+    ).toBe(400)
+    expect(bucket.head).not.toHaveBeenCalled()
+  })
+
+  it('keeps operation diagnostics behind authentication', async () => {
+    const { bucket, env } = setup()
+    bucket.head.mockRejectedValue(new Error('Synthetic native storage failure'))
+    const response = await worker.fetch(request('/head', { key: 'synthetic/key' }), env)
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: 'Error',
+      detail: 'Synthetic native storage failure',
+    })
+    const denied = await worker.fetch(request('/head', { key: 'synthetic/key' }, ''), env)
+    expect(denied.status).toBe(403)
+    expect(await denied.text()).toBe('')
+  })
+
   it('streams conditional writes with native SHA256 validation', async () => {
     const { bucket, env } = setup()
     const response = await worker.fetch(put(), env)

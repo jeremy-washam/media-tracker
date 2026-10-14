@@ -96,6 +96,21 @@ const worker = {
         })
         return object ? Response.json(metadata(object)) : new Response(null, { status: 409 })
       }
+      if (route === '/heads') {
+        if (Number(request.headers.get('content-length')) > 20_000)
+          return new Response(null, { status: 400 })
+        const { keys } = z
+          .object({ keys: z.array(z.string().min(1).max(1024)).min(1).max(16) })
+          .strict()
+          .parse(await request.json())
+        const objects = await Promise.all(
+          keys.map(async (key) => {
+            const object = await env.RAW_BUCKET.head(key)
+            return object ? metadata(object) : null
+          }),
+        )
+        return Response.json({ objects })
+      }
       if (!['/head', '/get'].includes(route)) return new Response(null, { status: 404 })
       if (Number(request.headers.get('content-length')) > 4096)
         return new Response(null, { status: 400 })
@@ -110,8 +125,14 @@ const worker = {
             headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' },
           })
         : new Response(null, { status: 404 })
-    } catch {
-      return new Response(null, { status: 400 })
+    } catch (error) {
+      return Response.json(
+        {
+          error: error instanceof Error ? error.name : 'Unknown',
+          detail: error instanceof Error ? error.message.slice(0, 4096) : 'Operation failed',
+        },
+        { status: 400 },
+      )
     }
   },
 }
