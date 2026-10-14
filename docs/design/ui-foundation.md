@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
 - Status: Index and all six initial Library slices implemented; further design remains open
-- Last updated: 2026-10-12
+- Last updated: 2026-10-13
 
 ## Purpose and scope
 
@@ -19,6 +19,14 @@ Desktop is the current focus; both light and dark modes are required. Aim for a 
 library with expressive artwork, readable typography, restrained controls, and
 clear selection state. Media metadata should serve the user's relationship to
 an item. Future Lists, Feed, and Explorations stay out of initial navigation.
+
+This document governs the desktop client. The owner now wants a separate mobile
+experience and genuine native iOS controls; the [native iOS plan](../planning/ios-app.md)
+owns that research and proposed delivery. Native navigation/detail presentation
+may be rethought while preserving accepted media semantics. Lists, Explorations,
+and Feed can appear as illustrative native prototype destinations to test future
+scale, without changing production desktop navigation or implying working services.
+The earlier mobile studies are disposable and are not approved design sources.
 
 ## Selected foundation: Index
 

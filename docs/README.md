@@ -28,6 +28,9 @@
   migration/deployment acceptance gates
 - [Implementation plan](planning/implementation-plan.md): phased delivery plan
   and connector sequencing
+- [Native iOS plan and workflow](planning/ios-app.md): separate SwiftUI client,
+  native controls, phased Library delivery, authentication research, phone testing,
+  signing/distribution, and the next development setup milestone
 - [October UI polish](planning/ui-polish.md): approved iterative fixes, browser
   baseline evidence, parallel ownership, and acceptance checks
 - [UI polish follow-up](planning/ui-polish-followup.md): owner-reviewed QA fixes,

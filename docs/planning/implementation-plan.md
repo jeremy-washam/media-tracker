@@ -1,6 +1,6 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
@@ -18,7 +18,7 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
-## Current checkout status (2026-10-12)
+## Current checkout status (2026-10-13)
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -41,6 +41,13 @@ hosted validation remain pending, along with the launch gates in the
 [documentation audit](documentation-audit.md) records the code/live-app comparison.
 Historical milestone sections below retain their original delivery context;
 their deferrals do not override this current status.
+
+The owner has requested a separate native iOS experience, with Library first and
+genuine native Apple controls. The [iOS plan and workflow](ios-app.md) captures
+the October 13 research, future navigation, authentication/distribution questions,
+and simulator/physical-phone testing. Development setup and a small installed
+app/test proof are next; no native project or authentication change exists yet.
+Disposable mobile studies do not establish an approved interface.
 
 ## 1. Product and architectural boundaries
 
