@@ -1,9 +1,9 @@
 # Native iOS app plan and development workflow
 
 - Date: 2026-10-13
-- Status: research captured; development setup is the next milestone
-- Implementation: no native project, device connection, or native authentication
-  implementation exists yet
+- Status: step 1 complete; simulator and physical-phone workflow verified
+- Implementation: fixture-based SwiftUI project builds, runs, and passes native
+  tests on the simulator and owner's phone; native design and authentication remain pending
 
 ## Owner direction and scope
 
@@ -15,10 +15,9 @@ The researched recommendation is a SwiftUI iPhone client using the existing REST
 backend. Library is the priority, with Books as the first complete vertical slice.
 
 The previous mobile design studies are disposable and do not establish an
-approved design. The owner authorized capturing this discussion in documentation
-before proceeding with development setup. This documentation change does not
-install tools, enroll an Apple account, start the native implementation, change
-authentication, or publish an iOS app.
+approved design. The owner first authorized capturing this discussion, then
+requested step 1. The native setup scaffold now exists under `apps/ios`. This work
+does not enroll a paid Apple account, change authentication, or publish an iOS app.
 
 Lists, Explorations, and Feed should inform how the mobile experience will scale.
 A four-destination native tab bar containing Library / Lists / Explorations / Feed
@@ -56,12 +55,14 @@ when adopted; do not rewrite existing accepted decisions.
 Recommend iOS 26 as the minimum if the owner's phone supports it. Use the latest
 stable compatible Xcode, not a beta solely for appearance. On the research date,
 Apple listed stable Xcode 27 with a macOS Tahoe 26.6+ requirement. The local Mac
-reported macOS 26.6.2, but its selected developer directory was Command Line
-Tools, and no Xcode app was found at the conventional `/Applications/Xcode.app`
-path. Full Xcode must be located or installed and selected. The phone model,
-iOS version, installed toolchain, and Apple membership status are unconfirmed.
-Recheck [Apple's toolchain requirements](https://developer.apple.com/xcode/system-requirements)
-when setup starts.
+reported macOS 26.6.2. Setup subsequently installed Xcode 27.0 (27A266a) at
+`/Applications/Xcode.app`, with the iOS 27.0 SDK and simulator runtime (24A434).
+The scripts select that installation using `DEVELOPER_DIR` without changing the
+global Command Line Tools selection. The owner confirmed an iPhone 16 on iOS
+26.5.2 and a free Apple account. Simulator results on iOS 27 do not establish
+compatibility or appearance on the physical iOS 26 phone.
+See [Apple's toolchain requirements](https://developer.apple.com/xcode/system-requirements)
+when updating the toolchain.
 
 ## Native interface and Liquid Glass
 
@@ -251,10 +252,10 @@ owner need not operate Xcode for each change, and local development installs do
 not pass through App Store review. Previews speed layout iteration; simulator
 automation checks flows; the physical phone validates actual device behavior.
 
-Start with full Xcode, one simulator, Apple's native MCP bridge, and a few
-repeatable UI flows. Apple documents granting external Codex access to Xcode.
-Use scoped access, normal permissions, and known project/scheme/destinations.
-The current session has no Xcode/device integration configured.
+The verified workflow uses full Xcode command-line tools, one simulator, and
+repeatable XCTest flows on the simulator and phone. Apple's native MCP bridge is
+optional and has not been connected. The owner handles Xcode UI and system
+prompts. Keep normal permissions and known project/scheme/destinations.
 
 MobileBuildMCP, formerly XcodeBuildMCP, is an optional build/simulator/device
 bridge with CLI and MCP interfaces. Its paired-device tools support builds,
@@ -266,7 +267,7 @@ Physical-phone access has three levels:
 
 | Method              | Capability                                                                                       | Current evidence boundary                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| XCTest UI tests     | Scripted taps, text entry, scrolling, assertions, screenshot attachments                         | Supported tooling; not yet configured or run for Imladris                   |
+| XCTest UI tests     | Scripted taps, text entry, scrolling, assertions, screenshot attachments                         | Verified on the simulator and owner's iPhone with retained screenshots      |
 | Xcode 27 Device Hub | Live screen/control of a paired physical device through a Mac window                             | Apple documents it; agent computer-use compatibility must be proved locally |
 | Mobile MCP          | Maintainer advertises real-iPhone screenshots, accessibility inspection, and gestures with Codex | Optional candidate; compatibility/setup must be tested before relying on it |
 
@@ -357,18 +358,92 @@ Sources: [free account limits](https://developer.apple.com/help/account/basics/a
 
 ## Next-step checklist
 
-- [ ] Confirm phone model/iOS version and Apple membership; confirm iOS 26 minimum.
-- [ ] Locate/install stable full Xcode, complete first launch/platform downloads,
-      and select its developer tools.
-- [ ] Create the small project, shared scheme, synthetic fixture path, and tests.
-- [ ] Configure one build/simulator bridge; verify it is connected before claiming access.
-- [ ] Owner completes Apple sign-in, automatic signing, pairing/trust, and Developer Mode.
-- [ ] Prove simulator interaction and one physical-device UI test with evidence.
-- [ ] Evaluate interactive Device Hub access separately; use it only once verified.
-- [ ] Record exact toolchain/device versions, repeatable commands, and remaining limits.
+- [x] Confirm phone model/iOS version and Apple membership; confirm iOS 26 minimum.
+- [x] Install full Xcode, complete first launch/platform downloads, and select
+      its developer tools for command-line runs.
+- [x] Create the small project, shared scheme, synthetic fixture path, and tests.
+- [x] Verify command-line build and simulator testing. An MCP bridge is optional
+      and not connected.
+- [x] Owner completes Apple sign-in, automatic signing, pairing/trust, and Developer Mode.
+- [x] Prove simulator interaction with retained UI-test screenshots.
+- [x] Prove one physical-device UI test with evidence.
+- [x] Record exact toolchain/device versions, repeatable commands, and remaining limits.
+- Optional, deferred: interactive Device Hub access. The owner requested terminal
+  tools rather than computer use; this is not required for the verified workflow.
 - [ ] Proceed to the native Books design prototype, then the authentication proof.
 
 Explain Xcode, SwiftUI state, model/network boundaries, signing, and testing as
 they become relevant. The owner is new to native development; completing a full
 course is not a prerequisite. Apple's [Develop in Swift](https://developer.apple.com/tutorials/develop-in-swift)
 tutorials can accompany each milestone.
+
+## October 13 setup progress
+
+The owner confirmed an iPhone 16 running iOS 26.5.2 and a free Apple account.
+Xcode 27.0 is installed and first-launch setup is complete; TestFlight is installed
+but is not needed for local development. A blank App Store confirmation sheet
+interrupted installation. Hiding the floating pet was suggested from matching
+community reports; the root cause has not been independently established.
+
+The owner requested that the agent use terminal commands rather than computer
+use. The owner handles Xcode UI, Apple sign-in, trust, and permission prompts.
+Simulator and device installation/tests use `xcodebuild`, `simctl`, `devicectl`,
+and XCTest. Interactive Device Hub access and the Xcode MCP bridge are optional
+and have not been configured.
+
+The directly tracked `apps/ios/Imladris.xcodeproj` now contains an app, a Swift
+Testing target, an XCTest UI target, and a shared scheme. A bundled fictional
+Books fixture exercises Archive/Queue overlap, repeat reads, and unknown/partial
+dates. The small UI opens a native medium/large detail sheet and returns to its
+list. This is a setup proof, not step 2's complete mobile design.
+
+`apps/ios/scripts/ios.sh` provides doctor/build/run/test and paired-device install/
+test commands with ignored build/results directories. The iPhone 16 simulator on
+iOS 27.0 passed the SDK build, both Swift Testing tests, and the XCTest book-history
+sheet flow. The UI test retains screenshots of the sheet and the returned Library
+in `apps/ios/artifacts/simulator-20261013-204022.xcresult`. These local artifacts
+are ignored by Git. Project plist, Swift syntax, and shell syntax checks also passed.
+The root `pnpm check` passed all 53 test files and 337 tests; an earlier unrelated
+reconciliation-test failure did not recur on this full run.
+
+The physical iPhone is paired over USB and reports iOS 26.5.2. Developer Mode is
+confirmed enabled. The owner selected the Personal Team, allowed signing, and
+trusted the development profile. The app built, installed, and launched on the
+phone; the owner confirmed seeing it. Personal signing values live in ignored
+`Signing.local.xcconfig` and are inherited by all three targets. The first app
+profile was issued October 13 at 8:51 PM PDT and expires October 20 at 8:51 PM PDT,
+confirming the seven-day lifetime for this actual install.
+
+Both Swift Testing tests and the XCTest book-history UI flow passed on the phone.
+The successful result is retained in `artifacts/device-20261013-210236.xcresult`,
+including screenshots of the native sheet and returned Library. The UI flow took
+10.175 seconds. The captured native medium sheet and returned Library were also
+visually checked in the phone's dark appearance. A post-test foreground launch
+was blocked because the phone was locked; the installed app can be opened after
+the owner unlocks it. The first device UI test stopped before its assertions with
+LocalAuthentication `Authentication canceled`; the owner enabled UI Automation
+before the successful retry. Its failed result remains available locally at
+`artifacts/device-20261013-205722.xcresult`. Device diagnostic collection on the
+failed run also
+reported that a nested `xcrun` could not locate `devicectl` while the global
+selection remains Command Line Tools; explicit `DEVELOPER_DIR` works for the
+project's build/install commands. No global selection change has been made.
+
+The simulator run command passed, installed/launched the app, and saved a diagnostic
+`artifacts/library.png`. The root formatter explicitly excludes generated native
+build/results directories; the final `pnpm check` passed all 337 tests after that
+configuration update. No connected Xcode bridge has been verified. This completes
+step 1's fixture-based build/run/test proof. Detailed native design, broader
+accessibility/appearance checks, live API authentication, and hosted owner-data
+access belong to subsequent milestones.
+
+The owner requested the larger, more detailed J2 logo for the native app icon.
+The asset catalog now uses the faithful `imladris-j2.svg` source, rendered into
+1024 px light, dark, and grayscale tinted variants. The icon compiles into the
+app. The owner approved the preview with a larger footprint and authorized
+installation. The renderer now fits the actual artwork to 928 px on its longest
+axis, retaining its proportions and a 48 px margin. The updated app built,
+installed, and launched successfully on the iPhone on October 13. The native
+README records the source and reproducible vector-rendering command.
+See the [native README](../../apps/ios/README.md) and
+[ADR 0018](../decisions/0018-native-ios-client.md).

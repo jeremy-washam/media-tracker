@@ -8,8 +8,8 @@ normalized view suitable for browsing and, later, evidence-backed LLM queries.
 
 The first milestone is ingestion. Recommendations and manually managed Queue
 remain deferred. Read-only source-derived Queue views are implemented in the
-six-media Library. A separate SwiftUI iOS client is now planned, with development
-setup next and no native implementation yet. The [native iOS plan](../planning/ios-app.md)
+six-media Library. A separate SwiftUI iOS setup proof now has a synthetic Books
+scaffold under `apps/ios`; it does not access the live API yet. The [native iOS plan](../planning/ios-app.md)
 records backend reuse, authentication gates, and the build/test workflow.
 
 ## System shape
@@ -57,6 +57,8 @@ migration, remote usage measurement and controlled activation remain launch gate
 ## Package boundaries
 
 - `apps/web`: React UI. It consumes API contracts and does not access storage.
+- `apps/ios`: separate SwiftUI iPhone client and native tests. Its current setup
+  proof uses bundled synthetic data; live REST integration remains pending.
 - `apps/api`: Hono Worker, HTTP concerns, Cloudflare bindings, cron, and queues.
 - `apps/cli`: explicit local backfills, imports, export, and recovery operations.
 - `packages/domain`: canonical types and pure normalization rules. It must not

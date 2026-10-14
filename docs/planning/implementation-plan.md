@@ -45,8 +45,10 @@ their deferrals do not override this current status.
 The owner has requested a separate native iOS experience, with Library first and
 genuine native Apple controls. The [iOS plan and workflow](ios-app.md) captures
 the October 13 research, future navigation, authentication/distribution questions,
-and simulator/physical-phone testing. Development setup and a small installed
-app/test proof are next; no native project or authentication change exists yet.
+and simulator/physical-phone testing. A small synthetic SwiftUI project and native
+test targets now exist under `apps/ios`, with build/run/tests verified on the
+simulator and owner's phone. Native Books design and live authentication remain
+pending.
 Disposable mobile studies do not establish an approved interface.
 
 ## 1. Product and architectural boundaries
@@ -60,7 +62,7 @@ These are fixed unless explicitly revisited:
 - Cloudflare R2 for raw exports, API snapshots, and authorized full text.
 - Cloudflare Queues and Cron Triggers for synchronization.
 - Cloudflare Access for initial web authentication.
-- TypeScript throughout, with Drizzle and Zod.
+- TypeScript web/backend, with Drizzle and Zod; separate SwiftUI iOS client.
 - API-first design so a future iOS client can use the same backend.
 - No recommendations, LLM integration, or queue interface in the first ingestion milestone.
 - Preserve enough provenance and source material to support those features later.
@@ -72,6 +74,7 @@ Use a small pnpm workspace:
 ```text
 apps/
   web/                 React/Vite application
+  ios/                 SwiftUI iPhone client and native tests
   api/                 Hono Cloudflare Worker
   cli/                 local backfill and recovery commands
 

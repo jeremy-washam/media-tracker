@@ -140,10 +140,12 @@ Use official APIs, webhooks, RSS feeds, and user data exports as appropriate. Pr
 - A separate iOS experience. On October 13, the owner requested a concrete native
   development plan and workflow, prioritizing Library and genuine Apple Liquid
   Glass. The researched direction is a SwiftUI client consuming the existing
-  API, with development setup and a small device proof next. Desktop retains its
+  API. The synthetic setup app now builds, runs, and passes native tests on the
+  simulator and owner's phone; the native Books prototype is next. Desktop retains its
   own React/Vite interface; mobile is designed independently. Lists, Explorations,
-  and Feed inform future navigation but still need their own services. No native
-  implementation exists yet, and the earlier mobile studies are disposable.
+  and Feed inform future navigation but still need their own services. A synthetic
+  SwiftUI setup app now exists under `apps/ios`; live integration remains pending,
+  and the earlier mobile studies are disposable.
   See the [native iOS plan](../planning/ios-app.md) for milestones and open decisions.
 
 ## Technical foundation
