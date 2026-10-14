@@ -30,8 +30,10 @@ behind Cloudflare Access. Worker-side token/owner checks and production asset
 exclusion are implemented. A paused Worker and owner-only Access application are
 provisioned; owner sign-in and MFA are confirmed. The database transfer is
 complete; all private R2 objects are checksum/metadata verified within included
-usage. Full database/restore verification stopped on an authorization rejection
-and awaits a fresh management connection; checked tables matched.
+usage. Full hosted database and independent restore verification passed:
+94 tables, 1,798,348 rows, the compatibility view, schema/integrity/sequence
+checks, and all eight search vocabularies matched. The private recovery artifact
+is retained, and temporary verification tables were removed.
 The owner approves the existing $5/month subscription with $0 additional
 charges. Full hosted Library validation is still pending. Missing
 Access configuration denies hosted requests. Local development bypasses

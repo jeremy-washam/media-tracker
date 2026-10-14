@@ -35,8 +35,10 @@ Private Access checks, usage limiters, production packaging, deployment helpers,
 and local snapshot/restore rehearsal are in the checkout. Hosted storage,
 queues, and an owner-only Access application are provisioned. The paused Worker
 is published and private data transfer is complete. Full database/restore
-verification awaits renewed management authorization. Owner sign-in and MFA
-are confirmed; full transfer integrity and authenticated Library validation remain pending, along with the launch gates in the
+verification passed: 94 tables, 1,798,348 rows, one compatibility view, and all
+eight search vocabularies matched. The private recovery artifact is retained.
+Owner sign-in and MFA are confirmed; authenticated Library validation remains
+pending, along with the launch gates in the
 [deployment runbook](deployment.md) and
 [storage efficiency plan](storage-efficiency-plan.md). The
 [documentation audit](documentation-audit.md) records the code/live-app comparison.
@@ -694,14 +696,16 @@ Free. The October 13 instruction prohibits spending; remote work is paused
 until the runbook's spending gate is satisfied. On October 14, the owner
 confirmed the existing $5/month plan with $0 additional charges. The isolated local implementation adds scoped D1
 usage reporting, independent bounded maintenance, clock-safe YouTube publication
-and compact evidence references. Remote validation and activation remain pending.
+and compact evidence references. Owner Library validation and provider-job
+activation remain pending; full remote storage verification passed.
 It recommends one paid D1 initially, copy-rehearsed
 compact references/evidence layouts, cache maintenance while ingestion is paused,
 and bounded job budgets. Further database splits and historical interpretation
 archival require demonstrated benefits and explicit recovery boundaries. This
 contains merged code and forward migrations. The local ledger was backed up and
-migrated through 0029 on October 13; hosted migration remains pending and
-retention policy is unchanged.
+migrated through 0029 on October 13. The hosted copy includes those migrations
+and passed independent schema/data/restore verification; retention policy is
+unchanged.
 
 The [private deployment runbook](deployment.md) records the October 12
 preparation: Worker-side owner authentication, an app-only production bundle,
@@ -710,9 +714,13 @@ restore rehearsal. The paused Worker and owner-only Access are deployed; owner
 sign-in, MFA, health, and the web interface are confirmed. The database copy is
 237 of 237 files complete, including indexes/triggers. All 18,126 private R2
 objects are checksum/metadata verified. Full hosted database/restore verification
-awaits renewed management authorization; production sync remains off. Further remote
-work is paused at the spending gate. The local database requires Workers Paid
-at its current size; this is not yet a complete, validated Library deployment.
+passed, including every table, the compatibility view, integrity and sequence
+checks, and all eight search vocabularies. Temporary verification tables were
+removed, the recovery artifact was retained, and a fresh Time Travel bookmark
+was saved. Production sync remains off. Usage stayed within included allowances;
+further remote work remains subject to the spending gate. The database requires
+Workers Paid at its current size. Owner Library smoke checks and provider-job
+budgets remain open; automatic ingestion is not activated.
 
 ### Production resources
 

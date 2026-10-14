@@ -1,16 +1,17 @@
 # Private deployment preparation
 
-Status: local preparation and restore rehearsal accepted. The production
-resources and paused Worker are provisioned, and the owner confirmed sign-in,
-MFA, the hosted health response, and the web interface. The private Library
-database transfer is complete: all 237 files, including final indexes and
-triggers, have matching native receipts. All 18,126 private R2 objects now have matching native SHA-256, size, and
-metadata. Full hosted database/restore verification is paused after an authorization
-rejection. Checked tables matched the snapshot; the incomplete restore was
-removed, and usage accounting remains measured. Wrangler sign-in was renewed;
-the separate management connection requires owner authorization before obtaining
-a fresh Access/MFA proof and restarting. The spending gate remains in force. Seeing the web interface
-does not confirm a complete or validated Library cutover.
+Status: the paused production Worker and owner-only Access/MFA are deployed.
+The owner confirmed sign-in, the health response, and the web interface. All
+237 database import files have matching native receipts, and all 18,126 private
+R2 objects have matching SHA-256, size, and metadata. Full hosted database and
+independent restore verification passed on October 14: 94 application tables,
+1,798,348 rows, one compatibility view, exact schema/index/trigger definitions,
+foreign keys, sequence state, and all eight search vocabularies matched. The
+private recovery SQLite artifact passed its final integrity checks, including
+reconstructed contentless search. Temporary verification tables were removed,
+and a fresh D1 Time Travel bookmark was saved. Full owner Library validation
+and provider-job budgets remain pending; background processing stays off.
+The owner approves the existing $5/month plan with $0 additional charges.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
@@ -50,14 +51,16 @@ billing screenshots showing $0 reported usage cost and no usage breakdown for
 the October 14–November 13 cycle. Missing billing data does not establish
 remaining included usage. Do not silently cancel or downgrade it; the current
 Library exceeds the Free plan's per-database size limit. Account subscription
-and billable-usage API reads were denied, so account-wide billing headroom and
-actual usage charges are not confirmed.
+and billable-usage API reads were denied, so those APIs do not confirm an
+invoice. Remaining included headroom is checked from native account analytics,
+private transfer ledgers, resource sizes, and bounded operation budgets.
 
-After reconciliation, the production transfer ledger records 7,519,061 D1 rows
-read and 6,917,466 rows written, conservatively including observed hosted reads. It measures this transfer, not every database, synthetic
+After completed verification, the production transfer ledger records 30,473,276
+D1 rows read and 11,977,506 rows written, including the earlier interrupted
+verification and conservative diagnostic reads. It measures this transfer, not every database, synthetic
 validation, Worker invocation, R2 operation, or other account activity. Its
 100-million-read/25-million-write deployment budget is an operation safeguard,
-not an account billing cap. The remaining R2 copy contains 18,126 objects and
+not an account billing cap. The completed R2 copy contains 18,126 objects and
 211,643,751 bytes. The completed copy consumed 55,514 helper Worker attempts, including the
 interruption and resume, below the unchanged 60,000 limit. The first pass
 stopped automatically on HTTP 400. Batch metadata checks confirmed 17,003
@@ -65,7 +68,7 @@ existing copies and uploaded the 1,123 missing objects without overwrites; the
 rejection did not recur. Batches are limited to 16 keys, so repeated metadata
 checks consume fewer Worker invocations. Every object still receives an exact
 checksum/size/metadata comparison. Authenticated failure diagnostics stay in
-private mode-0600 files; no object keys or payloads are printed. The temporary helper now has a 100 ms CPU ceiling and the client persists a
+private mode-0600 files; no object keys or payloads are printed. The temporary helper used a 100 ms CPU ceiling, and the client persists a
 60,000-request ceiling, bound to the exact endpoint and bundle. It reserves
 requests before network dispatch, counts lost responses, refuses a missing or
 mismatched ledger, and cannot reset its limit by restarting. Parallel uploads
@@ -84,6 +87,17 @@ reads, 50 million D1 writes, 5 GB D1 storage, 10 million Worker requests,
 10 million Class B operations. Native account metrics, the retained deployment
 ledger, bounded request counts, and remaining work must be checked together;
 none is permission to incur an overage.
+
+After full verification, unsampled account-wide D1 analytics reported
+36,785,628 reads and 15,108,120 writes, including the deleted synthetic test
+database. The production transfer ledger is 18 reads more conservative than
+native production analytics. The production database reported 1,170,182,144
+bytes. R2 retained 211,643,751 payload bytes in Standard storage; Infrequent
+Access usage was zero. Worker analytics reported about 55,608 requests and
+89,873 CPU milliseconds, with adaptive sampling for the deleted helper. The
+retained 60,000-request/100 ms helper bounds and native usage provide ample
+headroom; these figures are usage evidence, not an invoice or a hard dollar cap.
+No new subscription, paid service, or background processing was enabled.
 
 Workers Paid has no account-wide hard dollar cap. Create a budget alert for
 $1 of usage-based spend in Manage Account → Billing → Billable Usage; the
@@ -676,3 +690,32 @@ permission denials outside that narrow window still stop without refreshing;
 static API tokens are never replaced. This does not broaden permissions or
 change billing limits. An independent management-connection renewal is needed
 when its Access/MFA attestation expires.
+
+### Completed hosted restore verification
+
+The owner renewed the separate Cloudflare management connection remotely using
+`codex mcp login cloudflare --no-browser`, requesting read scopes and session
+renewal. The owner approved from a phone and supplied the full callback URL to
+the waiting CLI even though its loopback page could not load there. This CLI
+login expires after five minutes; both approval and callback submission must
+finish within that window. Keep the login process alive across the handoff,
+and restart with a fresh URL after a timeout. This management connection is
+separate from the application's owner-only Access/MFA login.
+
+A fresh native Access read confirmed the sole owner policy and independent MFA.
+Account usage was checked before resuming the guarded verifier. Wrangler
+renewed through its expiry boundary without stopping the completed pass. All
+94 tables and eight search indexes matched; the complete remote-derived restore
+is retained privately with a SHA-256/size manifest. It is 1,169,264,640 bytes.
+The frozen source file was 1,714,311,168 bytes and contained 498,814,976 bytes of
+free pages; physical file size is distinct from retained data. No imported
+facts were removed to produce the verified recovery copy.
+
+The verifier left no owned scratch tables or unmeasured queries. The temporary
+R2 helper Worker, its Access application/policy, and service token had already
+been removed after object verification. A fresh Time Travel bookmark was saved
+after scratch cleanup; this captures a recovery point and is not a destructive
+Time Travel restore test. Retain original backups and private transfer records.
+The remaining launch gates are owner-authenticated Library smoke checks,
+measured hosted behavior, and separate provider-job budgets. Background sync,
+maintenance, and catalog auto-refresh remain disabled.
