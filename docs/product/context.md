@@ -115,9 +115,10 @@ The ingestion-first foundation and initial read-only Library slices are
 implemented locally. Remaining work includes per-media hardening, private
 deployment gates, generalized recovery, and the proposed Chat/Recaps surfaces.
 Source-derived Queue remains read-only; local intent and write-back require
-their own future conflict model. The October 13 deployment record shows a paused
-Worker published against empty storage; owner MFA verification and private-data
-transfer remain pending. See the [deployment runbook](../planning/deployment.md).
+their own future conflict model. The October 14 deployment record shows a Worker with background jobs paused,
+confirmed owner MFA, a completed database transfer, and private R2 transfer in
+progress. Full hosted verification remains pending; the owner approves the
+existing $5/month plan with $0 additional charges. See the [deployment runbook](../planning/deployment.md).
 
 The original ingestion sequence backfills and then synchronizes consumption
 history, where the source services permit it, from:
