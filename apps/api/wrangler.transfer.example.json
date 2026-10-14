@@ -15,7 +15,7 @@
     "required": ["TRANSFER_SECRET"]
   },
   "limits": {
-    "cpu_ms": 10000
+    "cpu_ms": 100
   },
   "observability": {
     "enabled": true,

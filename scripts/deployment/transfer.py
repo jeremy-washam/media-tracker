@@ -15,6 +15,7 @@ import subprocess
 import uuid
 from email.utils import parsedate_to_datetime
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,6 +29,8 @@ CLEANUP_RESERVE = {'rows_read': 10_000_000, 'rows_written': 5_000_000}
 HELPER = 'media-tracker-transfer'
 VOCAB_PREFIX = 'imladris_transfer_vocab_'
 REQUEST_INTERVAL = 1 / 3 + 0.001
+R2_REQUEST_LIMIT = 60_000
+HELPER_CPU_LIMIT_MS = 100
 NO_IMPORT = 'Not currently importing anything.'
 RECONCILIATION_ATTEMPTS = 12
 RECONCILIATION_DELAY = 5
@@ -511,6 +514,9 @@ class Cloudflare:
         expected_url = 'https://' + HELPER + '.' + subdomain + '.workers.dev'
         validate_r2_url(settings['url'], expected_url)
         worker = self.request('GET', 'workers/scripts/' + HELPER + '/settings')
+        cpu = worker.get('limits', {}).get('cpu_ms')
+        if type(cpu) is not int or not 0 < cpu <= HELPER_CPU_LIMIT_MS:
+            raise ValueError('Transfer Worker CPU ceiling exceeds the included-usage safeguard')
         buckets = [b for b in worker['bindings'] if b['name'] == 'RAW_BUCKET']
         secrets = [b for b in worker['bindings'] if b['name'] == 'TRANSFER_SECRET']
         if len(buckets) != 1 or buckets[0].get('type') != 'r2_bucket' or buckets[0].get('bucket_name') != resources['bucket'] or len(secrets) != 1 or secrets[0].get('type') != 'secret_text':
@@ -714,12 +720,35 @@ def validate_r2_url(url, expected):
 
 
 class R2Transfer:
-    def __init__(self, settings, expected_url):
+    def __init__(self, settings, expected_url, usage_path=None, bundle=None):
         self.settings = settings
         self.client = urllib.request.build_opener(NoRedirect)
         validate_r2_url(settings['url'], expected_url)
+        self.usage_path = usage_path
+        self.request_lock = threading.Lock()
+        self.usage = None
+        if usage_path is not None:
+            target = {'url': expected_url, 'bundle': bundle}
+            if not bundle:
+                raise ValueError('R2 request accounting requires the verified bundle')
+            state = json.loads(usage_path.read_text()) if usage_path.exists() else {'target': target, 'requestLimit': R2_REQUEST_LIMIT, 'requests': 0}
+            if state.get('target') != target or state.get('requestLimit') != R2_REQUEST_LIMIT or type(state.get('requests')) is not int or not 0 <= state['requests'] <= R2_REQUEST_LIMIT:
+                raise ValueError('R2 request checkpoint target or limit mismatch')
+            self.usage = state
+            write_json(usage_path, state)
+
+    def reserve_request(self):
+        if self.usage is None:
+            raise ValueError('Persistent R2 request accounting is required')
+        with self.request_lock:
+            if self.usage['requests'] >= R2_REQUEST_LIMIT:
+                raise RuntimeError('Private transfer request limit reached; review account allowance before continuing')
+            self.usage['requests'] += 1
+            write_json(self.usage_path, self.usage)
+
 
     def request(self, route, key, metadata=None, path=None):
+        self.reserve_request()
         headers = {'User-Agent': 'Mozilla/5.0 ImladrisPrivateTransfer/1.0', 'CF-Access-Client-Id': self.settings['clientId'], 'CF-Access-Client-Secret': self.settings['clientSecret'],
             'Authorization': 'Bearer ' + self.settings['bearer']}
         stream = None
@@ -1031,7 +1060,7 @@ def main():
                 raise ValueError('R2 transfer settings are required')
             settings = json.loads(args.r2_settings.read_text())
             expected_url = remote.guard_r2(resources, settings, attestation)
-            count = transfer_r2(directory, manifest, R2Transfer(settings, expected_url), workers=args.r2_workers)
+            count = transfer_r2(directory, manifest, R2Transfer(settings, expected_url, work / 'r2-usage.json', bundle), workers=args.r2_workers)
             write_json(work / 'r2-complete.json', {'bundle': bundle, 'objectsVerified': count})
         else:
             report = verify_remote(directory, manifest, remote, work / 'verified.sqlite')

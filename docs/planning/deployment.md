@@ -3,9 +3,9 @@
 Status: local preparation and restore rehearsal accepted. The production
 resources and paused Worker are provisioned, and the owner confirmed sign-in,
 MFA, the hosted health response, and the web interface. The private Library
-transfer is paused: 236 of 237 database files are committed; final indexes and
-triggers, private R2 uploads, and full hosted verification remain pending.
-Remote work is blocked on the spending gate below. Seeing the web interface
+database transfer is complete: all 237 files, including final indexes and
+triggers, have matching native receipts. Private R2 uploads and full hosted
+verification remain pending and require the spending gate below. Seeing the web interface
 does not confirm a complete or validated Library cutover.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
@@ -40,28 +40,44 @@ and the work can stay within them. Pause and notify the owner before an action
 that would add a charge; uncertain billing headroom is not permission to proceed.
 Local inspection, code changes, tests, and documentation can continue.
 
-The scope of the existing, previously approved $5/month Workers Paid
-subscription needs clarification: its recurring fee can continue while
-transfers are paused. Do not silently cancel or downgrade it; the current
+On October 14, the owner confirmed that the existing $5/month Workers Paid
+subscription remains approved, with $0 additional charges. The owner supplied
+billing screenshots showing $0 reported usage cost and no usage breakdown for
+the October 14–November 13 cycle. Missing billing data does not establish
+remaining included usage. Do not silently cancel or downgrade it; the current
 Library exceeds the Free plan's per-database size limit. Account subscription
 and billable-usage API reads were denied, so account-wide billing headroom and
 actual usage charges are not confirmed.
 
-The production transfer ledger at the pause records 1,814,508 D1 rows read and
-4,296,956 rows written. It measures this transfer, not every database, synthetic
+After reconciliation, the production transfer ledger records 7,519,061 D1 rows
+read and 6,917,466 rows written, conservatively including observed hosted reads. It measures this transfer, not every database, synthetic
 validation, Worker invocation, R2 operation, or other account activity. Its
 100-million-read/25-million-write deployment budget is an operation safeguard,
 not an account billing cap. The remaining R2 copy contains 18,126 objects and
 211,643,751 bytes. A clean first pass makes 54,378 helper Worker requests
-(HEAD, PUT, HEAD), before retries or independent verification. The current
-10,000 ms helper CPU ceiling per invocation does not prove that aggregate CPU
-will remain within the plan allowance. Establish account-wide remaining
-allowances and bound all affected products before resuming.
+(HEAD, PUT, HEAD), before retries or independent verification. The temporary helper now has a 100 ms CPU ceiling and the client persists a
+60,000-request ceiling, bound to the exact endpoint and bundle. It reserves
+requests before network dispatch, counts lost responses, refuses a missing or
+mismatched ledger, and cannot reset its limit by restarting. Parallel uploads
+share the same serialized counter. The nominal configured ceiling is 6 million
+CPU milliseconds; runtime CPU limits have some flexibility and are not a hard
+billing cap. Stop on unexpected usage or errors rather than raising the limit.
+
+An account-wide analytics read on October 14 reported 13,830,556 D1 reads and
+10,048,080 writes, 130 Worker requests and 676,215 microseconds of CPU, and only
+small synthetic R2 operations/storage. D1 and Worker sampling intervals were 1.
+The sole production bucket was empty. Included monthly usage is 25 billion D1
+reads, 50 million D1 writes, 5 GB D1 storage, 10 million Worker requests,
+30 million CPU milliseconds, and R2 Standard's 10 GB-month/1 million Class A/
+10 million Class B operations. Native account metrics, the retained deployment
+ledger, bounded request counts, and remaining work must be checked together;
+none is permission to incur an overage.
 
 Workers Paid has no account-wide hard dollar cap. Create a budget alert for
 $1 of usage-based spend in Manage Account → Billing → Billable Usage; the
 recurring $5 plan fee is excluded. Alerts do not stop usage and can arrive the
-following day. Account activation/alert creation has not been confirmed.
+following day. Account activation is confirmed by the owner. The supplied
+billing screenshot shows two budget alerts; their thresholds are not visible.
 See [budget alerts](https://developers.cloudflare.com/billing/manage/budget-alerts/)
 and [alert timing](https://developers.cloudflare.com/changelog/product/billing/).
 

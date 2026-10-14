@@ -13,7 +13,7 @@ import unittest
 
 from snapshot import checksum
 import test_snapshot
-from transfer import BUDGET, ImportStatusLost, NO_IMPORT, prepared_sql, Cloudflare, NoRedirect, RECEIPTS, R2Transfer, VOCAB_PREFIX, transfer_d1, verify_bundle, verify_remote, write_json
+from transfer import R2_REQUEST_LIMIT, BUDGET, ImportStatusLost, NO_IMPORT, prepared_sql, Cloudflare, NoRedirect, RECEIPTS, R2Transfer, VOCAB_PREFIX, transfer_d1, verify_bundle, verify_remote, write_json
 
 
 class LocalRemote:
@@ -399,7 +399,7 @@ class TransferTests(unittest.TestCase):
         remote = Cloudflare('account','database',self.root / 'never-read-oauth')
         responses = {
             'workers/subdomain': {'subdomain': 'synthetic-account'},
-            'workers/scripts/media-tracker-transfer/settings': {'bindings': [{'name': 'RAW_BUCKET', 'type': 'r2_bucket', 'bucket_name': 'synthetic-bucket'}, {'name': 'TRANSFER_SECRET', 'type': 'secret_text'}]},
+            'workers/scripts/media-tracker-transfer/settings': {'limits': {'cpu_ms':100}, 'bindings': [{'name': 'RAW_BUCKET', 'type': 'r2_bucket', 'bucket_name': 'synthetic-bucket'}, {'name': 'TRANSFER_SECRET', 'type': 'secret_text'}]},
             'workers/scripts/media-tracker-transfer/subdomain': {'enabled': True, 'previews_enabled': False},
             'access/apps/helper-app': {'id': 'helper-app', 'domain': 'media-tracker-transfer.synthetic-account.workers.dev', 'policies': [{'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'synthetic-token'}}]}]},
         }
@@ -408,6 +408,12 @@ class TransferTests(unittest.TestCase):
         for bad in ['http://' + expected[8:], expected + '/', expected + '?x=1', expected + '#x', expected + ':443', 'https://user@' + expected[8:], 'https://unrelated.example']:
             with self.subTest(url=bad), self.assertRaises(ValueError):
                 R2Transfer({**settings, 'url': bad}, expected)
+        helper = responses['workers/scripts/media-tracker-transfer/settings']
+        for cpu in [None,0,True,101,10000]:
+            helper['limits'] = {'cpu_ms':cpu}
+            with self.subTest(cpu=cpu),self.assertRaisesRegex(ValueError,'CPU ceiling'):
+                remote.guard_r2({'bucket':'synthetic-bucket','transferAccessApplicationId':'helper-app'},settings)
+        helper['limits'] = {'cpu_ms':100}
         responses['workers/scripts/media-tracker-transfer/subdomain']['previews_enabled'] = True
         with self.assertRaisesRegex(ValueError, 'preview configuration'):
             remote.guard_r2({'bucket': 'synthetic-bucket', 'transferAccessApplicationId': 'helper-app'}, settings)
@@ -538,7 +544,7 @@ class TransferTests(unittest.TestCase):
             'workers/scripts/media-tracker/schedules':{'schedules':[]},'queues/sync/consumers':[],'queues/dead/consumers':[],
             'r2/buckets/synthetic-bucket/domains/managed':{'enabled':False},'r2/buckets/synthetic-bucket/domains/custom':{'domains':[]},
             'workers/subdomain':{'subdomain':'synthetic'},
-            'workers/scripts/media-tracker-transfer/settings':{'bindings':[{'name':'RAW_BUCKET','type':'r2_bucket','bucket_name':'synthetic-bucket'},{'name':'TRANSFER_SECRET','type':'secret_text'}]},
+            'workers/scripts/media-tracker-transfer/settings':{'limits':{'cpu_ms':100},'bindings':[{'name':'RAW_BUCKET','type':'r2_bucket','bucket_name':'synthetic-bucket'},{'name':'TRANSFER_SECRET','type':'secret_text'}]},
             'workers/scripts/media-tracker-transfer/subdomain':{'enabled':True,'previews_enabled':False},
         }
         remote.request = lambda method,path: responses[path]
@@ -560,6 +566,7 @@ class TransferTests(unittest.TestCase):
 
     def test_r2_request_sets_descriptive_user_agent_without_redirects(self):
         r2 = R2Transfer({'url':'https://media-tracker-transfer.synthetic.workers.dev','clientId':'synthetic','clientSecret':'synthetic','bearer':'synthetic'}, 'https://media-tracker-transfer.synthetic.workers.dev')
+        r2.reserve_request = lambda:None
         requests = []
         class Client:
             def open(self,request,timeout):
@@ -873,6 +880,42 @@ class TransferTests(unittest.TestCase):
         with patch('transfer.time.sleep'),patch('transfer.subprocess.run',return_value=SimpleNamespace(returncode=0)) as refresh, self.assertRaisesRegex(RuntimeError,'HTTP 401'):
             remote.request('GET','synthetic')
         refresh.assert_called_once()
+
+    def test_r2_request_limit_survives_failure_and_restart_before_network(self):
+        url = 'https://media-tracker-transfer.synthetic.workers.dev'
+        settings = {'url':url,'clientId':'synthetic','clientSecret':'synthetic','bearer':'synthetic'}
+        path = self.root / 'r2-usage.json'
+        write_json(path,{'target':{'url':url,'bundle':'bundle'},'requestLimit':R2_REQUEST_LIMIT,'requests':R2_REQUEST_LIMIT-1})
+        r2 = R2Transfer(settings,url,path,'bundle')
+        class Client:
+            calls = 0
+            def open(self,request,timeout):
+                self.calls += 1
+                raise ConnectionError('Lost response after invocation')
+        client = Client();r2.client = client
+        with self.assertRaises(ConnectionError):r2.request('/head','synthetic')
+        self.assertEqual(json.loads(path.read_text())['requests'],R2_REQUEST_LIMIT)
+        resumed = R2Transfer(settings,url,path,'bundle');resumed.client = client
+        with self.assertRaisesRegex(RuntimeError,'request limit'):resumed.request('/head','synthetic')
+        self.assertEqual(client.calls,1)
+        with self.assertRaisesRegex(ValueError,'checkpoint'):R2Transfer(settings,url,path,'wrong-bundle')
+
+    def test_r2_concurrent_request_reservations_cannot_exceed_limit(self):
+        import concurrent.futures
+        url = 'https://media-tracker-transfer.synthetic.workers.dev';path = self.root / 'r2-usage.json'
+        write_json(path,{'target':{'url':url,'bundle':'bundle'},'requestLimit':R2_REQUEST_LIMIT,'requests':R2_REQUEST_LIMIT-5})
+        r2 = R2Transfer({'url':url},url,path,'bundle')
+        def reserve():
+            try:r2.reserve_request();return True
+            except RuntimeError:return False
+        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+            self.assertEqual(sum(pool.map(lambda _:reserve(),range(30))),5)
+        self.assertEqual(json.loads(path.read_text())['requests'],R2_REQUEST_LIMIT)
+
+    def test_r2_network_requests_require_persistent_accounting(self):
+        url = 'https://media-tracker-transfer.synthetic.workers.dev'
+        with self.assertRaisesRegex(ValueError,'Persistent R2'):
+            R2Transfer({'url':url},url).request('/head','synthetic')
 
     def test_r2_resume_compares_checksum_size_and_exact_metadata(self):
         class FakeR2(R2Transfer):
