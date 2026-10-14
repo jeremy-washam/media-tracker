@@ -1,10 +1,12 @@
 # Private deployment preparation
 
-Status: local preparation and restore rehearsal accepted. The empty production
-database, private bucket, queues, and owner-only Access application are
-provisioned, and the paused Worker is deployed. The private Library transfer is
-in progress; it is not ready for full browsing validation. The owner has completed sign-in and MFA
-and confirmed the hosted health response; full Library validation is pending.
+Status: local preparation and restore rehearsal accepted. The production
+resources and paused Worker are provisioned, and the owner confirmed sign-in,
+MFA, the hosted health response, and the web interface. The private Library
+transfer is paused: 236 of 237 database files are committed; final indexes and
+triggers, private R2 uploads, and full hosted verification remain pending.
+Remote work is blocked on the spending gate below. Seeing the web interface
+does not confirm a complete or validated Library cutover.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
@@ -26,6 +28,35 @@ See [D1 limits](https://developers.cloudflare.com/d1/platform/limits/) and
 [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/).
 
 ## Cost controls and storage audit
+
+### Owner spending gate
+
+On October 13, the owner instructed: "Do not, under any circumstances, spend
+money. If your actions will cause me to get charged, pause and let me know."
+This supersedes the earlier deployment spending assumptions. Do not resume
+remote imports, object uploads, data queries, verification, provider calls, or
+background processing until remaining included account allowances are verified
+and the work can stay within them. Pause and notify the owner before an action
+that would add a charge; uncertain billing headroom is not permission to proceed.
+Local inspection, code changes, tests, and documentation can continue.
+
+The scope of the existing, previously approved $5/month Workers Paid
+subscription needs clarification: its recurring fee can continue while
+transfers are paused. Do not silently cancel or downgrade it; the current
+Library exceeds the Free plan's per-database size limit. Account subscription
+and billable-usage API reads were denied, so account-wide billing headroom and
+actual usage charges are not confirmed.
+
+The production transfer ledger at the pause records 1,814,508 D1 rows read and
+4,296,956 rows written. It measures this transfer, not every database, synthetic
+validation, Worker invocation, R2 operation, or other account activity. Its
+100-million-read/25-million-write deployment budget is an operation safeguard,
+not an account billing cap. The remaining R2 copy contains 18,126 objects and
+211,643,751 bytes. A clean first pass makes 54,378 helper Worker requests
+(HEAD, PUT, HEAD), before retries or independent verification. The current
+10,000 ms helper CPU ceiling per invocation does not prove that aggregate CPU
+will remain within the plan allowance. Establish account-wide remaining
+allowances and bound all affected products before resuming.
 
 Workers Paid has no account-wide hard dollar cap. Create a budget alert for
 $1 of usage-based spend in Manage Account → Billing → Billable Usage; the

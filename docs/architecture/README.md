@@ -28,8 +28,9 @@ External services and exports
 Production deployment must put the web application and normal API traffic
 behind Cloudflare Access. Worker-side token/owner checks and production asset
 exclusion are implemented. A paused Worker and owner-only Access application are
-provisioned; owner sign-in and MFA are confirmed. Private-data transfer is in
-progress, with full hosted Library validation still pending. Missing
+provisioned; owner sign-in and MFA are confirmed. Private-data transfer is
+partially complete and paused at the owner spending gate in the deployment
+runbook, with full hosted Library validation still pending. Missing
 Access configuration denies hosted requests. Local development bypasses
 authentication only for explicit loopback requests.
 Hosted webhook/OAuth callback routes are deferred and will require their own

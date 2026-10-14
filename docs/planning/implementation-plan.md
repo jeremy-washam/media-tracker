@@ -685,8 +685,10 @@ Importing the same source data twice produces the same final database state.
 ## 15. Deployment and operations
 
 The [storage efficiency plan](storage-efficiency-plan.md) adds the owner's
-October 12 priority: $5/month is acceptable; reduce amplification and measure
-usage rather than force Free. The isolated local implementation adds scoped D1
+October 12 priority: reduce amplification and measure usage rather than force
+Free. The October 13 instruction prohibits spending; remote work is paused
+until the runbook's spending gate is satisfied, including clarification of the
+previously approved $5/month subscription. The isolated local implementation adds scoped D1
 usage reporting, independent bounded maintenance, clock-safe YouTube publication
 and compact evidence references. Remote validation and activation remain pending.
 It recommends one paid D1 initially, copy-rehearsed
@@ -700,9 +702,12 @@ retention policy is unchanged.
 The [private deployment runbook](deployment.md) records the October 12
 preparation: Worker-side owner authentication, an app-only production bundle,
 guarded production configuration, paused cutover, and a local D1/R2 transfer and
-restore rehearsal. Account activation, remote transfer, hosted verification,
-and production sync cutover remain pending. The local database requires Workers
-Paid at its current size. This preparation is not a deployed application.
+restore rehearsal. The paused Worker and owner-only Access are deployed; owner
+sign-in, MFA, health, and the web interface are confirmed. The database copy is
+236 of 237 files complete. Final indexes/triggers, private R2 transfer, full
+hosted verification, and production sync cutover remain pending. Further remote
+work is paused at the spending gate. The local database requires Workers Paid
+at its current size; this is not yet a complete, validated Library deployment.
 
 ### Production resources
 
