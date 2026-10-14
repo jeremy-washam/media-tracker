@@ -2,7 +2,8 @@
 
 Status: local preparation and restore rehearsal accepted. The empty production
 database, private bucket, queues, and owner-only Access application are
-provisioned. The Worker and private data have not been deployed.
+provisioned, and the paused Worker is deployed against empty storage. Private
+Library data has not been transferred; authenticated hosted validation is pending.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
@@ -436,3 +437,21 @@ provider refresh, cron, and queue consumers paused, and preview URLs disabled.
 Wrangler requires a separate browser OAuth authorization; connector access
 alone does not authenticate the CLI. Hosted authentication, remote transfer
 and resume, integrity, cost measurements, and recovery gates remain open.
+
+### Paused Worker publication
+
+Wrangler browser authorization completed for the intended account. The repaired
+CLI generated the real paused configuration and passed a production dry run.
+`pnpm check` passed formatting, typechecks, lint, and all 337 tests across 53 files;
+`pnpm build:production` passed package builds, the app-only asset bundle, and
+Worker packaging. The existing app was published against the empty database and
+private bucket. Private records, raw objects, and provider secrets remain local.
+
+Remote configuration confirms the CPU ceiling and both rate-limit bindings,
+Access mode, the intended owner and audience, disabled preview URLs, no cron,
+no queue consumers, and all three background flags false. Public requests to
+the homepage, Library deep link, JavaScript asset, and health API were denied,
+including spoofed identity headers. Browser-style health requests redirect to
+the configured Access login. The owner must verify the actual sign-in and MFA
+flow before private data transfer. Full-size import and resumability tooling,
+hosted data integrity, cost measurement, and recovery remain open gates.

@@ -33,8 +33,9 @@ The [Music implementation](music-implementation.md) supersedes earlier
 
 Private Access checks, usage limiters, production packaging, deployment helpers,
 and local snapshot/restore rehearsal are in the checkout. Empty hosted storage,
-queues, and an owner-only Access application are provisioned. Worker deployment
-and private data transfer remain pending, as do the hosted launch gates in the
+queues, and an owner-only Access application are provisioned. The paused Worker
+is published against empty storage. Private data transfer and authenticated
+hosted validation remain pending, along with the launch gates in the
 [deployment runbook](deployment.md) and
 [storage efficiency plan](storage-efficiency-plan.md). The
 [documentation audit](documentation-audit.md) records the code/live-app comparison.
