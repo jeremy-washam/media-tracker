@@ -749,7 +749,7 @@ test('shows the production Books shell and preserves Connections', async ({ page
 
   await page.getByRole('link', { name: 'Connections' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Connections' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Connections', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Readwise Reader' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'YouTube', exact: true }).first()).toBeVisible()
 })

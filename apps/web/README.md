@@ -6,6 +6,10 @@ across Books, Movies, Articles, Podcasts, Music, and Videos, with server-side
 search/filter/sort, complete counts, cursor pagination, and contextual inspectors.
 The legacy History component is not routed. Chat and Recaps remain disabled
 navigation; Settings has no production route.
+Connections uses compact source rows with bundled official logos and labeled
+connection-state icons. Sync/coverage summaries remain visible; Collapsible
+details retain source limitations and attempt/export dates. The account form
+follows the source rows. Standard actions use the small shadcn Button variant.
 Connections displays every account lineage, coverage, attempts,
 incomplete-import progress, and resumable Spotify/YouTube imports. Use an
 existing YouTube card for later snapshots of the same account.

@@ -5,6 +5,16 @@
 /* Controls and app navigation use the native arrow; ordinary links use a pointer. */
 @layer base {
   button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button,
+  select {
+    color: inherit;
+  }
+  button,
   [role='button'],
   [data-slot='button'],
   [role='option'],

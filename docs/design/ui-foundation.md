@@ -168,6 +168,18 @@ source-specific copy and existing filter-reset callbacks; empty collections link
 to Connections through Button's Base UI `render` API. Do not style ordinary links
 as buttons in collection CSS.
 
+Connections uses the workspace header as its page title, with no repeated body
+heading or Source coverage eyebrow. Source rows show bundled official app marks,
+14px names, labeled green/red connection icons, and compact sync/coverage metadata.
+Degraded status stays amber and reauthorization stays red. Actions use shadcn's
+small Button variant, while the account form pairs default 32px Input/Button
+controls; coverage explanations and attempt/export dates live in
+Collapsible details. Incomplete-import progress and Resume remain visible. The
+new YouTube account form sits below the sources; existing lineage imports keep
+their connection IDs. Page-owned layout is isolated in its CSS Module and wraps
+both copy and actions at narrow widths. Base native-control defaults live in the
+base layer so they do not override installed component typography.
+
 ## Visual and writing principles
 
 The owner approved the twelve findings in the [October 12 visual audit](../planning/visual-ui-audit.md).

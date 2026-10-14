@@ -612,17 +612,6 @@ a {
 }
 
 /* Production Index shell */
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button,
-select {
-  color: inherit;
-}
 
 button:focus-visible:not([data-slot]),
 input:focus-visible:not([data-slot]),

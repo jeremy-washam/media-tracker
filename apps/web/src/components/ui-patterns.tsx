@@ -49,14 +49,18 @@ export function Hint({ content, children }: { content: ReactNode; children: Reac
 export function FileUploadButton({
   children,
   disabled,
+  buttonSize = 'default',
   ...props
-}: Omit<ComponentProps<typeof Input>, 'type'>) {
+}: Omit<ComponentProps<typeof Input>, 'type'> & {
+  buttonSize?: ComponentProps<typeof Button>['size']
+}) {
   const input = useRef<HTMLInputElement>(null)
   return (
     <>
       <Button
         type="button"
         variant="outline"
+        size={buttonSize}
         disabled={disabled}
         onClick={() => input.current?.click()}
       >

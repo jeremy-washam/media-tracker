@@ -241,7 +241,7 @@ test('keeps Connections polling at five seconds with the longer Library freshnes
   await page.goto('/library/books/archive')
   await waitForWarmCache(page)
   await page.getByRole('link', { name: 'Connections', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Connections', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Connections', exact: true })).toBeVisible()
   const connectionCount = requests.filter((url) => url.pathname === '/api/connections').length
   const runCount = requests.filter((url) => url.pathname === '/api/sync-runs').length
   await page.clock.runFor(5100)
