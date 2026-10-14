@@ -41,8 +41,8 @@ test.beforeEach(async ({ page }) => {
 
 function sampleMotion(page: Page) {
   return page.evaluate(() => {
-    const workspace = document.querySelector<HTMLElement>('.books-page')!
-    const collection = document.querySelector<HTMLElement>('.books-collection')!
+    const workspace = document.querySelector<HTMLElement>('[data-ui~="library-workspace"]')!
+    const collection = document.querySelector<HTMLElement>('[data-ui~="library-collection"]')!
     return new Promise<Array<{ space: number; edgeDifference: number }>>((resolve, reject) => {
       const samples: Array<{ space: number; edgeDifference: number }> = []
       const timeout = setTimeout(
@@ -51,7 +51,7 @@ function sampleMotion(page: Page) {
       )
       let frame: number
       const sample = () => {
-        const inspector = workspace.querySelector<HTMLElement>('.book-inspector')
+        const inspector = workspace.querySelector<HTMLElement>('[data-ui~="book-inspector"]')
         if (inspector) {
           samples.push({
             space: parseFloat(getComputedStyle(workspace).getPropertyValue('--inspector-space')),
@@ -89,7 +89,7 @@ test('moves the collection and inspector together throughout opening and closing
   await page.goto('/library/books/archive?layout=grid')
   const card = page.getByRole('button', { name: /Motion Book 0/ })
   await expect(card).toBeVisible()
-  const collection = page.locator('.books-collection')
+  const collection = page.locator('[data-ui~="library-collection"]')
   const closedWidth = (await collection.boundingBox())!.width
   for (const opening of [true, false]) {
     const sampling = sampleMotion(page)
@@ -112,7 +112,7 @@ test('puts List first while preserving the saved grid preference and explicit UR
 }) => {
   await page.addInitScript(() => localStorage.setItem('media-tracker:library-layout', 'grid'))
   await page.goto('/library/books/archive')
-  const controls = page.locator('.layout-toggle button')
+  const controls = page.locator('[data-ui~="layout-toggle"] button')
   await expect(controls.nth(0)).toHaveAttribute('aria-label', 'List view')
   await expect(controls.nth(1)).toHaveAttribute('aria-label', 'Grid view')
   await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'true')
@@ -126,13 +126,15 @@ test('skips motion with reduced motion and keeps narrow collections full width',
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width: 960, height: 720 })
   await page.goto('/library/books/archive?layout=grid')
-  const collection = page.locator('.books-collection')
+  const collection = page.locator('[data-ui~="library-collection"]')
   const closedWidth = (await collection.boundingBox())!.width
   await page.getByRole('button', { name: /Motion Book 0/ }).click()
   await expect(page.getByRole('complementary', { name: 'Book inspector' })).toBeVisible()
   expect((await collection.boundingBox())!.width).toBeCloseTo(closedWidth, 0)
   expect(
-    await page.locator('.books-page').evaluate((el) => getComputedStyle(el).transitionDuration),
+    await page
+      .locator('[data-ui~="library-workspace"]')
+      .evaluate((el) => getComputedStyle(el).transitionDuration),
   ).toBe('0s')
   await page.getByRole('button', { name: 'Close inspector', exact: true }).last().click()
   await expect(page.getByRole('complementary', { name: 'Book inspector' })).toHaveCount(0)

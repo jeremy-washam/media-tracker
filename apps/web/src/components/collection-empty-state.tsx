@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { AppButton as Button } from '@/components/ui-patterns'
+import workspaceStyles from '@/components/library-workspace.module.css'
 
 export function CollectionEmptyState({
   icon: Icon,
@@ -16,7 +17,7 @@ export function CollectionEmptyState({
   clearLabel?: string
 }) {
   return (
-    <div className="collection-empty-state">
+    <div className={workspaceStyles['books-state']} data-ui="collection-empty-state">
       <Icon aria-hidden="true" />
       <h2>{title}</h2>
       <p>{description}</p>
@@ -25,7 +26,12 @@ export function CollectionEmptyState({
           {clearLabel}
         </Button>
       ) : (
-        <Button variant="outline" nativeButton={false} render={<Link to="/connections" />}>
+        <Button
+          variant="outline"
+          className="text-sm font-medium"
+          nativeButton={false}
+          render={<Link to="/connections" />}
+        >
           Open Connections
         </Button>
       )}

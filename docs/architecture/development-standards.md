@@ -12,6 +12,18 @@
 - Distinguish `occurred_at`, `recorded_at`, and `ingested_at`.
 - Never let generated summaries or inferred metadata overwrite imported facts.
 
+## Web styling
+
+Use installed shadcn/ui Base UI primitives and shared compositions for controls.
+Use Tailwind utilities for small arrangements and plain CSS Modules for
+substantial custom layouts/content. Keep global CSS limited to shared tokens,
+document/accessibility defaults, and custom-property registrations. Shared media
+presentation and collection/inspector geometry have shared owners; avoid copying
+those contracts into each media feature. Keep class names out of runtime behavior
+and browser test identity. Verify computed geometry, keyboard behavior, and
+light/dark desktop/narrow appearance when moving cascade boundaries. See
+[ADR 0019](../decisions/0019-web-styling-ownership.md).
+
 ## Ingestion rules
 
 - Store raw evidence even when validation or parsing fails.

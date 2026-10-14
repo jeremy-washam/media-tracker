@@ -1,9 +1,12 @@
+import contentStyles from '@/components/page-content.module.css'
+import connectionsStyles from '@/pages/connections-page.module.css'
+import { cn } from '@/lib/utils'
 import { invalidateLibraryQueries } from '../library-queries'
 import { Notice, FileUploadButton } from '@/components/ui-patterns'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import { useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -149,18 +152,24 @@ export function ConnectionsPage() {
   })
 
   return (
-    <section className="page-stack" aria-labelledby="connections-title">
-      <div className="page-heading page-heading-compact">
-        <p className="eyebrow">Source coverage</p>
+    <section
+      className={contentStyles['page-stack']}
+      aria-labelledby="connections-title"
+      data-ui="page-stack"
+    >
+      <div className={cn(contentStyles['page-heading'], contentStyles['page-heading-compact'])}>
+        <p className={contentStyles['eyebrow']} data-ui="eyebrow">
+          Source coverage
+        </p>
         <h1 id="connections-title">Connections</h1>
         <p>See what is connected, how much history is covered, and when each source last synced.</p>
       </div>
       {connections.isError ? (
-        <Notice className="notice notice-error">
+        <Notice className={cn(contentStyles['notice'], 'notice-error')}>
           Connection status is unavailable because the local API could not be reached.
         </Notice>
       ) : null}
-      <label className="checkpoint-note">
+      <label className={connectionsStyles['checkpoint-note']}>
         New YouTube account or channel label{' '}
         <Input
           aria-label="YouTube account label"
@@ -182,13 +191,22 @@ export function ConnectionsPage() {
           Import a new YouTube account
         </FileUploadButton>
       ) : null}
-      <div className="connection-list" aria-busy={connections.isPending}>
+      <div className={connectionsStyles['connection-list']} aria-busy={connections.isPending}>
         {(connections.data?.data ?? []).map((connection) => (
-          <article className="connection-row" key={connection.id ?? connection.source}>
-            <div className={`source-monogram source-${connection.source}`} aria-hidden="true">
+          <article
+            className={connectionsStyles['connection-row']}
+            key={connection.id ?? connection.source}
+          >
+            <div
+              className={cn(
+                connectionsStyles['source-monogram'],
+                connectionsStyles[`source-${connection.source}`],
+              )}
+              aria-hidden="true"
+            >
               {sourceNames[connection.source].slice(0, 1)}
             </div>
-            <div className="connection-copy">
+            <div className={connectionsStyles['connection-copy']}>
               <h2>{sourceNames[connection.source]}</h2>
               {connection.id === null ? null : <p>{connection.label}</p>}
               <p>
@@ -213,7 +231,7 @@ export function ConnectionsPage() {
                   (connection.source === 'youtube' || connection.source === 'spotify') ? (
                     <Button
                       variant="outline"
-                      className="sync-button"
+
                       type="button"
                       disabled={resumed.isPending}
                       onClick={() =>
@@ -223,6 +241,7 @@ export function ConnectionsPage() {
                           connectionId: connection.id!,
                         })
                       }
+                      data-ui="sync-button"
                     >
                       Resume import
                     </Button>
@@ -240,31 +259,34 @@ export function ConnectionsPage() {
             {connection.source === 'readwise' ? (
               <Button
                 variant="outline"
-                className="sync-button"
+
                 type="button"
                 disabled={readwiseSync.isPending}
                 onClick={() => readwiseSync.mutate()}
+                data-ui="sync-button"
               >
                 {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
               </Button>
             ) : connection.source === 'hardcover' ? (
               <Button
                 variant="outline"
-                className="sync-button"
+
                 type="button"
                 disabled={hardcoverSync.isPending}
                 onClick={() => hardcoverSync.mutate()}
+                data-ui="sync-button"
               >
                 {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
               </Button>
             ) : connection.source === 'letterboxd' ? (
-              <div className="connection-actions">
+              <div className={connectionsStyles['connection-actions']}>
                 <Button
                   variant="outline"
-                  className="sync-button sync-button-secondary"
+                  className="sync-button-secondary"
                   type="button"
                   disabled={letterboxdSync.isPending}
                   onClick={() => letterboxdSync.mutate()}
+                  data-ui="sync-button"
                 >
                   {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
                 </Button>
@@ -281,13 +303,14 @@ export function ConnectionsPage() {
                 </FileUploadButton>
               </div>
             ) : connection.source === 'spotify' ? (
-              <div className="connection-actions">
+              <div className={connectionsStyles['connection-actions']}>
                 <Button
                   variant="outline"
-                  className="sync-button sync-button-secondary"
+                  className="sync-button-secondary"
                   type="button"
                   disabled={spotifySync.isPending}
                   onClick={() => spotifySync.mutate()}
+                  data-ui="sync-button"
                 >
                   {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
                 </Button>
@@ -328,96 +351,100 @@ export function ConnectionsPage() {
         ))}
         {connections.isPending
           ? Array.from({ length: 5 }, (_, index) => (
-              <Skeleton className="connection-skeleton" key={index} aria-hidden="true" />
+              <Skeleton
+                className={connectionsStyles['connection-skeleton']}
+                key={index}
+                aria-hidden="true"
+              />
             ))
           : null}
       </div>
       {readwiseSync.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           Imported {readwiseSync.data.archiveItems} Archive items from{' '}
           {readwiseSync.data.sourceRecords} Reader records.
         </p>
       ) : null}
       {readwiseSync.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Readwise sync failed. Confirm the Worker has a valid READWISE_TOKEN secret.
         </Notice>
       ) : null}
       {hardcoverSync.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           {hardcoverSync.data.mode === 'backfill' ? 'Imported' : 'Reconciled'}{' '}
           {hardcoverSync.data.books} read books and {hardcoverSync.data.archiveEntries} supported
           reading occurrences from Hardcover.
         </p>
       ) : null}
       {hardcoverSync.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Hardcover sync failed. Confirm the Worker has a valid HARDCOVER_TOKEN secret.
         </Notice>
       ) : null}
       {letterboxdImport.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           {letterboxdImport.data.alreadyImported
             ? 'That exact Letterboxd export was already imported.'
             : `Imported ${letterboxdImport.data.films} films and ${letterboxdImport.data.archiveEntries} viewing records from Letterboxd.`}
         </p>
       ) : null}
       {letterboxdImport.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Letterboxd import failed. Select the ZIP downloaded from Letterboxd’s export page.
         </Notice>
       ) : null}
       {letterboxdSync.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           {letterboxdSync.data.unchanged
             ? `Letterboxd RSS is current (${letterboxdSync.data.feedEntries} recent entries checked).`
             : `Reconciled ${letterboxdSync.data.archiveEntries} recent Letterboxd viewings.`}
         </p>
       ) : null}
       {letterboxdSync.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Letterboxd RSS sync failed. Confirm the configured username and try again.
         </Notice>
       ) : null}
       {spotifyImport.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           {spotifyImport.data.alreadyImported
             ? 'That exact Spotify export was already imported.'
             : `Imported ${spotifyImport.data.totalArchiveEpisodes} podcast episodes from ${spotifyImport.data.totalPodcastSegments} playback segments.`}
         </p>
       ) : null}
       {spotifyImport.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Spotify import failed. Select the Extended Streaming History ZIP from Spotify.
         </Notice>
       ) : null}
       {spotifySync.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           Reconciled {spotifySync.data.archiveEpisodes} consumed saved episodes,{' '}
           {spotifySync.data.savedShows} followed shows, and {spotifySync.data.recentTracks} recent
           track observations; enriched {spotifySync.data.catalogTracks} additional tracks.
         </p>
       ) : null}
       {spotifySync.isSuccess && spotifySync.data.partialFailures.length > 0 ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Some Spotify reads could not be refreshed: {spotifySync.data.partialFailures.join(', ')}.
           Retained data remains available.
         </Notice>
       ) : null}
       {spotifySync.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           Spotify sync failed. Confirm its client ID and refresh token are configured.
         </Notice>
       ) : null}
       {youtubeImport.isSuccess ? (
-        <p className="checkpoint-note">
+        <p className={connectionsStyles['checkpoint-note']}>
           {youtubeImport.data.alreadyImported
             ? 'That exact YouTube Takeout was already imported.'
             : `Imported ${youtubeImport.data.archiveEntries} YouTube watch occurrences, ${youtubeImport.data.queueEntries} Watch Later entries, and ${youtubeImport.data.subscriptionRecords} subscriptions.`}
         </p>
       ) : null}
       {youtubeImport.isError ? (
-        <Notice className="checkpoint-note sync-error">
+        <Notice className={cn(connectionsStyles['checkpoint-note'], 'sync-error')}>
           YouTube import failed. Select a Google Takeout ZIP containing YouTube watch history.
         </Notice>
       ) : null}
@@ -431,7 +458,7 @@ export function ConnectionsPage() {
       {runs.data?.pages
         .flatMap((page) => page.data)
         .map((run) => (
-          <article className="connection-row" key={run.id}>
+          <article className={connectionsStyles['connection-row']} key={run.id}>
             <div>
               <strong>{run.connectionLabel}</strong>
               <p>
@@ -468,9 +495,10 @@ export function ConnectionsPage() {
         <Button
           variant="outline"
           type="button"
-          className="sync-button"
+
           disabled={runs.isFetchingNextPage}
           onClick={() => void runs.fetchNextPage()}
+          data-ui="sync-button"
         >
           Older activity
         </Button>

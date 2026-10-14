@@ -1,4 +1,12 @@
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
+import workspaceStyles from '@/components/library-workspace.module.css'
+import inspectorStyles from '@/components/inspector.module.css'
+import musicStyles from '@/features/music/music.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import mediaStyles from '@/components/media-presentation.module.css'
+import contentStyles from '@/components/page-content.module.css'
+import { cn } from '@/lib/utils'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
@@ -14,8 +22,8 @@ import {
 } from '@/components/flat-tabs'
 import { FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import {
   InputGroup,
   InputGroupAddon,
@@ -137,9 +145,20 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
       value={view}
       render={<section />}
       data-inspector-open={Boolean(search.item)}
-      className={`books-page spotify-library-page music-page music-${layout}`}
+      data-layout={layout}
+      className={cn(
+        workspaceStyles['books-page'],
+        workspaceStyles['spotify-library-page'],
+        layout === 'grid' ? musicStyles['music-grid'] : mediaStyles['music-list'],
+      )}
+      data-ui={cn('library-workspace spotify-library-page music-page', `music-${layout}`)}
     >
-      <FlatTabsContent value={view} className="books-collection" ref={collectionRef}>
+      <FlatTabsContent
+        value={view}
+        className={workspaceStyles['books-collection']}
+        ref={collectionRef}
+        data-ui="library-collection"
+      >
         <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
           Music
         </h1>
@@ -152,16 +171,16 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 target === view ? search : { ...search, item: undefined },
                 target,
               )}
-              activeProps={{ className: 'active', 'aria-current': 'page' }}
+              activeProps={{ 'aria-current': 'page' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
               <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
-        <div className="books-toolbar">
+        <LibraryToolbar data-ui="library-toolbar">
           <form
-            className="books-search"
+            className={controlsStyles['books-search']}
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
@@ -200,7 +219,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               ) : null}
             </InputGroup>
           </form>
-          <label className="library-inline-filter">
+          <label className={controlsStyles['library-inline-filter']}>
             <span>Source</span>
             <LibrarySelect
               value={search.source ?? 'all'}
@@ -221,13 +240,14 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           <Button
             variant="outline"
             type="button"
-            className="toolbar-button"
+            className={controlsStyles['toolbar-button']}
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
+            data-ui="toolbar-button"
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
           </Button>
-          <label className="books-sort">
+          <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <span className="sr-only">Sort music</span>
             <LibrarySelect
               aria-label="Sort music"
@@ -243,7 +263,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
               variant="outline"
               size="icon"
               type="button"
-              className="sort-direction"
+              className={controlsStyles['sort-direction']}
               aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
               onClick={() =>
                 update({
@@ -263,10 +283,10 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           {view !== 'tracks' ? (
             <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
           ) : null}
-        </div>
+        </LibraryToolbar>
         {filtersOpen ? (
-          <section className="filter-panel" aria-label="Music filters">
-            <div className="filter-panel-heading">
+          <LibraryFilterPanel aria-label="Music filters" data-ui="filter-panel">
+            <div className={controlsStyles['filter-panel-heading']}>
               <strong> Filters</strong>
               <Button
                 variant="outline"
@@ -288,8 +308,8 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 Clear
               </Button>
             </div>
-            <div className="filter-panel-grid">
-              <fieldset className="date-filter">
+            <div className={controlsStyles['filter-panel-grid']}>
+              <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
                 <legend>Playback date</legend>
                 <label>
                   From
@@ -312,7 +332,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                   />
                 </label>
               </fieldset>
-              <label className="library-inline-filter">
+              <label className={controlsStyles['library-inline-filter']}>
                 <span>Playback observations</span>
                 <LibrarySelect
                   value={search.playbackCount ?? 'any'}
@@ -332,7 +352,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                   ]}
                 />
               </label>
-              <label className="library-inline-filter">
+              <label className={controlsStyles['library-inline-filter']}>
                 <span>Metadata</span>
                 <LibrarySelect
                   value={search.metadata ?? 'any'}
@@ -352,7 +372,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 />
               </label>
               {view === 'tracks' ? (
-                <label className="library-inline-filter">
+                <label className={controlsStyles['library-inline-filter']}>
                   <span>Explicit</span>
                   <LibrarySelect
                     value={search.explicit ?? 'any'}
@@ -373,7 +393,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 </label>
               ) : null}
               {view === 'albums' ? (
-                <label className="library-inline-filter">
+                <label className={controlsStyles['library-inline-filter']}>
                   <span>Album type</span>
                   <LibrarySelect
                     value={search.albumType ?? 'any'}
@@ -424,29 +444,33 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 />
               ) : null}
             </div>
-          </section>
+          </LibraryFilterPanel>
         ) : null}
-        <div className="books-result-summary" aria-live="polite">
+        <div
+          className={workspaceStyles['books-result-summary']}
+          aria-live="polite"
+          data-ui="collection-summary"
+        >
           <span>
             {result.isPending ? null : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
           </span>
         </div>
         {result.isPending ? (
-          <LoadingState className="books-loading">Loading music…</LoadingState>
+          <LoadingState data-ui="collection-loading">Loading music…</LoadingState>
         ) : null}
         {summary?.coverage?.possibleRecentGap ? (
-          <p className="library-coverage-note" role="status">
+          <p className={workspaceStyles['library-coverage-note']} role="status">
             Recent playback coverage may have a gap between Spotify polls. Imported history is
             retained.
           </p>
         ) : !summary?.coverage?.recentPollAt && !result.isPending ? (
-          <p className="library-coverage-note">
+          <p className={workspaceStyles['library-coverage-note']}>
             Recently Played has not completed a checkpointed poll; imported listening history
             remains available.
           </p>
         ) : null}
         {result.isError && !result.isFetchNextPageError ? (
-          <Notice className="books-state books-state-error">
+          <Notice className={workspaceStyles['books-state']}>
             <h2>Music could not be loaded</h2>
             <p>{result.error.message}</p>
           </Notice>
@@ -459,7 +483,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           />
         ) : null}
         {items.length ? (
-          <div className="spotify-result-grid">
+          <div className={mediaStyles['spotify-result-grid']}>
             {items.map((item) => (
               <MusicItem
                 key={`${item.kind}:${item.id}`}
@@ -530,7 +554,7 @@ function MusicFacetPicker({
   })
   const label = facet === 'artist' ? 'Artists' : 'Albums'
   return (
-    <fieldset className="library-facet-picker">
+    <fieldset className={controlsStyles['library-facet-picker']}>
       <legend>
         {label}
         {selected.length ? ` (${selected.length} selected)` : ''}
@@ -542,7 +566,7 @@ function MusicFacetPicker({
         value={optionQ}
         onChange={(event) => setOptionQ(event.target.value)}
       />
-      <div className="library-facet-options">
+      <div className={controlsStyles['library-facet-options']}>
         {options.isPending ? <LoadingState>Loading options…</LoadingState> : null}
         {options.isError ? <Notice>Options unavailable</Notice> : null}
         {options.data?.pages
@@ -586,22 +610,24 @@ function MusicItem({
     <MediaRowButton
       data-collection-item={item.id}
       type="button"
-      className={`spotify-result ${selected ? 'selected' : ''}`}
+      className={cn(mediaStyles['spotify-result'], selected ? mediaStyles['selected'] : undefined)}
       onClick={(event) => onSelect(event.currentTarget)}
+      data-ui="spotify-result"
+      aria-pressed={selected}
     >
       {item.imageUrl ? (
         <img src={item.imageUrl} alt="" loading="lazy" />
       ) : (
-        <span className="spotify-art-fallback">
+        <span className={mediaStyles['spotify-art-fallback']}>
           {item.kind === 'track' ? <Music2 /> : <Disc3 />}
         </span>
       )}
-      <span className="spotify-result-copy">
+      <span className={mediaStyles['spotify-result-copy']} data-ui="media-item-copy">
         <strong>{item.title}</strong>
         <span>
           {item.subtitle ?? item.album ?? (item.kind === 'artist' ? 'Artist' : 'Metadata pending')}
         </span>
-        <small className="music-list-summary">
+        <small className={musicStyles['music-list-summary']}>
           {item.playbackCount.toLocaleString()} playback{' '}
           {item.playbackCount === 1 ? 'observation' : 'observations'} ·{' '}
           {item.observedDurationKnown ? (
@@ -623,7 +649,7 @@ function MusicItem({
             ? ` · ${item.trackCount} ${item.trackCount === 1 ? 'track' : 'tracks'}`
             : ''}
         </small>
-        <small className="music-grid-summary">
+        <small className={musicStyles['music-grid-summary']} data-ui="music-grid-summary">
           {item.playbackCount.toLocaleString()} observations ·{' '}
           {item.observedDurationKnown ? listened(item.observedMs) : 'Time unavailable'}
         </small>
@@ -657,21 +683,30 @@ function MusicInspector({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside ref={inspectorRef} className="media-inspector" aria-label="Music inspector">
+    <aside
+      ref={inspectorRef}
+      className={inspectorStyles['media-inspector']}
+      aria-label="Music inspector"
+      data-ui="media-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
         <InspectorHeader onClose={onClose}>
-          <TabsList variant="line" className="inspector-tabs" aria-label="Music information">
+          <TabsList
+            variant="line"
+            className={inspectorStyles['inspector-tabs']}
+            aria-label="Music information"
+          >
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">
               History{detail.data ? ` (${detail.data.playbackCount.toLocaleString()})` : ''}
             </TabsTrigger>
           </TabsList>
         </InspectorHeader>
-        <div className="inspector-scroll">
+        <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
           {detail.isPending ? (
             <InspectorStatePanels values={['details', 'history']}>
               <LoadingState>Loading…</LoadingState>
@@ -682,23 +717,25 @@ function MusicInspector({
             </InspectorStatePanels>
           ) : detail.data ? (
             <>
-              <div className="inspector-hero">
+              <div className={inspectorStyles['inspector-hero']} data-ui="inspector-hero">
                 {detail.data.imageUrl ? (
                   <img src={detail.data.imageUrl} alt="" />
                 ) : (
-                  <span className="spotify-art-fallback">
+                  <span className={mediaStyles['spotify-art-fallback']}>
                     <Music2 />
                   </span>
                 )}
                 <div>
-                  <span className="eyebrow">{detail.data.kind}</span>
+                  <span className={contentStyles['eyebrow']} data-ui="eyebrow">
+                    {detail.data.kind}
+                  </span>
                   <h2>{detail.data.title}</h2>
                   <p>{detail.data.subtitle}</p>
                 </div>
               </div>
               {
                 <>
-                  <TabsContent value="details" className="inspector-tab-panel">
+                  <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
                     <section>
                       <h3>Details</h3>
                       <dl>
@@ -787,7 +824,7 @@ function MusicInspector({
                         ) : null}
                       </dl>
                       {detail.data.artists?.length ? (
-                        <div className="inspector-related-links">
+                        <div className={inspectorStyles['inspector-related-links']}>
                           {detail.data.artists.map((artist) => (
                             <Link
                               key={artist.id}
@@ -800,7 +837,7 @@ function MusicInspector({
                         </div>
                       ) : null}
                       {detail.data.relatedTracks?.length ? (
-                        <div className="inspector-related-list">
+                        <div className={inspectorStyles['inspector-related-list']}>
                           <h3>Heard tracks</h3>
                           {detail.data.relatedTracks.map((track) => (
                             <Link
@@ -818,7 +855,7 @@ function MusicInspector({
                         </div>
                       ) : null}
                       {detail.data.relatedAlbums?.length ? (
-                        <div className="inspector-related-list">
+                        <div className={inspectorStyles['inspector-related-list']}>
                           <h3>Albums</h3>
                           {detail.data.relatedAlbums.map((album) => (
                             <Link
@@ -842,7 +879,7 @@ function MusicInspector({
                       ) : null}
                     </section>
                   </TabsContent>
-                  <TabsContent value="history" className="inspector-tab-panel">
+                  <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
                     <section>
                       <h3>History</h3>
                       {history.isPending ? <LoadingState>Loading history…</LoadingState> : null}
@@ -851,7 +888,11 @@ function MusicInspector({
                         <p>No playback observations.</p>
                       ) : null}
                       <ol
-                        className={`history-list spotify-history-list ${view === 'tracks' ? '' : 'music-entity-history'}`}
+                        className={cn(
+                          inspectorStyles['history-list'],
+                          inspectorStyles['spotify-history-list'],
+                          view === 'tracks' ? undefined : inspectorStyles['music-entity-history'],
+                        )}
                       >
                         {history.data?.pages
                           .flatMap((page) => page.data)
@@ -878,7 +919,7 @@ function MusicInspector({
                         <Button
                           variant="outline"
                           type="button"
-                          className="load-more"
+                          className={workspaceStyles['load-more']}
                           disabled={history.isFetchingNextPage}
                           onClick={() => void history.fetchNextPage()}
                         >

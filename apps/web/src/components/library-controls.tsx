@@ -1,3 +1,5 @@
+import mediaStyles from '@/components/media-presentation.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
 import { type ComponentProps } from 'react'
 import { Grid2X2, List, Star } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -37,7 +39,13 @@ export function LibrarySelect({
         if (next !== null) onValueChange(next)
       }}
     >
-      <SelectTrigger className={cn('min-w-0 max-w-full shrink-0', className)} {...props}>
+      <SelectTrigger
+        className={cn(
+          'min-w-0 max-w-full shrink-0 text-[length:inherit] text-[color:inherit] data-placeholder:text-[color:inherit] font-normal',
+          className,
+        )}
+        {...props}
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent
@@ -64,14 +72,23 @@ export function LibrarySelect({
 export function RatingStars({ rating }: { rating: number | null }) {
   if (rating === null)
     return (
-      <span className="rating-stars rating-unavailable" aria-label="Not rated">
+      <span
+        className={cn(mediaStyles['rating-stars'], mediaStyles['rating-unavailable'])}
+        aria-label="Not rated"
+        data-ui="rating-stars"
+      >
         —
       </span>
     )
   return (
-    <span className="rating-stars" role="img" aria-label={`${rating} out of 5 stars`}>
+    <span
+      className={mediaStyles['rating-stars']}
+      role="img"
+      aria-label={`${rating} out of 5 stars`}
+      data-ui="rating-stars"
+    >
       {Array.from({ length: Math.ceil(rating) }, (_, index) => (
-        <span className="rating-star" key={index}>
+        <span className={mediaStyles['rating-star']} key={index}>
           <Star aria-hidden="true" />
           <span style={{ width: `${Math.min(1, rating - index) * 100}%` }}>
             <Star aria-hidden="true" />
@@ -83,7 +100,7 @@ export function RatingStars({ rating }: { rating: number | null }) {
 }
 
 export function MediaCard({ className = '', ...props }: ComponentProps<'button'>) {
-  return <button type="button" {...props} className={`media-card ${className}`} />
+  return <button type="button" {...props} className={cn(mediaStyles['media-card'], className)} />
 }
 
 export function LibraryLayoutToggle({
@@ -95,7 +112,7 @@ export function LibraryLayoutToggle({
 }) {
   return (
     <ToggleGroup
-      className="layout-toggle"
+      className={controlsStyles['layout-toggle']}
       aria-label="Result layout"
       variant="outline"
       spacing={0}
@@ -105,11 +122,20 @@ export function LibraryLayoutToggle({
         const next = values[0] ?? value
         if (next === 'list' || next === 'grid') onValueChange(next)
       }}
+      data-ui="layout-toggle"
     >
-      <ToggleGroupItem value="list" aria-label="List view">
+      <ToggleGroupItem
+        value="list"
+        aria-label="List view"
+        className="text-[length:inherit] font-normal"
+      >
         <List aria-hidden="true" />
       </ToggleGroupItem>
-      <ToggleGroupItem value="grid" aria-label="Grid view">
+      <ToggleGroupItem
+        value="grid"
+        aria-label="Grid view"
+        className="text-[length:inherit] font-normal"
+      >
         <Grid2X2 aria-hidden="true" />
       </ToggleGroupItem>
     </ToggleGroup>
@@ -123,4 +149,41 @@ export function MediaRowButton(props: ComponentProps<'button'>) {
 }
 export function InspectorBackdrop(props: ComponentProps<'button'>) {
   return <button type="button" {...props} />
+}
+
+// Application density belongs to these compositions; primitives retain their defaults.
+type LibraryPart = { 'data-ui'?: string }
+export function LibraryToolbar({
+  className,
+  'data-ui': part,
+  ...props
+}: ComponentProps<'div'> & LibraryPart) {
+  return (
+    <div
+      className={cn(
+        controlsStyles['books-toolbar'],
+        '[&_[data-ui~=toolbar-button]]:text-[11px] [&_[data-ui~=library-sort]]:text-[11px] [&_[data-slot=select-trigger]]:text-[11px] [&_[data-slot=input-group-control]]:text-[12px]',
+        className,
+      )}
+      {...props}
+      data-ui={['library-toolbar', part].filter(Boolean).join(' ')}
+    />
+  )
+}
+export function LibraryFilterPanel({
+  className,
+  'data-ui': part,
+  ...props
+}: ComponentProps<'section'> & LibraryPart) {
+  return (
+    <section
+      className={cn(
+        controlsStyles['filter-panel'],
+        'text-[12px] [&_label]:text-[12px] [&_[data-slot=field-label]]:text-[12px] [&_[data-slot=input]]:text-[12px] [&_[data-slot=select-trigger]]:text-[12px] [&_[data-slot=button]]:text-[12px]',
+        className,
+      )}
+      {...props}
+      data-ui={['filter-panel', part].filter(Boolean).join(' ')}
+    />
+  )
 }

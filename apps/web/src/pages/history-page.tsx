@@ -1,4 +1,9 @@
-import { Button } from '@/components/ui/button'
+import contentStyles from '@/components/page-content.module.css'
+import historyStyles from '@/pages/history-page.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import connectionsStyles from '@/pages/connections-page.module.css'
+import { cn } from '@/lib/utils'
+import { AppButton as Button } from '@/components/ui-patterns'
 import { useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
@@ -55,27 +60,33 @@ export function HistoryPage() {
   const filteredItems = items
 
   return (
-    <section className="page-stack" aria-labelledby="history-title">
-      <div className="page-heading">
-        <p className="eyebrow">Personal ledger</p>
+    <section
+      className={contentStyles['page-stack']}
+      aria-labelledby="history-title"
+      data-ui="page-stack"
+    >
+      <div className={contentStyles['page-heading']}>
+        <p className={contentStyles['eyebrow']} data-ui="eyebrow">
+          Personal ledger
+        </p>
         <h1 id="history-title">Your media history, in one place.</h1>
         <p>
           Movies, books, podcasts, articles, and videos from your connected services appear here.
         </p>
       </div>
 
-      <div className="summary-grid" aria-label="History summary">
-        <article className="summary-card">
+      <div className={historyStyles['summary-grid']} aria-label="History summary">
+        <article className={historyStyles['summary-card']}>
           <span>Items imported</span>
           <strong>{media.isPending ? '—' : totalCount}</strong>
           <small>{totalCount === 0 ? 'Waiting for the first import' : 'In your Archive'}</small>
         </article>
-        <article className="summary-card">
+        <article className={historyStyles['summary-card']}>
           <span>Media types</span>
           <strong>{media.isPending ? '—' : typeCount}</strong>
           <small>Across the current Archive</small>
         </article>
-        <article className="summary-card">
+        <article className={historyStyles['summary-card']}>
           <span>Current view</span>
           <strong>{media.isPending ? '—' : filteredCount}</strong>
           <small>{filter === 'all' ? 'All media' : mediaTypePluralNames[filter]}</small>
@@ -83,14 +94,14 @@ export function HistoryPage() {
       </div>
 
       {media.isError ? (
-        <div className="notice notice-error" role="alert">
+        <div className={cn(contentStyles['notice'], 'notice-error')} role="alert">
           Your Archive could not be loaded from the local API.
         </div>
       ) : null}
 
       {!media.isPending && !media.isError && totalCount === 0 ? (
-        <div className="empty-panel">
-          <div className="empty-mark" aria-hidden="true">
+        <div className={contentStyles['empty-panel']}>
+          <div className={contentStyles['empty-mark']} aria-hidden="true">
             <span />
             <span />
             <span />
@@ -104,11 +115,11 @@ export function HistoryPage() {
 
       {totalCount > 0 ? (
         <>
-          <div className="media-filters" aria-label="Filter Archive by media type">
+          <div className={historyStyles['media-filters']} aria-label="Filter Archive by media type">
             <Button
               variant="outline"
               type="button"
-              className={filter === 'all' ? 'active' : ''}
+              className={filter === 'all' ? undefined : undefined}
               aria-pressed={filter === 'all'}
               onClick={() => setFilter('all')}
             >
@@ -118,7 +129,7 @@ export function HistoryPage() {
               <Button
                 variant="outline"
                 type="button"
-                className={filter === type ? 'active' : ''}
+                className={filter === type ? undefined : undefined}
                 aria-pressed={filter === type}
                 onClick={() => setFilter(type)}
                 key={type}
@@ -129,12 +140,18 @@ export function HistoryPage() {
           </div>
 
           <div
-            className="media-list"
+            className={historyStyles['media-list']}
             aria-label={`${filter === 'all' ? 'All media' : mediaTypePluralNames[filter]} Archive`}
           >
             {filteredItems.map((item) => (
-              <article className="media-row" key={item.id}>
-                <span className={`media-type-mark media-type-${item.type}`} aria-hidden="true">
+              <article className={historyStyles['media-row']} key={item.id}>
+                <span
+                  className={cn(
+                    historyStyles['media-type-mark'],
+                    historyStyles[`media-type-${item.type}`],
+                  )}
+                  aria-hidden="true"
+                >
                   {mediaTypeNames[item.type].slice(0, 1)}
                 </span>
                 <div>
@@ -144,7 +161,7 @@ export function HistoryPage() {
               </article>
             ))}
             {filteredItems.length === 0 ? (
-              <div className="filter-empty">
+              <div className={controlsStyles['filter-empty']}>
                 No {mediaTypePluralNames[filter as MediaType]?.toLowerCase() ?? 'items'} imported
                 yet.
               </div>
@@ -154,14 +171,15 @@ export function HistoryPage() {
             <Button
               variant="outline"
               type="button"
-              className="sync-button"
+
               disabled={media.isFetchingNextPage}
               onClick={() => void media.fetchNextPage()}
+              data-ui="sync-button"
             >
               {media.isFetchingNextPage ? 'Loading…' : 'Load more'}
             </Button>
           ) : null}
-          <p className="checkpoint-note">
+          <p className={connectionsStyles['checkpoint-note']}>
             Showing {items.length} of {filteredCount} items.
           </p>
         </>

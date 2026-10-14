@@ -1,4 +1,12 @@
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
+import mediaStyles from '@/components/media-presentation.module.css'
+import workspaceStyles from '@/components/library-workspace.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import moviesStyles from '@/features/movies/movies.module.css'
+import inspectorStyles from '@/components/inspector.module.css'
+import booksStyles from '@/features/books/books.module.css'
+import { cn } from '@/lib/utils'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
 import { moviesQueryOptions } from '../../library-queries'
@@ -13,8 +21,8 @@ import {
 } from '@/components/flat-tabs'
 import { FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import {
   InputGroup,
   InputGroupAddon,
@@ -82,7 +90,7 @@ function MoviePoster({
   if (movie.posterUrl !== null && !failed) {
     return (
       <img
-        className={`movie-poster movie-poster-${size}`}
+        className={cn(mediaStyles['movie-poster'], mediaStyles[`movie-poster-${size}`])}
         src={movie.posterUrl}
         alt={`Poster for ${movie.displayTitle}`}
         loading="lazy"
@@ -92,7 +100,11 @@ function MoviePoster({
   }
   return (
     <span
-      className={`movie-poster movie-poster-${size} movie-poster-fallback`}
+      className={cn(
+        mediaStyles['movie-poster'],
+        mediaStyles[`movie-poster-${size}`],
+        mediaStyles['movie-poster-fallback'],
+      )}
       role="img"
       aria-label={`No poster available for ${movie.displayTitle}`}
     >
@@ -202,10 +214,17 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
       value={collection}
       render={<section />}
       data-inspector-open={Boolean(search.item)}
-      className={`books-page movies-page movies-view-${view}`}
+      data-layout={view}
+      className={workspaceStyles['books-page']}
       aria-labelledby="movies-title"
+      data-ui="library-workspace"
     >
-      <FlatTabsContent value={collection} className="books-collection" ref={collectionRef}>
+      <FlatTabsContent
+        value={collection}
+        className={workspaceStyles['books-collection']}
+        ref={collectionRef}
+        data-ui="library-collection"
+      >
         <h1 className="sr-only" id="movies-title">
           Movies
         </h1>
@@ -213,21 +232,21 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           <Link
             to="/library/movies/archive"
             search={normalizedForMovieCollection(search, 'archive')}
-            activeProps={{ 'aria-current': 'page', className: 'active' }}
+            activeProps={{ 'aria-current': 'page' }}
           >
             Archive <span>{sectionCounts?.archiveItems?.toLocaleString() ?? '—'}</span>
           </Link>
           <Link
             to="/library/movies/queue"
             search={normalizedForMovieCollection(search, 'queue')}
-            activeProps={{ 'aria-current': 'page', className: 'active' }}
+            activeProps={{ 'aria-current': 'page' }}
           >
             Queue <span>{sectionCounts?.queueItems?.toLocaleString() ?? '—'}</span>
           </Link>
         </CollectionTabList>
-        <div className="books-toolbar">
+        <LibraryToolbar data-ui="library-toolbar">
           <form
-            className="books-search"
+            className={controlsStyles['books-search']}
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
@@ -276,14 +295,15 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           <Button
             variant={filters > 0 ? 'secondary' : 'outline'}
             type="button"
-            className="toolbar-button"
+            className={controlsStyles['toolbar-button']}
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
+            data-ui="toolbar-button"
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
             {filters > 0 ? <span>{filters}</span> : null}
           </Button>
-          <label className="books-sort">
+          <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort movies</span>
             <LibrarySelect
@@ -305,7 +325,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             variant="outline"
             size="icon"
             type="button"
-            className="sort-direction"
+            className={controlsStyles['sort-direction']}
             disabled={selectedSort === 'relevance'}
             aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
             onClick={() =>
@@ -323,7 +343,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             )}
           </Button>
           <LibraryLayoutToggle value={view} onValueChange={(view) => updateSearch({ view })} />
-        </div>
+        </LibraryToolbar>
         {filtersOpen ? (
           <MovieFilters
             collection={collection}
@@ -332,7 +352,11 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             onChange={updateSearch}
           />
         ) : null}
-        <div className="books-result-summary" aria-live="polite">
+        <div
+          className={workspaceStyles['books-result-summary']}
+          aria-live="polite"
+          data-ui="collection-summary"
+        >
           {movies.isPending ? null : (
             <span>
               {count.toLocaleString()} {count === 1 ? 'movie' : 'movies'}
@@ -348,10 +372,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           ) : null}
         </div>
         {movies.isPending ? (
-          <LoadingState className="books-loading">Loading movies…</LoadingState>
+          <LoadingState data-ui="collection-loading">Loading movies…</LoadingState>
         ) : null}
         {movies.isError && !movies.isFetchNextPageError ? (
-          <Notice className="books-state books-state-error">
+          <Notice className={workspaceStyles['books-state']}>
             <h2>Movies could not be loaded</h2>
             <p>{movies.error.message}</p>
             <Button variant="outline" type="button" onClick={() => void movies.refetch()}>
@@ -379,7 +403,9 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           />
         ) : null}
         {items.length > 0 ? (
-          <div className={view === 'grid' ? 'movies-grid' : 'movies-list'}>
+          <div
+            className={view === 'grid' ? mediaStyles['movies-grid'] : moviesStyles['movies-list']}
+          >
             {items.map((movie) => (
               <MovieResult
                 key={movie.id}
@@ -406,9 +432,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
         <>
           <InspectorBackdrop
             type="button"
-            className="inspector-backdrop"
+            className={workspaceStyles['inspector-backdrop']}
             aria-label="Close inspector"
             onClick={closeInspector}
+            data-ui="inspector-backdrop"
           />
           <MovieInspector mediaItemId={inspectorItem} search={search} onClose={closeInspector} />
         </>
@@ -443,7 +470,11 @@ function MovieResult({
         data-collection-item={movie.id}
         type="button"
         ref={buttonRef}
-        className={selected ? 'movie-card selected' : 'movie-card'}
+        className={
+          selected
+            ? cn(mediaStyles['movie-card'], mediaStyles['selected'])
+            : mediaStyles['movie-card']
+        }
         aria-pressed={selected}
         aria-label={`${movie.displayTitle}${movie.releaseYear ? `, ${movie.releaseYear}` : ''}`}
         onClick={onSelect}
@@ -468,18 +499,21 @@ function MovieResult({
       data-collection-item={movie.id}
       type="button"
       ref={buttonRef}
-      className={selected ? 'movie-row selected' : 'movie-row'}
+      className={
+        selected ? cn(mediaStyles['movie-row'], mediaStyles['selected']) : mediaStyles['movie-row']
+      }
       aria-pressed={selected}
       onClick={onSelect}
+      data-ui="movie-row"
     >
       <MoviePoster movie={movie} size="row" />
-      <span className="movie-row-title">
+      <span className={mediaStyles['movie-row-title']}>
         <strong>{movie.displayTitle}</strong>
         <small>{movie.releaseYear ?? 'Year unavailable'}</small>
       </span>
-      <span className="movie-row-director">{director}</span>
-      <span className="movie-row-context">{context}</span>
-      <span className="movie-row-rating">
+      <span className={mediaStyles['movie-row-director']}>{director}</span>
+      <span className={mediaStyles['movie-row-context']}>{context}</span>
+      <span className={mediaStyles['movie-row-rating']}>
         {movie.personal.currentRating === null ? '—' : `${movie.personal.currentRating}/5`}
       </span>
       <ChevronRight aria-hidden="true" />
@@ -524,7 +558,7 @@ function DateFilter({
   onChange: (mode?: 'range' | 'unknown', from?: string, to?: string) => void
 }) {
   return (
-    <fieldset className="date-filter">
+    <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
       <legend>{label}</legend>
       <LibrarySelect
         aria-label={label}
@@ -575,14 +609,14 @@ function MovieFilters({
   onChange: (patch: Partial<MoviesRouteSearch>) => void
 }) {
   return (
-    <section className="filter-panel" aria-label="Movie filters">
-      <div className="filter-panel-heading">
+    <LibraryFilterPanel aria-label="Movie filters" data-ui="filter-panel">
+      <div className={controlsStyles['filter-panel-heading']}>
         <strong> Filters</strong>
         <Button variant="outline" type="button" onClick={() => onChange(clearMovieFilters())}>
           Clear all
         </Button>
       </div>
-      <div className="filter-panel-grid">
+      <div className={controlsStyles['filter-panel-grid']}>
         {collection === 'archive' ? (
           <DateFilter
             label="Watched date"
@@ -604,7 +638,7 @@ function MovieFilters({
             }
           />
         )}
-        <fieldset className="date-filter">
+        <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
           <legend>Release year</legend>
           <span className="movie-year-range">
             <Input
@@ -626,7 +660,7 @@ function MovieFilters({
               }
             />
           </span>
-          <FieldLabel className="movie-filter-check">
+          <FieldLabel className={moviesStyles['movie-filter-check']}>
             <Checkbox
               checked={search.releaseYearUnknown ?? false}
               onCheckedChange={(checked) =>
@@ -636,7 +670,7 @@ function MovieFilters({
             Include unknown
           </FieldLabel>
         </fieldset>
-        <fieldset className="date-filter">
+        <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
           <legend>Your rating</legend>
           <LibrarySelect
             aria-label="Your rating"
@@ -695,7 +729,7 @@ function MovieFilters({
             </span>
           ) : null}
         </fieldset>
-        <fieldset className="date-filter">
+        <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
           <legend>{collection === 'archive' ? 'Review' : 'Archive status'}</legend>
           <LibrarySelect
             aria-label={collection === 'archive' ? 'Review' : 'Archive status'}
@@ -721,7 +755,7 @@ function MovieFilters({
           />
         </fieldset>
         {runtimeAvailable ? (
-          <fieldset className="date-filter">
+          <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
             <legend>Runtime</legend>
             <LibrarySelect
               aria-label="Runtime"
@@ -740,7 +774,7 @@ function MovieFilters({
                 { value: '150plus', label: '150+ min' },
               ]}
             />
-            <FieldLabel className="movie-filter-check">
+            <FieldLabel className={moviesStyles['movie-filter-check']}>
               <Checkbox
                 checked={search.runtimeUnknown ?? false}
                 onCheckedChange={(checked) =>
@@ -752,7 +786,7 @@ function MovieFilters({
           </fieldset>
         ) : null}
       </div>
-    </section>
+    </LibraryFilterPanel>
   )
 }
 
@@ -792,7 +826,7 @@ function MovieInspector({
   }, [onClose])
   useEffect(() => {
     const inspector = ref.current
-    inspector?.querySelector<HTMLElement>('.inspector-close')?.focus()
+    inspector?.querySelector<HTMLElement>('button[aria-label="Close inspector"]')?.focus()
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeRef.current()
     }
@@ -801,14 +835,23 @@ function MovieInspector({
   }, [mediaItemId])
 
   return (
-    <aside ref={ref} className="book-inspector movie-inspector" aria-label="Movie inspector">
+    <aside
+      ref={ref}
+      className={cn(inspectorStyles['book-inspector'], 'movie-inspector')}
+      aria-label="Movie inspector"
+      data-ui="book-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
-        <div className="inspector-topbar">
-          <TabsList variant="line" className="inspector-tabs" aria-label="Movie information">
+        <div className={inspectorStyles['inspector-topbar']} data-ui="inspector-header">
+          <TabsList
+            variant="line"
+            className={inspectorStyles['inspector-tabs']}
+            aria-label="Movie information"
+          >
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">
               History
@@ -818,25 +861,28 @@ function MovieInspector({
           <Button
             variant="ghost"
             size="icon"
-            className="inspector-close"
+            className="shrink-0 [&_svg]:size-[17px]"
             type="button"
             aria-label="Close inspector"
             onClick={onClose}
+            data-ui="inspector-close"
           >
             <X aria-hidden="true" />
           </Button>
         </div>
         {movie.isPending ? (
-          <LoadingState className="inspector-state">Loading movie…</LoadingState>
+          <LoadingState className={inspectorStyles['inspector-state']}>Loading movie…</LoadingState>
         ) : null}
-        {movie.isError ? <Notice className="inspector-state">{movie.error.message}</Notice> : null}
+        {movie.isError ? (
+          <Notice className={inspectorStyles['inspector-state']}>{movie.error.message}</Notice>
+        ) : null}
         {
-          <TabsContent value="details" className="inspector-tab-panel">
+          <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
             {movie.data ? <MovieDetails movie={movie.data} /> : null}
           </TabsContent>
         }
         {
-          <TabsContent value="history" className="inspector-tab-panel">
+          <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
             {movie.data ? (
               <MovieHistory
                 entries={history.data?.pages.flatMap((page) => page.data) ?? []}
@@ -856,8 +902,11 @@ function MovieInspector({
 
 function MovieDetails({ movie }: { movie: MovieDetail }) {
   return (
-    <div className="inspector-scroll">
-      <header className="inspector-book-heading inspector-movie-heading">
+    <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
+      <header
+        className={inspectorStyles['inspector-book-heading']}
+        data-ui="inspector-movie-heading"
+      >
         <MoviePoster movie={movie} size="inspector" />
         <div>
           <h2>{movie.displayTitle}</h2>
@@ -876,22 +925,24 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
               .join(' · ')}
           </span>
           {movie.personal.currentRating !== null ? (
-            <strong className="movie-personal-rating">
+            <strong className={moviesStyles['movie-personal-rating']}>
               Your rating {movie.personal.currentRating}/5
             </strong>
           ) : null}
           {movie.personal.liked ? (
-            <strong className="movie-liked">
+            <strong className={moviesStyles['movie-liked']}>
               <Heart aria-hidden="true" /> Liked
             </strong>
           ) : null}
         </div>
       </header>
       {movie.overview || movie.genres.length || movie.originalTitle || movie.releaseDate ? (
-        <section className="inspector-section">
+        <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
           <h3>Overview</h3>
-          {movie.overview ? <p className="book-description">{movie.overview}</p> : null}
-          <dl className="detail-list">
+          {movie.overview ? (
+            <p className={booksStyles['book-description']}>{movie.overview}</p>
+          ) : null}
+          <dl className={inspectorStyles['detail-list']}>
             {movie.originalTitle ? (
               <>
                 <dt>Original title</dt>
@@ -913,9 +964,9 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           </dl>
         </section>
       ) : null}
-      <section className="inspector-section">
+      <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
         <h3>Your relationship</h3>
-        <dl className="detail-list">
+        <dl className={inspectorStyles['detail-list']}>
           {movie.personal.currentRating !== null ? (
             <>
               <dt>Current rating</dt>
@@ -960,9 +1011,9 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
         </dl>
       </section>
       {movie.directors.length || movie.cast.length ? (
-        <section className="inspector-section">
+        <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
           <h3>Credits</h3>
-          <dl className="detail-list">
+          <dl className={inspectorStyles['detail-list']}>
             {movie.directors.length ? (
               <>
                 <dt>{movie.enrichment.mediaType === 'tv' ? 'Creators' : 'Director'}</dt>
@@ -978,7 +1029,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           </dl>
         </section>
       ) : null}
-      <section className="inspector-section">
+      <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
         <h3>Sources</h3>
         {movie.source.letterboxdUrl ? (
           <p>
@@ -997,7 +1048,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
         {movie.source.tmdbUrl ? (
           <>
             <a
-              className="tmdb-attribution"
+              className={inspectorStyles['tmdb-attribution']}
               href="https://www.themoviedb.org"
               target="_blank"
               rel="noreferrer"
@@ -1042,15 +1093,21 @@ function MovieHistory({
   loadingMore: boolean
   onLoadMore: () => void
 }) {
-  if (pending) return <LoadingState className="inspector-state">Loading history…</LoadingState>
-  if (error) return <div className="inspector-state">{error}</div>
+  if (pending)
+    return (
+      <LoadingState className={inspectorStyles['inspector-state']}>Loading history…</LoadingState>
+    )
+  if (error) return <div className={inspectorStyles['inspector-state']}>{error}</div>
   return (
-    <div className="inspector-scroll">
-      <div className="history-list movie-history-list">
+    <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
+      <div className={cn(inspectorStyles['history-list'], inspectorStyles['movie-history-list'])}>
         {entries.length === 0 ? <p>No viewing history is available.</p> : null}
         {entries.map((entry) => (
           <article key={entry.archiveEntryId}>
-            <span className="history-mark history-read" aria-hidden="true">
+            <span
+              className={cn(inspectorStyles['history-mark'], 'history-read')}
+              aria-hidden="true"
+            >
               <Check />
             </span>
             <div>
@@ -1062,7 +1119,9 @@ function MovieHistory({
               {entry.matchesFilter ? <small>Matches filter</small> : null}
               {entry.rating ? <p>{entry.rating.value}/5</p> : null}
               {entry.sourceRewatch ? <p>Marked as a rewatch</p> : null}
-              {entry.reviewText ? <p className="movie-review">{entry.reviewText}</p> : null}
+              {entry.reviewText ? (
+                <p className={moviesStyles['movie-review']}>{entry.reviewText}</p>
+              ) : null}
               {(entry.letterboxdLogUrl ?? entry.letterboxdFilmUrl) ? (
                 <a
                   href={entry.letterboxdLogUrl ?? entry.letterboxdFilmUrl ?? undefined}
@@ -1083,7 +1142,7 @@ function MovieHistory({
       {hasMore ? (
         <Button
           variant="outline"
-          className="load-more"
+          className={workspaceStyles['load-more']}
           type="button"
           disabled={loadingMore}
           onClick={onLoadMore}

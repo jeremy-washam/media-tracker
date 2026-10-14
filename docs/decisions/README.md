@@ -28,3 +28,5 @@ ADRs are append-only records of consequential technical choices. If a decision
 changes, add a new ADR that supersedes the old one rather than rewriting history.
 
 17. [Evidence insertion and replay](./0017-evidence-insert-only-replay.md)
+
+18. [Web styling ownership](./0019-web-styling-ownership.md)

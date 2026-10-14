@@ -1,0 +1,100 @@
+.connection-list {
+  display: grid;
+  gap: 10px;
+}
+
+.connection-row {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.source-monogram {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: white;
+  background: #34362e;
+  font-family: inherit;
+  font-size: 1.1rem;
+}
+
+.source-readwise {
+  background: #194c7a;
+}
+
+.source-hardcover {
+  background: #5851a7;
+}
+
+.source-letterboxd {
+  background: #37515e;
+}
+
+.source-spotify {
+  color: #173a24;
+  background: #6dc88c;
+}
+
+.source-youtube {
+  background: #a9453d;
+}
+
+.connection-copy h2 {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 720;
+}
+
+.connection-copy p {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+}
+
+.connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkpoint-note {
+  margin: -18px 0 0;
+}
+
+@media (max-width: 760px) {
+  .connection-row {
+    grid-template-columns: auto 1fr;
+  }
+}
+.connection-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 18px;
+}
+.connection-copy p {
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+.checkpoint-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+[data-ui~='page-stack'] > .connection-row {
+  display: block;
+}
+[data-ui~='page-stack'] > .connection-row p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+.connection-skeleton {
+  min-height: 86px;
+}
