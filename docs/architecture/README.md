@@ -25,7 +25,8 @@ External services and exports
 
 Production deployment must put the web application and normal API traffic
 behind Cloudflare Access. Worker-side token/owner checks and production asset
-exclusion are implemented; hosted Access provisioning remains pending. Missing
+exclusion are implemented; hosted Access is provisioned and owner sign-in/MFA
+has been confirmed. Missing
 Access configuration denies hosted requests. Local development bypasses
 authentication only for explicit loopback requests.
 Hosted webhook/OAuth callback routes are deferred and will require their own
@@ -33,8 +34,9 @@ authentication when introduced.
 
 The [private deployment runbook](../planning/deployment.md) records paused
 cutover configuration and a local D1/R2 snapshot/restore rehearsal. Contentless
-FTS token positions are preserved. The utility does not upload data or provide
-generalized replay/remote recovery.
+FTS token positions are preserved. The snapshot utility stays local. A separate guarded transfer utility supports
+ordered native D1 imports, metadata-preserving private R2 uploads, and independent
+remote-derived restore verification; generalized replay remains deferred.
 
 The [storage efficiency plan](../planning/storage-efficiency-plan.md) retains one
 paid D1 initially and evaluates compact references/evidence on private copies.

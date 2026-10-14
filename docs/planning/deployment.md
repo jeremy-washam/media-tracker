@@ -3,7 +3,8 @@
 Status: local preparation and restore rehearsal accepted. The empty production
 database, private bucket, queues, and owner-only Access application are
 provisioned, and the paused Worker is deployed against empty storage. Private
-Library data has not been transferred; authenticated hosted validation is pending.
+Library data has not been transferred. The owner has completed sign-in and MFA
+and confirmed the hosted health response; full Library validation is pending.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
@@ -187,6 +188,92 @@ provider cron are forbidden; the only allowed cron is the explicitly enabled
 `*/5 * * * *` cache-maintenance schedule. Provider credentials belong in Worker secrets; local secret files
 are not uploaded automatically. The original token-encryption key must accompany
 copied encrypted Spotify credentials.
+
+## Ordered hosted transfer
+
+`pnpm deployment:transfer` uploads a previously rehearsed version 2 private
+bundle. It requires Python 3.9+ with SQLite FTS5 and the existing Wrangler OAuth
+file; credentials never appear in arguments or diagnostics. Run `pnpm check`
+and the isolated native D1/R2 rehearsal before transferring personal data.
+
+```sh
+pnpm deployment:transfer \
+  --bundle .private/deployment/final-snapshot \
+  --resources .private/deployment/resources.json \
+  --oauth-file /absolute/path/to/wrangler/config/default.toml \
+  --access-attestation .private/deployment/access-attestation.json \
+  --phase d1
+```
+
+Repeat with `--phase r2 --r2-settings .private/deployment/r2-settings.json`,
+then `--phase verify`. R2 defaults to four concurrent objects; `--r2-workers`
+accepts 1–16 to bound transfer concurrency independently of D1. Keep all bundle,
+checkpoint, settings, and attestation
+files private. Refresh the Access attestation from current administrator API
+reads before each phase. It is needed only when Wrangler's OAuth scopes cannot
+read Access: version 1 includes UTC `issuedAt`/`expiresAt` (at most 15 minutes),
+account/application/audience/owner/hostname identities, and the fresh full
+`application` and `helperApplication` objects. The tool still checks native
+Worker bindings, pause flags, schedules, consumers, and private bucket domains;
+the attestation does not authorize bypassing any guard.
+
+The resources file binds the account, database, bucket, production hostname,
+Access application, owner, queues, and temporary transfer Access application.
+The temporary R2 settings file supplies its exact account-derived Worker URL,
+Access service-token ID/client ID/client secret, and a separate random bearer
+secret. These are operation-owned temporary credentials, never provider keys.
+
+D1 file imports are ordered and atomic, with a bundle/file hash receipt committed
+in the same transaction as every schema/data/final-index file. Native receipts
+are authoritative if an acknowledgment is lost; a persisted import bookmark is
+polled before querying receipts. A failed or unknown import never becomes a
+completed checkpoint. Preserve `remote-transfer/` when resuming. Its locked,
+target-bound usage ledger accumulates native reads/writes across all phases and
+stops normal work at 90 million reads or 20 million writes, reserving bounded
+cleanup capacity within total ceilings of 100 million reads and 25 million writes.
+Missing or uncertain usage
+requires explicit reconciliation rather than an automatic retry. Requests are
+paced and HTTP 429 retries are bounded. These deployment budgets are operational
+stop thresholds, not account-wide billing caps.
+
+Create its ignored private Wrangler configuration from
+`apps/api/wrangler.transfer.example.json`, set the verified account ID and absolute
+entrypoint path, and use an isolated test bucket for the native rehearsal. Deploy
+with a protected secrets file containing a fresh 32-byte hexadecimal
+`TRANSFER_SECRET`; create its temporary service-only Access application before
+exposing the hostname. Bind the production bucket only after rehearsal passes.
+The template is not part of the normal app deployment.
+
+The temporary Worker streams native R2 binding operations, validates SHA-256,
+preserves case-sensitive HTTP/custom metadata, and uses create-only writes.
+It has no D1 binding, delete operation, provider credentials, cron, or preview
+URL. Access accepts only its short-lived service token; a separate bearer secret
+is also required. Before upload, the tool verifies the exact helper hostname,
+production bucket binding, secret binding, and service-only Access policy.
+Conflicting objects stop transfer rather than being overwritten. Interrupted
+copies resume by comparing stored native checksums, sizes, and metadata.
+
+Verification requires all receipts and exact remote schema/index/view/trigger
+definitions, compares every typed row and allocator state, and checks foreign
+keys and integrity. A uniquely named indexed vocabulary staging table supports
+bounded keyset scans of FTS terms and positions. A durable, target-bound ownership
+journal records each exact scratch name and CREATE definition before use. Cleanup
+removes only matching journal-owned tables, including after interruption or a
+normal-work budget stop, using the reserved 10 million reads/5 million writes
+within the total ceilings. Unknown query/import usage still requires explicit
+reconciliation before normal work resumes. Remote contentless tokens rebuild the independent local
+verification SQLite artifact, which must pass the same vocabulary fingerprint.
+Partial local artifacts are removed on failure and promoted only after success.
+Standard D1 export remains unsuitable for virtual tables. Retain the original
+bundle and the verified remote-derived restore artifact independently, plus a
+D1 Time Travel recovery point.
+
+After successful copy and owner browser smoke tests, delete the temporary
+Worker, its Access application/policy/service token, and all isolated test cloud
+resources. Keep production sync paused until provider-specific budgets and
+single-owner Spotify token refresh are validated. Uploading existing provider
+credentials and the original encryption key is a separately approved sensitive
+step; read-only browsing can be validated while they remain local.
 
 ## Local transfer bundle and rehearsal
 
@@ -474,3 +561,27 @@ enrollment and the authenticated health response remain pending. Do not upload
 private Library data before that flow is verified. See Cloudflare's
 [App Launcher setup](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/app-launcher/)
 and [authenticator enrollment](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/independent-mfa/#enroll-authenticators).
+
+### Owner access and native transfer rehearsal
+
+The owner completed sign-in/MFA, confirmed the hosted health response, and opened
+Books Archive. The full Library has not yet been copied. With explicit owner
+approval, the eight existing provider settings and original token-encryption key
+were installed as encrypted Worker secrets. The key decrypted the retained
+Spotify credential locally without contacting Spotify. Production still has
+sync, maintenance, and automatic catalog refresh disabled. The owner will perform
+the hosted browser checks; agent access to Chrome is unnecessary.
+
+Isolated native D1 tests preserve exact typed rows, embedded NULs/line endings,
+large integers, binary values, schema definitions, and reconstructed contentless
+phrase search. Repeated transfer adds no duplicate writes. An invalid file import
+leaves neither its table nor its records behind. Native R2 tests preserve exact
+bytes, zero-byte objects, and case-sensitive metadata; an 86,178,068-byte stream
+passes end-to-end hashing, while checksum failures and overwrites are rejected.
+
+A native scale rehearsal staged 3,100,000 synthetic search-token instances in
+3,065 ms of SQL time with exactly 3.1 million rows read/written. Hot-term keyset
+pages read 2,000/2,001/2,001 rows for 2,000 results, confirming indexed pagination.
+Its tables were removed; native test usage was approximately 6.2 million reads
+and 3.1 million writes. Personal data transfer and full hosted integrity and
+owner browsing remain the next gates.
