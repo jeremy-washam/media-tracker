@@ -205,14 +205,14 @@ test('persists only the first page and preserves cursor pagination and explicit 
   })
   await page.goto('/library/books/archive')
   await waitForWarmCache(page)
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Second Book/ })).toHaveCount(0)
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()

@@ -1,0 +1,13 @@
+.collection-pagination {
+  padding-block: 16px 24px;
+  text-align: center;
+  overflow-anchor: none;
+}
+.collection-pagination-status {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12px;
+}

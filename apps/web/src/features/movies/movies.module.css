@@ -1,0 +1,29 @@
+.movies-list {
+  border-top: 1px solid var(--border);
+}
+
+.movie-filter-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  color: var(--muted-foreground);
+}
+
+.movie-personal-rating,
+.movie-liked {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 10px;
+}
+
+.movie-liked svg {
+  width: 12px;
+  fill: currentColor;
+}
+
+.movie-review {
+  white-space: pre-wrap;
+}

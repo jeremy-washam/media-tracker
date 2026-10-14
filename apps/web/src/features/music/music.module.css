@@ -1,0 +1,18 @@
+.music-grid-summary {
+  display: none;
+}
+.music-grid [data-ui~='media-item-copy'] strong,
+.music-grid [data-ui~='media-item-copy'] > span,
+.music-grid [data-ui~='media-item-copy'] > .music-grid-summary {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+.music-grid .music-list-summary {
+  display: none;
+}
+.music-grid .music-grid-summary {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}

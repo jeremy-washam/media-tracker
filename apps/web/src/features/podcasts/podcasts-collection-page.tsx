@@ -1,4 +1,11 @@
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
+import workspaceStyles from '@/components/library-workspace.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import mediaStyles from '@/components/media-presentation.module.css'
+import inspectorStyles from '@/components/inspector.module.css'
+import contentStyles from '@/components/page-content.module.css'
+import { cn } from '@/lib/utils'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
@@ -14,8 +21,8 @@ import {
 } from '@/components/flat-tabs'
 import { FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import {
   InputGroup,
   InputGroupAddon,
@@ -138,9 +145,20 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
       value={view}
       render={<section />}
       data-inspector-open={Boolean(search.item)}
-      className={`books-page spotify-library-page podcasts-page podcasts-${layout}`}
+      data-layout={layout}
+      className={cn(
+        workspaceStyles['books-page'],
+        workspaceStyles['spotify-library-page'],
+        layout === 'list' ? mediaStyles['podcasts-list'] : undefined,
+      )}
+      data-ui={cn('library-workspace spotify-library-page', `podcasts-${layout}`)}
     >
-      <FlatTabsContent value={view} className="books-collection" ref={collectionRef}>
+      <FlatTabsContent
+        value={view}
+        className={workspaceStyles['books-collection']}
+        ref={collectionRef}
+        data-ui="library-collection"
+      >
         <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
           Podcasts
         </h1>
@@ -150,16 +168,16 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               key={target}
               to={`/library/podcasts/${target}`}
               search={normalizePodcastSearch(search, target)}
-              activeProps={{ className: 'active', 'aria-current': 'page' }}
+              activeProps={{ 'aria-current': 'page' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
               <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
-        <div className="books-toolbar">
+        <LibraryToolbar data-ui="library-toolbar">
           <form
-            className="books-search"
+            className={controlsStyles['books-search']}
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
@@ -201,7 +219,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             </InputGroup>
           </form>
           {view !== 'following' ? (
-            <label className="library-inline-filter">
+            <label className={controlsStyles['library-inline-filter']}>
               <span>Show</span>
               <LibrarySelect
                 value={search.following ?? 'all'}
@@ -223,13 +241,14 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           <Button
             variant="outline"
             type="button"
-            className="toolbar-button"
+            className={controlsStyles['toolbar-button']}
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
+            data-ui="toolbar-button"
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
           </Button>
-          <label className="books-sort">
+          <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <span className="sr-only">Sort podcasts</span>
             <LibrarySelect
               aria-label="Sort podcasts"
@@ -244,7 +263,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             variant="outline"
             size="icon"
             type="button"
-            className="sort-direction"
+            className={controlsStyles['sort-direction']}
             aria-label="Reverse podcast sort"
             onClick={() =>
               update({
@@ -262,10 +281,10 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           {view === 'following' ? (
             <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
           ) : null}
-        </div>
+        </LibraryToolbar>
         {filtersOpen ? (
-          <section className="filter-panel" aria-label="Podcast filters">
-            <div className="filter-panel-heading">
+          <LibraryFilterPanel aria-label="Podcast filters" data-ui="filter-panel">
+            <div className={controlsStyles['filter-panel-heading']}>
               <strong> Filters</strong>
               <Button
                 variant="outline"
@@ -291,8 +310,8 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 Clear
               </Button>
             </div>
-            <div className="filter-panel-grid">
-              <fieldset className="date-filter">
+            <div className={controlsStyles['filter-panel-grid']}>
+              <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
                 <legend>{view === 'archive' ? 'Activity date' : 'Saved date'}</legend>
                 <label>
                   From
@@ -326,7 +345,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
               </fieldset>
               {view !== 'following' ? (
                 <>
-                  <fieldset className="date-filter">
+                  <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
                     <legend>Published</legend>
                     <label>
                       From
@@ -364,7 +383,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                       Date unavailable
                     </FieldLabel>
                   </fieldset>
-                  <label className="library-inline-filter">
+                  <label className={controlsStyles['library-inline-filter']}>
                     <span>Duration</span>
                     <LibrarySelect
                       value={search.duration?.[0] ?? ''}
@@ -399,7 +418,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 </>
               ) : (
                 <>
-                  <label className="library-inline-filter">
+                  <label className={controlsStyles['library-inline-filter']}>
                     <span>Library episodes</span>
                     <LibrarySelect
                       value={search.libraryEpisodes?.[0] ?? ''}
@@ -441,9 +460,13 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 </>
               )}
             </div>
-          </section>
+          </LibraryFilterPanel>
         ) : null}
-        <div className="books-result-summary" aria-live="polite">
+        <div
+          className={workspaceStyles['books-result-summary']}
+          aria-live="polite"
+          data-ui="collection-summary"
+        >
           <span>
             {result.isPending
               ? null
@@ -451,21 +474,21 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           </span>
         </div>
         {result.isPending ? (
-          <LoadingState className="books-loading">Loading podcasts…</LoadingState>
+          <LoadingState data-ui="collection-loading">Loading podcasts…</LoadingState>
         ) : null}
         {!result.isPending &&
         summary?.coverage &&
         (view === 'following'
           ? !summary.coverage.savedShowsAt
           : !summary.coverage.savedEpisodesAt) ? (
-          <p className="library-coverage-note">
+          <p className={workspaceStyles['library-coverage-note']}>
             {view === 'following'
               ? 'Following has not completed a checkpointed Spotify show sync.'
               : 'Saved episodes have not completed a checkpointed Spotify sync; Queue may be incomplete.'}
           </p>
         ) : null}
         {result.isError && !result.isFetchNextPageError ? (
-          <Notice className="books-state books-state-error">
+          <Notice className={workspaceStyles['books-state']}>
             <h2>Podcasts could not be loaded</h2>
             <p>{result.error.message}</p>
           </Notice>
@@ -478,7 +501,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           />
         ) : null}
         {items.length ? (
-          <div className="spotify-result-grid">
+          <div className={mediaStyles['spotify-result-grid']}>
             {items.map((item) => (
               <PodcastItem
                 key={`${item.kind}:${item.id}`}
@@ -545,7 +568,7 @@ function PodcastFacetPicker({
   })
   const label = facet === 'show' ? 'Shows' : facet === 'publisher' ? 'Publishers' : 'Languages'
   return (
-    <fieldset className="library-facet-picker">
+    <fieldset className={controlsStyles['library-facet-picker']}>
       <legend>
         {label}
         {selected.length ? ` (${selected.length} selected)` : ''}
@@ -557,7 +580,7 @@ function PodcastFacetPicker({
         value={optionQ}
         onChange={(event) => setOptionQ(event.target.value)}
       />
-      <div className="library-facet-options">
+      <div className={controlsStyles['library-facet-options']}>
         {options.isPending ? <LoadingState>Loading options…</LoadingState> : null}
         {options.isError ? <Notice>Options unavailable</Notice> : null}
         {options.data?.pages
@@ -601,17 +624,19 @@ function PodcastItem({
     <MediaRowButton
       data-collection-item={item.id}
       type="button"
-      className={`spotify-result ${selected ? 'selected' : ''}`}
+      className={cn(mediaStyles['spotify-result'], selected ? mediaStyles['selected'] : undefined)}
       onClick={(event) => onSelect(event.currentTarget)}
+      data-ui="spotify-result"
+      aria-pressed={selected}
     >
       {item.imageUrl ? (
         <img src={item.imageUrl} alt="" loading="lazy" />
       ) : (
-        <span className="spotify-art-fallback">
+        <span className={mediaStyles['spotify-art-fallback']}>
           <Headphones />
         </span>
       )}
-      <span className="spotify-result-copy">
+      <span className={mediaStyles['spotify-result-copy']} data-ui="media-item-copy">
         <strong>{item.title}</strong>
         <span>
           {item.subtitle ?? (item.kind === 'show' ? 'Publisher unknown' : 'Show unknown')}
@@ -651,14 +676,23 @@ function PodcastInspector({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside ref={inspectorRef} className="media-inspector" aria-label="Podcast inspector">
+    <aside
+      ref={inspectorRef}
+      className={inspectorStyles['media-inspector']}
+      aria-label="Podcast inspector"
+      data-ui="media-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
         <InspectorHeader onClose={onClose}>
-          <TabsList variant="line" className="inspector-tabs" aria-label="Podcast information">
+          <TabsList
+            variant="line"
+            className={inspectorStyles['inspector-tabs']}
+            aria-label="Podcast information"
+          >
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">
               History
@@ -668,7 +702,7 @@ function PodcastInspector({
             </TabsTrigger>
           </TabsList>
         </InspectorHeader>
-        <div className="inspector-scroll">
+        <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
           {detail.isPending ? (
             <InspectorStatePanels values={['details', 'history']}>
               <LoadingState>Loading…</LoadingState>
@@ -679,23 +713,25 @@ function PodcastInspector({
             </InspectorStatePanels>
           ) : detail.data ? (
             <>
-              <div className="inspector-hero">
+              <div className={inspectorStyles['inspector-hero']} data-ui="inspector-hero">
                 {detail.data.imageUrl ? (
                   <img src={detail.data.imageUrl} alt="" />
                 ) : (
-                  <span className="spotify-art-fallback">
+                  <span className={mediaStyles['spotify-art-fallback']}>
                     <Headphones />
                   </span>
                 )}
                 <div>
-                  <span className="eyebrow">{detail.data.kind}</span>
+                  <span className={contentStyles['eyebrow']} data-ui="eyebrow">
+                    {detail.data.kind}
+                  </span>
                   <h2>{detail.data.title}</h2>
                   <p>{detail.data.subtitle}</p>
                 </div>
               </div>
               {
                 <>
-                  <TabsContent value="details" className="inspector-tab-panel">
+                  <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
                     <section>
                       <h3>Details</h3>
                       {detail.data.description ? <p>{detail.data.description}</p> : null}
@@ -733,14 +769,14 @@ function PodcastInspector({
                         <Button
                           variant="outline"
                           type="button"
-                          className="inspector-related-link"
+                          className={inspectorStyles['inspector-related-link']}
                           onClick={() => onOpenShow(detail.data!.showId!)}
                         >
                           Show details: {detail.data.subtitle ?? 'Show'}
                         </Button>
                       ) : null}
                       {kind === 'show' ? (
-                        <div className="inspector-related-links">
+                        <div className={inspectorStyles['inspector-related-links']}>
                           <Link to="/library/podcasts/archive" search={{ show: [id] }}>
                             Archive episodes
                           </Link>
@@ -756,7 +792,7 @@ function PodcastInspector({
                       ) : null}
                     </section>
                   </TabsContent>
-                  <TabsContent value="history" className="inspector-tab-panel">
+                  <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
                     {kind === 'episode' ? (
                       <section>
                         <h3>History</h3>
@@ -765,7 +801,7 @@ function PodcastInspector({
                         {history.data?.pages[0]?.totalCount === 0 ? (
                           <p>No supported history.</p>
                         ) : null}
-                        <ol className="history-list">
+                        <ol className={inspectorStyles['history-list']}>
                           {history.data?.pages
                             .flatMap((page) => page.data)
                             .map((entry, index) => (
@@ -785,7 +821,7 @@ function PodcastInspector({
                           <Button
                             variant="outline"
                             type="button"
-                            className="load-more"
+                            className={workspaceStyles['load-more']}
                             disabled={history.isFetchingNextPage}
                             onClick={() => void history.fetchNextPage()}
                           >

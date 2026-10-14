@@ -1,0 +1,190 @@
+.books-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.books-page:has([data-ui~='book-inspector']) {
+  grid-template-columns: minmax(540px, 1fr) minmax(340px, 410px);
+}
+
+.books-collection {
+  container: library-collection / inline-size;
+  min-width: 0;
+  padding: 30px var(--library-inline-padding) 50px;
+}
+
+.books-result-summary {
+  min-height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.books-result-summary strong {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+.books-state {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  border: 1px dashed var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  color: var(--foreground);
+  text-align: center;
+}
+
+.books-state > svg {
+  width: 28px;
+  color: var(--muted-foreground);
+  margin-bottom: 14px;
+}
+
+.books-state h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.books-state p {
+  max-width: 450px;
+  color: var(--muted-foreground);
+  margin: 8px 0 16px;
+  font-size: 12px;
+}
+
+.load-more {
+  display: block;
+  margin: 28px auto 0;
+}
+
+.load-more:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.inspector-backdrop {
+  display: none;
+}
+@media (max-width: 1180px) {
+  .books-page:has([data-ui~='book-inspector']) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inspector-backdrop {
+    position: fixed;
+    z-index: 59;
+    inset: 0;
+    display: block;
+    border: 0;
+    background: rgb(0 0 0 / 36%);
+  }
+}
+@media (max-width: 560px) {
+  .books-collection {
+    padding: 22px var(--library-inline-padding) 42px;
+  }
+}
+
+.spotify-library-page [data-ui~='date-filter'] label:has([data-slot='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: 12px;
+}
+
+[data-ui~='video-result-copy'] span,
+[data-ui~='video-result-copy'] small,
+[data-ui~='video-result-date'],
+.library-coverage-note {
+  color: var(--muted-foreground);
+}
+
+.library-coverage-note {
+  margin: -4px 0 14px;
+  font-size: 11px;
+}
+
+@media (max-width: 1280px) {
+  .videos-page [data-ui~='media-inspector'] {
+    position: fixed;
+    inset: var(--workspace-header-height) 0 0 auto;
+    width: min(430px, 100vw);
+    z-index: 20;
+    box-shadow: -8px 0 28px rgb(0 0 0 / 16%);
+  }
+}
+.books-page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.books-collection {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.books-page {
+  --inspector-space: 0px;
+  transition: --inspector-space 180ms ease-in-out;
+}
+.books-page,
+.books-page:has([data-ui~='book-inspector']),
+.books-page:has([data-ui~='media-inspector']) {
+  grid-template-columns: minmax(0, 1fr) var(--inspector-space);
+}
+.books-page[data-inspector-open='true'] {
+  --inspector-space: 360px;
+}
+.books-page > .inspector-backdrop {
+  z-index: 29;
+}
+.books-page > [data-ui~='book-inspector'],
+.books-page > [data-ui~='media-inspector'] {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  height: 100dvh;
+  z-index: 30;
+  overscroll-behavior: contain;
+  transform: translateX(calc(360px - var(--inspector-space)));
+  opacity: calc(var(--inspector-space) / 360px);
+}
+.books-page[data-inspector-open='false'] > [data-ui~='book-inspector'],
+.books-page[data-inspector-open='false'] > [data-ui~='media-inspector'] {
+  pointer-events: none;
+}
+@media (max-width: 1000px) {
+  .books-page:has([data-ui~='book-inspector']),
+  .books-page:has([data-ui~='media-inspector']) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .books-page > [data-ui~='book-inspector'],
+  .books-page > [data-ui~='media-inspector'] {
+    box-shadow: -10px 0 35px rgb(0 0 0 / 10%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .books-page {
+    transition: none;
+  }
+}
+[data-ui~='media-inspector'] [data-ui~='flat-tabs']:not(.books-page),
+[data-ui~='media-inspector'] [data-ui~='flat-tabs-list'] {
+  min-height: 32px;
+}
+
+.books-collection {
+  overflow-anchor: none;
+}

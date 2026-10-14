@@ -35,7 +35,7 @@ for (const { media, section, response } of collections) {
     )
     await page.goto(`/library/${media}/${section}`)
     await page.getByRole('button', { name: 'Filters', exact: true }).click()
-    const panel = page.locator('.filter-panel')
+    const panel = page.locator('[data-ui~="filter-panel"]')
     const checkbox = panel.getByRole('checkbox').first()
     await expect(checkbox).toBeVisible()
     await expect(checkbox).toHaveAttribute('data-slot', 'checkbox')
@@ -137,7 +137,7 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   await page.unroute('**/api/library/books?*')
   await page.route('**/api/library/books?*', (r) => r.fulfill({ json: booksResponse() }))
   await page.getByRole('button', { name: 'Try again' }).click()
-  await expect(page.locator('.book-row').first()).toBeVisible()
+  await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
 })
 
 test('keeps the Video duration checkbox and its complete label together', async ({ page }) => {

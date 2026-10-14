@@ -7,12 +7,28 @@ import {
   type ReactNode,
 } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button as PrimitiveButton } from '@/components/ui/button'
+import { Input as PrimitiveInput } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+export function AppButton({ className, ...props }: ComponentProps<typeof PrimitiveButton>) {
+  return (
+    <PrimitiveButton
+      className={cn('text-[length:inherit] text-[color:inherit] font-normal', className)}
+      {...props}
+    />
+  )
+}
+export function AppInput({ className, ...props }: ComponentProps<typeof PrimitiveInput>) {
+  return (
+    <PrimitiveInput
+      className={cn('text-[length:inherit] md:text-[length:inherit]', className)}
+      {...props}
+    />
+  )
+}
 export function Notice({ children, className, ...props }: ComponentProps<typeof Alert>) {
   return (
     <Alert variant="destructive" className={cn('my-2', className)} {...props}>
@@ -50,19 +66,19 @@ export function FileUploadButton({
   children,
   disabled,
   ...props
-}: Omit<ComponentProps<typeof Input>, 'type'>) {
+}: Omit<ComponentProps<typeof PrimitiveInput>, 'type'>) {
   const input = useRef<HTMLInputElement>(null)
   return (
     <>
-      <Button
+      <AppButton
         type="button"
         variant="outline"
         disabled={disabled}
         onClick={() => input.current?.click()}
       >
         {children}
-      </Button>
-      <Input
+      </AppButton>
+      <AppInput
         ref={input}
         type="file"
         className="sr-only"
