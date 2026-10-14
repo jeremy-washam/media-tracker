@@ -1,0 +1,479 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C457DC8FD31545D1BFBD1121 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C457DC8FD31545D1BFBD1122 /* Assets.xcassets */; };
+		2232628BC77CB7D19CD3B3C4 /* FixtureLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C579839DAF99D55E4A27AB18 /* FixtureLibraryTests.swift */; };
+		4FFE5D8D9EF3B32C39422413 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CF13E03B9AFC1430EA31FF /* LibraryView.swift */; };
+		6A132698057F7BB6BDEFD023 /* ImladrisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A565F1D8E7B6B48C1E1E8C1E /* ImladrisApp.swift */; };
+		797BDCAF2C22DD7821EB3B3C /* FixtureLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6B72467AAAEC9062CA2637 /* FixtureLibrary.swift */; };
+		996D21535050BBA76778BDFC /* Resources/books.json in Resources */ = {isa = PBXBuildFile; fileRef = 3F9B45F4A5BB49FCC71427DB /* Resources/books.json */; };
+		F16AFD11F9800F11918818E4 /* SetupFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB532600DBF95F321745333A /* SetupFlowTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1F6EB2ECFE2F73DD774CFF39 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 28C5F34F6182D34317D86568;
+			remoteInfo = Imladris;
+		};
+		8A35A2529E21216336F018A3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 28C5F34F6182D34317D86568;
+			remoteInfo = Imladris;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		C457DC8FD31545D1BFBD1122 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		04C9EC5D89C15A2F0CF2C623 /* Imladris.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Imladris.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B6B72467AAAEC9062CA2637 /* FixtureLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureLibrary.swift; sourceTree = "<group>"; };
+		3F9B45F4A5BB49FCC71427DB /* Resources/books.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/books.json; sourceTree = "<group>"; };
+		89A664695EE7213B80CF7D6F /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		A565F1D8E7B6B48C1E1E8C1E /* ImladrisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImladrisApp.swift; sourceTree = "<group>"; };
+		B1CF13E03B9AFC1430EA31FF /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		C579839DAF99D55E4A27AB18 /* FixtureLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureLibraryTests.swift; sourceTree = "<group>"; };
+		DB532600DBF95F321745333A /* SetupFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupFlowTests.swift; sourceTree = "<group>"; };
+		F7695308431C450C64E78A5E /* ImladrisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImladrisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F89AEA347B733B615C1FAA48 /* ImladrisUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImladrisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2CD9427CC4A3620FC35E5CA0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		78FB1FC3FCB0C66968F92AF8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1567E2BE7FC3866633DEE7C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5A8137B85B1AF1ABAC82CB4E /* Imladris */ = {
+			isa = PBXGroup;
+			children = (
+				A565F1D8E7B6B48C1E1E8C1E /* ImladrisApp.swift */,
+				1B6B72467AAAEC9062CA2637 /* FixtureLibrary.swift */,
+				B1CF13E03B9AFC1430EA31FF /* LibraryView.swift */,
+				3F9B45F4A5BB49FCC71427DB /* Resources/books.json */,
+				C457DC8FD31545D1BFBD1122 /* Assets.xcassets */,
+			);
+			path = Imladris;
+			sourceTree = "<group>";
+		};
+		A7A364F38405598558C64EEA /* ImladrisUITests */ = {
+			isa = PBXGroup;
+			children = (
+				DB532600DBF95F321745333A /* SetupFlowTests.swift */,
+			);
+			path = ImladrisUITests;
+			sourceTree = "<group>";
+		};
+		A97FB6FE27D5E5BE2BA19010 /* ImladrisTests */ = {
+			isa = PBXGroup;
+			children = (
+				C579839DAF99D55E4A27AB18 /* FixtureLibraryTests.swift */,
+			);
+			path = ImladrisTests;
+			sourceTree = "<group>";
+		};
+		E50290A24C49A459B43487C5 = {
+			isa = PBXGroup;
+			children = (
+				5A8137B85B1AF1ABAC82CB4E /* Imladris */,
+				A97FB6FE27D5E5BE2BA19010 /* ImladrisTests */,
+				A7A364F38405598558C64EEA /* ImladrisUITests */,
+				89A664695EE7213B80CF7D6F /* Signing.xcconfig */,
+				FBDC4F23F93125BBEEAE800C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FBDC4F23F93125BBEEAE800C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				04C9EC5D89C15A2F0CF2C623 /* Imladris.app */,
+				F7695308431C450C64E78A5E /* ImladrisTests.xctest */,
+				F89AEA347B733B615C1FAA48 /* ImladrisUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		17C8EFC195FDB33C4F4BEB2D /* ImladrisUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EA23E17D18E108CADF7987CA /* Build configuration list for PBXNativeTarget "ImladrisUITests" */;
+			buildPhases = (
+				049D47084CC1CC4916DFB9BA /* Sources */,
+				2CD9427CC4A3620FC35E5CA0 /* Frameworks */,
+				DC7520AA20B4240706F7D94A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2B48C4F184CD5DA5E97C87B /* PBXTargetDependency */,
+			);
+			name = ImladrisUITests;
+			productName = ImladrisUITests;
+			productReference = F89AEA347B733B615C1FAA48 /* ImladrisUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		28C5F34F6182D34317D86568 /* Imladris */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1F97D898315AB3F49C6B62CC /* Build configuration list for PBXNativeTarget "Imladris" */;
+			buildPhases = (
+				5D83353F5ED1C7334DE1B6A8 /* Sources */,
+				78FB1FC3FCB0C66968F92AF8 /* Frameworks */,
+				3CB55D4F930B341263A8658D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Imladris;
+			productName = Imladris;
+			productReference = 04C9EC5D89C15A2F0CF2C623 /* Imladris.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5BE9FB3DD3FAE82E5F0175D7 /* ImladrisTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2EE9EE97303FF0477B3FE8F2 /* Build configuration list for PBXNativeTarget "ImladrisTests" */;
+			buildPhases = (
+				96BE9E5668B7E83A1223CDC6 /* Sources */,
+				C1567E2BE7FC3866633DEE7C /* Frameworks */,
+				B66B3C88829020413D1281F8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6F27D324C9CD2DEB28C47701 /* PBXTargetDependency */,
+			);
+			name = ImladrisTests;
+			productName = ImladrisTests;
+			productReference = F7695308431C450C64E78A5E /* ImladrisTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					17C8EFC195FDB33C4F4BEB2D = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 28C5F34F6182D34317D86568;
+					};
+					28C5F34F6182D34317D86568 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					5BE9FB3DD3FAE82E5F0175D7 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 28C5F34F6182D34317D86568;
+					};
+				};
+			};
+			buildConfigurationList = 49EA05A46B1A86EA7E413B43 /* Build configuration list for PBXProject "Imladris" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E50290A24C49A459B43487C5;
+			productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				28C5F34F6182D34317D86568 /* Imladris */,
+				5BE9FB3DD3FAE82E5F0175D7 /* ImladrisTests */,
+				17C8EFC195FDB33C4F4BEB2D /* ImladrisUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3CB55D4F930B341263A8658D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				996D21535050BBA76778BDFC /* Resources/books.json in Resources */,
+				C457DC8FD31545D1BFBD1121 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B66B3C88829020413D1281F8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DC7520AA20B4240706F7D94A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		049D47084CC1CC4916DFB9BA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F16AFD11F9800F11918818E4 /* SetupFlowTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5D83353F5ED1C7334DE1B6A8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6A132698057F7BB6BDEFD023 /* ImladrisApp.swift in Sources */,
+				797BDCAF2C22DD7821EB3B3C /* FixtureLibrary.swift in Sources */,
+				4FFE5D8D9EF3B32C39422413 /* LibraryView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96BE9E5668B7E83A1223CDC6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2232628BC77CB7D19CD3B3C4 /* FixtureLibraryTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6F27D324C9CD2DEB28C47701 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 28C5F34F6182D34317D86568 /* Imladris */;
+			targetProxy = 8A35A2529E21216336F018A3 /* PBXContainerItemProxy */;
+		};
+		B2B48C4F184CD5DA5E97C87B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 28C5F34F6182D34317D86568 /* Imladris */;
+			targetProxy = 1F6EB2ECFE2F73DD774CFF39 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		27774580D6FADB41CB835D60 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremywasham.imladris.imladristests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Imladris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Imladris";
+			};
+			name = Release;
+		};
+		49E2C89727D73A2CE4A2B051 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Imladris;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremywasham.imladris;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		75480C1485DBE348AD2A0C7A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremywasham.imladris.imladristests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Imladris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Imladris";
+			};
+			name = Debug;
+		};
+		9B02B6EDC3ACD0D0A45EB8D7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 89A664695EE7213B80CF7D6F /* Signing.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A434B80E094158A0DBDCB78E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Imladris;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremywasham.imladris;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		D1E71D3AC6E94A9DDA6A39A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremywasham.imladris.imladrisuitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Imladris;
+			};
+			name = Release;
+		};
+		D55A472A54FF4167B59A18AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 89A664695EE7213B80CF7D6F /* Signing.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_TESTABILITY = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		F7817177EEC632244422591E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremywasham.imladris.imladrisuitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Imladris;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1F97D898315AB3F49C6B62CC /* Build configuration list for PBXNativeTarget "Imladris" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				49E2C89727D73A2CE4A2B051 /* Debug */,
+				A434B80E094158A0DBDCB78E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2EE9EE97303FF0477B3FE8F2 /* Build configuration list for PBXNativeTarget "ImladrisTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				75480C1485DBE348AD2A0C7A /* Debug */,
+				27774580D6FADB41CB835D60 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		49EA05A46B1A86EA7E413B43 /* Build configuration list for PBXProject "Imladris" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9B02B6EDC3ACD0D0A45EB8D7 /* Debug */,
+				D55A472A54FF4167B59A18AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EA23E17D18E108CADF7987CA /* Build configuration list for PBXNativeTarget "ImladrisUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7817177EEC632244422591E /* Debug */,
+				D1E71D3AC6E94A9DDA6A39A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

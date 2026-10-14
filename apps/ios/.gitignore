@@ -1,0 +1,6 @@
+.build/
+.derived-data/
+artifacts/
+Signing.local.xcconfig
+xcuserdata/
+*.xcuserstate
