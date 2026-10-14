@@ -445,7 +445,7 @@ class TransferTests(unittest.TestCase):
     def test_oauth_refresh_is_once_only_and_permission_denial_never_refreshes(self):
         remote = Cloudflare('account','database',self.root / 'never-read-oauth')
         remote.token = lambda: 'synthetic'
-        expiry_checks = iter([False,True])
+        expiry_checks = iter([False,True,False])
         remote.oauth_expired = lambda: next(expiry_checks)
         calls = []
         class Client:
@@ -462,7 +462,7 @@ class TransferTests(unittest.TestCase):
         class Denied:
             def open(self, request, timeout):
                 raise urllib.error.HTTPError(request.full_url,403,'denied',Message(),io.BytesIO(b'PRIVATE RESPONSE BODY'))
-        remote.client = Denied();remote.oauth_refreshed = False
+        remote.client = Denied()
         remote.oauth_expired = lambda: False
         with patch('transfer.time.sleep'), patch('transfer.subprocess.run') as refresh, self.assertRaisesRegex(RuntimeError,'HTTP 403'):
             remote.request('GET', 'synthetic')
@@ -842,14 +842,35 @@ class TransferTests(unittest.TestCase):
         self.assertTrue(remote.db.execute("SELECT 1 FROM sqlite_schema WHERE name='retained'").fetchone())
         self.assertTrue(remote.scratch_state()['owned'])
 
-    def test_oauth_is_proactively_refreshed_once_when_file_has_expired(self):
+    def test_oauth_refresh_handles_multiple_expirations_during_one_phase(self):
         remote = Cloudflare('account','database',self.root / 'never-read-oauth')
-        remote.token = lambda:'synthetic';remote.oauth_expired = lambda:True
+        remote.token = lambda:'synthetic'
+        expiry_checks = iter([True,False,False,True,False])
+        remote.oauth_expired = lambda:next(expiry_checks)
         class Client:
             def open(self,request,timeout):return io.BytesIO(b'{"success":true,"result":{}}')
         remote.client = Client()
         with patch('transfer.time.sleep'),patch('transfer.subprocess.run',return_value=SimpleNamespace(returncode=0)) as refresh:
+            for _ in range(3):remote.request('GET','synthetic')
+        self.assertEqual(refresh.call_count,2)
+
+    def test_oauth_refresh_stops_if_wrangler_leaves_expired_credentials(self):
+        remote = Cloudflare('account','database',self.root / 'never-read-oauth')
+        remote.oauth_expired = lambda:True
+        with patch('transfer.subprocess.run',return_value=SimpleNamespace(returncode=0)) as refresh, self.assertRaisesRegex(RuntimeError,'valid credentials'):
             remote.request('GET','synthetic')
+        refresh.assert_called_once()
+
+    def test_oauth_refresh_does_not_loop_on_repeated_unauthorized_response(self):
+        remote = Cloudflare('account','database',self.root / 'never-read-oauth')
+        remote.token = lambda:'synthetic'
+        expiry_checks = iter([False,True,False])
+        remote.oauth_expired = lambda:next(expiry_checks)
+        class Client:
+            def open(self,request,timeout):
+                raise urllib.error.HTTPError(request.full_url,401,'denied',Message(),io.BytesIO(b'PRIVATE RESPONSE BODY'))
+        remote.client = Client()
+        with patch('transfer.time.sleep'),patch('transfer.subprocess.run',return_value=SimpleNamespace(returncode=0)) as refresh, self.assertRaisesRegex(RuntimeError,'HTTP 401'):
             remote.request('GET','synthetic')
         refresh.assert_called_once()
 

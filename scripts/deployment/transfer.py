@@ -89,7 +89,6 @@ class Cloudflare:
         self.usage_path = None
         self.usage_state = None
         self.last_request = None
-        self.oauth_refreshed = False
 
     def token(self):
         token = os.environ.get('CLOUDFLARE_API_TOKEN')
@@ -163,18 +162,19 @@ class Cloudflare:
         return False
 
     def refresh_oauth(self):
-        self.oauth_refreshed = True
         result = subprocess.run(['pnpm', '--filter', '@media-tracker/api', 'exec', 'wrangler', 'whoami'],
             cwd=Path(__file__).resolve().parents[2], capture_output=True, timeout=120)
-        if result.returncode:
-            raise RuntimeError('Wrangler OAuth refresh did not succeed')
+        if result.returncode or self.oauth_expired():
+            raise RuntimeError('Wrangler OAuth refresh did not produce valid credentials')
 
     def request(self, method, path, body=None):
         data = None if body is None else json.dumps(body).encode()
         retries = 0
+        refreshed = False
         while True:
-            if not self.oauth_refreshed and self.oauth_expired():
+            if not refreshed and self.oauth_expired():
                 self.refresh_oauth()
+                refreshed = True
             self.pace()
             url = API + '/graphql' if path == 'graphql' else API + '/accounts/' + self.account + '/' + path
             request = urllib.request.Request(url,
@@ -184,8 +184,9 @@ class Cloudflare:
                 with self.client.open(request, timeout=60) as response:
                     result = json.load(response)
             except urllib.error.HTTPError as error:
-                if error.code == 401 and not self.oauth_refreshed and self.oauth_expired():
+                if error.code == 401 and not refreshed and self.oauth_expired():
                     self.refresh_oauth()
+                    refreshed = True
                     continue
                 if error.code == 429 and retries < 3:
                     value = error.headers.get('Retry-After')
