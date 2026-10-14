@@ -814,7 +814,7 @@ a:focus-visible {
 }
 
 .sidebar-health {
-  min-height: 34px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   padding: 0 10px;
@@ -855,6 +855,7 @@ a:focus-visible {
 
 .sidebar-collapsed .sidebar-health .status-pill {
   font-size: 0;
+  gap: 0;
 }
 
 .app-workspace {

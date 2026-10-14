@@ -158,6 +158,9 @@ and collapse control with the workspace header in expanded and collapsed layouts
 Neutral buttons and sidebar navigation share a visible hover background that is
 less emphasized than selection in both appearance modes, including the sidebar toggle.
 Selected controls retain their selection background while hovered.
+Sidebar footer rows share a 38px height. In the collapsed rail, the Connections
+icon, appearance icon, and health dot share the same horizontal center; hidden
+health text must not leave an extra flex gap.
 
 ## Visual and writing principles
 
