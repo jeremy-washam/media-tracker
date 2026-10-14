@@ -6,9 +6,18 @@ across Books, Movies, Articles, Podcasts, Music, and Videos, with server-side
 search/filter/sort, complete counts, cursor pagination, and contextual inspectors.
 The legacy History component is not routed. Chat and Recaps remain disabled
 navigation; Settings has no production route.
-Connections displays every account lineage, coverage, attempts,
-incomplete-import progress, and resumable Spotify/YouTube imports. Use an
-existing YouTube card for later snapshots of the same account.
+Connections uses compact source rows with bundled official logos and labeled
+connection-state icons. Sync/coverage summaries remain visible; Collapsible
+details retain source limitations and attempt/export dates. The account form
+follows the source rows. Standard actions use the small shadcn Button variant.
+Connections preserves every account lineage, coverage, attempts,
+incomplete-import progress, and resumable Spotify/YouTube imports. Spotify has
+one source row and one set of Sync/Import actions, matching the API's first
+connection target. Additional Spotify records, including their exact Resume
+targets, appear in Details; a visible summary flags unfinished imports there.
+Do not delete or merge ledger records to deduplicate source presentation.
+YouTube keeps separate account rows; use the existing row for later snapshots
+of the same account.
 
 `pnpm build:production` at the repository root prepares the hosted app. The web
 package's deployment-mode build writes `dist-production`, excludes all private
@@ -109,6 +118,38 @@ the choice, and uses system appearance when no preference is saved. Production
 screens use these tokens; the separate specimen retains the alternative-theme
 comparison. Future entries should import Tailwind and this stylesheet once.
 Keep component colors on the shared semantic tokens.
+
+## Styling ownership
+
+Production uses Tailwind v4 and plain CSS Modules alongside the installed
+shadcn/ui Base UI components. See [ADR 0019](../../docs/decisions/0019-web-styling-ownership.md)
+and the [cleanup implementation record](../../docs/planning/web-styling-cleanup.md).
+
+- `src/styles.css` owns document defaults, accessibility defaults, and registered
+  inspector width properties. `src/components.css` owns light/dark semantic
+  tokens, shared application metrics, and Tailwind theme mappings.
+- Shared compositions own control density and appearance: FlatTabs,
+  LibraryToolbar, LibraryFilterPanel, LibrarySelect, and navigation variants.
+  AppButton/AppInput compose installed primitives and preserve the application's
+  inherited typography without resetting all primitives from global CSS.
+- CSS Modules beside components/features own substantial custom layouts and
+  media presentation. Shared Library workspace, inspector, and media modules
+  keep geometry, motion, and list presentation consistent across six media types.
+  Small arrangements use Tailwind utilities.
+- Production module imports are ordered explicitly in `src/main.tsx` before
+  the router. Application module rules remain unlayered where they must retain
+  precedence over primitive utilities. Changing that order or layering requires
+  visual verification. Modules contain ordinary CSS and use shared variables;
+  do not import Tailwind per module or use Sass, `@apply` directives, or global class aliases.
+- `data-ui` identifies shared structural parts across component/portal boundaries
+  and in geometry tests. Accessible names and refs own actions/focus;
+  `data-layout`, `data-inspector-open`, and `data-collection-item` own explicit state
+  and collection identity. Do not query generated class names. Keep Base UI's
+  `data-slot` contracts separate.
+
+The unmounted History page owns its legacy stylesheet and is not imported into
+production. Design, specimen, and Library review entries retain independent
+stylesheets. Keep `components.json` targeting `src/components.css` for shadcn.
 
 ## Production UI guardrails
 

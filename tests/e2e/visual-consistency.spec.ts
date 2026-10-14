@@ -3,6 +3,7 @@ import {
   book,
   booksResponse,
   moviesResponse,
+  movie,
   article,
   articlesResponse,
   podcast,
@@ -78,6 +79,31 @@ const bookDetail = {
   },
   source: { label: 'Hardcover', url: null, refreshedAt: null, coverage: 'complete' },
 }
+const movieDetail = {
+  ...movie,
+  personal: { ...movie.personal, reviewedOccurrenceCount: 1 },
+  overview: null,
+  originalTitle: null,
+  originalLanguage: null,
+  releaseDate: null,
+  tagline: null,
+  backdropUrl: null,
+  genres: [],
+  cast: [],
+  countries: [],
+  tmdbRating: null,
+  tmdbVoteCount: null,
+  source: {
+    letterboxdUrl: 'https://letterboxd.com/film/a-distant-movie/',
+    tmdbUrl: null,
+    imdbUrl: null,
+    connectionLabel: 'Letterboxd',
+    coverage: 'complete',
+    lastCompleteExportAt: '2026-09-12T10:00:00.000Z',
+    lastRssSuccessAt: '2026-09-20T10:00:00.000Z',
+    metadataStatus: 'not_configured',
+  },
+}
 const channel = {
   ...video,
   id: 'channel-one',
@@ -125,6 +151,7 @@ async function mocks(page: Page) {
     for (const [media, json] of Object.entries(collections)) {
       if (path === `/api/library/${media}`) return route.fulfill({ json })
     }
+    if (path === '/api/library/movies/movie-one') return route.fulfill({ json: movieDetail })
     if (path === '/api/library/books/book-one') return route.fulfill({ json: bookDetail })
     if (path === '/api/library/articles/article-one') return route.fulfill({ json: articleDetail })
     if (path === '/api/library/music/tracks/track-one')
@@ -215,7 +242,7 @@ for (const [route, resource, label] of [
       })
     })
     await page.goto(route)
-    const inspector = page.locator('aside.media-inspector')
+    const inspector = page.locator('aside[data-ui~="media-inspector"]')
     const tabs = inspector.getByRole('tab')
     const associations = () =>
       tabs.evaluateAll((triggers) =>
@@ -248,6 +275,7 @@ for (const [route, resource, label] of [
 for (const dark of [false, true]) {
   for (const [media, view, id, title] of [
     ['books', 'archive', 'book-one', book.title],
+    ['movies', 'archive', 'movie-one', movie.displayTitle],
     ['articles', 'archive', 'article-one', article.title],
     ['music', 'tracks', 'track-one', track.title],
     ['podcasts', 'archive', 'podcast-one', podcast.title],
@@ -264,14 +292,16 @@ for (const dark of [false, true]) {
       await page.goto(
         `/library/${media}/${view}?${view === 'channels' ? 'channelItem' : 'item'}=${id}`,
       )
-      const inspector = page.locator('aside.book-inspector, aside.media-inspector')
+      const inspector = page.locator(
+        'aside[data-ui~="book-inspector"], aside[data-ui~="media-inspector"]',
+      )
       await expect(inspector.getByRole('heading', { name: title, exact: true })).toBeVisible()
       for (const width of [1280, 1024, 390]) {
         await page.setViewportSize({ width, height: 768 })
         await expect
           .poll(() =>
             inspector.evaluate((el) => {
-              const header = el.querySelector<HTMLElement>('.inspector-topbar')!,
+              const header = el.querySelector<HTMLElement>('[data-ui~="inspector-header"]')!,
                 tabs = header.querySelector<HTMLElement>('[role=tablist]')!
               const close = header.querySelector<HTMLElement>(
                 'button[aria-label="Close inspector"]',
@@ -296,11 +326,13 @@ for (const dark of [false, true]) {
           )
           .toBe(true)
       }
-      const headerTop = (await inspector.locator('.inspector-topbar').boundingBox())!.y
-      await inspector.locator('.inspector-scroll:visible').evaluate((el) => {
+      const headerTop = (await inspector.locator('[data-ui~="inspector-header"]').boundingBox())!.y
+      await inspector.locator('[data-ui~="inspector-scroll"]:visible').evaluate((el) => {
         el.scrollTop = el.scrollHeight
       })
-      expect((await inspector.locator('.inspector-topbar').boundingBox())!.y).toBe(headerTop)
+      expect((await inspector.locator('[data-ui~="inspector-header"]').boundingBox())!.y).toBe(
+        headerTop,
+      )
       const firstTab = inspector.getByRole('tab').first()
       await firstTab.press('ArrowRight')
       await inspector.getByRole('tab').nth(1).press('Enter')
@@ -314,21 +346,21 @@ test('Book column headings match visible cells in both collections and inspector
 }) => {
   for (const view of ['archive', 'queue']) {
     await page.goto(`/library/books/${view}`)
-    const row = page.locator('.book-row').first()
+    const row = page.locator('[data-ui~="book-row"]').first()
     await expect(row).toBeVisible()
     for (const width of [1280, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: 768 })
       await expect
         .poll(() =>
           page.evaluate(() => {
-            const head = document.querySelector('.book-list-head')!,
-              row = document.querySelector('.book-row')!
+            const head = document.querySelector('[data-ui~="collection-column-headings"]')!,
+              row = document.querySelector('[data-ui~="book-row"]')!
             const visible = (el: Element) => el.getBoundingClientRect().width > 0
             return (
               [
-                ['.book-head-year', '.book-row-year'],
-                ['.book-head-context', '.book-row-context'],
-                ['.book-head-rating', '.rating-stars'],
+                ['[data-ui~="book-head-year"]', '[data-ui~="book-row-year"]'],
+                ['[data-ui~="book-head-context"]', '[data-ui~="book-row-context"]'],
+                ['[data-ui~="book-head-rating"]', '[data-ui~="rating-stars"]'],
               ].every(([h, c]) => {
                 const heading = head.querySelector(h)!,
                   cell = row.querySelector(c)!
@@ -346,7 +378,10 @@ test('Book column headings match visible cells in both collections and inspector
     }
     await page.setViewportSize({ width: 1024, height: 768 })
     await row.click()
-    await expect(page.locator('.books-page')).toHaveAttribute('data-inspector-open', 'true')
+    await expect(page.locator('[data-ui~="library-workspace"]')).toHaveAttribute(
+      'data-inspector-open',
+      'true',
+    )
     await expect.poll(() => row.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
   }
 })
@@ -361,7 +396,7 @@ test('selected Music section stays visible on direct mobile navigation and resiz
   const visible = () =>
     active.evaluate((el) => {
       const r = el.getBoundingClientRect(),
-        v = el.closest('.workspace-header-tabs')!.getBoundingClientRect()
+        v = el.closest('[data-ui~="workspace-tabs"]')!.getBoundingClientRect()
       return r.left >= v.left - 1 && r.right <= v.right + 1
     })
   await expect.poll(visible).toBe(true)
@@ -374,7 +409,7 @@ test('Article provenance retains IDs on demand, avoids duplicate actions and exp
   page,
 }) => {
   await page.goto('/library/articles/archive?item=article-one')
-  const inspector = page.locator('.article-inspector')
+  const inspector = page.locator('[data-ui~="article-inspector"]')
   const toggle = inspector.getByRole('button', { name: 'Reader source details' })
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(inspector.getByText('Reader ID: article-one', { exact: true })).toBeHidden()
@@ -382,7 +417,7 @@ test('Article provenance retains IDs on demand, avoids duplicate actions and exp
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await expect(inspector.getByText('Reader ID: article-one', { exact: true })).toBeVisible()
   await expect(inspector.getByRole('link', { name: 'Open in Reader', exact: true })).toHaveCount(1)
-  const actions = inspector.locator('.article-source-links a')
+  const actions = inspector.locator('[data-ui~="article-source-links"] a')
   for (const action of await actions.all())
     expect(
       await action.evaluate((el) => {
@@ -400,14 +435,14 @@ test('common toolbar order and filter field scales agree across media', async ({
     await page.goto(`/library/${media}/${media === 'music' ? 'tracks' : 'archive'}`)
     await expect(page.getByRole('combobox', { name: `Sort ${media}`, exact: true })).toBeVisible()
     expect(
-      await page.locator('.books-toolbar').evaluate((el) => {
-        const filters = el.querySelector('.toolbar-button')!,
-          sort = el.querySelector('.books-sort')!
+      await page.locator('[data-ui~="library-toolbar"]').evaluate((el) => {
+        const filters = el.querySelector('[data-ui~="toolbar-button"]')!,
+          sort = el.querySelector('[data-ui~="library-sort"]')!
         return !!(filters.compareDocumentPosition(sort) & Node.DOCUMENT_POSITION_FOLLOWING)
       }),
     ).toBe(true)
     await page.getByRole('button', { name: 'Filters', exact: true }).click()
-    const panel = page.locator('.filter-panel')
+    const panel = page.locator('[data-ui~="filter-panel"]')
     await expect(panel).toBeVisible()
     expect(
       await panel
@@ -446,7 +481,7 @@ test('Album grid wraps long identity text and keeps the concise playback summary
     await page.setViewportSize({ width, height: 768 })
     expect(
       await card
-        .locator('.spotify-result-copy strong, .music-grid-summary')
+        .locator('[data-ui~="media-item-copy"] strong, [data-ui~="music-grid-summary"]')
         .evaluateAll((els) =>
           els.every(
             (e) =>
@@ -455,8 +490,77 @@ test('Album grid wraps long identity text and keeps the concise playback summary
         ),
     ).toBe(true)
   }
-  await expect(card.locator('.music-grid-summary')).toContainText('4 observations · 10 min')
+  await expect(card.locator('[data-ui~="music-grid-summary"]')).toContainText(
+    '4 observations · 10 min',
+  )
 })
+
+for (const [media, id] of [
+  ['books', 'book-one'],
+  ['movies', 'movie-one'],
+  ['articles', 'article-one'],
+]) {
+  test(`focuses the close action while loading the ${media} inspector and returns to its opener`, async ({
+    page,
+  }) => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await page.route(`**/api/library/${media}/${id}`, async (route) => {
+      await pending
+      await route.fallback()
+    })
+    await page.goto(`/library/${media}/archive`)
+    const opener = page.locator('[data-collection-item]').first()
+    await opener.click()
+    const close = page.getByRole('button', { name: 'Close inspector', exact: true })
+    try {
+      await expect(close).toBeFocused()
+    } finally {
+      release()
+    }
+    await expect(page.getByRole('tab', { name: 'Details', exact: true })).toBeVisible()
+    await expect(close).toBeFocused()
+    await close.press('Escape')
+    await expect(close).toHaveCount(0)
+    await expect(opener).toBeFocused()
+  })
+}
+
+for (const dark of [false, true]) {
+  test(`retains compact control type and selected navigation hover in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    await page.goto('/library/books/archive')
+    const nav = page.getByRole('link', { name: 'Books', exact: true })
+    const before = await nav.evaluate((e) => getComputedStyle(e).backgroundColor)
+    expect(before).not.toBe('rgba(0, 0, 0, 0)')
+    await nav.hover()
+    await expect.poll(() => nav.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(before)
+    const toolbar = page.locator('[data-ui~="library-toolbar"]')
+    for (const control of await toolbar
+      .locator('[data-ui~="toolbar-button"], [data-slot="select-trigger"]')
+      .all()) {
+      expect(await control.evaluate((e) => getComputedStyle(e).fontSize)).toBe('11px')
+    }
+    expect(await toolbar.getByRole('textbox').evaluate((e) => getComputedStyle(e).fontSize)).toBe(
+      '12px',
+    )
+    for (const action of ['Chat — not available yet', 'Recaps — not available yet']) {
+      expect(
+        (await page.getByRole('button', { name: action, exact: true }).boundingBox())!.height,
+      ).toBe(38)
+      await expect(
+        page.getByRole('button', { name: action, exact: true }).locator('svg'),
+      ).toHaveCSS('width', '17px')
+    }
+  })
+}
 
 // Empty collections must share the same primitive and geometry across every section.
 for (const dark of [false, true]) {
@@ -482,9 +586,11 @@ for (const dark of [false, true]) {
           return route.fallback()
         })
         await page.goto(`/library/${media}/${view}`)
-        const state = page.locator('.collection-empty-state')
+        const state = page.locator('[data-ui~="collection-empty-state"]')
         const action = state.locator('a[data-slot="button"]')
         await expect(action).toHaveText('Open Connections')
+        await expect(action).toHaveCSS('font-size', '14px')
+        await expect(action).toHaveCSS('font-weight', '500')
         await expect(action).toHaveAttribute('href', '/connections')
         for (const width of [1280, 390]) {
           await page.setViewportSize({ width, height: 844 })
@@ -494,7 +600,9 @@ for (const dark of [false, true]) {
             const range = document.createRange()
             range.selectNodeContents(element)
             const text = range.getBoundingClientRect()
-            const state = element.closest('.collection-empty-state')!.getBoundingClientRect()
+            const state = element
+              .closest('[data-ui~="collection-empty-state"]')!
+              .getBoundingClientRect()
             return {
               height: box.height,
               textCenterOffset: Math.abs((text.top + text.bottom - box.top - box.bottom) / 2),
@@ -502,7 +610,7 @@ for (const dark of [false, true]) {
               cursor: getComputedStyle(element).cursor,
               color: getComputedStyle(element).color,
               headingColor: getComputedStyle(
-                element.closest('.collection-empty-state')!.querySelector('h2')!,
+                element.closest('[data-ui~="collection-empty-state"]')!.querySelector('h2')!,
               ).color,
               left: box.left,
               right: box.right,
@@ -538,7 +646,7 @@ for (const [media, response, label] of [
       return route.fallback()
     })
     await page.goto(`/library/${media}/archive?q=missing&sort=title&direction=asc`)
-    const state = page.locator('.collection-empty-state')
+    const state = page.locator('[data-ui~="collection-empty-state"]')
     await expect(state.getByRole('heading')).toHaveText(`No matching ${media}`)
     const action = state.getByRole('button', { name: label })
     await expect(action).toHaveCSS('cursor', 'default')

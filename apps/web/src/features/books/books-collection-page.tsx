@@ -1,4 +1,11 @@
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
+import mediaStyles from '@/components/media-presentation.module.css'
+import workspaceStyles from '@/components/library-workspace.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import booksStyles from '@/features/books/books.module.css'
+import inspectorStyles from '@/components/inspector.module.css'
+import { cn } from '@/lib/utils'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
 import { booksQueryOptions } from '../../library-queries'
@@ -13,8 +20,8 @@ import {
 } from '@/components/flat-tabs'
 import { FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import {
   InputGroup,
   InputGroupAddon,
@@ -78,7 +85,7 @@ function Cover({ book, size = 'card' }: { book: BookCollectionItem; size?: 'card
   if (book.coverUrl !== null && !failed) {
     return (
       <img
-        className={`book-cover book-cover-${size}`}
+        className={cn(mediaStyles['book-cover'], mediaStyles[`book-cover-${size}`])}
         src={book.coverUrl}
         alt={`Cover of ${book.title}`}
         loading="lazy"
@@ -88,7 +95,11 @@ function Cover({ book, size = 'card' }: { book: BookCollectionItem; size?: 'card
   }
   return (
     <span
-      className={`book-cover book-cover-${size} book-cover-fallback`}
+      className={cn(
+        mediaStyles['book-cover'],
+        mediaStyles[`book-cover-${size}`],
+        mediaStyles['book-cover-fallback'],
+      )}
       style={{ '--cover-color': book.coverColor ?? 'var(--muted)' } as CSSProperties}
       role="img"
       aria-label={`No cover available for ${book.title}`}
@@ -204,10 +215,17 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
       value={collection}
       render={<section />}
       data-inspector-open={Boolean(search.item)}
-      className={`books-page books-layout-${layout}`}
+      className={workspaceStyles['books-page']}
       aria-labelledby="books-title"
+      data-ui="library-workspace"
+      data-layout={layout}
     >
-      <FlatTabsContent value={collection} className="books-collection" ref={collectionRef}>
+      <FlatTabsContent
+        value={collection}
+        className={workspaceStyles['books-collection']}
+        ref={collectionRef}
+        data-ui="library-collection"
+      >
         <h1 className="sr-only" id="books-title">
           Books
         </h1>
@@ -215,21 +233,21 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           <Link
             to="/library/books/archive"
             search={normalizedForCollection(search, 'archive')}
-            activeProps={{ 'aria-current': 'page', className: 'active' }}
+            activeProps={{ 'aria-current': 'page' }}
           >
             Archive <span>{sectionCounts?.archive?.toLocaleString() ?? '—'}</span>
           </Link>
           <Link
             to="/library/books/queue"
             search={normalizedForCollection(search, 'queue')}
-            activeProps={{ 'aria-current': 'page', className: 'active' }}
+            activeProps={{ 'aria-current': 'page' }}
           >
             Queue <span>{sectionCounts?.queue?.toLocaleString() ?? '—'}</span>
           </Link>
         </CollectionTabList>
-        <div className="books-toolbar">
+        <LibraryToolbar data-ui="library-toolbar">
           <form
-            className="books-search"
+            className={controlsStyles['books-search']}
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
@@ -268,14 +286,15 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           <Button
             variant={filters > 0 ? 'secondary' : 'outline'}
             type="button"
-            className="toolbar-button"
+            className={controlsStyles['toolbar-button']}
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
+            data-ui="toolbar-button"
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
             {filters > 0 ? <span>{filters}</span> : null}
           </Button>
-          <label className="books-sort">
+          <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort books</span>
             <LibrarySelect
@@ -297,7 +316,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
               variant="outline"
               size="icon"
               type="button"
-              className="sort-direction"
+              className={controlsStyles['sort-direction']}
               aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
               onClick={() =>
                 updateSearch({ direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
@@ -314,7 +333,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             value={layout}
             onValueChange={(layout) => updateSearch({ layout })}
           />
-        </div>
+        </LibraryToolbar>
         {filtersOpen ? (
           <FilterPanel
             collection={collection}
@@ -343,7 +362,11 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             }
           />
         ) : null}
-        <div className="books-result-summary" aria-live="polite">
+        <div
+          className={workspaceStyles['books-result-summary']}
+          aria-live="polite"
+          data-ui="collection-summary"
+        >
           {books.isPending ? null : (
             <span>
               {count.toLocaleString()} {count === 1 ? 'book' : 'books'}
@@ -355,10 +378,10 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           {summary?.freshness.degraded ? <strong>Hardcover sync needs attention</strong> : null}
         </div>
         {books.isPending ? (
-          <LoadingState className="books-loading">Loading books…</LoadingState>
+          <LoadingState data-ui="collection-loading">Loading books…</LoadingState>
         ) : null}
         {books.isError && !books.isFetchNextPageError ? (
-          <Notice className="books-state books-state-error">
+          <Notice className={workspaceStyles['books-state']}>
             <h2>Books could not be loaded</h2>
             <p>{books.error.message}</p>
             <Button variant="outline" type="button" onClick={() => void books.refetch()}>
@@ -392,15 +415,26 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           />
         ) : null}
         {items.length > 0 ? (
-          <div className={layout === 'grid' ? 'books-grid' : 'books-list'}>
+          <div
+            className={layout === 'grid' ? mediaStyles['books-grid'] : booksStyles['books-list']}
+            data-ui="books-list"
+          >
             {layout === 'list' ? (
-              <div className="book-list-head" aria-hidden="true">
-                <span className="book-head-title">Title</span>
-                <span className="book-head-year">Publish Year</span>
-                <span className="book-head-context">
+              <div
+                className={booksStyles['book-list-head']}
+                aria-hidden="true"
+                data-ui="collection-column-headings"
+              >
+                <span className={booksStyles['book-head-title']}>Title</span>
+                <span className={booksStyles['book-head-year']} data-ui="book-head-year">
+                  Publish Year
+                </span>
+                <span className={booksStyles['book-head-context']} data-ui="book-head-context">
                   {collection === 'archive' ? 'Read Date' : 'Added to Hardcover'}
                 </span>
-                <span className="book-head-rating">Rating</span>
+                <span className="book-head-rating" data-ui="book-head-rating">
+                  Rating
+                </span>
                 <span />
               </div>
             ) : null}
@@ -430,9 +464,10 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
         <>
           <InspectorBackdrop
             type="button"
-            className="inspector-backdrop"
+            className={workspaceStyles['inspector-backdrop']}
             aria-label="Close inspector"
             onClick={closeInspector}
+            data-ui="inspector-backdrop"
           />
           <BookInspector mediaItemId={inspectorItem} onClose={closeInspector} />
         </>
@@ -462,7 +497,11 @@ function BookResult({
         data-collection-item={book.id}
         type="button"
         ref={buttonRef}
-        className={selected ? 'book-card selected' : 'book-card'}
+        className={
+          selected
+            ? cn(mediaStyles['book-card'], mediaStyles['selected'])
+            : mediaStyles['book-card']
+        }
         aria-pressed={selected}
         onClick={onSelect}
       >
@@ -478,17 +517,24 @@ function BookResult({
       data-collection-item={book.id}
       type="button"
       ref={buttonRef}
-      className={selected ? 'book-row selected' : 'book-row'}
+      className={
+        selected ? cn(mediaStyles['book-row'], mediaStyles['selected']) : mediaStyles['book-row']
+      }
       aria-pressed={selected}
       onClick={onSelect}
+      data-ui="book-row"
     >
       <Cover book={book} size="row" />
-      <span className="book-row-title">
+      <span className={mediaStyles['book-row-title']}>
         <strong>{book.title}</strong>
         <small>{authors(book)}</small>
       </span>
-      <span className="book-row-year">{book.publicationDate?.slice(0, 4) ?? '—'}</span>
-      <span className="book-row-context">{contextLabel(book, collection)}</span>
+      <span className={mediaStyles['book-row-year']} data-ui="book-row-year">
+        {book.publicationDate?.slice(0, 4) ?? '—'}
+      </span>
+      <span className={mediaStyles['book-row-context']} data-ui="book-row-context">
+        {contextLabel(book, collection)}
+      </span>
       <RatingStars rating={book.personalRating} />
       <ChevronRight aria-hidden="true" />
     </MediaRowButton>
@@ -514,7 +560,7 @@ function FacetGroup({
       .map((value) => ({ value, label: value, count: 0 })),
   ]
   return (
-    <fieldset className="filter-group">
+    <fieldset className={controlsStyles['filter-group']}>
       <legend>{title}</legend>
       <div>
         {merged.map((facet) => (
@@ -550,7 +596,7 @@ function DateFilter({
   }) => void
 }) {
   return (
-    <fieldset className="date-filter">
+    <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
       <legend>{label}</legend>
       <LibrarySelect
         aria-label={label}
@@ -611,14 +657,14 @@ function FilterPanel({
   onClear: () => void
 }) {
   return (
-    <section className="filter-panel" aria-label="Book filters">
-      <div className="filter-panel-heading">
+    <LibraryFilterPanel aria-label="Book filters" data-ui="filter-panel">
+      <div className={controlsStyles['filter-panel-heading']}>
         <strong> Filters</strong>
         <Button variant="outline" type="button" onClick={onClear}>
           Clear all
         </Button>
       </div>
-      <div className="filter-panel-grid">
+      <div className={controlsStyles['filter-panel-grid']}>
         <FacetGroup
           title="Format"
           values={facets?.formats ?? []}
@@ -683,7 +729,7 @@ function FilterPanel({
           }
         />
         {collection === 'archive' ? (
-          <fieldset className="date-filter">
+          <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
             <legend>Personal rating</legend>
             <LibrarySelect
               aria-label="Personal rating"
@@ -719,7 +765,7 @@ function FilterPanel({
           </fieldset>
         ) : null}
       </div>
-    </section>
+    </LibraryFilterPanel>
   )
 }
 
@@ -745,7 +791,7 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
 
   useEffect(() => {
     const inspector = inspectorRef.current
-    inspector?.querySelector<HTMLElement>('.inspector-close')?.focus()
+    inspector?.querySelector<HTMLElement>('button[aria-label="Close inspector"]')?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onCloseRef.current()
@@ -773,39 +819,51 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
   }, [mediaItemId])
 
   return (
-    <aside ref={inspectorRef} className="book-inspector" aria-label="Book inspector">
+    <aside
+      ref={inspectorRef}
+      className={inspectorStyles['book-inspector']}
+      aria-label="Book inspector"
+      data-ui="book-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
-        <div className="inspector-topbar">
-          <TabsList variant="line" className="inspector-tabs" aria-label="Book information">
+        <div className={inspectorStyles['inspector-topbar']} data-ui="inspector-header">
+          <TabsList
+            variant="line"
+            className={inspectorStyles['inspector-tabs']}
+            aria-label="Book information"
+          >
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           <Button
             variant="ghost"
             size="icon"
-            className="inspector-close"
+            className="shrink-0 [&_svg]:size-[17px]"
             type="button"
             aria-label="Close inspector"
             onClick={onClose}
+            data-ui="inspector-close"
           >
             <X aria-hidden="true" />
           </Button>
         </div>
         {book.isPending ? (
-          <LoadingState className="inspector-state">Loading book…</LoadingState>
+          <LoadingState className={inspectorStyles['inspector-state']}>Loading book…</LoadingState>
         ) : null}
-        {book.isError ? <Notice className="inspector-state">{book.error.message}</Notice> : null}
+        {book.isError ? (
+          <Notice className={inspectorStyles['inspector-state']}>{book.error.message}</Notice>
+        ) : null}
         {
-          <TabsContent value="details" className="inspector-tab-panel">
+          <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
             {book.data ? <BookDetails book={book.data} /> : null}
           </TabsContent>
         }
         {
-          <TabsContent value="history" className="inspector-tab-panel">
+          <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
             {book.data ? (
               <BookHistory
                 entries={history.data?.pages.flatMap((page) => page.data) ?? []}
@@ -825,8 +883,8 @@ function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose:
 
 function BookDetails({ book }: { book: BookDetail }) {
   return (
-    <div className="inspector-scroll">
-      <header className="inspector-book-heading">
+    <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
+      <header className={inspectorStyles['inspector-book-heading']}>
         {book.coverUrl ? <img src={book.coverUrl} alt={`Cover of ${book.title}`} /> : <BookOpen />}
         <div>
           <h2>{book.title}</h2>
@@ -844,11 +902,11 @@ function BookDetails({ book }: { book: BookDetail }) {
       </header>
       <InspectorSection title="Overview">
         {book.description ? (
-          <p className="book-description">{book.description}</p>
+          <p className={booksStyles['book-description']}>{book.description}</p>
         ) : (
           <p>Overview unavailable.</p>
         )}
-        <dl className="detail-list">
+        <dl className={inspectorStyles['detail-list']}>
           {book.publicationDate ? (
             <>
               <dt>Published</dt>
@@ -871,7 +929,7 @@ function BookDetails({ book }: { book: BookDetail }) {
       </InspectorSection>
       {book.series.length ? (
         <InspectorSection title="Series">
-          <div className="series-list">
+          <div className={inspectorStyles['series-list']}>
             {book.series.map((series) => (
               <div key={series.id}>
                 <strong>{series.name}</strong>
@@ -888,7 +946,7 @@ function BookDetails({ book }: { book: BookDetail }) {
       ) : null}
       {book.contributors.length ? (
         <InspectorSection title="Contributors">
-          <dl className="detail-list">
+          <dl className={inspectorStyles['detail-list']}>
             {book.contributors.map((group) => (
               <div key={group.role}>
                 <dt>{group.role}</dt>
@@ -900,7 +958,7 @@ function BookDetails({ book }: { book: BookDetail }) {
       ) : null}
       {book.selectedEdition ? (
         <InspectorSection title="Selected edition">
-          <dl className="detail-list">
+          <dl className={inspectorStyles['detail-list']}>
             {book.selectedEdition.format ? (
               <>
                 <dt>Format</dt>
@@ -929,7 +987,7 @@ function BookDetails({ book }: { book: BookDetail }) {
         </InspectorSection>
       ) : null}
       <InspectorSection title="Hardcover community">
-        <dl className="detail-list">
+        <dl className={inspectorStyles['detail-list']}>
           {book.community.rating !== null ? (
             <>
               <dt>Community rating</dt>
@@ -974,7 +1032,7 @@ function BookDetails({ book }: { book: BookDetail }) {
 
 function InspectorSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="inspector-section">
+    <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
       <h3>{title}</h3>
       {children}
     </section>
@@ -996,15 +1054,18 @@ function BookHistory({
   loadingMore: boolean
   onLoadMore: () => void
 }) {
-  if (pending) return <LoadingState className="inspector-state">Loading history…</LoadingState>
-  if (error) return <div className="inspector-state">{error}</div>
+  if (pending)
+    return (
+      <LoadingState className={inspectorStyles['inspector-state']}>Loading history…</LoadingState>
+    )
+  if (error) return <div className={inspectorStyles['inspector-state']}>{error}</div>
   return (
-    <div className="inspector-scroll">
-      <div className="history-list">
+    <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
+      <div className={inspectorStyles['history-list']}>
         {entries.length === 0 ? <p>No personal activity is available.</p> : null}
         {entries.map((entry) => (
           <article key={entry.id}>
-            <span className={`history-mark history-${entry.kind}`} aria-hidden="true">
+            <span className={inspectorStyles['history-mark']} aria-hidden="true">
               <Check />
             </span>
             <div>
@@ -1025,7 +1086,7 @@ function BookHistory({
         <Button
           variant="outline"
           type="button"
-          className="load-more"
+          className={workspaceStyles['load-more']}
           disabled={loadingMore}
           onClick={onLoadMore}
         >

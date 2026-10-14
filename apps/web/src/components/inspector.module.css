@@ -1,0 +1,545 @@
+.article-inspector blockquote {
+  margin: 0;
+  padding: 14px 0 14px 16px;
+  border-bottom: 1px solid var(--border, #ddd9cf);
+  border-left: 2px solid var(--border, #ccc7bb);
+}
+.article-inspector blockquote p {
+  margin: 0;
+}
+.article-inspector blockquote footer {
+  margin-top: 8px;
+  color: var(--muted-foreground, #6d6b64);
+  font-size: 0.84rem;
+}
+
+.movie-history-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  color: var(--foreground);
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.movie-history-list a svg {
+  width: 11px;
+}
+
+.movie-history-list small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
+
+.book-inspector {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+
+.inspector-topbar {
+  min-height: var(--workspace-header-height);
+  flex: 0 0 var(--workspace-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 22px;
+}
+
+.inspector-state {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.inspector-book-heading {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 16px;
+  align-items: start;
+  padding-bottom: 22px;
+}
+
+.inspector-book-heading > img,
+.inspector-book-heading > svg {
+  width: 80px;
+  height: 120px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  background: var(--muted);
+  box-shadow: 0 5px 12px rgb(0 0 0 / 15%);
+}
+
+.inspector-book-heading > svg {
+  padding: 24px;
+  color: var(--muted-foreground);
+}
+
+.inspector-book-heading h2 {
+  margin: 4px 0 5px;
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.inspector-book-heading p {
+  margin: 0 0 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.inspector-book-heading span {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspector-section {
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+
+.inspector-section h3 {
+  margin: 0 0 12px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-section p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.inspector-section a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.inspector-section a svg {
+  width: 11px;
+  vertical-align: -1px;
+}
+
+.inspector-section p a:not(.tmdb-attribution) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.inspector-section .tmdb-attribution {
+  display: block;
+  width: min(8.5rem, 45%);
+}
+
+.inspector-section .tmdb-attribution img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) 1fr;
+  gap: 8px 14px;
+  margin: 14px 0 0;
+  font-size: 10px;
+}
+
+.detail-list > div {
+  display: contents;
+}
+
+.detail-list dt {
+  color: var(--muted-foreground);
+}
+
+.detail-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.series-list {
+  display: grid;
+  gap: 7px;
+}
+
+.series-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 10px;
+}
+
+.series-list span {
+  color: var(--muted-foreground);
+}
+
+.history-list {
+  position: relative;
+  display: grid;
+  gap: 0;
+}
+
+.history-list::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 11px;
+  width: 1px;
+  background: var(--border);
+}
+
+.history-list article {
+  position: relative;
+  display: grid;
+  grid-template-columns: 23px 1fr;
+  gap: 11px;
+  padding: 0 0 22px;
+}
+
+.history-mark {
+  z-index: 1;
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--muted-foreground);
+  background: var(--card);
+}
+
+.history-mark svg {
+  width: 11px;
+}
+
+.history-list strong,
+.history-list time,
+.history-list small {
+  display: block;
+}
+
+.history-list strong {
+  font-size: 11px;
+}
+
+.history-list time,
+.history-list small {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
+
+.history-list p {
+  margin: 8px 0 0;
+  padding: 9px;
+  border-left: 2px solid var(--border);
+  color: var(--muted-foreground);
+  background: var(--background);
+  font-size: 10px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1180px) {
+  .book-inspector {
+    border-left: 1px solid var(--border);
+    box-shadow: -20px 0 50px rgb(0 0 0 / 24%);
+  }
+}
+
+.media-inspector {
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+
+.spotify-history-list li {
+  align-items: flex-start;
+}
+
+.spotify-history-list li span {
+  flex-basis: 52%;
+  white-space: normal;
+}
+
+.inspector-hero {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 16px;
+}
+
+.media-inspector section {
+  border-top: 1px solid var(--border);
+  padding: 20px 0;
+}
+
+.media-inspector dl > div,
+.history-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+}
+
+.media-inspector ol.history-list,
+.media-inspector ul.history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.media-inspector ol.history-list::before,
+.media-inspector ul.history-list::before {
+  display: none;
+}
+
+.media-inspector .history-list li {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.media-inspector .history-list li strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-inspector .history-list li span {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.media-inspector dt,
+.history-list span {
+  color: var(--muted-foreground);
+}
+
+.media-inspector a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.media-inspector a svg {
+  width: 14px;
+}
+
+.inspector-related-link {
+  display: inline-flex;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.inspector-related-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0 0;
+}
+
+.inspector-related-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.inspector-related-list a {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block: 5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-related-list a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-related-list a small {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 900px) {
+  .media-inspector {
+    inset: var(--workspace-header-height) 0 0 auto;
+    box-shadow: -16px 0 36px rgb(0 0 0 / 0.16);
+  }
+}
+.media-inspector .history-list .channel-library-video {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 5px 12px;
+  padding-block: 12px;
+}
+.media-inspector .history-list .channel-library-video strong {
+  white-space: normal;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.media-inspector .history-list .channel-library-video > span:last-child {
+  font-size: 10px;
+}
+.media-inspector .music-entity-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+}
+.media-inspector .music-entity-history li strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.media-inspector .music-entity-history li span {
+  text-align: left;
+  font-size: 10px;
+}
+.inspector-tab-root {
+  display: contents;
+}
+.book-inspector .inspector-tab-panel {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+.inspector-tabs {
+  flex-shrink: 0;
+}
+.media-inspector {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.inspector-scroll {
+  overscroll-behavior: contain;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.inspector-hero {
+  margin: 0 0 22px;
+  align-items: start;
+}
+.inspector-hero h2,
+.inspector-book-heading h2 {
+  margin: 4px 0 5px;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.inspector-hero p,
+.inspector-book-heading p,
+.inspector-section p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.inspector-hero p,
+.inspector-book-heading p {
+  color: var(--muted-foreground);
+  margin-bottom: 10px;
+}
+.inspector-hero [data-ui~='eyebrow'],
+.inspector-book-heading > div > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+.inspector-section h3,
+.media-inspector h3 {
+  margin: 0 0 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.detail-list dt,
+.detail-list dd {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-inspector dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr);
+  gap: 8px 14px;
+  padding: 5px 0;
+}
+.media-inspector dd {
+  margin: 0;
+  text-align: left;
+}
+.media-inspector .inspector-tab-panel {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-inspector .history-list li strong,
+.media-inspector .history-list li span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-inspector .inspector-scroll > [role='status'] {
+  font-size: 12px;
+}
+.inspector-section a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.inspector-section a svg,
+.media-inspector a svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.inspector-scroll .history-list strong,
+.inspector-scroll .history-list time,
+.inspector-scroll .history-list small,
+.inspector-scroll .history-list p {
+  font-size: 12px;
+}

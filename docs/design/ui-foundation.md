@@ -96,10 +96,10 @@ their explicit pagination controls. Virtualization remains a measured follow-up.
 
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
 presentation details where they conflict. Use the platform system font throughout
-production UI. A global base-layer rule gives buttons, native selects, and app navigation
-(including collection tabs and sidebar navigation) the default cursor. Button-composed links also use the default cursor. Ordinary links
-use a pointer. Text inputs
-retain their text cursor; disabled and busy controls retain their specific cursors.
+production UI. Base defaults give buttons, native selects, and Button-composed
+links the default cursor. Shared navigation and tab compositions set their own
+default cursor. Ordinary links use a pointer. Text inputs retain their text
+cursor; disabled and busy controls retain their specific cursors.
 The current Letterboxd reference
 applies only to small, muted personal-rating stars below Book and Movie artwork,
 including half stars; it does not prescribe poster density, colors, or metadata.
@@ -167,6 +167,23 @@ the shared icon, heading, description, and shadcn outline action. Pages supply
 source-specific copy and existing filter-reset callbacks; empty collections link
 to Connections through Button's Base UI `render` API. Do not style ordinary links
 as buttons in collection CSS.
+
+Connections uses the workspace header as its page title, with no repeated body
+heading or Source coverage eyebrow. Source rows show bundled official app marks,
+14px names, labeled green/red connection icons, and compact sync/coverage metadata.
+Degraded status stays amber and reauthorization stays red. Actions use shadcn's
+small Button variant, while the account form pairs default 32px Input/Button
+controls; coverage explanations and attempt/export dates live in
+Collapsible details. Spotify uses one source row and one set of Sync/Import
+actions for the API's first connection target. Additional saved Spotify records
+retain their status, dates, coverage, import progress, and account-specific
+Resume action within Details; a visible summary flags unfinished imports there.
+Presentation grouping never deletes or merges source evidence. YouTube account
+lineages retain separate rows. Primary incomplete-import progress and Resume remain visible. The
+new YouTube account form sits below the sources; existing lineage imports keep
+their connection IDs. Page-owned layout is isolated in its CSS Module and wraps
+both copy and actions at narrow widths. Base native-control defaults live in the
+base layer so they do not override installed component typography.
 
 ## Visual and writing principles
 
@@ -340,6 +357,15 @@ Use the installed shadcn component for matching controls rather than copying its
 appearance into raw HTML or building directly against Base UI. Completed migrations and validation
 are recorded in the [production component audit](../planning/shadcn-ui-audit.md).
 
+Production styling ownership is recorded in [ADR 0019](../decisions/0019-web-styling-ownership.md).
+Keep shared theme/metric tokens and document defaults global, use plain CSS
+Modules for substantial application styling, and use Tailwind for small
+arrangements and component variants. FlatTabs, LibraryToolbar, LibraryFilterPanel,
+LibrarySelect, and navigation compositions own approved compact controls.
+Keep shared collection/inspector geometry and media presentation in shared modules;
+feature modules own their specialized content. Preserve explicit structural hooks
+and accessible identities rather than relying on generated styling classes.
+
 ## Brand identity: compact J2 symbol
 
 On 2026-10-12, the owner selected **J2**, the house-and-waterfall concept, as
@@ -446,7 +472,7 @@ Use the installed **shadcn/ui Base UI components** in `apps/web/src/components/u
 
 - Use Button, Input/Input Group, Checkbox with FieldLabel, Select, ToggleGroup, Tabs, Tooltip, Sheet, Alert, Badge, and Skeleton as appropriate. Install missing primitives with the configured shadcn CLI; preserve existing components, use the local cn helper, and do not add a second primitive library.
 - Compose the real primitives. Keep their focus, keyboard, ARIA, disabled, and popup behavior. Do not replace an entire TabsContent with a single changing panel; each trigger needs its own associated panel. Keep lazy data loading and source semantics intact.
-- Component variants own appearance. Keep global CSS for app layouts, media content, and sizing constraints; remove old native-control appearance rules when migrating. Do not force custom borders, backgrounds, focus outlines, padding, or chevrons over the installed primitive.
+- Component variants and shared compositions own appearance. Keep global CSS for theme tokens, document defaults, accessibility defaults, and registered custom properties. Use plain CSS Modules for substantial app layouts, media content, and sizing constraints, and Tailwind utilities for straightforward composition; remove old native-control appearance rules when migrating. Do not force custom borders, backgrounds, focus outlines, padding, or chevrons over the installed primitive.
 - Application media rows/cards and inspector click-away surfaces are intentional custom interactions. Their native buttons are centralized in library-controls.tsx. Ordinary actions cannot use those exceptions. Semantic headings, fieldsets, labels, and route links remain appropriate HTML. Historical design studies are references, not production component sources.
 - Verify real light/dark UI at desktop and narrow widths, with filters, popups, and inspectors open. Measure adjacent control heights and popup/toolbar bounds, test keyboard navigation and label activation, and verify modal focus/return behavior. Passing typecheck is not visual QA.
 - Run pnpm check, the frontend build, and relevant Playwright coverage after final edits. Production route code has ESLint restrictions against raw controls, handcrafted tab roles, and browser title hints; do not disable those rules to ship a replacement.

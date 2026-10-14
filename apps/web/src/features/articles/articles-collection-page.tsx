@@ -1,4 +1,13 @@
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
+import workspaceStyles from '@/components/library-workspace.module.css'
+import articlesStyles from '@/features/articles/articles.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import mediaStyles from '@/components/media-presentation.module.css'
+import moviesStyles from '@/features/movies/movies.module.css'
+import inspectorStyles from '@/components/inspector.module.css'
+import booksStyles from '@/features/books/books.module.css'
+import { cn } from '@/lib/utils'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
 import { articlesQueryOptions } from '../../library-queries'
@@ -13,8 +22,8 @@ import {
 } from '@/components/flat-tabs'
 import { FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   InputGroup,
@@ -160,10 +169,17 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
       value={section}
       render={<section />}
       data-inspector-open={Boolean(search.item)}
-      className={`books-page articles-page articles-density-expanded`}
+      data-layout="list"
+      className={workspaceStyles['books-page']}
       aria-labelledby="articles-title"
+      data-ui="library-workspace articles-density-expanded"
     >
-      <FlatTabsContent value={section} className="books-collection" ref={collectionRef}>
+      <FlatTabsContent
+        value={section}
+        className={workspaceStyles['books-collection']}
+        ref={collectionRef}
+        data-ui="library-collection"
+      >
         <h1 className="sr-only" id="articles-title">
           Articles
         </h1>
@@ -173,16 +189,16 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
               key={target}
               to={`/library/articles/${target}`}
               search={normalizedForArticleSection(search, target)}
-              activeProps={{ 'aria-current': 'page', className: 'active' }}
+              activeProps={{ 'aria-current': 'page' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
               <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
-        <div className="books-toolbar">
+        <LibraryToolbar data-ui="library-toolbar">
           <form
-            className="books-search"
+            className={controlsStyles['books-search']}
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
@@ -231,14 +247,15 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           <Button
             variant={activeFilters ? 'secondary' : 'outline'}
             type="button"
-            className="toolbar-button"
+            className={controlsStyles['toolbar-button']}
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
+            data-ui="toolbar-button"
           >
             <ListFilter aria-hidden="true" /> Filters{' '}
             {activeFilters ? <span>{activeFilters}</span> : null}
           </Button>
-          <label className="books-sort">
+          <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort articles</span>
             <LibrarySelect
@@ -259,7 +276,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             variant="outline"
             size="icon"
             type="button"
-            className="sort-direction"
+            className={controlsStyles['sort-direction']}
             disabled={sort === 'relevance'}
             aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
             onClick={() =>
@@ -272,11 +289,15 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
               <ArrowDown aria-hidden="true" />
             )}
           </Button>
-        </div>
+        </LibraryToolbar>
         {filtersOpen ? (
           <ArticleFilters section={section} search={search} summary={summary} onChange={update} />
         ) : null}
-        <div className="books-result-summary" aria-live="polite">
+        <div
+          className={workspaceStyles['books-result-summary']}
+          aria-live="polite"
+          data-ui="collection-summary"
+        >
           <span>
             {articles.isPending
               ? null
@@ -287,10 +308,10 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           ) : null}
         </div>
         {articles.isPending ? (
-          <LoadingState className="books-loading">Loading articles…</LoadingState>
+          <LoadingState data-ui="collection-loading">Loading articles…</LoadingState>
         ) : null}
         {articles.isError && !articles.isFetchNextPageError ? (
-          <Notice className="books-state books-state-error">
+          <Notice className={workspaceStyles['books-state']}>
             <h2>Articles could not be loaded</h2>
             <p>{articles.error.message}</p>
             <Button variant="outline" type="button" onClick={() => void articles.refetch()}>
@@ -311,7 +332,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           />
         ) : null}
         {items.length ? (
-          <div className="articles-list">
+          <div className={articlesStyles['articles-list']}>
             {items.map((item) => (
               <ArticleRow
                 key={item.id}
@@ -336,9 +357,10 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
         <>
           <InspectorBackdrop
             type="button"
-            className="inspector-backdrop"
+            className={workspaceStyles['inspector-backdrop']}
             aria-label="Close inspector"
             onClick={close}
+            data-ui="inspector-backdrop"
           />
           <ArticleInspector id={inspectorItem} onClose={close} />
         </>
@@ -367,18 +389,23 @@ function ArticleRow({
       data-collection-item={item.id}
       ref={ref}
       type="button"
-      className={selected ? 'article-row selected' : 'article-row'}
+      className={
+        selected
+          ? cn(mediaStyles['article-row'], mediaStyles['selected'])
+          : mediaStyles['article-row']
+      }
       aria-pressed={selected}
       onClick={onClick}
+      data-ui="article-row"
     >
       {item.imageUrl ? (
         <img src={item.imageUrl} alt="" loading="lazy" />
       ) : (
-        <span className="article-thumbnail">
+        <span className={articlesStyles['article-thumbnail']}>
           <FileText aria-hidden="true" />
         </span>
       )}
-      <span className="article-row-copy">
+      <span className={mediaStyles['article-row-copy']}>
         <strong>{item.title}</strong>
         <small>
           {[item.author, displayPublication(item.publication)].filter(Boolean).join(' · ') ||
@@ -397,12 +424,12 @@ function ArticleRow({
           </em>
         ) : null}
         {item.searchExcerpt?.text ? (
-          <span className="article-search-excerpt">
+          <span className={articlesStyles['article-search-excerpt']}>
             <b>{item.searchExcerpt.source}</b> ·{item.searchExcerpt.text}
           </span>
         ) : null}
       </span>
-      <span className="article-row-fact">{fact(item, section)}</span>
+      <span className={mediaStyles['article-row-fact']}>{fact(item, section)}</span>
       <ChevronRight aria-hidden="true" />
     </MediaRowButton>
   )
@@ -473,14 +500,14 @@ function ArticleFilters({
   onChange: (patch: Partial<ArticlesRouteSearch>) => void
 }) {
   return (
-    <section className="filter-panel" aria-label="Article filters">
-      <div className="filter-panel-heading">
+    <LibraryFilterPanel aria-label="Article filters" data-ui="filter-panel">
+      <div className={controlsStyles['filter-panel-heading']}>
         <strong> Filters</strong>
         <Button variant="outline" type="button" onClick={() => onChange(clearFilters())}>
           Clear all
         </Button>
       </div>
-      <div className="filter-panel-grid">
+      <div className={controlsStyles['filter-panel-grid']}>
         <FacetGroup
           title="Type"
           values={summary?.facets.types ?? []}
@@ -641,7 +668,7 @@ function ArticleFilters({
           </>
         ) : null}
       </div>
-    </section>
+    </LibraryFilterPanel>
   )
 }
 function FacetGroup({
@@ -668,11 +695,11 @@ function FacetGroup({
     facet.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
   )
   return (
-    <fieldset className="filter-group">
+    <fieldset className={controlsStyles['filter-group']}>
       <legend>{title}</legend>
       {searchable ? (
         <Input
-          className="facet-search"
+          className={controlsStyles['facet-search']}
           type="search"
           aria-label={`Search ${title.toLocaleLowerCase()}`}
           placeholder={`Search ${title.toLocaleLowerCase()}`}
@@ -709,7 +736,7 @@ function DateSelect({
   onChange: (from?: string, to?: string, includeUnknown?: true) => void
 }) {
   return (
-    <fieldset className="date-filter">
+    <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
       <legend>{label}</legend>
       <span>
         <Input
@@ -729,7 +756,7 @@ function DateSelect({
           }
         />
       </span>
-      <FieldLabel className="movie-filter-check">
+      <FieldLabel className={moviesStyles['movie-filter-check']}>
         <Checkbox
           checked={includeUnknown ?? false}
           onCheckedChange={(checked) => onChange(from, to, checked ? true : undefined)}
@@ -766,7 +793,7 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
     closeRef.current = onClose
   }, [onClose])
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('.inspector-close')?.focus()
+    ref.current?.querySelector<HTMLElement>('button[aria-label="Close inspector"]')?.focus()
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeRef.current()
     }
@@ -774,46 +801,57 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
     return () => document.removeEventListener('keydown', key)
   }, [id])
   return (
-    <aside ref={ref} className="book-inspector article-inspector" aria-label="Article inspector">
+    <aside
+      ref={ref}
+      className={cn(inspectorStyles['book-inspector'], inspectorStyles['article-inspector'])}
+      aria-label="Article inspector"
+      data-ui="book-inspector article-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
-        <div className="inspector-topbar">
-          <TabsList variant="line" className="inspector-tabs">
+        <div className={inspectorStyles['inspector-topbar']} data-ui="inspector-header">
+          <TabsList variant="line" className={inspectorStyles['inspector-tabs']}>
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           <Button
             variant="ghost"
             size="icon"
-            className="inspector-close"
+            className="shrink-0 [&_svg]:size-[17px]"
             type="button"
             aria-label="Close inspector"
             onClick={onClose}
+            data-ui="inspector-close"
           >
             <X aria-hidden="true" />
           </Button>
         </div>
         {article.isPending ? (
-          <LoadingState className="inspector-state">Loading article…</LoadingState>
+          <LoadingState className={inspectorStyles['inspector-state']}>
+            Loading article…
+          </LoadingState>
         ) : null}
         {article.isError ? (
-          <Notice className="inspector-state">{article.error.message}</Notice>
+          <Notice className={inspectorStyles['inspector-state']}>{article.error.message}</Notice>
         ) : null}
         {
-          <TabsContent value="details" className="inspector-tab-panel">
+          <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
             {article.data ? <ArticleDetails article={article.data} /> : null}
           </TabsContent>
         }
         {
-          <TabsContent value="history" className="inspector-tab-panel">
+          <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
             {article.data ? (
-              <div className="inspector-scroll">
-                <section className="inspector-section">
+              <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
+                <section
+                  className={inspectorStyles['inspector-section']}
+                  data-ui="inspector-section"
+                >
                   <h3>Reader activity</h3>
-                  <dl className="detail-list">
+                  <dl className={inspectorStyles['detail-list']}>
                     <dt>Current state</dt>
                     <dd>
                       {article.data.currentAvailable
@@ -834,19 +872,22 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
                     <dd>{formatDate(article.data.dates.observedAt) ?? 'Unknown'}</dd>
                   </dl>
                   {article.data.documentNote ? (
-                    <div className="article-note">
+                    <div className={articlesStyles['article-note']}>
                       <strong>Document note</strong>
                       <p>{article.data.documentNote}</p>
                     </div>
                   ) : null}
                   {article.data.highlightDocumentNote ? (
-                    <div className="article-note">
+                    <div className={articlesStyles['article-note']}>
                       <strong>Highlight note</strong>
                       <p>{article.data.highlightDocumentNote}</p>
                     </div>
                   ) : null}
                 </section>
-                <section className="inspector-section">
+                <section
+                  className={inspectorStyles['inspector-section']}
+                  data-ui="inspector-section"
+                >
                   <h3>Archive history</h3>
                   {history.isPending ? (
                     <LoadingState>Loading history…</LoadingState>
@@ -858,7 +899,10 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
                     history.data?.pages
                       .flatMap((page) => page.data)
                       .map((entry) => (
-                        <article className="article-history-entry" key={entry.archiveEntryId}>
+                        <article
+                          className={articlesStyles['article-history-entry']}
+                          key={entry.archiveEntryId}
+                        >
                           <strong>
                             {entry.archivedAt
                               ? `Archived ${formatDate(entry.archivedAt.value)}`
@@ -886,7 +930,10 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
                     </Button>
                   ) : null}
                 </section>
-                <section className="inspector-section">
+                <section
+                  className={inspectorStyles['inspector-section']}
+                  data-ui="inspector-section"
+                >
                   <h3>Highlights and notes</h3>
                   {highlights.isPending ? (
                     <LoadingState>Loading highlights…</LoadingState>
@@ -927,8 +974,13 @@ function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) 
 }
 function ArticleDetails({ article }: { article: ArticleDetail }) {
   return (
-    <div className="inspector-scroll">
-      <header className="inspector-book-heading article-inspector-heading">
+    <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
+      <header
+        className={cn(
+          inspectorStyles['inspector-book-heading'],
+          articlesStyles['article-inspector-heading'],
+        )}
+      >
         {article.imageUrl ? <img src={article.imageUrl} alt="" /> : <FileText aria-hidden="true" />}
         <div>
           <h2>{article.title}</h2>
@@ -950,14 +1002,14 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
         </div>
       </header>
       {article.summary ? (
-        <section className="inspector-section">
+        <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
           <h3>Summary</h3>
-          <p className="book-description">{article.summary}</p>
+          <p className={booksStyles['book-description']}>{article.summary}</p>
         </section>
       ) : null}
-      <section className="inspector-section">
+      <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
         <h3>Article facts</h3>
-        <dl className="detail-list">
+        <dl className={inspectorStyles['detail-list']}>
           <dt>Type</dt>
           <dd>{article.subtype}</dd>
           <dt>Author</dt>
@@ -990,16 +1042,16 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
         </dl>
       </section>
       {article.tags.length ? (
-        <section className="inspector-section">
+        <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
           <h3>Tags</h3>
-          <div className="article-tags">
+          <div className={articlesStyles['article-tags']}>
             {article.tags.map((tag) => (
               <span key={tag.key}>{tag.name}</span>
             ))}
           </div>
         </section>
       ) : null}
-      <section className="inspector-section">
+      <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
         <h3>Content status</h3>
         <p>
           {article.content.available
@@ -1011,7 +1063,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
                 : 'Full text not acquired'}
         </p>
       </section>
-      <section className="inspector-section">
+      <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
         <h3>Source</h3>
         <p>
           {article.source.connectionLabel} ·{' '}
@@ -1019,7 +1071,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
             ? article.currentLocation
             : `Unavailable · last known ${article.currentLocation}`}
         </p>
-        <dl className="detail-list">
+        <dl className={inspectorStyles['detail-list']}>
           <dt>Category</dt>
           <dd>{article.sourceCategory}</dd>
           <dt>Added via</dt>
@@ -1029,12 +1081,12 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
           <dt>Last observed</dt>
           <dd>{formatDate(article.source.sourceRefreshedAt) ?? 'Unknown'}</dd>
         </dl>
-        <Collapsible className="article-source-details">
+        <Collapsible className={articlesStyles['article-source-details']}>
           <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
             Reader source details <ChevronRight aria-hidden="true" />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <ul className="article-relationships">
+            <ul className={articlesStyles['article-relationships']}>
               {article.readerRelationships.map((relationship) => (
                 <li key={relationship.documentId}>
                   <span>
@@ -1053,7 +1105,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
             </ul>
           </CollapsibleContent>
         </Collapsible>
-        <div className="article-source-links">
+        <div className={articlesStyles['article-source-links']} data-ui="article-source-links">
           {article.links.original ? (
             <a href={article.links.original} target="_blank" rel="noopener noreferrer">
               Open original <ExternalLink aria-hidden="true" />

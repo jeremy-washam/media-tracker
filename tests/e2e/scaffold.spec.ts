@@ -134,7 +134,7 @@ test('keeps loaded Podcast pages while opening the inspector in list-only Archiv
     route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
   )
   await page.goto('/library/podcasts/archive')
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Episode/ })).toBeVisible()
@@ -201,7 +201,7 @@ test('keeps loaded Music pages while opening the inspector in list-only Tracks',
     route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
   )
   await page.goto('/library/music/tracks')
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Track/ })).toBeVisible()
@@ -335,7 +335,7 @@ test('keeps loaded Video pages while changing layout and opening the inspector',
     route.fulfill({ json: { data: [], nextCursor: null, totalCount: 0 } }),
   )
   await page.goto('/library/videos/archive')
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Video/ })).toBeVisible()
@@ -650,11 +650,11 @@ for (const scenario of [
     })
     await page.goto(`/library/${scenario.media}/${scenario.start}`)
     const nav = page.getByRole('navigation', { name: scenario.nav })
-    await expect(page.locator('.workspace-header').getByRole('tablist')).toBeVisible()
-    await expect(page.locator('.books-header')).toHaveCount(0)
+    await expect(page.locator('[data-ui~="workspace-header"]').getByRole('tablist')).toBeVisible()
+    await expect(page.locator('[data-ui~="books-header"]')).toHaveCount(0)
     expect(
       await page
-        .locator('.workspace-breadcrumb strong')
+        .locator('[data-ui~="workspace-breadcrumb"] strong')
         .evaluate((e) => getComputedStyle(e).fontSize),
     ).toBe('12px')
     await expect(nav.locator('span').first()).not.toHaveText('—')
@@ -697,7 +697,7 @@ for (const scenario of [
       expect(await geometry()).toEqual(before)
       await expect(nav.locator('span')).toHaveText(counts)
       const results = page.locator(
-        '.book-row, .movie-row, .article-row, .spotify-result, .video-result',
+        '[data-ui~="book-row"], [data-ui~="movie-row"], [data-ui~="article-row"], [data-ui~="spotify-result"], [data-ui~="video-result"]',
       )
       await expect(results).toHaveCount(1)
       release()
@@ -749,7 +749,7 @@ test('shows the production Books shell and preserves Connections', async ({ page
 
   await page.getByRole('link', { name: 'Connections' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Connections' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Connections', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Readwise Reader' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'YouTube', exact: true }).first()).toBeVisible()
 })
@@ -807,7 +807,7 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
   )
   await page.goto('/library/books/archive')
   await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Book/ })).toBeVisible()
@@ -1138,7 +1138,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await expect(page.getByRole('heading', { name: 'Movies' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Archive 372' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Queue 309' })).toBeVisible()
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
@@ -1380,7 +1380,7 @@ test('keeps loaded Article pages while inspecting History in expanded rows', asy
   await expect(page.getByRole('tab', { name: 'Archive 72' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Queue 178' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Feed 666' })).toBeVisible()
-  await page.locator('.books-collection').evaluate((element) => {
+  await page.locator('[data-ui~="library-collection"]').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await expect(page.getByRole('button', { name: /Second Article/ })).toBeVisible()
@@ -1525,7 +1525,7 @@ test('searches every channel and pages shadcn channel choices', async ({ page })
   })
   await page.getByRole('searchbox', { name: 'Search channel options' }).fill('Zebra')
   await searchResponse
-  await expect(page.locator('.video-channel-picker').getByRole('status')).toHaveCount(0)
+  await expect(page.locator('[data-ui~="video-channel-picker"]').getByRole('status')).toHaveCount(0)
   await channel.click()
   await expect(channel).toHaveAttribute('aria-expanded', 'true')
   await page.getByRole('option', { name: 'Zebra Channel', exact: true }).click()
@@ -1558,7 +1558,7 @@ test('uses aligned shadcn toolbars and sorting on every Library media collection
     await page.goto(`/library/${collection.media}/${collection.view}`)
     const trigger = page.getByRole('combobox', { name: `Sort ${collection.media}`, exact: true })
     await expect(trigger).toHaveAttribute('data-slot', 'select-trigger')
-    const controls = await page.locator('.books-toolbar').evaluate((toolbar) =>
+    const controls = await page.locator('[data-ui~="library-toolbar"]').evaluate((toolbar) =>
       Array.from(toolbar.children).map((control) => {
         const rect = control.getBoundingClientRect()
         return { height: rect.height, top: rect.top, left: rect.left, right: rect.right }
@@ -1647,7 +1647,7 @@ for (const dark of [false, true]) {
           json: { error: { message: 'Synthetic inspector details unavailable' } },
         }),
       )
-      const toolbar = page.locator('.books-toolbar')
+      const toolbar = page.locator('[data-ui~="library-toolbar"]')
       const trigger = page.getByRole('combobox', { name: `Sort ${media}`, exact: true })
       const measure = () =>
         toolbar.evaluate((el) => {
@@ -1687,15 +1687,18 @@ for (const dark of [false, true]) {
       await page.setViewportSize({ width: 1024, height: 768 })
       await page
         .locator(
-          'button.book-row, button.movie-row, button.article-row, button.spotify-result, button.video-result',
+          'button[data-ui~="book-row"], button[data-ui~="movie-row"], button[data-ui~="article-row"], button[data-ui~="spotify-result"], button[data-ui~="video-result"]',
         )
         .first()
         .click()
-      await expect(page.locator('.books-page')).toHaveAttribute('data-inspector-open', 'true')
+      await expect(page.locator('[data-ui~="library-workspace"]')).toHaveAttribute(
+        'data-inspector-open',
+        'true',
+      )
       await expect
         .poll(() =>
           page
-            .locator('.books-page')
+            .locator('[data-ui~="library-workspace"]')
             .evaluate((el) =>
               Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--inspector-space'))),
             ),
@@ -1710,13 +1713,13 @@ for (const dark of [false, true]) {
       await expect(page.getByRole('listbox')).toBeVisible()
       await trigger.press('Escape')
       await page
-        .locator('.book-inspector, .media-inspector')
+        .locator('[data-ui~="book-inspector"], [data-ui~="media-inspector"]')
         .getByRole('button', { name: 'Close inspector', exact: true })
         .click()
       await expect
         .poll(() =>
           page
-            .locator('.books-page')
+            .locator('[data-ui~="library-workspace"]')
             .evaluate((el) =>
               Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--inspector-space'))),
             ),

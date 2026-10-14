@@ -1,3 +1,18 @@
+// Keep shared contracts before feature styles; verify visual parity when changing this order.
+import './styles.css'
+import './components/app-shell.module.css'
+import './components/library-workspace.module.css'
+import './components/library-controls.module.css'
+import './components/inspector.module.css'
+import './components/media-presentation.module.css'
+import './features/books/books.module.css'
+import './features/movies/movies.module.css'
+import './features/articles/articles.module.css'
+import './features/music/music.module.css'
+import './features/videos/videos.module.css'
+import './components/page-content.module.css'
+import './pages/connections-page.module.css'
+import './components/collection-pagination.module.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -10,7 +25,6 @@ import {
   persistLibraryCache,
   startInitialPrefetch,
 } from './library-cache'
-import './styles.css'
 
 const storage = browserCacheStorage()
 const queryClient = createAppQueryClient(storage)

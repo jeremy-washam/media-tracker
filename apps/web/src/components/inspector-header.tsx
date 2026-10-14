@@ -1,6 +1,7 @@
+import inspectorStyles from '@/components/inspector.module.css'
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { AppButton as Button } from '@/components/ui-patterns'
 import { FlatTabsContent } from '@/components/flat-tabs'
 
 // Tabs keep their panel associations while the shared item request settles.
@@ -12,7 +13,7 @@ export function InspectorStatePanels({
   children: ReactNode
 }) {
   return values.map((value) => (
-    <FlatTabsContent key={value} value={value} className="inspector-tab-panel">
+    <FlatTabsContent key={value} value={value} className={inspectorStyles['inspector-tab-panel']}>
       {children}
     </FlatTabsContent>
   ))
@@ -26,7 +27,7 @@ export function InspectorHeader({
   onClose: () => void
 }) {
   return (
-    <header className="inspector-topbar">
+    <header className={inspectorStyles['inspector-topbar']} data-ui="inspector-header">
       {children}
       <Button
         variant="ghost"

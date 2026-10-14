@@ -1,4 +1,12 @@
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
+import workspaceStyles from '@/components/library-workspace.module.css'
+import videosStyles from '@/features/videos/videos.module.css'
+import controlsStyles from '@/components/library-controls.module.css'
+import mediaStyles from '@/components/media-presentation.module.css'
+import inspectorStyles from '@/components/inspector.module.css'
+import contentStyles from '@/components/page-content.module.css'
+import { cn } from '@/lib/utils'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
@@ -14,8 +22,8 @@ import {
 } from '@/components/flat-tabs'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AppInput as Input } from '@/components/ui-patterns'
+import { AppButton as Button } from '@/components/ui-patterns'
 import {
   InputGroup,
   InputGroupAddon,
@@ -136,9 +144,20 @@ export function VideosCollectionPage({ view }: { view: View }) {
       value={view}
       render={<section />}
       data-inspector-open={Boolean(search.item || search.channelItem)}
-      className={`books-page videos-page videos-${layout}`}
+      data-layout={layout}
+      className={cn(
+        workspaceStyles['books-page'],
+        workspaceStyles['videos-page'],
+        videosStyles[`videos-${layout}`],
+      )}
+      data-ui={cn('library-workspace videos-page', `videos-${layout}`)}
     >
-      <FlatTabsContent value={view} className="books-collection" ref={collectionRef}>
+      <FlatTabsContent
+        value={view}
+        className={workspaceStyles['books-collection']}
+        ref={collectionRef}
+        data-ui="library-collection"
+      >
         <h1 className="sr-only">Videos</h1>
         <CollectionTabList aria-label="Video sections">
           {(['archive', 'queue', 'channels'] as const).map((target) => (
@@ -146,16 +165,16 @@ export function VideosCollectionPage({ view }: { view: View }) {
               key={target}
               to={`/library/videos/${target}`}
               search={normalizeVideoSearch(search, target)}
-              activeProps={{ className: 'active', 'aria-current': 'page' }}
+              activeProps={{ 'aria-current': 'page' }}
             >
               {target[0]!.toUpperCase() + target.slice(1)}{' '}
               <span>{sectionCounts?.[target]?.toLocaleString() ?? '—'}</span>
             </Link>
           ))}
         </CollectionTabList>
-        <div className="books-toolbar">
+        <LibraryToolbar data-ui="library-toolbar">
           <form
-            className="books-search"
+            className={controlsStyles['books-search']}
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
@@ -203,13 +222,14 @@ export function VideosCollectionPage({ view }: { view: View }) {
           <Button
             variant="outline"
             type="button"
-            className="toolbar-button"
+            className={controlsStyles['toolbar-button']}
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((value) => !value)}
+            data-ui="toolbar-button"
           >
             <SlidersHorizontal aria-hidden="true" /> Filters
           </Button>
-          <label className="books-sort">
+          <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <span className="sr-only">Sort videos</span>
             <LibrarySelect
               aria-label="Sort videos"
@@ -229,7 +249,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
             variant="outline"
             size="icon"
             type="button"
-            className="sort-direction"
+            className={controlsStyles['sort-direction']}
             aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
             onClick={() =>
               update({
@@ -249,11 +269,15 @@ export function VideosCollectionPage({ view }: { view: View }) {
           {view !== 'channels' ? (
             <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
           ) : null}
-        </div>
+        </LibraryToolbar>
         {filtersOpen ? (
           <VideoFilters view={view} search={search} summary={summary} update={update} />
         ) : null}
-        <div className="books-result-summary" aria-live="polite">
+        <div
+          className={workspaceStyles['books-result-summary']}
+          aria-live="polite"
+          data-ui="collection-summary"
+        >
           <span>
             {result.isPending
               ? null
@@ -264,15 +288,15 @@ export function VideosCollectionPage({ view }: { view: View }) {
           ) : null}
         </div>
         {result.isPending ? (
-          <LoadingState className="books-loading">Loading videos…</LoadingState>
+          <LoadingState data-ui="collection-loading">Loading videos…</LoadingState>
         ) : null}
         {summary && summary.coverage.watchLater !== 'complete' ? (
-          <p className="library-coverage-note">
+          <p className={workspaceStyles['library-coverage-note']}>
             Takeout coverage: Watch Later {summary.coverage.watchLater}.
           </p>
         ) : null}
         {result.isError && !result.isFetchNextPageError ? (
-          <Notice className="books-state books-state-error">
+          <Notice className={workspaceStyles['books-state']}>
             <h2>Videos could not be loaded</h2>
             <p>{result.error.message}</p>
           </Notice>
@@ -285,7 +309,13 @@ export function VideosCollectionPage({ view }: { view: View }) {
           />
         ) : null}
         {items.length ? (
-          <div className={view === 'channels' ? 'video-channel-list' : 'video-result-grid'}>
+          <div
+            className={
+              view === 'channels'
+                ? videosStyles['video-channel-list']
+                : videosStyles['video-result-grid']
+            }
+          >
             {items.map((item) => (
               <VideoItem
                 key={`${item.kind}:${item.id}`}
@@ -358,7 +388,10 @@ function VideoChannelPicker({
   const selected = search.channel?.[0] ?? ''
   const selectedFacet = summary?.facets.channels.find((option) => option.value === selected)
   return (
-    <fieldset className="filter-group video-channel-picker">
+    <fieldset
+      className={cn(controlsStyles['filter-group'], videosStyles['video-channel-picker'])}
+      data-ui="video-channel-picker"
+    >
       <legend>Channel</legend>
       <Input
         type="search"
@@ -428,8 +461,8 @@ function VideoFilters({
     return null
   }
   return (
-    <section className="filter-panel" aria-label="Video filters">
-      <div className="filter-panel-heading">
+    <LibraryFilterPanel aria-label="Video filters" data-ui="filter-panel">
+      <div className={controlsStyles['filter-panel-heading']}>
         <strong> Filters</strong>
         <Button
           variant="outline"
@@ -461,8 +494,8 @@ function VideoFilters({
           Clear
         </Button>
       </div>
-      <div className="filter-panel-grid">
-        <fieldset className="date-filter">
+      <div className={controlsStyles['filter-panel-grid']}>
+        <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
           <legend>{view === 'archive' ? 'Watched date' : 'Added to Watch Later'}</legend>
           <label>
             From
@@ -492,7 +525,7 @@ function VideoFilters({
               }
             />
           </label>
-          <FieldLabel className="unknown-toggle">
+          <FieldLabel className={controlsStyles['unknown-toggle']}>
             <Checkbox
               checked={
                 view === 'archive'
@@ -510,7 +543,7 @@ function VideoFilters({
             Include unknown dates
           </FieldLabel>
         </fieldset>
-        <fieldset className="date-filter">
+        <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
           <legend>Published</legend>
           <label>
             From
@@ -542,7 +575,7 @@ function VideoFilters({
               }
             />
           </label>
-          <FieldLabel className="unknown-toggle">
+          <FieldLabel className={controlsStyles['unknown-toggle']}>
             <Checkbox
               checked={search.published === 'unknown'}
               onCheckedChange={(checked) =>
@@ -557,7 +590,7 @@ function VideoFilters({
             Unknown date only
           </FieldLabel>
         </fieldset>
-        <label className="library-inline-filter">
+        <label className={controlsStyles['library-inline-filter']}>
           <span>Account</span>
           <LibrarySelect
             value={search.account?.[0] ?? ''}
@@ -579,7 +612,7 @@ function VideoFilters({
         </label>
         <VideoChannelPicker search={search} summary={summary} update={update} />
         {view === 'archive' ? (
-          <label className="library-inline-filter">
+          <label className={controlsStyles['library-inline-filter']}>
             <span>Watches</span>
             <LibrarySelect
               value={search.watchCount ?? 'all'}
@@ -598,7 +631,7 @@ function VideoFilters({
             />
           </label>
         ) : null}
-        <label className="library-inline-filter">
+        <label className={controlsStyles['library-inline-filter']}>
           <span>{view === 'archive' ? 'Queue status' : 'Archive status'}</span>
           <LibrarySelect
             value={search.overlap ?? 'all'}
@@ -624,7 +657,7 @@ function VideoFilters({
         </label>
         <Field
           orientation="horizontal"
-          className="library-inline-filter"
+          className={controlsStyles['library-inline-filter']}
           aria-label="Duration filter"
         >
           <span>Duration</span>
@@ -645,7 +678,7 @@ function VideoFilters({
               { value: '60plus', label: '60+ minutes' },
             ]}
           />
-          <FieldLabel className="unknown-toggle whitespace-nowrap">
+          <FieldLabel className={cn(controlsStyles['unknown-toggle'], 'whitespace-nowrap')}>
             <Checkbox
               checked={search.durationUnknown ?? false}
               onCheckedChange={(checked) =>
@@ -655,7 +688,7 @@ function VideoFilters({
             Include unknown
           </FieldLabel>
         </Field>
-        <label className="library-inline-filter">
+        <label className={controlsStyles['library-inline-filter']}>
           <span>Availability</span>
           <LibrarySelect
             value={search.availability ?? ''}
@@ -674,7 +707,7 @@ function VideoFilters({
             ]}
           />
         </label>
-        <label className="library-inline-filter">
+        <label className={controlsStyles['library-inline-filter']}>
           <span>Format</span>
           <LibrarySelect
             value={search.format?.[0] ?? ''}
@@ -697,7 +730,7 @@ function VideoFilters({
           />
         </label>
         {summary?.facets.categories.length ? (
-          <label className="library-inline-filter">
+          <label className={controlsStyles['library-inline-filter']}>
             <span>Category</span>
             <LibrarySelect
               value={search.category?.[0] ?? ''}
@@ -719,7 +752,7 @@ function VideoFilters({
           </label>
         ) : null}
       </div>
-    </section>
+    </LibraryFilterPanel>
   )
 }
 
@@ -739,13 +772,17 @@ function VideoItem({
       <MediaRowButton
         data-collection-item={item.id}
         type="button"
-        className={`video-channel-row ${selected ? 'selected' : ''}`}
+        className={cn(
+          mediaStyles['video-channel-row'],
+          selected ? mediaStyles['selected'] : undefined,
+        )}
         onClick={onSelect}
+        aria-pressed={selected}
       >
-        <span className="video-channel-avatar">
+        <span className={videosStyles['video-channel-avatar']}>
           {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <UserRound />}
         </span>
-        <span className="video-result-copy">
+        <span className={mediaStyles['video-result-copy']} data-ui="video-result-copy">
           <strong>{item.title}</strong>
           <small>
             {countLabel(item.archiveVideoCount, 'archived video')} ·{' '}
@@ -753,7 +790,7 @@ function VideoItem({
             {countLabel(item.queueVideoCount, 'queued video')}
           </small>
         </span>
-        <span className="video-result-date">
+        <span className={mediaStyles['video-result-date']} data-ui="video-result-date">
           {item.date ? `Latest watch ${date(item.date)}` : 'No supported watches'}
         </span>
       </MediaRowButton>
@@ -763,13 +800,15 @@ function VideoItem({
     <MediaRowButton
       data-collection-item={item.id}
       type="button"
-      className={`video-result ${selected ? 'selected' : ''}`}
+      className={cn(mediaStyles['video-result'], selected ? mediaStyles['selected'] : undefined)}
       onClick={onSelect}
+      data-ui="video-result"
+      aria-pressed={selected}
     >
-      <span className="video-thumbnail">
+      <span className={videosStyles['video-thumbnail']}>
         {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <PlaySquare />}
       </span>
-      <span className="video-result-copy">
+      <span className={mediaStyles['video-result-copy']} data-ui="video-result-copy">
         <strong>{item.title}</strong>
         <span>{item.channelTitle ?? 'Channel unavailable'}</span>
         <small>
@@ -778,7 +817,7 @@ function VideoItem({
             : `Added ${date(item.date)} · ${countLabel(item.matchingQueueAccountCount, 'account')}${item.inArchive ? ` · ${countLabel(item.watchCount, 'watch')}` : ''}`}
         </small>
         {item.durationMs !== null || item.publishedAt !== null ? (
-          <small className="video-list-extra">
+          <small className={videosStyles['video-list-extra']}>
             {duration(item.durationMs)} ·{' '}
             {item.publishedAt ? `Published ${date(item.publishedAt)}` : 'Publish date unavailable'}
           </small>
@@ -819,20 +858,28 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
       fetchChannelVideos(detail.data!.channelId!, 'queue', undefined, signal),
   })
   return (
-    <aside className="media-inspector" aria-label="Video inspector">
+    <aside
+      className={inspectorStyles['media-inspector']}
+      aria-label="Video inspector"
+      data-ui="media-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
         <InspectorHeader onClose={onClose}>
-          <TabsList variant="line" className="inspector-tabs" aria-label="Video details">
+          <TabsList
+            variant="line"
+            className={inspectorStyles['inspector-tabs']}
+            aria-label="Video details"
+          >
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="history">Watch history</TabsTrigger>
             <TabsTrigger value="channel">Channel</TabsTrigger>
           </TabsList>
         </InspectorHeader>
-        <div className="inspector-scroll">
+        <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
           {detail.isPending ? (
             <InspectorStatePanels values={['details', 'history', 'channel']}>
               <LoadingState>Loading…</LoadingState>
@@ -843,8 +890,14 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
             </InspectorStatePanels>
           ) : detail.data ? (
             <>
-              <div className="inspector-hero video-inspector-hero">
-                <span className="video-thumbnail">
+              <div
+                className={cn(
+                  inspectorStyles['inspector-hero'],
+                  videosStyles['video-inspector-hero'],
+                )}
+                data-ui="inspector-hero"
+              >
+                <span className={videosStyles['video-thumbnail']}>
                   {detail.data.imageUrl ? (
                     <img src={detail.data.imageUrl} alt="" />
                   ) : (
@@ -852,14 +905,16 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                   )}
                 </span>
                 <div>
-                  <span className="eyebrow">Video</span>
+                  <span className={contentStyles['eyebrow']} data-ui="eyebrow">
+                    Video
+                  </span>
                   <h2>{detail.data.title}</h2>
                   <p>{detail.data.channelTitle ?? 'Channel unavailable'}</p>
                 </div>
               </div>
 
               {
-                <TabsContent value="details" className="inspector-tab-panel">
+                <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
                   <section>
                     <h3>Activity</h3>
                     <dl>
@@ -915,7 +970,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                     {detail.data.queueRelationships.length ? (
                       <div>
                         <h3>Watch Later</h3>
-                        <ul className="history-list">
+                        <ul className={inspectorStyles['history-list']}>
                           {detail.data.queueRelationships.map((relationship) => (
                             <li
                               key={`${relationship.connectionLabel}:${relationship.addedAt ?? 'unknown'}`}
@@ -934,10 +989,10 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                 </TabsContent>
               }
               {
-                <TabsContent value="history" className="inspector-tab-panel">
+                <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
                   <section>
                     <h3>Watch history</h3>
-                    <ol className="history-list">
+                    <ol className={inspectorStyles['history-list']}>
                       {history.data?.pages
                         .flatMap((page) => page.data)
                         .map((entry) => (
@@ -953,7 +1008,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                     {history.hasNextPage ? (
                       <Button
                         variant="outline"
-                        className="load-more"
+                        className={workspaceStyles['load-more']}
                         type="button"
                         onClick={() => void history.fetchNextPage()}
                       >
@@ -964,7 +1019,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                 </TabsContent>
               }
               {
-                <TabsContent value="channel" className="inspector-tab-panel">
+                <TabsContent value="channel" className={inspectorStyles['inspector-tab-panel']}>
                   <section>
                     <h3>Channel</h3>
                     {detail.data.channelId === null ? (
@@ -1021,7 +1076,7 @@ function ChannelPreview({
       {pending ? (
         <LoadingState>Loading…</LoadingState>
       ) : items.length ? (
-        <ol className="history-list">
+        <ol className={inspectorStyles['history-list']}>
           {items.map((item) => (
             <li key={item.id}>
               <strong>{item.title}</strong>
@@ -1051,19 +1106,27 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   return (
-    <aside className="media-inspector" aria-label="Channel inspector">
+    <aside
+      className={inspectorStyles['media-inspector']}
+      aria-label="Channel inspector"
+      data-ui="media-inspector"
+    >
       <Tabs
-        className="inspector-tab-root"
+        className={inspectorStyles['inspector-tab-root']}
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
       >
         <InspectorHeader onClose={onClose}>
-          <TabsList variant="line" className="inspector-tabs" aria-label="Channel details">
+          <TabsList
+            variant="line"
+            className={inspectorStyles['inspector-tabs']}
+            aria-label="Channel details"
+          >
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="library">Library</TabsTrigger>
           </TabsList>
         </InspectorHeader>
-        <div className="inspector-scroll">
+        <div className={inspectorStyles['inspector-scroll']} data-ui="inspector-scroll">
           {detail.isPending ? (
             <InspectorStatePanels values={['details', 'library']}>
               <LoadingState>Loading…</LoadingState>
@@ -1074,19 +1137,21 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
             </InspectorStatePanels>
           ) : detail.data ? (
             <>
-              <div className="inspector-hero">
-                <span className="video-channel-avatar">
+              <div className={inspectorStyles['inspector-hero']} data-ui="inspector-hero">
+                <span className={videosStyles['video-channel-avatar']}>
                   {detail.data.imageUrl ? <img src={detail.data.imageUrl} alt="" /> : <UserRound />}
                 </span>
                 <div>
-                  <span className="eyebrow">Channel</span>
+                  <span className={contentStyles['eyebrow']} data-ui="eyebrow">
+                    Channel
+                  </span>
                   <h2>{detail.data.title}</h2>
                   <p>{countLabel(detail.data.archiveVideoCount, 'archived video')}</p>
                 </div>
               </div>
 
               {
-                <TabsContent value="details" className="inspector-tab-panel">
+                <TabsContent value="details" className={inspectorStyles['inspector-tab-panel']}>
                   <section>
                     <h3>Activity</h3>
                     <dl>
@@ -1117,18 +1182,21 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                 </TabsContent>
               }
               {
-                <TabsContent value="library" className="inspector-tab-panel">
+                <TabsContent value="library" className={inspectorStyles['inspector-tab-panel']}>
                   <section>
                     <h3>Library</h3>
                     <Tabs
                       value={membership}
                       onValueChange={(value) => setMembership(value as typeof membership)}
                     >
-                      <TabsList variant="line" className="inspector-tabs">
+                      <TabsList variant="line" className={inspectorStyles['inspector-tabs']}>
                         <TabsTrigger value="archive">Archive</TabsTrigger>
                         <TabsTrigger value="queue">Queue</TabsTrigger>
                       </TabsList>
-                      <TabsContent value={membership} className="inspector-tab-panel">
+                      <TabsContent
+                        value={membership}
+                        className={inspectorStyles['inspector-tab-panel']}
+                      >
                         {library.isPending ? <LoadingState>Loading videos…</LoadingState> : null}
                         {library.isError ? <Notice>{library.error.message}</Notice> : null}
                         {library.isSuccess &&
@@ -1137,12 +1205,16 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                             {membership === 'queue' ? 'No queued videos.' : 'No archived videos.'}
                           </p>
                         ) : null}
-                        <ol className="history-list">
+                        <ol className={inspectorStyles['history-list']}>
                           {library.data?.pages
                             .flatMap((page) => page.data)
                             .map((item) => (
-                              <li key={item.id} className="channel-library-video">
-                                <span className="video-thumbnail">
+                              <li
+                                key={item.id}
+                                className={inspectorStyles['channel-library-video']}
+                                data-ui="channel-library-video"
+                              >
+                                <span className={videosStyles['video-thumbnail']}>
                                   {item.imageUrl ? (
                                     <img src={item.imageUrl} alt="" loading="lazy" />
                                   ) : (
@@ -1161,7 +1233,7 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                         {library.hasNextPage ? (
                           <Button
                             variant="outline"
-                            className="load-more"
+                            className={workspaceStyles['load-more']}
                             type="button"
                             onClick={() => void library.fetchNextPage()}
                           >
