@@ -2,8 +2,8 @@
 
 Status: local preparation and restore rehearsal accepted. The empty production
 database, private bucket, queues, and owner-only Access application are
-provisioned, and the paused Worker is deployed against empty storage. Private
-Library data has not been transferred. The owner has completed sign-in and MFA
+provisioned, and the paused Worker is deployed. The private Library transfer is
+in progress; it is not ready for full browsing validation. The owner has completed sign-in and MFA
 and confirmed the hosted health response; full Library validation is pending.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
@@ -585,3 +585,23 @@ pages read 2,000/2,001/2,001 rows for 2,000 results, confirming indexed paginati
 Its tables were removed; native test usage was approximately 6.2 million reads
 and 3.1 million writes. Personal data transfer and full hosted integrity and
 owner browsing remain the next gates.
+
+### Import status recovery
+
+The first production copy committed the schema and eight data files. A subsequent
+status poll returned `Not currently importing anything.` despite the matching
+receipt for the latest file. This is lost completion status, not a confirmed SQL
+rollback. The copy stopped rather than retrying or assuming zero usage. Native
+D1 analytics are available through Wrangler authentication and reported
+`avg.sampleInterval = 1`; native write-query count matched the nine receipts.
+
+Resume the D1 command with `--reconcile-import-status` and
+`--reconciliation-extra-reads 9` for this incident (declare `0` only when no
+external diagnostic reads occurred). Use opt-in import-status reconciliation
+only for this exact status-loss case.
+It requires an exact pending bundle/file receipt and payload identity, a fresh
+unsampled per-database native counter snapshot covering the target's lifetime,
+a write-query count matching the receipts, and totals covering recorded usage.
+Record any external diagnostic reads separately; for this incident the sole
+manual receipt query read nine rows and wrote none. Never clear unrelated query
+uncertainty or treat an actual SQL failure as a completed import.

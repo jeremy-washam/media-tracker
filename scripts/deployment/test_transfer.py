@@ -13,7 +13,7 @@ import unittest
 
 from snapshot import checksum
 import test_snapshot
-from transfer import BUDGET, Cloudflare, NoRedirect, RECEIPTS, R2Transfer, VOCAB_PREFIX, transfer_d1, verify_bundle, verify_remote, write_json
+from transfer import BUDGET, ImportStatusLost, NO_IMPORT, prepared_sql, Cloudflare, NoRedirect, RECEIPTS, R2Transfer, VOCAB_PREFIX, transfer_d1, verify_bundle, verify_remote, write_json
 
 
 class LocalRemote:
@@ -575,6 +575,172 @@ class TransferTests(unittest.TestCase):
         remote = NativeBridge(self.root / 'native.sqlite', self.root / 'native-usage.json', digest)
         self.addCleanup(remote.db.close)
         return manifest,digest,files,remote,self.root / 'd1-state.json'
+
+    def lost_status_prepare(self):
+        manifest,digest,files,remote,state = self.native_prepare()
+        payload = prepared_sql(self.output,digest,files[0],True)
+        remote.db.executescript('BEGIN;\n' + payload.decode() + '\nCOMMIT;')
+        remote.imports = 1
+        pending = {'path':files[0]['path'],'sha256':files[0]['sha256'],
+            'importId':hashlib.md5(payload).hexdigest(),'bookmark':'synthetic-bookmark'}
+        write_json(state,{'target':remote.usage_state['target'],'completed':{},'pending':pending})
+        def lost(*args,**kwargs):
+            return remote.poll_import({'success':False,'error':NO_IMPORT},lambda bookmark:None,pending['importId'])
+        with self.assertRaises(ImportStatusLost):lost()
+        remote.resume_import = lost
+        remote.native_counters = lambda:{'target':remote.usage_state['target'],'unsampled':True,
+            'totals':{'rows_read':1000,'rows_written':1000,'readQueries':12,'writeQueries':1}}
+        return manifest,digest,files,remote,state,pending
+
+    def reconcile(self, digest, files, remote, pending, extra_reads=0):
+        return remote.reconcile_import_status(pending,self.output,digest,files,extra_reads)
+
+    def test_exact_lost_status_reconciles_and_resumes_without_duplicate_writes(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        failure = dict(remote.usage_state['importFailure'])
+        diagnostic = remote.usage_path.parent / failure['path']
+        self.assertEqual(json.loads(diagnostic.read_text())['response'],{'success':False,'error':NO_IMPORT})
+        self.assertEqual(diagnostic.stat().st_mode & 0o777,0o600)
+        with contextlib.redirect_stdout(io.StringIO()):
+            transfer_d1(self.output,manifest,digest,files,remote,state,True,9)
+        self.assertEqual(remote.imports,len(files))
+        self.assertEqual(len(remote.usage_state['imports']),len(files))
+        self.assertFalse(remote.usage_state['unmeasured'])
+        proof = remote.usage_state['importReconciliations'][0]
+        self.assertEqual(proof['importId'],pending['importId'])
+        self.assertEqual(proof['diagnostic']['importId'],failure['importId'])
+        self.assertTrue((remote.usage_path.parent/proof['diagnostic']['path']).exists())
+        self.assertEqual(proof['diagnosticCharges']['rows_read'],11)
+        self.assertEqual(proof['adoptedUsage'],{'rows_read':1011,'rows_written':1000})
+        remote.resume_import = lambda *args,**kwargs:self.fail('Accounted import must never be polled again')
+        checkpoint = json.loads(state.read_text());checkpoint['pending'] = pending;write_json(state,checkpoint)
+        self.run_transfer(manifest,digest,files,remote,state)
+        self.assertEqual(remote.imports,len(files))
+        self.assertTrue(diagnostic.exists())
+
+    def test_reconciliation_rejects_absent_or_changed_receipt(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        remote.db.execute('DELETE FROM ' + RECEIPTS);remote.db.commit()
+        with self.assertRaisesRegex(ValueError,'Exact pending receipt'):
+            self.reconcile(digest,files,remote,pending)
+        self.assertTrue(remote.usage_state['unmeasured'])
+        self.assertEqual(remote.usage_state['imports'],[])
+        remote.db.execute('INSERT INTO ' + RECEIPTS + ' VALUES(?,?,?)',(digest,pending['path'],'wrong'));remote.db.commit()
+        with self.assertRaisesRegex(ValueError,'payload differs'):
+            self.reconcile(digest,files,remote,pending)
+
+    def test_lagging_telemetry_is_bounded_and_keeps_charges_on_retry(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        remote.native_counters = lambda:{'target':remote.usage_state['target'],'unsampled':True,
+            'totals':{'rows_read':1000,'rows_written':1000,'readQueries':12,'writeQueries':0}}
+        with patch('transfer.time.sleep') as wait:
+            with self.assertRaisesRegex(RuntimeError,'still lagging'):
+                self.reconcile(digest,files,remote,pending,9)
+        self.assertEqual(wait.call_count,11)
+        self.assertTrue(remote.usage_state['unmeasured'])
+        self.assertEqual(remote.usage_state['importReconciliationDiagnostics']['rows_read'],11)
+        remote.native_counters = lambda:{'target':remote.usage_state['target'],'unsampled':True,
+            'totals':{'rows_read':1000,'rows_written':1000,'readQueries':12,'writeQueries':1}}
+        self.reconcile(digest,files,remote,pending,9)
+        self.assertEqual(remote.usage_state['importReconciliations'][0]['diagnosticCharges']['rows_read'],13)
+        self.assertEqual(remote.usage['rows_read'],1013)
+
+    def test_reconciliation_refuses_wrong_target_pending_identity_and_unrelated_writes(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        wrong = dict(pending,importId='0'*32)
+        with self.assertRaisesRegex(ValueError,'payload identity'):
+            self.reconcile(digest,files,remote,wrong)
+        remote.native_counters = lambda:{'target':{},'unsampled':True,'totals':{}}
+        with self.assertRaisesRegex(ValueError,'snapshot target'):
+            self.reconcile(digest,files,remote,pending)
+        remote.native_counters = lambda:{'target':remote.usage_state['target'],'unsampled':True,
+            'totals':{'rows_read':1000,'rows_written':1000,'readQueries':12,'writeQueries':2}}
+        with self.assertRaisesRegex(ValueError,'Unrelated writes'):
+            self.reconcile(digest,files,remote,pending)
+        self.assertTrue(remote.usage_state['unmeasured'])
+
+    def test_reconciliation_refuses_unrelated_pending_queries_cleanup_and_scratch(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        for name,value in [('pendingQuery',{'id':'normal','kind':'normal'}),('pendingCleanupQueries',['cleanup'])]:
+            remote.usage_state[name] = value
+            with self.assertRaisesRegex(ValueError,'unrelated query'):
+                self.reconcile(digest,files,remote,pending)
+            remote.usage_state.pop(name)
+        scratch = remote.scratch_state()
+        scratch['owned'] = [{'name':VOCAB_PREFIX+'b'*32,'sql':'CREATE TABLE synthetic(id)'}]
+        write_json(remote.scratch_path(),scratch)
+        with self.assertRaisesRegex(ValueError,'scratch uncertainty'):
+            self.reconcile(digest,files,remote,pending)
+
+    def test_receipt_proof_response_loss_retains_inflight_marker_and_blocks_retry(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        remote.crash_query = True
+        with self.assertRaises(SystemExit):self.reconcile(digest,files,remote,pending)
+        persisted = json.loads(remote.usage_path.read_text())
+        self.assertEqual(persisted['pendingQuery']['kind'],'import-reconciliation-read')
+        self.assertTrue(persisted['unmeasured'])
+        with self.assertRaisesRegex(ValueError,'unrelated query'):
+            self.reconcile(digest,files,remote,pending)
+
+    def test_real_import_error_preserves_full_private_diagnostic_and_stops_recovery(self):
+        manifest,digest,files,remote,state = self.native_prepare()
+        response = {'success':False,'status':'error','error':'Synthetic sensitive SQL detail','result':{'diagnostic':'retained'}}
+        with self.assertRaisesRegex(RuntimeError,'private diagnostic saved') as error:
+            remote.poll_import(response,lambda bookmark:None,'a'*32)
+        self.assertNotIn(response['error'],str(error.exception))
+        failure = remote.usage_state['importFailure']
+        self.assertEqual(failure['kind'],'failed')
+        self.assertEqual(json.loads((remote.usage_path.parent/failure['path']).read_text())['response'],response)
+        with self.assertRaisesRegex(ValueError,'Confirmed import failure'):remote.import_recovery_budget()
+        with self.assertRaisesRegex(RuntimeError,'usage is uncertain'):remote.check_budget()
+
+    def test_reconciliation_rejects_lagging_row_cost_and_changed_extra_charge(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        remote.usage['rows_written'] = 2000
+        remote.native_counters = lambda:{'target':remote.usage_state['target'],'unsampled':True,
+            'totals':{'rows_read':1000,'rows_written':1000,'readQueries':12,'writeQueries':1}}
+        with patch('transfer.time.sleep'):
+            with self.assertRaisesRegex(RuntimeError,'still lagging'):
+                self.reconcile(digest,files,remote,pending,9)
+        self.assertEqual(remote.usage['rows_written'],2000)
+        with self.assertRaisesRegex(ValueError,'diagnostic charge differs'):
+            self.reconcile(digest,files,remote,pending,0)
+        self.assertTrue(remote.usage_state['unmeasured'])
+
+    def test_reconciliation_proof_transport_loss_preserves_unknown_query(self):
+        manifest,digest,files,remote,state,pending = self.lost_status_prepare()
+        remote.request = lambda *args,**kwargs:(_ for _ in ()).throw(urllib.error.URLError('private response detail'))
+        with self.assertRaisesRegex(RuntimeError,'proof response was lost') as error:
+            self.reconcile(digest,files,remote,pending)
+        self.assertNotIn('private response detail',str(error.exception))
+        self.assertEqual(remote.usage_state['pendingQuery']['kind'],'import-reconciliation-read')
+        self.assertTrue(remote.usage_state['unmeasured'])
+        with self.assertRaisesRegex(ValueError,'unrelated query'):
+            remote.import_recovery_budget()
+
+    def test_native_counters_require_unsampled_whole_lifetime_exact_target(self):
+        manifest,digest,files,remote,state = self.native_prepare()
+        today = datetime.datetime.now(datetime.timezone.utc).date()
+        database = {'uuid':remote.database,'created_at':today.isoformat()+'T00:00:00Z'}
+        group = {'dimensions':{'date':today.isoformat(),'databaseId':remote.database},
+            'sum':{'rowsRead':123,'rowsWritten':456,'readQueries':3,'writeQueries':1},'avg':{'sampleInterval':1}}
+        calls = []
+        def request(method,path,body=None):
+            calls.append((method,path,body))
+            return database if method == 'GET' else {'viewer':{'accounts':[{'d1AnalyticsAdaptiveGroups':[group]}]}}
+        remote.request = request
+        snapshot = Cloudflare.native_counters(remote)
+        self.assertEqual(snapshot['totals'],{'rows_read':123,'rows_written':456,'readQueries':3,'writeQueries':1})
+        self.assertIn('avg {sampleInterval}',calls[1][2]['query'])
+        for invalid in ({}, {'sampleInterval':2}, {'sampleInterval':True}):
+            group['avg'] = invalid
+            with self.assertRaisesRegex(ValueError,'sampling interval'):Cloudflare.native_counters(remote)
+        group['avg'] = {'sampleInterval':1}
+        group['dimensions']['databaseId'] = 'wrong'
+        with self.assertRaisesRegex(ValueError,'group target'):Cloudflare.native_counters(remote)
+        group['dimensions']['databaseId'] = remote.database
+        database['created_at'] = (today-datetime.timedelta(days=30)).isoformat()+'T00:00:00Z'
+        with self.assertRaisesRegex(ValueError,'database lifetime'):Cloudflare.native_counters(remote)
 
     def owned_scratch(self, remote):
         name = VOCAB_PREFIX + 'a' * 32

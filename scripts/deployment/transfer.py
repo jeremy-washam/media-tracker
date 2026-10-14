@@ -28,6 +28,14 @@ CLEANUP_RESERVE = {'rows_read': 10_000_000, 'rows_written': 5_000_000}
 HELPER = 'media-tracker-transfer'
 VOCAB_PREFIX = 'imladris_transfer_vocab_'
 REQUEST_INTERVAL = 1 / 3 + 0.001
+NO_IMPORT = 'Not currently importing anything.'
+RECONCILIATION_ATTEMPTS = 12
+RECONCILIATION_DELAY = 5
+
+
+class ImportStatusLost(RuntimeError):
+    def __init__(self):
+        super().__init__('D1 import status is unavailable; exact receipt and native usage reconciliation are required')
 
 
 class ManagementError(RuntimeError):
@@ -168,7 +176,8 @@ class Cloudflare:
             if not self.oauth_refreshed and self.oauth_expired():
                 self.refresh_oauth()
             self.pace()
-            request = urllib.request.Request(API + '/accounts/' + self.account + '/' + path,
+            url = API + '/graphql' if path == 'graphql' else API + '/accounts/' + self.account + '/' + path
+            request = urllib.request.Request(url,
                 data=data, method=method,
                 headers={'Authorization': 'Bearer ' + self.token(), 'Content-Type': 'application/json'})
             try:
@@ -190,6 +199,10 @@ class Cloudflare:
                     time.sleep(max(0, delay))
                     continue
                 raise ManagementError(error.code) from None
+            if path == 'graphql':
+                if result.get('errors') or not isinstance(result.get('data'), dict):
+                    raise RuntimeError('Native GraphQL usage request failed; inspect the private configuration')
+                return result['data']
             if not result.get('success'):
                 codes = [str(error.get('code')) for error in result.get('errors', [])]
                 raise ManagementError(codes=codes)
@@ -299,12 +312,160 @@ class Cloudflare:
             state['owned'] = [entry for entry in state['owned'] if entry['name'] != name]
             write_json(self.scratch_path(), state)
 
+    def import_recovery_budget(self):
+        if self.usage_state is None or self.usage_state.get('pendingQuery') or self.usage_state.get('pendingCleanupQueries') or self.scratch_state()['owned']:
+            raise ValueError('Import reconciliation refuses unrelated query or scratch uncertainty')
+        if any(self.usage[name] >= BUDGET[name] - CLEANUP_RESERVE[name] for name in BUDGET):
+            raise RuntimeError('Native deployment usage budget exhausted')
+        failure = self.usage_state.get('importFailure', {})
+        if failure.get('kind') == 'failed':
+            raise ValueError('Confirmed import failure requires separate native usage reconciliation')
+
+    def persist_import_error(self, response, import_id, kind):
+        directory = self.usage_path.parent / 'import-errors'
+        directory.mkdir(mode=0o700, exist_ok=True)
+        record_id = uuid.uuid4().hex
+        path = directory / (record_id + '.json')
+        record = {'target':self.usage_state['target'], 'id':record_id, 'importId':import_id, 'kind':kind,
+            'recordedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(), 'response':response}
+        write_json(path, record)
+        self.usage_state['importFailure'] = {'id':record_id, 'importId':import_id, 'kind':kind,
+            'path':str(path.relative_to(self.usage_path.parent)), 'sha256':checksum(path)}
+        self.unknown_usage()
+
+    def native_counters(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        start = (now.date() - datetime.timedelta(days=29)).isoformat()
+        end = now.date().isoformat()
+        database = self.request('GET', 'd1/database/' + self.database)
+        created = datetime.datetime.fromisoformat(database['created_at'].replace('Z','+00:00'))
+        if database.get('uuid') != self.database or created.utcoffset() != datetime.timedelta(0) or not start <= created.date().isoformat() <= end:
+            raise ValueError('Native usage range does not cover this exact database lifetime')
+        query = 'query { viewer { accounts(filter:{accountTag:' + json.dumps(self.account) + '}) { d1AnalyticsAdaptiveGroups(limit:10000,filter:{date_geq:' + json.dumps(start) + ',date_leq:' + json.dumps(end) + ',databaseId:' + json.dumps(self.database) + '}) { sum {rowsRead rowsWritten readQueries writeQueries} dimensions {date databaseId} avg {sampleInterval} } } } }'
+        data = self.request('POST', 'graphql', {'query':query})
+        accounts = data.get('viewer', {}).get('accounts', [])
+        if len(accounts) != 1 or not isinstance(accounts[0].get('d1AnalyticsAdaptiveGroups'), list):
+            raise ValueError('Native usage response does not identify one filtered account')
+        totals = {'rows_read':0,'rows_written':0,'readQueries':0,'writeQueries':0}
+        seen = set()
+        for group in accounts[0]['d1AnalyticsAdaptiveGroups']:
+            dimension = group.get('dimensions', {})
+            date = dimension.get('date')
+            if dimension.get('databaseId') != self.database or not isinstance(date,str) or not start <= date <= end or date in seen:
+                raise ValueError('Native usage group target or date differs from the requested range')
+            if group.get('avg', {}).get('sampleInterval') != 1 or type(group['avg']['sampleInterval']) not in (int,float):
+                raise ValueError('Native usage is sampled or lacks its sampling interval')
+            seen.add(date)
+            for name,field in [('rows_read','rowsRead'),('rows_written','rowsWritten'),('readQueries','readQueries'),('writeQueries','writeQueries')]:
+                value = group.get('sum', {}).get(field)
+                if type(value) not in (int,float) or value < 0 or value > 2**53-1 or int(value) != value:
+                    raise ValueError('Native usage counters are not exact nonnegative integers')
+                totals[name] += int(value)
+        return {'target':self.usage_state['target'], 'start':start, 'end':end, 'databaseCreatedAt':database['created_at'],
+            'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(), 'unsampled':True, 'totals':totals}
+
+    def reconciliation_receipts(self, maximum):
+        self.import_recovery_budget()
+        diagnostics = self.usage_state.setdefault('importReconciliationDiagnostics', {'rows_read':0,'rows_written':0})
+        sql = 'SELECT bundle,path,sha256 FROM ' + identifier(RECEIPTS) + ' LIMIT ' + str(maximum + 1)
+        query_id = uuid.uuid4().hex
+        self.usage_state['pendingQuery'] = {'kind':'import-reconciliation-read','id':query_id}
+        write_json(self.usage_path,self.usage_state)
+        try:
+            result = self.request('POST','d1/database/' + self.database + '/query',{'sql':sql,'params':[]})
+        except Exception:
+            self.unknown_usage()
+            raise RuntimeError('Import receipt proof response was lost; query usage must be reconciled separately') from None
+        if not isinstance(result,list) or len(result) != 1 or not result[0].get('success'):
+            self.unknown_usage()
+            raise RuntimeError('Import receipt proof query failed')
+        metadata = result[0].get('meta', {})
+        if any(type(metadata.get(name)) is not int or metadata[name] < 0 for name in BUDGET) or metadata['rows_written'] != 0:
+            self.unknown_usage()
+            raise RuntimeError('Import receipt proof lacks exact read-only native usage metadata')
+        for name in BUDGET:
+            self.usage[name] += metadata[name]
+            diagnostics[name] += metadata[name]
+        self.usage_state.pop('pendingQuery',None)
+        write_json(self.usage_path,self.usage_state)
+        self.import_recovery_budget()
+        return result[0]['results']
+
+    def reconcile_import_status(self, pending, directory, bundle, files, extra_reads):
+        self.import_recovery_budget()
+        if type(extra_reads) is not int or not 0 <= extra_reads <= CLEANUP_RESERVE['rows_read']:
+            raise ValueError('Declare a bounded conservative diagnostic read charge')
+        item = next((item for item in files if item['path'] == pending.get('path')), None)
+        if item is None or pending.get('sha256') != item['sha256'] or hashlib.md5(prepared_sql(directory,bundle,item,item is files[0])).hexdigest() != pending.get('importId') or self.usage_state['target'] != {'account':self.account,'database':self.database,'bundle':bundle}:
+            raise ValueError('Pending reconciliation target or prepared payload identity differs')
+        if pending['importId'] in self.usage_state['imports']:
+            raise ValueError('Pending import usage is already accounted')
+        failure = self.usage_state.get('importFailure', {})
+        if failure.get('kind') != 'status-lost' or failure.get('importId') != pending['importId']:
+            raise ValueError('Only the exact pending no-active-import status may be reconciled')
+        error_path = (self.usage_path.parent / failure['path']).resolve()
+        if self.usage_path.parent.resolve() not in error_path.parents or checksum(error_path) != failure['sha256']:
+            raise ValueError('Private import status diagnostic differs')
+        diagnostic = json.loads(error_path.read_text())
+        if diagnostic.get('target') != self.usage_state['target'] or diagnostic.get('importId') != pending['importId'] or diagnostic.get('id') != failure['id'] or diagnostic.get('kind') != 'status-lost' or diagnostic.get('response',{}).get('error') != NO_IMPORT or diagnostic['response'].get('success') is not False or diagnostic['response'].get('status') is not None:
+            raise ValueError('Private diagnostic does not prove the exact lost import status')
+        declared = self.usage_state.setdefault('importReconciliationExtraReads', {})
+        if pending['importId'] in declared and declared[pending['importId']] != extra_reads:
+            raise ValueError('Previously declared diagnostic charge differs for this pending import')
+        if pending['importId'] not in declared:
+            declared[pending['importId']] = extra_reads
+            diagnostics = self.usage_state.setdefault('importReconciliationDiagnostics', {'rows_read':0,'rows_written':0})
+            diagnostics['rows_read'] += extra_reads
+            self.usage['rows_read'] += extra_reads
+            write_json(self.usage_path,self.usage_state)
+        records = self.reconciliation_receipts(len(files))
+        expected = {item['path']:item['sha256'] for item in files}
+        known = {record['path']:record['sha256'] for record in records}
+        if len(known) != len(records) or any(record.get('bundle') != bundle or expected.get(record['path']) != record['sha256'] for record in records):
+            raise ValueError('Import reconciliation receipt target or payload differs')
+        if known.get(pending['path']) != pending['sha256'] or set(known) != {item['path'] for item in files[:len(known)]}:
+            raise ValueError('Exact pending receipt and ordered completed prefix are required')
+        for number,item in enumerate(files[:len(known)]):
+            import_id = hashlib.md5(prepared_sql(directory,bundle,item,number == 0)).hexdigest()
+            if import_id != pending['importId'] and import_id not in self.usage_state['imports']:
+                raise ValueError('Another completed import has unresolved usage')
+        recorded = dict(self.usage)
+        for attempt in range(RECONCILIATION_ATTEMPTS):
+            snapshot = self.native_counters()
+            if snapshot.get('target') != self.usage_state['target'] or snapshot.get('unsampled') is not True:
+                raise ValueError('Native counter snapshot target or precision differs')
+            totals = snapshot['totals']
+            if totals['writeQueries'] > len(known):
+                raise ValueError('Unrelated writes invalidate dedicated-target import telemetry')
+            if totals['writeQueries'] == len(known) and all(totals[name] >= recorded[name] for name in BUDGET):
+                break
+            if attempt + 1 == RECONCILIATION_ATTEMPTS:
+                raise RuntimeError('Native import telemetry is still lagging; no reconciliation was accepted')
+            time.sleep(RECONCILIATION_DELAY)
+        diagnostics = dict(self.usage_state['importReconciliationDiagnostics'])
+        adopted = {name:totals[name] + diagnostics[name] for name in BUDGET}
+        if any(adopted[name] >= BUDGET[name] - CLEANUP_RESERVE[name] for name in BUDGET):
+            raise RuntimeError('Reconciled native deployment usage budget is exhausted')
+        proof = {'target':self.usage_state['target'], 'importId':pending['importId'], 'path':pending['path'],'sha256':pending['sha256'],
+            'diagnostic':failure,'receiptCount':len(known),'recordedBefore':recorded,'diagnosticCharges':diagnostics,'nativeSnapshot':snapshot,'adoptedUsage':adopted}
+        self.usage.update(adopted)
+        self.usage_state['imports'].append(pending['importId'])
+        self.usage_state.setdefault('importReconciliations',[]).append(proof)
+        self.usage_state['unmeasured'] = False
+        self.usage_state.pop('importFailure',None)
+        write_json(self.usage_path,self.usage_state)
+        self.usage_fresh = False
+        self.check_budget()
+
     def poll_import(self, result, progress, import_id):
         endpoint = 'd1/database/' + self.database + '/import'
         for _ in range(600):
             if not result.get('success', True) or result.get('status') == 'error':
-                self.unknown_usage()
-                raise RuntimeError('D1 import rolled back; native usage must be reconciled before retrying')
+                lost = result.get('success') is False and result.get('error') == NO_IMPORT and result.get('status') is None
+                self.persist_import_error(result,import_id,'status-lost' if lost else 'failed')
+                if lost:
+                    raise ImportStatusLost()
+                raise RuntimeError('D1 import failed; private diagnostic saved and native usage remains uncertain')
             if result.get('status') == 'complete':
                 self.account_usage(result.get('result', {}).get('meta'), import_id)
                 return result.get('result', {})
@@ -316,8 +477,11 @@ class Cloudflare:
             result = self.request('POST', endpoint, {'action': 'poll', 'current_bookmark': bookmark})
         raise RuntimeError('D1 import still pending; resume rather than assuming completion')
 
-    def resume_import(self, bookmark, progress, import_id):
-        self.check_budget()
+    def resume_import(self, bookmark, progress, import_id, recovery=False):
+        if recovery:
+            self.import_recovery_budget()
+        else:
+            self.check_budget()
         result = self.request('POST', 'd1/database/' + self.database + '/import', {'action': 'poll', 'current_bookmark': bookmark})
         return self.poll_import(result, progress, import_id)
 
@@ -459,7 +623,7 @@ def remote_receipts(remote, bundle):
     return {item['path']: item['sha256'] for item in records}
 
 
-def transfer_d1(directory, manifest, bundle, files, remote, state_path):
+def transfer_d1(directory, manifest, bundle, files, remote, state_path, reconcile_import_status=False, reconciliation_extra_reads=0):
     target = {'account': remote.account, 'database': remote.database, 'bundle': bundle}
     state = json.loads(state_path.read_text()) if state_path.exists() else {'target': target, 'completed': {}}
     if state.get('target') != target:
@@ -469,7 +633,8 @@ def transfer_d1(directory, manifest, bundle, files, remote, state_path):
     if pending is not None:
         if not isinstance(pending, dict) or expected.get(pending.get('path')) != pending.get('sha256'):
             raise ValueError('Invalid pending import checkpoint')
-        if 'bookmark' in pending:
+        accounted = pending.get('importId') in getattr(remote,'usage_state',{}).get('imports',[]) if getattr(remote,'usage_state',None) is not None else False
+        if 'bookmark' in pending and not accounted:
             if not isinstance(pending['bookmark'], str) or not pending['bookmark'] or not isinstance(pending.get('importId'), str):
                 raise ValueError('Invalid pending import bookmark identity')
             item = next(item for item in files if item['path'] == pending['path'])
@@ -479,7 +644,15 @@ def transfer_d1(directory, manifest, bundle, files, remote, state_path):
             def progress(bookmark):
                 state['pending']['bookmark'] = bookmark
                 write_json(state_path, state)
-            remote.resume_import(pending['bookmark'], progress, pending['importId'])
+            try:
+                if reconcile_import_status:
+                    remote.resume_import(pending['bookmark'], progress, pending['importId'], recovery=True)
+                else:
+                    remote.resume_import(pending['bookmark'], progress, pending['importId'])
+            except ImportStatusLost:
+                if not reconcile_import_status:
+                    raise
+                remote.reconcile_import_status(pending,directory,bundle,files,reconciliation_extra_reads)
     known = remote_receipts(remote, bundle)
     if any(expected.get(path) != digest for path, digest in known.items()):
         raise ValueError('Unexpected or changed remote transfer receipt')
@@ -509,7 +682,12 @@ def transfer_d1(directory, manifest, bundle, files, remote, state_path):
         def progress(bookmark):
             state['pending']['bookmark'] = bookmark
             write_json(state_path, state)
-        remote.import_file(prepared, progress)
+        try:
+            remote.import_file(prepared, progress)
+        except ImportStatusLost:
+            if not reconcile_import_status:
+                raise
+            remote.reconcile_import_status(state['pending'],directory,bundle,files,reconciliation_extra_reads)
         proof = remote.query('SELECT sha256 FROM ' + identifier(RECEIPTS) + ' WHERE bundle=? AND path=?', [bundle, path])
         if proof != [{'sha256': digest}]:
             raise RuntimeError('Remote import receipt not confirmed')
@@ -809,7 +987,13 @@ def main():
     parser.add_argument('--r2-settings', type=Path)
     parser.add_argument('--r2-workers', type=int, choices=range(1, 17), default=4)
     parser.add_argument('--access-attestation', type=Path)
+    parser.add_argument('--reconcile-import-status', action='store_true')
+    parser.add_argument('--reconciliation-extra-reads', type=int)
     args = parser.parse_args()
+    if args.reconcile_import_status and (args.phase != 'd1' or args.reconciliation_extra_reads is None):
+        raise ValueError('Import reconciliation requires the D1 phase and an explicit diagnostic read charge')
+    if args.reconciliation_extra_reads is not None and (not args.reconcile_import_status or args.reconciliation_extra_reads < 0):
+        raise ValueError('Diagnostic read charges are only valid with explicit import reconciliation')
     os.umask(0o077)
     directory = args.bundle.resolve()
     manifest, bundle, files = verify_bundle(directory)
@@ -822,8 +1006,17 @@ def main():
         try:
             remote.configure_usage(work / 'usage.json', bundle)
         except RuntimeError:
-            remote.cleanup_scratch()
-            raise
+            if args.reconcile_import_status:
+                remote.import_recovery_budget()
+                state_path = work / 'd1-state.json'
+                if not state_path.exists():
+                    raise ValueError('Import reconciliation requires a target-bound pending checkpoint')
+                checkpoint = json.loads(state_path.read_text())
+                if checkpoint.get('target') != remote.usage_state['target'] or not checkpoint.get('pending', {}).get('bookmark'):
+                    raise ValueError('Import reconciliation requires the exact target and pending bookmark')
+            else:
+                remote.cleanup_scratch()
+                raise
         attestation = None
         if args.access_attestation:
             if args.access_attestation.stat().st_mode & 0o077:
@@ -831,7 +1024,7 @@ def main():
             attestation = json.loads(args.access_attestation.read_text())
         remote.guard(resources, attestation)
         if args.phase == 'd1':
-            transfer_d1(directory, manifest, bundle, files, remote, work / 'd1-state.json')
+            transfer_d1(directory, manifest, bundle, files, remote, work / 'd1-state.json', args.reconcile_import_status, args.reconciliation_extra_reads or 0)
         elif args.phase == 'r2':
             if not args.r2_settings:
                 raise ValueError('R2 transfer settings are required')
