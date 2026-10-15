@@ -35,8 +35,10 @@ usage. Full hosted database and independent restore verification passed:
 checks, and all eight search vocabularies matched. The private recovery artifact
 is retained, and temporary verification tables were removed.
 The owner approves the existing $5/month subscription with $0 additional
-charges. Full hosted Library validation is still pending. Missing
-Access configuration denies hosted requests. Local development bypasses
+charges. The owner confirmed all six media sections, search, filters, item
+details/history, and article excerpts work. Hosted performance and provider-job
+budgets remain pending; background processing stays off. Missing Access
+configuration denies hosted requests. Local development bypasses
 authentication only for explicit loopback requests.
 Hosted webhook/OAuth callback routes are deferred and will require their own
 authentication when introduced.

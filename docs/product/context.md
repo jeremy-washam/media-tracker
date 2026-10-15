@@ -119,8 +119,9 @@ their own future conflict model. The October 14 deployment record shows a Worker
 confirmed owner MFA, a completed database transfer, and fully copied,
 checksum-verified private R2 objects. Full hosted database and independent
 restore verification passed: 94 tables, 1,798,348 rows, and all eight search
-vocabularies matched. Owner Library validation and provider-job budgets remain
-pending, with background jobs off. The owner approves the existing $5/month
+vocabularies matched. The owner confirmed all six media sections and the
+requested search/filter/detail/history/excerpt checks work. Hosted performance
+and provider-job budgets remain pending, with background jobs off. The owner approves the existing $5/month
 plan with $0 additional charges. See the [deployment runbook](../planning/deployment.md).
 
 The original ingestion sequence backfills and then synchronizes consumption

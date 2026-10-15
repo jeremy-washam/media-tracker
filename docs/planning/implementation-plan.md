@@ -1,6 +1,6 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-10-13
+Last updated: 2026-10-14
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
@@ -18,7 +18,7 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
-## Current checkout status (2026-10-13)
+## Current checkout status (2026-10-14)
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -37,8 +37,10 @@ queues, and an owner-only Access application are provisioned. The paused Worker
 is published and private data transfer is complete. Full database/restore
 verification passed: 94 tables, 1,798,348 rows, one compatibility view, and all
 eight search vocabularies matched. The private recovery artifact is retained.
-Owner sign-in and MFA are confirmed; authenticated Library validation remains
-pending, along with the launch gates in the
+Owner sign-in and MFA are confirmed, and the owner passed all six section-load
+checks plus search, filters, item details/history, and an article excerpt.
+Hosted performance and provider-job budgets remain pending under the launch
+gates in the
 [deployment runbook](deployment.md) and
 [storage efficiency plan](storage-efficiency-plan.md). The
 [documentation audit](documentation-audit.md) records the code/live-app comparison.
@@ -696,8 +698,9 @@ Free. The October 13 instruction prohibits spending; remote work is paused
 until the runbook's spending gate is satisfied. On October 14, the owner
 confirmed the existing $5/month plan with $0 additional charges. The isolated local implementation adds scoped D1
 usage reporting, independent bounded maintenance, clock-safe YouTube publication
-and compact evidence references. Owner Library validation and provider-job
-activation remain pending; full remote storage verification passed.
+and compact evidence references. Owner Library smoke checks and full remote
+storage verification passed. Hosted performance measurement and provider-job
+budgets/activation remain pending.
 It recommends one paid D1 initially, copy-rehearsed
 compact references/evidence layouts, cache maintenance while ingestion is paused,
 and bounded job budgets. Further database splits and historical interpretation
@@ -719,8 +722,9 @@ checks, and all eight search vocabularies. Temporary verification tables were
 removed, the recovery artifact was retained, and a fresh Time Travel bookmark
 was saved. Production sync remains off. Usage stayed within included allowances;
 further remote work remains subject to the spending gate. The database requires
-Workers Paid at its current size. Owner Library smoke checks and provider-job
-budgets remain open; automatic ingestion is not activated.
+Workers Paid at its current size. Owner Library smoke checks passed; hosted
+performance measurement and provider-job budgets remain open. Automatic
+ingestion is not activated.
 
 ### Production resources
 

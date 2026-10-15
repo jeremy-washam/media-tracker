@@ -9,8 +9,11 @@ independent restore verification passed on October 14: 94 application tables,
 foreign keys, sequence state, and all eight search vocabularies matched. The
 private recovery SQLite artifact passed its final integrity checks, including
 reconstructed contentless search. Temporary verification tables were removed,
-and a fresh D1 Time Travel bookmark was saved. Full owner Library validation
-and provider-job budgets remain pending; background processing stays off.
+and a fresh D1 Time Travel bookmark was saved. The owner confirmed that Books,
+Movies, Articles, Podcasts, Music, and Videos load in the deployed app. The owner
+also confirmed search, filters, item details/history, and article excerpts work.
+Hosted performance and provider-job budgets remain pending; background
+processing stays off.
 The owner approves the existing $5/month plan with $0 additional charges.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
@@ -716,6 +719,21 @@ R2 helper Worker, its Access application/policy, and service token had already
 been removed after object verification. A fresh Time Travel bookmark was saved
 after scratch cleanup; this captures a recovery point and is not a destructive
 Time Travel restore test. Retain original backups and private transfer records.
-The remaining launch gates are owner-authenticated Library smoke checks,
-measured hosted behavior, and separate provider-job budgets. Background sync,
-maintenance, and catalog auto-refresh remain disabled.
+Owner-authenticated Library smoke checks subsequently passed as recorded below.
+Measured hosted behavior and separate provider-job budgets remain launch gates.
+Background sync, maintenance, and catalog auto-refresh remain disabled.
+
+### Owner Library smoke acceptance
+
+The owner confirmed that Books, Movies, Articles, Podcasts, Music, and Videos
+load in the deployed app, then separately confirmed search, filters, item
+details/history, and an article excerpt work. The requested owner-authenticated
+Library smoke checks passed. Hosted performance still needs measurement.
+
+Usage reporting exists for HTTP requests, scheduled jobs, and queues, but the
+job observer reports measurements after operations; it does not reserve or
+stop work against a daily allowance. Provider pagination still lacks the
+planned durable per-day request/record/byte reservations. Keep all background
+classes disabled while measuring representative operations and defining and
+testing their budgets. Configure maintenance separately, then enable provider
+classes individually only within verified included account allowances.
