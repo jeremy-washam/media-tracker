@@ -907,6 +907,7 @@ export async function syncSpotifySavedEpisodes(
         page = parseSpotifySavedEpisodesPage(response)
         bindings.SYNC_BUDGET?.page(page.items.length)
         for (const [index, episode] of page.items.entries()) {
+          bindings.SYNC_BUDGET?.check()
           const disposition = classifySavedEpisode({
             fullyPlayed: episode.fullyPlayed,
             resumePositionMs: episode.resumePositionMs,

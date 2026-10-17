@@ -10,6 +10,8 @@ export function jobUsage(env: Bindings, scope: string) {
     rowsWritten: 0,
     databaseElapsedMs: 0,
     failedOperations: 0,
+    unmeasuredNonFirstStatements: 0,
+    databaseBytes: 0,
   }
   const observer: DatabaseUsageObserver = (event) => {
     summary.statements += event.statementCount
@@ -17,6 +19,9 @@ export function jobUsage(env: Bindings, scope: string) {
     summary.rowsRead += event.rowsRead
     summary.rowsWritten += event.rowsWritten
     summary.databaseElapsedMs += event.elapsedMs
+    summary.databaseBytes = Math.max(summary.databaseBytes, event.databaseBytes ?? 0)
+    if (event.operation !== 'first')
+      summary.unmeasuredNonFirstStatements += event.statementCount - event.measuredStatements
     if (!event.success) summary.failedOperations += 1
   }
   return {

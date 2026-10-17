@@ -33,6 +33,7 @@ const sourceOperations = {
 
 async function enqueueSources(env: Bindings) {
   const admission = new SqlSourceSyncAdmission(new D1DatabaseClient(env.DB))
+  if (!(await admission.withinAllowance())) return
   const now = Date.now()
   const messages: MessageSendRequest<SyncJob>[] = []
   for (const source of Object.keys(sourceOperations) as SyncSource[]) {

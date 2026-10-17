@@ -4,6 +4,21 @@ import { SyncBudget, SyncDeferredError } from './sync-budget'
 const limits = { requests: 2, pages: 2, records: 3, bytes: 64 }
 
 describe('source sync resource ceilings', () => {
+  it('stops at database usage or storage review thresholds before another request', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+    const budget = new SyncBudget(limits, fetcher, Date.now, () => ({
+      rowsRead: 0,
+      rowsWritten: 1_000_000,
+    }))
+    await expect(budget.fetch('https://example.test')).rejects.toThrow('database allowance')
+    const storage = new SyncBudget(limits, fetcher, Date.now, () => ({
+      rowsRead: 0,
+      rowsWritten: 0,
+      databaseBytes: 3_000_000_000,
+    }))
+    await expect(storage.fetch('https://example.test')).rejects.toThrow('storage review')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
   it('rejects redirects without forwarding authorization to another origin', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(null, {

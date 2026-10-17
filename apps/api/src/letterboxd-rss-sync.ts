@@ -299,6 +299,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
     let unresolvedRecords = 0
 
     for (const [index, entry] of snapshot.entries.entries()) {
+      bindings.SYNC_BUDGET?.check()
       const recordId = sourceRecordId(ulid())
       const record = (disposition: SourceRecordDisposition): SourceRecord => ({
         id: recordId,

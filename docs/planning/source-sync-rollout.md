@@ -9,7 +9,8 @@ $5/month Workers plan is approved; additional charges are not.
 Apply migration 0030 before enabling source work. `SYNC_ENABLED=true` alone is
 insufficient in production: `SYNC_SOURCES` explicitly lists enabled polling
 sources and `SYNC_BUDGET_UNTIL` contains a future UTC instant. The deployment
-validator limits an initial usage grant to 24 hours. Expiry stops new admissions;
+validator limits a usage grant to 32 days; initial controlled grants last two
+hours. Expiry stops new admissions;
 it does not renew automatically. Check current account-wide included allowances
 before issuing a grant, including rehearsal and deleted-resource usage.
 
@@ -20,6 +21,23 @@ rotating credentials. Request new credentials only if a provider rejects those
 already installed.
 
 Both HTTP sync actions and queued source jobs share these controls:
+
+The durable allocation is 10 million observed D1 writes, 1 billion observed D1
+reads, 2 GB acquired response bytes, 20,000 provider requests and 365 daily
+reservations. It covers all rows in the admission ledger and does not reset on
+deployment, grant renewal or a new day. Each admission requires room for a
+2-million-write/200-million-read/64-MiB/128-request reservation. Unknown or failed
+database work keeps the full D1 reservation; measured successful work reconciles
+to its observed totals. Unmeasured non-`first()` statements cannot refund D1
+reservations. Native account analytics remains the billing authority.
+
+Jobs check observed database usage between records/pages at 1 million writes
+or 100 million reads. A SQL operation can cross that threshold before the next
+check; the admission reservation provides headroom. Native database size is
+checked before hosted work and during measured statements; jobs stop at the
+3 GB review threshold, below the account's included 5 GB. Included capacity
+must still be checked account-wide before extending a grant; these controls
+are engineering allocations, not a Cloudflare dollar cap.
 
 - One reservation per source per UTC day, with at least 23 hours between new reservations.
   `SYNC_RETRY_SOURCE` can explicitly permit one recovery attempt for a failed
@@ -85,7 +103,7 @@ polling covers discoverable episodes/library state and recent tracks; periodic
 Extended Streaming History exports remain necessary. YouTube watch history still
 requires manual Takeout imports.
 
-After representative native usage is recorded, set recurring cadence and durable
-period allowances from measured amplification. Do not silently turn an expiring
-grant into an indefinite schedule. Content, enrichment, maintenance, and manual
-history imports need their own budgets before enabling.
+After representative native usage is recorded, activate the daily cadence through
+an explicit grant no later than the reviewed billing-cycle end. Grants never
+renew automatically or reset the allocation. Content, enrichment, maintenance,
+and manual history imports need their own budgets before enabling.

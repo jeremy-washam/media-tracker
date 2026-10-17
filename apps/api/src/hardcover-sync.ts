@@ -47,7 +47,7 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createBooksRepository, createLedgerRepository } from './env'
 
-const parserVersion = 'hardcover-user-books@3'
+const parserVersion = 'hardcover-user-books@4'
 const editionParserVersion = 'hardcover-editions@1'
 const pageSize = 50
 const editionBatchSize = 50
@@ -164,6 +164,8 @@ async function findOrCreateIdentity(
       externalId: input.externalId,
       connectionId: null,
     }))
+  if (known && input.namespace === 'hardcover' && known.mediaItemId !== input.mediaItemId)
+    throw new Error('Hardcover authoritative identities refer to different local books')
   const id = known?.id ?? externalIdentityId(ulid())
   const mediaId = known?.mediaItemId ?? input.mediaItemId
   pending.set(key, { id, mediaItemId: mediaId })
@@ -200,6 +202,7 @@ async function normalizeBook(
   index: number,
   observedAt: ReturnType<typeof utcInstant>,
   pendingIdentities: Map<string, PendingIdentity>,
+  relationship: { media_item_id: string; work_id: number } | null,
 ): Promise<{
   sourceRecord: SourceRecord
   mediaItem: MediaItem
@@ -243,8 +246,22 @@ async function normalizeBook(
       }))
     if (knownWork !== null) break
   }
-  const itemId = knownWork?.mediaItemId ?? mediaItemId(ulid())
+  if (knownWork && relationship && knownWork.mediaItemId !== relationship.media_item_id)
+    throw new Error('Hardcover relationship and work refer to different local books')
+  const itemId = knownWork?.mediaItemId ?? mediaItemId(relationship?.media_item_id ?? ulid())
   const identities: ExternalIdentity[] = []
+  if (relationship && !workIds.includes(relationship.work_id)) {
+    identities.push({
+      ...(await findOrCreateIdentity(repository, pendingIdentities, {
+        namespace: 'hardcover',
+        externalType: 'book_id',
+        externalId: String(relationship.work_id),
+        mediaItemId: itemId,
+        sourceRecordId: recordId,
+      })),
+      retiredAt: observedAt,
+    })
+  }
   for (const workId of workIds) {
     identities.push(
       await findOrCreateIdentity(repository, pendingIdentities, {
@@ -306,7 +323,10 @@ async function normalizeBook(
   const defaultConsumedIdentity =
     (book.editionId === null ? null : identityByEditionId.get(String(book.editionId))) ??
     identities.find(
-      (identity) => identity.namespace === 'hardcover' && identity.externalType === 'book_id',
+      (identity) =>
+        identity.namespace === 'hardcover' &&
+        identity.externalType === 'book_id' &&
+        identity.retiredAt === null,
     )?.id ??
     null
   const finishedReads = book.reads.filter((read) => validFinishedDate(read.finishedAt))
@@ -761,6 +781,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
           }
         }
         for (const [index, book] of page.books.entries()) {
+          bindings.SYNC_BUDGET?.check()
           const normalized = await normalizeBook(
             repository,
             connection,
@@ -769,6 +790,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
             index,
             acquiredAt,
             pendingIdentities,
+            await booksRepository.findHardcoverRelationship(connection.id, book.userBookId),
           )
           await repository.commit({
             sourceRecords: [normalized.sourceRecord],

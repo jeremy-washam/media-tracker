@@ -9,10 +9,12 @@ import type {
 interface D1Metadata {
   rows_read?: number
   rows_written?: number
+  size_after?: number
 }
 type ObservedResult = DatabaseRunResult & { meta?: D1Metadata }
 
 export interface DatabaseUsage {
+  databaseBytes?: number
   operation: 'first' | 'all' | 'run' | 'batch'
   statementCount: number
   measuredStatements: number
@@ -46,7 +48,11 @@ function publish(
   let measuredStatements = 0
   let rowsRead = 0
   let rowsWritten = 0
+  let databaseBytes: number | undefined
   for (const result of results) {
+    const size = result.meta?.size_after
+    if (typeof size === 'number' && Number.isFinite(size) && size >= 0)
+      databaseBytes = Math.max(databaseBytes ?? 0, size)
     const read = result.meta?.rows_read
     const written = result.meta?.rows_written
     if (
@@ -72,6 +78,7 @@ function publish(
       rowsWritten,
       elapsedMs: performance.now() - started,
       success,
+      ...(databaseBytes === undefined ? {} : { databaseBytes }),
     })
   } catch {
     /* observer failure is outside the persistence boundary */

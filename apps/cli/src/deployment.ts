@@ -96,10 +96,10 @@ export function validateProductionConfiguration(
       ) ||
       !Number.isFinite(until) ||
       until <= Date.now() ||
-      until > Date.now() + 24 * 60 * 60_000
+      until > Date.now() + 32 * 24 * 60 * 60_000
     )
       throw new Error(
-        'Source rollout requires explicit sources and an included-usage grant lasting at most 24 hours',
+        'Source rollout requires explicit sources and an included-usage grant lasting at most 32 days',
       )
     if (
       configuration.vars.ARTICLE_CONTENT_ENABLED !== 'false' ||

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SqlSourceSyncAdmission } from '@media-tracker/db'
 import app from './app'
 import worker from './index'
@@ -17,6 +17,9 @@ vi.mock('./readwise-sync', async (original) => ({
   })),
 }))
 
+beforeEach(() => {
+  vi.spyOn(SqlSourceSyncAdmission.prototype, 'withinAllowance').mockResolvedValue(true)
+})
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -25,12 +28,41 @@ afterEach(() => {
 const hosted = () =>
   ({
     AUTH_MODE: 'access',
+    DB: {
+      prepare: () => ({
+        all: async () => ({ meta: { size_after: 1_000_000 }, success: true, results: [] }),
+      }),
+    },
     SYNC_ENABLED: 'true',
     SYNC_SOURCES: 'readwise',
     SYNC_BUDGET_UNTIL: new Date(Date.now() + 3600_000).toISOString(),
-  }) as Bindings
+  }) as unknown as Bindings
 
 describe('source sync entry points', () => {
+  it.each([undefined, 0, Number.NaN, 3_000_000_000])(
+    'defers provider work when native storage size is %s',
+    async (size) => {
+      const operation = vi.fn()
+      const env = hosted()
+      env.DB = {
+        prepare: () => ({ all: async () => ({ meta: { size_after: size } }) }),
+      } as unknown as D1Database
+      await expect(runSourceSync(env, 'readwise', operation)).rejects.toThrow('storage headroom')
+      expect(operation).not.toHaveBeenCalled()
+    },
+  )
+  it('defers before provider work when the lifetime allocation is exhausted', async () => {
+    vi.mocked(SqlSourceSyncAdmission.prototype.withinAllowance).mockResolvedValue(false)
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
+    const release = vi.spyOn(SqlSourceSyncAdmission.prototype, 'release').mockResolvedValue()
+    const operation = vi.fn()
+    await expect(runSourceSync(hosted(), 'readwise', operation)).rejects.toThrow(
+      'usage is exhausted',
+    )
+    expect(operation).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
   it('uses only the remainder of a failed reservation for one explicit retry', async () => {
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'reserve').mockResolvedValue(false)

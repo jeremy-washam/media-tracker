@@ -33,12 +33,22 @@ export class SyncBudget {
     readonly limits: SyncLimits,
     private readonly fetcher: typeof fetch = fetch,
     private readonly clock: () => number = Date.now,
+    private readonly databaseUsage: () => {
+      rowsRead: number
+      rowsWritten: number
+      databaseBytes?: number
+    } = () => ({ rowsRead: 0, rowsWritten: 0 }),
   ) {
     this.deadline = this.clock() + 10 * 60_000
   }
 
   check() {
     if (this.clock() >= this.deadline) throw new SyncDeferredError('Sync time allowance exhausted')
+    const database = this.databaseUsage()
+    if ((database.databaseBytes ?? 0) >= 3_000_000_000)
+      throw new SyncDeferredError('Sync database storage review threshold reached')
+    if (database.rowsRead >= 100_000_000 || database.rowsWritten >= 1_000_000)
+      throw new SyncDeferredError('Sync database allowance exhausted')
   }
 
   page(records: number) {

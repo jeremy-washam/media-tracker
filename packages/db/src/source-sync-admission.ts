@@ -4,6 +4,31 @@ import type { DatabaseClient } from './database'
 export class SqlSourceSyncAdmission {
   constructor(private readonly db: DatabaseClient) {}
 
+  async withinAllowance(): Promise<boolean> {
+    // Lifetime allocation, deliberately not reset by a deploy, new day or new
+    // grant. Unknown/failed database work retains the complete reservation.
+    const row = await this.db
+      .prepare(
+        `SELECT COUNT(*) jobs,
+      COALESCE(SUM(CASE WHEN usage_json IS NULL OR COALESCE(json_extract(usage_json,'$.failedOperations'),0)>0 OR COALESCE(json_extract(usage_json,'$.unmeasuredNonFirstStatements'),0)>0
+        THEN 2000000 ELSE COALESCE(json_extract(usage_json,'$.rowsWritten'),2000000) END),0) writes,
+      COALESCE(SUM(CASE WHEN usage_json IS NULL OR COALESCE(json_extract(usage_json,'$.failedOperations'),0)>0 OR COALESCE(json_extract(usage_json,'$.unmeasuredNonFirstStatements'),0)>0
+        THEN 200000000 ELSE COALESCE(json_extract(usage_json,'$.rowsRead'),200000000) END),0) reads,
+      COALESCE(SUM(COALESCE(json_extract(usage_json,'$.bytes'),67108864)),0) bytes,
+      COALESCE(SUM(COALESCE(json_extract(usage_json,'$.requests'),128)),0) requests
+      FROM source_sync_admission`,
+      )
+      .first<{ jobs: number; writes: number; reads: number; bytes: number; requests: number }>()
+    return (
+      row !== null &&
+      row.jobs < 365 &&
+      row.writes + 2_000_000 <= 10_000_000 &&
+      row.reads + 200_000_000 <= 1_000_000_000 &&
+      row.bytes + 67_108_864 <= 2_000_000_000 &&
+      row.requests + 128 <= 20_000
+    )
+  }
+
   async available(source: string, now: number): Promise<boolean> {
     return (
       (await this.db

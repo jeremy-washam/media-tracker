@@ -190,6 +190,7 @@ async function syncHighlights(input: {
       const sourceRecords: SourceRecord[] = []
       const containers: ReaderHighlightContainerProjection[] = []
       for (const [index, container] of page.results.entries()) {
+        input.bindings.SYNC_BUDGET?.check()
         const recordId = sourceRecordId(ulid())
         sourceRecords.push({
           id: recordId,
@@ -355,6 +356,7 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
         const articleDocuments: ReaderArticleDocumentProjection[] = []
         const retiredArticleDocuments: ReaderArticleRetirementProjection[] = []
         for (const [index, readerDocument] of page.results.entries()) {
+          bindings.SYNC_BUDGET?.check()
           const item = normalizeReaderDocument(readerDocument)
           const recordId = sourceRecordId(ulid())
           const knownIdentity = await repository.findExternalIdentity({

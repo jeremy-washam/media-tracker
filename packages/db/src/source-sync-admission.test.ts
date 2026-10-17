@@ -29,6 +29,68 @@ function client(db: DatabaseSync): DatabaseClient {
 }
 
 describe('durable source admission', () => {
+  it.each([
+    { bytes: 1_950_000_000, requests: 0 },
+    { bytes: 0, requests: 19_900 },
+  ])('retains acquired-byte and provider-request limits: %j', async (usage) => {
+    const db = new DatabaseSync(':memory:')
+    try {
+      db.exec(
+        readFileSync(
+          new URL('../migrations/0030_source_sync_admission.sql', import.meta.url),
+          'utf8',
+        ),
+      )
+      const repository = new SqlSourceSyncAdmission(client(db))
+      db.prepare(
+        `INSERT INTO source_sync_admission (source,day,attempts,started_at,outcome,reservation_json,usage_json)
+        VALUES ('synthetic','2026-10-17',1,0,'succeeded','{}',?)`,
+      ).run(JSON.stringify({ rowsRead: 0, rowsWritten: 0, ...usage }))
+      expect(await repository.withinAllowance()).toBe(false)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('retains unknown reservations against the lifetime allocation across days', async () => {
+    const db = new DatabaseSync(':memory:')
+    try {
+      db.exec(
+        readFileSync(
+          new URL('../migrations/0030_source_sync_admission.sql', import.meta.url),
+          'utf8',
+        ),
+      )
+      const repository = new SqlSourceSyncAdmission(client(db))
+      expect(await repository.withinAllowance()).toBe(true)
+      for (let index = 0; index < 5; index++)
+        db.prepare(
+          `INSERT INTO source_sync_admission
+        (source,day,attempts,started_at,outcome,reservation_json) VALUES (?, ?, 1, ?, 'running', '{}')`,
+        ).run('synthetic', `2026-10-${10 + index}`, index)
+      expect(await repository.withinAllowance()).toBe(false)
+      db.prepare(`UPDATE source_sync_admission SET outcome='succeeded',usage_json=?`).run(
+        JSON.stringify({
+          rowsRead: 10,
+          rowsWritten: 10,
+          failedOperations: 0,
+          unmeasuredNonFirstStatements: 0,
+        }),
+      )
+      expect(await repository.withinAllowance()).toBe(true)
+      db.prepare(`UPDATE source_sync_admission SET usage_json=?`).run(
+        JSON.stringify({
+          rowsRead: 0,
+          rowsWritten: 0,
+          failedOperations: 0,
+          unmeasuredNonFirstStatements: 1,
+        }),
+      )
+      expect(await repository.withinAllowance()).toBe(false)
+    } finally {
+      db.close()
+    }
+  })
   it('migrates the prior schema and prevents overlaps, midnight resets and retry resets', async () => {
     const db = new DatabaseSync(':memory:')
     try {

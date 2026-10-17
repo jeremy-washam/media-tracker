@@ -24,8 +24,8 @@ describe('deployment safeguards', () => {
     configuration.vars.CATALOG_AUTO_REFRESH = 'true'
     expect(() => validateProductionConfiguration(configuration)).toThrow('bounded source consumer')
     configuration.vars.CATALOG_AUTO_REFRESH = 'false'
-    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 25 * 3600_000).toISOString()
-    expect(() => validateProductionConfiguration(configuration)).toThrow('24 hours')
+    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 33 * 24 * 3600_000).toISOString()
+    expect(() => validateProductionConfiguration(configuration)).toThrow('32 days')
   })
   it('starts with private assets, disabled previews and paused background work', () => {
     const configuration = productionConfiguration(settings)

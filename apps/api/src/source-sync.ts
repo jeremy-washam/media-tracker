@@ -28,19 +28,29 @@ export async function runSourceSync<Result>(
   if (!sourceSyncAllowed(env, source))
     throw new SyncDeferredError('Source sync is paused or its usage grant has expired')
   const started = Date.now()
-  let budget = new SyncBudget(sourceSyncLimits[source])
+  const usage = jobUsage(env, `sync_${source}`)
+  let budget = new SyncBudget(sourceSyncLimits[source], fetch, Date.now, usage.snapshot)
   let admissionStarted = started
   let previousUsage: Record<string, number> = {}
-  const usage = jobUsage(env, `sync_${source}`)
   const admission =
     env.AUTH_MODE === 'access' ? new SqlSourceSyncAdmission(new D1DatabaseClient(env.DB)) : null
   const owner = crypto.randomUUID()
+  if (admission) {
+    const storage = await env.DB.prepare('SELECT 1').all()
+    const size = storage.meta.size_after
+    if (!Number.isFinite(size) || size <= 0 || size >= 3_000_000_000)
+      throw new SyncDeferredError('Database storage headroom must be verified before source sync')
+  }
   if (admission && !(await admission.acquire(owner, started)))
     throw new SyncDeferredError('Another source sync is running', 300)
   let reserved = false
   let outcome: 'succeeded' | 'failed' = 'failed'
   try {
     if (admission) {
+      if (!(await admission.withinAllowance()))
+        throw new SyncDeferredError(
+          'Allocated source-sync usage is exhausted; review included account headroom before continuing',
+        )
       reserved = await admission.reserve(source, started, JSON.stringify(budget.limits))
       if (!reserved && env.SYNC_RETRY_SOURCE === source) {
         const previous = await admission.retryable(source, started)
@@ -61,7 +71,7 @@ export async function runSourceSync<Result>(
           }
           reserved = await admission.claimRetry(source, previous.started_at)
           if (reserved) {
-            budget = new SyncBudget(remaining)
+            budget = new SyncBudget(remaining, fetch, Date.now, usage.snapshot)
             admissionStarted = previous.started_at
             previousUsage = used
           }
@@ -93,7 +103,9 @@ export async function runSourceSync<Result>(
             Object.fromEntries(
               Object.entries({ ...budget.usage, ...usage.snapshot() }).map(([key, value]) => [
                 key,
-                value + (previousUsage[key] ?? 0),
+                key === 'databaseBytes'
+                  ? Math.max(value, previousUsage[key] ?? 0)
+                  : value + (previousUsage[key] ?? 0),
               ]),
             ),
           ),
