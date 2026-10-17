@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "media-tracker-transfer",
+  "main": "src/deployment/r2-transfer-worker.ts",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": true,
+  "preview_urls": false,
+  "r2_buckets": [
+    {
+      "binding": "RAW_BUCKET",
+      "bucket_name": "media-tracker-raw"
+    }
+  ],
+  "secrets": {
+    "required": ["TRANSFER_SECRET"]
+  },
+  "limits": {
+    "cpu_ms": 100
+  },
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0
+    }
+  },
+  "triggers": {
+    "crons": []
+  }
+}

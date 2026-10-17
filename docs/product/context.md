@@ -115,9 +115,14 @@ The ingestion-first foundation and initial read-only Library slices are
 implemented locally. Remaining work includes per-media hardening, private
 deployment gates, generalized recovery, and the proposed Chat/Recaps surfaces.
 Source-derived Queue remains read-only; local intent and write-back require
-their own future conflict model. The October 13 deployment record shows a paused
-Worker published against empty storage; owner MFA verification and private-data
-transfer remain pending. See the [deployment runbook](../planning/deployment.md).
+their own future conflict model. The October 14 deployment record shows a Worker with background jobs paused,
+confirmed owner MFA, a completed database transfer, and fully copied,
+checksum-verified private R2 objects. Full hosted database and independent
+restore verification passed: 94 tables, 1,798,348 rows, and all eight search
+vocabularies matched. The owner confirmed all six media sections and the
+requested search/filter/detail/history/excerpt checks work. Hosted performance
+and provider-job budgets remain pending, with background jobs off. The owner approves the existing $5/month
+plan with $0 additional charges. See the [deployment runbook](../planning/deployment.md).
 
 The original ingestion sequence backfills and then synchronizes consumption
 history, where the source services permit it, from:
@@ -140,10 +145,12 @@ Use official APIs, webhooks, RSS feeds, and user data exports as appropriate. Pr
 - A separate iOS experience. On October 13, the owner requested a concrete native
   development plan and workflow, prioritizing Library and genuine Apple Liquid
   Glass. The researched direction is a SwiftUI client consuming the existing
-  API, with development setup and a small device proof next. Desktop retains its
+  API. The synthetic setup app now builds, runs, and passes native tests on the
+  simulator and owner's phone; the native Books prototype is next. Desktop retains its
   own React/Vite interface; mobile is designed independently. Lists, Explorations,
-  and Feed inform future navigation but still need their own services. No native
-  implementation exists yet, and the earlier mobile studies are disposable.
+  and Feed inform future navigation but still need their own services. A synthetic
+  SwiftUI setup app now exists under `apps/ios`; live integration remains pending,
+  and the earlier mobile studies are disposable.
   See the [native iOS plan](../planning/ios-app.md) for milestones and open decisions.
 
 ## Technical foundation

@@ -18,6 +18,11 @@
     "ACCESS_AUD": "",
     "OWNER_EMAIL": "",
     "SYNC_ENABLED": "false",
+    "SYNC_SOURCES": "",
+    "SYNC_BUDGET_UNTIL": "",
+    "SYNC_RETRY_SOURCE": "",
+    "ARTICLE_CONTENT_ENABLED": "false",
+    "SPOTIFY_CATALOG_ENABLED": "false",
     "MAINTENANCE_ENABLED": "false",
     "CATALOG_AUTO_REFRESH": "false"
   },

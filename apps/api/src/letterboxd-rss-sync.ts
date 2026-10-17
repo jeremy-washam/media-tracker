@@ -213,7 +213,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
   await repository.saveSyncRun(runningRun)
 
   try {
-    const response = await fetchLetterboxdRss(username)
+    const response = await fetchLetterboxdRss(username, bindings.SYNC_FETCH)
     const storageKey = `raw/letterboxd/sha256/${response.responseHash.slice(0, 2)}/${response.responseHash}.xml`
     await bindings.RAW_BUCKET.put(storageKey, response.bytes, {
       httpMetadata: { contentType: response.contentType },
@@ -288,6 +288,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
     }
 
     const snapshot = await parseLetterboxdRssResponse(response)
+    bindings.SYNC_BUDGET?.page(snapshot.entries.length)
 
     const sourceRecords: SourceRecord[] = []
     const mediaItems: MediaItem[] = []
@@ -298,6 +299,7 @@ export async function syncLetterboxdRss(bindings: Bindings): Promise<LetterboxdR
     let unresolvedRecords = 0
 
     for (const [index, entry] of snapshot.entries.entries()) {
+      bindings.SYNC_BUDGET?.check()
       const recordId = sourceRecordId(ulid())
       const record = (disposition: SourceRecordDisposition): SourceRecord => ({
         id: recordId,

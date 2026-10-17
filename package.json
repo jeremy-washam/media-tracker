@@ -23,10 +23,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
-    "test": "vitest run",
+    "test": "vitest run && pnpm test:deployment",
     "test:e2e": "playwright test",
     "typecheck": "pnpm -r --if-present typecheck",
-    "workspace:list": "pnpm -r list --depth -1"
+    "workspace:list": "pnpm -r list --depth -1",
+    "deployment:transfer": "python3 scripts/deployment/transfer.py",
+    "test:deployment": "python3 -m unittest discover -s scripts/deployment -p 'test_*.py'"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

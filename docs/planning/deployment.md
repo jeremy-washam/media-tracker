@@ -1,9 +1,25 @@
 # Private deployment preparation
 
-Status: local preparation and restore rehearsal accepted. The empty production
-database, private bucket, queues, and owner-only Access application are
-provisioned, and the paused Worker is deployed against empty storage. Private
-Library data has not been transferred; authenticated hosted validation is pending.
+Status: the paused production Worker and owner-only Access/MFA are deployed.
+The owner confirmed sign-in, the health response, and the web interface. All
+237 database import files have matching native receipts, and all 18,126 private
+R2 objects have matching SHA-256, size, and metadata. Full hosted database and
+independent restore verification passed on October 14: 94 application tables,
+1,798,348 rows, one compatibility view, exact schema/index/trigger definitions,
+foreign keys, sequence state, and all eight search vocabularies matched. The
+private recovery SQLite artifact passed its final integrity checks, including
+reconstructed contentless search. Temporary verification tables were removed,
+and a fresh D1 Time Travel bookmark was saved. The owner confirmed that Books,
+Movies, Articles, Podcasts, Music, and Videos load in the deployed app. The owner
+also confirmed search, filters, item details/history, and article excerpts work.
+Hosted performance and provider-job budgets remain pending; background
+processing stays off.
+The owner approves the existing $5/month plan with $0 additional charges.
+
+October 17: source sync is the next activation stage, before further browsing
+measurements. Follow the [source sync rollout](source-sync-rollout.md) for
+expiring grants, durable admission, queue settings and first-source validation.
+Do not enable the older unrestricted hourly provider handler in production.
 
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
@@ -26,10 +42,76 @@ See [D1 limits](https://developers.cloudflare.com/d1/platform/limits/) and
 
 ## Cost controls and storage audit
 
+### Owner spending gate
+
+On October 13, the owner instructed: "Do not, under any circumstances, spend
+money. If your actions will cause me to get charged, pause and let me know."
+This supersedes the earlier deployment spending assumptions. Do not resume
+remote imports, object uploads, data queries, verification, provider calls, or
+background processing until remaining included account allowances are verified
+and the work can stay within them. Pause and notify the owner before an action
+that would add a charge; uncertain billing headroom is not permission to proceed.
+Local inspection, code changes, tests, and documentation can continue.
+
+On October 14, the owner confirmed that the existing $5/month Workers Paid
+subscription remains approved, with $0 additional charges. The owner supplied
+billing screenshots showing $0 reported usage cost and no usage breakdown for
+the October 14–November 13 cycle. Missing billing data does not establish
+remaining included usage. Do not silently cancel or downgrade it; the current
+Library exceeds the Free plan's per-database size limit. Account subscription
+and billable-usage API reads were denied, so those APIs do not confirm an
+invoice. Remaining included headroom is checked from native account analytics,
+private transfer ledgers, resource sizes, and bounded operation budgets.
+
+After completed verification, the production transfer ledger records 30,473,276
+D1 rows read and 11,977,506 rows written, including the earlier interrupted
+verification and conservative diagnostic reads. It measures this transfer, not every database, synthetic
+validation, Worker invocation, R2 operation, or other account activity. Its
+100-million-read/25-million-write deployment budget is an operation safeguard,
+not an account billing cap. The completed R2 copy contains 18,126 objects and
+211,643,751 bytes. The completed copy consumed 55,514 helper Worker attempts, including the
+interruption and resume, below the unchanged 60,000 limit. The first pass
+stopped automatically on HTTP 400. Batch metadata checks confirmed 17,003
+existing copies and uploaded the 1,123 missing objects without overwrites; the
+rejection did not recur. Batches are limited to 16 keys, so repeated metadata
+checks consume fewer Worker invocations. Every object still receives an exact
+checksum/size/metadata comparison. Authenticated failure diagnostics stay in
+private mode-0600 files; no object keys or payloads are printed. The temporary helper used a 100 ms CPU ceiling, and the client persists a
+60,000-request ceiling, bound to the exact endpoint and bundle. It reserves
+requests before network dispatch, counts lost responses, refuses a missing or
+mismatched ledger, and cannot reset its limit by restarting. Parallel uploads
+share the same serialized counter. The nominal configured ceiling is 6 million
+CPU milliseconds. A batch can issue at most 16 Class B reads, so the 60,000
+invocation limit also bounds Class B reads below 960,000; each PUT invocation
+performs one Class A write. Both are below included R2 operation allowances; runtime CPU limits have some flexibility and are not a hard
+billing cap. Stop on unexpected usage or errors rather than raising the limit.
+
+An account-wide analytics read on October 14 reported 13,830,556 D1 reads and
+10,048,080 writes, 130 Worker requests and 676,215 microseconds of CPU, and only
+small synthetic R2 operations/storage. D1 and Worker sampling intervals were 1.
+The sole production bucket was empty. Included monthly usage is 25 billion D1
+reads, 50 million D1 writes, 5 GB D1 storage, 10 million Worker requests,
+30 million CPU milliseconds, and R2 Standard's 10 GB-month/1 million Class A/
+10 million Class B operations. Native account metrics, the retained deployment
+ledger, bounded request counts, and remaining work must be checked together;
+none is permission to incur an overage.
+
+After full verification, unsampled account-wide D1 analytics reported
+36,785,628 reads and 15,108,120 writes, including the deleted synthetic test
+database. The production transfer ledger is 18 reads more conservative than
+native production analytics. The production database reported 1,170,182,144
+bytes. R2 retained 211,643,751 payload bytes in Standard storage; Infrequent
+Access usage was zero. Worker analytics reported about 55,608 requests and
+89,873 CPU milliseconds, with adaptive sampling for the deleted helper. The
+retained 60,000-request/100 ms helper bounds and native usage provide ample
+headroom; these figures are usage evidence, not an invoice or a hard dollar cap.
+No new subscription, paid service, or background processing was enabled.
+
 Workers Paid has no account-wide hard dollar cap. Create a budget alert for
 $1 of usage-based spend in Manage Account → Billing → Billable Usage; the
 recurring $5 plan fee is excluded. Alerts do not stop usage and can arrive the
-following day. Account activation/alert creation has not been confirmed.
+following day. Account activation is confirmed by the owner. The supplied
+billing screenshot shows two budget alerts; their thresholds are not visible.
 See [budget alerts](https://developers.cloudflare.com/billing/manage/budget-alerts/)
 and [alert timing](https://developers.cloudflare.com/changelog/product/billing/).
 
@@ -187,6 +269,92 @@ provider cron are forbidden; the only allowed cron is the explicitly enabled
 `*/5 * * * *` cache-maintenance schedule. Provider credentials belong in Worker secrets; local secret files
 are not uploaded automatically. The original token-encryption key must accompany
 copied encrypted Spotify credentials.
+
+## Ordered hosted transfer
+
+`pnpm deployment:transfer` uploads a previously rehearsed version 2 private
+bundle. It requires Python 3.9+ with SQLite FTS5 and the existing Wrangler OAuth
+file; credentials never appear in arguments or diagnostics. Run `pnpm check`
+and the isolated native D1/R2 rehearsal before transferring personal data.
+
+```sh
+pnpm deployment:transfer \
+  --bundle .private/deployment/final-snapshot \
+  --resources .private/deployment/resources.json \
+  --oauth-file /absolute/path/to/wrangler/config/default.toml \
+  --access-attestation .private/deployment/access-attestation.json \
+  --phase d1
+```
+
+Repeat with `--phase r2 --r2-settings .private/deployment/r2-settings.json`,
+then `--phase verify`. R2 defaults to four concurrent objects; `--r2-workers`
+accepts 1–16 to bound transfer concurrency independently of D1. Keep all bundle,
+checkpoint, settings, and attestation
+files private. Refresh the Access attestation from current administrator API
+reads before each phase. It is needed only when Wrangler's OAuth scopes cannot
+read Access: version 1 includes UTC `issuedAt`/`expiresAt` (at most 15 minutes),
+account/application/audience/owner/hostname identities, and the fresh full
+`application` and `helperApplication` objects. The tool still checks native
+Worker bindings, pause flags, schedules, consumers, and private bucket domains;
+the attestation does not authorize bypassing any guard.
+
+The resources file binds the account, database, bucket, production hostname,
+Access application, owner, queues, and temporary transfer Access application.
+The temporary R2 settings file supplies its exact account-derived Worker URL,
+Access service-token ID/client ID/client secret, and a separate random bearer
+secret. These are operation-owned temporary credentials, never provider keys.
+
+D1 file imports are ordered and atomic, with a bundle/file hash receipt committed
+in the same transaction as every schema/data/final-index file. Native receipts
+are authoritative if an acknowledgment is lost; a persisted import bookmark is
+polled before querying receipts. A failed or unknown import never becomes a
+completed checkpoint. Preserve `remote-transfer/` when resuming. Its locked,
+target-bound usage ledger accumulates native reads/writes across all phases and
+stops normal work at 90 million reads or 20 million writes, reserving bounded
+cleanup capacity within total ceilings of 100 million reads and 25 million writes.
+Missing or uncertain usage
+requires explicit reconciliation rather than an automatic retry. Requests are
+paced and HTTP 429 retries are bounded. These deployment budgets are operational
+stop thresholds, not account-wide billing caps.
+
+Create its ignored private Wrangler configuration from
+`apps/api/wrangler.transfer.example.json`, set the verified account ID and absolute
+entrypoint path, and use an isolated test bucket for the native rehearsal. Deploy
+with a protected secrets file containing a fresh 32-byte hexadecimal
+`TRANSFER_SECRET`; create its temporary service-only Access application before
+exposing the hostname. Bind the production bucket only after rehearsal passes.
+The template is not part of the normal app deployment.
+
+The temporary Worker streams native R2 binding operations, validates SHA-256,
+preserves case-sensitive HTTP/custom metadata, and uses create-only writes.
+It has no D1 binding, delete operation, provider credentials, cron, or preview
+URL. Access accepts only its short-lived service token; a separate bearer secret
+is also required. Before upload, the tool verifies the exact helper hostname,
+production bucket binding, secret binding, and service-only Access policy.
+Conflicting objects stop transfer rather than being overwritten. Interrupted
+copies resume by comparing stored native checksums, sizes, and metadata.
+
+Verification requires all receipts and exact remote schema/index/view/trigger
+definitions, compares every typed row and allocator state, and checks foreign
+keys and integrity. A uniquely named indexed vocabulary staging table supports
+bounded keyset scans of FTS terms and positions. A durable, target-bound ownership
+journal records each exact scratch name and CREATE definition before use. Cleanup
+removes only matching journal-owned tables, including after interruption or a
+normal-work budget stop, using the reserved 10 million reads/5 million writes
+within the total ceilings. Unknown query/import usage still requires explicit
+reconciliation before normal work resumes. Remote contentless tokens rebuild the independent local
+verification SQLite artifact, which must pass the same vocabulary fingerprint.
+Partial local artifacts are removed on failure and promoted only after success.
+Standard D1 export remains unsuitable for virtual tables. Retain the original
+bundle and the verified remote-derived restore artifact independently, plus a
+D1 Time Travel recovery point.
+
+After successful copy and owner browser smoke tests, delete the temporary
+Worker, its Access application/policy/service token, and all isolated test cloud
+resources. Keep production sync paused until provider-specific budgets and
+single-owner Spotify token refresh are validated. Uploading existing provider
+credentials and the original encryption key is a separately approved sensitive
+step; read-only browsing can be validated while they remain local.
 
 ## Local transfer bundle and rehearsal
 
@@ -474,3 +642,103 @@ enrollment and the authenticated health response remain pending. Do not upload
 private Library data before that flow is verified. See Cloudflare's
 [App Launcher setup](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/app-launcher/)
 and [authenticator enrollment](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/independent-mfa/#enroll-authenticators).
+
+### Owner access and native transfer rehearsal
+
+The owner completed sign-in/MFA, confirmed the hosted health response, and opened
+Books Archive. The full Library has not yet been copied. With explicit owner
+approval, the eight existing provider settings and original token-encryption key
+were installed as encrypted Worker secrets. The key decrypted the retained
+Spotify credential locally without contacting Spotify. Production still has
+sync, maintenance, and automatic catalog refresh disabled. The owner will perform
+the hosted browser checks; agent access to Chrome is unnecessary.
+
+Isolated native D1 tests preserve exact typed rows, embedded NULs/line endings,
+large integers, binary values, schema definitions, and reconstructed contentless
+phrase search. Repeated transfer adds no duplicate writes. An invalid file import
+leaves neither its table nor its records behind. Native R2 tests preserve exact
+bytes, zero-byte objects, and case-sensitive metadata; an 86,178,068-byte stream
+passes end-to-end hashing, while checksum failures and overwrites are rejected.
+
+A native scale rehearsal staged 3,100,000 synthetic search-token instances in
+3,065 ms of SQL time with exactly 3.1 million rows read/written. Hot-term keyset
+pages read 2,000/2,001/2,001 rows for 2,000 results, confirming indexed pagination.
+Its tables were removed; native test usage was approximately 6.2 million reads
+and 3.1 million writes. Personal data transfer and full hosted integrity and
+owner browsing remain the next gates.
+
+### Import status recovery
+
+The first production copy committed the schema and eight data files. A subsequent
+status poll returned `Not currently importing anything.` despite the matching
+receipt for the latest file. This is lost completion status, not a confirmed SQL
+rollback. The copy stopped rather than retrying or assuming zero usage. Native
+D1 analytics are available through Wrangler authentication and reported
+`avg.sampleInterval = 1`; native write-query count matched the nine receipts.
+
+Resume the D1 command with `--reconcile-import-status` and
+`--reconciliation-extra-reads 9` for this incident (declare `0` only when no
+external diagnostic reads occurred). Use opt-in import-status reconciliation
+only for this exact status-loss case.
+It requires an exact pending bundle/file receipt and payload identity, a fresh
+unsampled per-database native counter snapshot covering the target's lifetime,
+a write-query count matching the receipts, and totals covering recorded usage.
+Record any external diagnostic reads separately; for this incident the sole
+manual receipt query read nine rows and wrote none. Never clear unrelated query
+uncertainty or treat an actual SQL failure as a completed import.
+
+### Authorization recovery during verification
+
+An October 14 verification pass stopped on an HTTP 403 shortly before the
+Wrangler token's advertised expiry. No failed-query charge or scratch table
+was left unresolved. The client now handles an authorization rejection within
+three minutes of OAuth expiry by waiting in intervals of at most 30 seconds,
+then letting Wrangler renew the expired token and retrying once. Unexpired
+permission denials outside that narrow window still stop without refreshing;
+static API tokens are never replaced. This does not broaden permissions or
+change billing limits. An independent management-connection renewal is needed
+when its Access/MFA attestation expires.
+
+### Completed hosted restore verification
+
+The owner renewed the separate Cloudflare management connection remotely using
+`codex mcp login cloudflare --no-browser`, requesting read scopes and session
+renewal. The owner approved from a phone and supplied the full callback URL to
+the waiting CLI even though its loopback page could not load there. This CLI
+login expires after five minutes; both approval and callback submission must
+finish within that window. Keep the login process alive across the handoff,
+and restart with a fresh URL after a timeout. This management connection is
+separate from the application's owner-only Access/MFA login.
+
+A fresh native Access read confirmed the sole owner policy and independent MFA.
+Account usage was checked before resuming the guarded verifier. Wrangler
+renewed through its expiry boundary without stopping the completed pass. All
+94 tables and eight search indexes matched; the complete remote-derived restore
+is retained privately with a SHA-256/size manifest. It is 1,169,264,640 bytes.
+The frozen source file was 1,714,311,168 bytes and contained 498,814,976 bytes of
+free pages; physical file size is distinct from retained data. No imported
+facts were removed to produce the verified recovery copy.
+
+The verifier left no owned scratch tables or unmeasured queries. The temporary
+R2 helper Worker, its Access application/policy, and service token had already
+been removed after object verification. A fresh Time Travel bookmark was saved
+after scratch cleanup; this captures a recovery point and is not a destructive
+Time Travel restore test. Retain original backups and private transfer records.
+Owner-authenticated Library smoke checks subsequently passed as recorded below.
+Measured hosted behavior and separate provider-job budgets remain launch gates.
+Background sync, maintenance, and catalog auto-refresh remain disabled.
+
+### Owner Library smoke acceptance
+
+The owner confirmed that Books, Movies, Articles, Podcasts, Music, and Videos
+load in the deployed app, then separately confirmed search, filters, item
+details/history, and an article excerpt work. The requested owner-authenticated
+Library smoke checks passed. Hosted performance still needs measurement.
+
+Usage reporting exists for HTTP requests, scheduled jobs, and queues, but the
+job observer reports measurements after operations; it does not reserve or
+stop work against a daily allowance. Provider pagination still lacks the
+planned durable per-day request/record/byte reservations. Keep all background
+classes disabled while measuring representative operations and defining and
+testing their budgets. Configure maintenance separately, then enable provider
+classes individually only within verified included account allowances.

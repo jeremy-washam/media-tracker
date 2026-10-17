@@ -1,4 +1,5 @@
 import type { SyncJob } from '@media-tracker/contracts'
+import type { SyncBudget } from './sync-budget'
 import {
   D1DatabaseClient,
   SqlArticlesRepository,
@@ -21,6 +22,13 @@ export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BU
   ACCESS_AUD?: string
   OWNER_EMAIL?: string
   SYNC_ENABLED?: string
+  SYNC_SOURCES?: string
+  SYNC_BUDGET_UNTIL?: string
+  SYNC_RETRY_SOURCE?: string
+  SYNC_BUDGET?: SyncBudget
+  SYNC_FETCH?: typeof fetch
+  ARTICLE_CONTENT_ENABLED?: string
+  SPOTIFY_CATALOG_ENABLED?: string
   CATALOG_AUTO_REFRESH?: string
   MAINTENANCE_ENABLED?: string
   DATABASE_USAGE_OBSERVER?: DatabaseUsageObserver

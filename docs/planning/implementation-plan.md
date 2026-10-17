@@ -1,6 +1,11 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-10-13
+Last updated: 2026-10-14
+
+October 17 follow-up: the owner prioritized hosted source sync before additional
+browsing measurements. The [source sync rollout](source-sync-rollout.md) owns
+activation controls, initial finite limits, credential ownership and first-run
+validation. Optional content acquisition and catalog backfills remain paused.
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
@@ -18,7 +23,7 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
-## Current checkout status (2026-10-13)
+## Current checkout status (2026-10-14)
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -32,10 +37,15 @@ The [Music implementation](music-implementation.md) supersedes earlier
 30-second/excluded-observation proposals with immediate song counting.
 
 Private Access checks, usage limiters, production packaging, deployment helpers,
-and local snapshot/restore rehearsal are in the checkout. Empty hosted storage,
+and local snapshot/restore rehearsal are in the checkout. Hosted storage,
 queues, and an owner-only Access application are provisioned. The paused Worker
-is published against empty storage. Private data transfer and authenticated
-hosted validation remain pending, along with the launch gates in the
+is published and private data transfer is complete. Full database/restore
+verification passed: 94 tables, 1,798,348 rows, one compatibility view, and all
+eight search vocabularies matched. The private recovery artifact is retained.
+Owner sign-in and MFA are confirmed, and the owner passed all six section-load
+checks plus search, filters, item details/history, and an article excerpt.
+Hosted performance and provider-job budgets remain pending under the launch
+gates in the
 [deployment runbook](deployment.md) and
 [storage efficiency plan](storage-efficiency-plan.md). The
 [documentation audit](documentation-audit.md) records the code/live-app comparison.
@@ -45,8 +55,10 @@ their deferrals do not override this current status.
 The owner has requested a separate native iOS experience, with Library first and
 genuine native Apple controls. The [iOS plan and workflow](ios-app.md) captures
 the October 13 research, future navigation, authentication/distribution questions,
-and simulator/physical-phone testing. Development setup and a small installed
-app/test proof are next; no native project or authentication change exists yet.
+and simulator/physical-phone testing. A small synthetic SwiftUI project and native
+test targets now exist under `apps/ios`, with build/run/tests verified on the
+simulator and owner's phone. Native Books design and live authentication remain
+pending.
 Disposable mobile studies do not establish an approved interface.
 
 The [Library fetching contract](../architecture/library-fetching.md) records the
@@ -64,7 +76,7 @@ These are fixed unless explicitly revisited:
 - Cloudflare R2 for raw exports, API snapshots, and authorized full text.
 - Cloudflare Queues and Cron Triggers for synchronization.
 - Cloudflare Access for initial web authentication.
-- TypeScript throughout, with Drizzle and Zod.
+- TypeScript web/backend, with Drizzle and Zod; separate SwiftUI iOS client.
 - API-first design so a future iOS client can use the same backend.
 - No recommendations, LLM integration, or queue interface in the first ingestion milestone.
 - Preserve enough provenance and source material to support those features later.
@@ -76,6 +88,7 @@ Use a small pnpm workspace:
 ```text
 apps/
   web/                 React/Vite application
+  ios/                 SwiftUI iPhone client and native tests
   api/                 Hono Cloudflare Worker
   cli/                 local backfill and recovery commands
 
@@ -689,24 +702,38 @@ Importing the same source data twice produces the same final database state.
 ## 15. Deployment and operations
 
 The [storage efficiency plan](storage-efficiency-plan.md) adds the owner's
-October 12 priority: $5/month is acceptable; reduce amplification and measure
-usage rather than force Free. The isolated local implementation adds scoped D1
+October 12 priority: reduce amplification and measure usage rather than force
+Free. The October 13 instruction prohibits spending; remote work is paused
+until the runbook's spending gate is satisfied. On October 14, the owner
+confirmed the existing $5/month plan with $0 additional charges. The isolated local implementation adds scoped D1
 usage reporting, independent bounded maintenance, clock-safe YouTube publication
-and compact evidence references. Remote validation and activation remain pending.
+and compact evidence references. Owner Library smoke checks and full remote
+storage verification passed. Hosted performance measurement and provider-job
+budgets/activation remain pending.
 It recommends one paid D1 initially, copy-rehearsed
 compact references/evidence layouts, cache maintenance while ingestion is paused,
 and bounded job budgets. Further database splits and historical interpretation
 archival require demonstrated benefits and explicit recovery boundaries. This
 contains merged code and forward migrations. The local ledger was backed up and
-migrated through 0029 on October 13; hosted migration remains pending and
-retention policy is unchanged.
+migrated through 0029 on October 13. The hosted copy includes those migrations
+and passed independent schema/data/restore verification; retention policy is
+unchanged.
 
 The [private deployment runbook](deployment.md) records the October 12
 preparation: Worker-side owner authentication, an app-only production bundle,
 guarded production configuration, paused cutover, and a local D1/R2 transfer and
-restore rehearsal. Account activation, remote transfer, hosted verification,
-and production sync cutover remain pending. The local database requires Workers
-Paid at its current size. This preparation is not a deployed application.
+restore rehearsal. The paused Worker and owner-only Access are deployed; owner
+sign-in, MFA, health, and the web interface are confirmed. The database copy is
+237 of 237 files complete, including indexes/triggers. All 18,126 private R2
+objects are checksum/metadata verified. Full hosted database/restore verification
+passed, including every table, the compatibility view, integrity and sequence
+checks, and all eight search vocabularies. Temporary verification tables were
+removed, the recovery artifact was retained, and a fresh Time Travel bookmark
+was saved. Production sync remains off. Usage stayed within included allowances;
+further remote work remains subject to the spending gate. The database requires
+Workers Paid at its current size. Owner Library smoke checks passed; hosted
+performance measurement and provider-job budgets remain open. Automatic
+ingestion is not activated.
 
 ### Production resources
 

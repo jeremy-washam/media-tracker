@@ -47,7 +47,7 @@ import { ulid } from 'ulid'
 import type { Bindings } from './env'
 import { createBooksRepository, createLedgerRepository } from './env'
 
-const parserVersion = 'hardcover-user-books@3'
+const parserVersion = 'hardcover-user-books@4'
 const editionParserVersion = 'hardcover-editions@1'
 const pageSize = 50
 const editionBatchSize = 50
@@ -200,6 +200,7 @@ async function normalizeBook(
   index: number,
   observedAt: ReturnType<typeof utcInstant>,
   pendingIdentities: Map<string, PendingIdentity>,
+  relationship: { media_item_id: string; work_id: number } | null,
 ): Promise<{
   sourceRecord: SourceRecord
   mediaItem: MediaItem
@@ -243,8 +244,22 @@ async function normalizeBook(
       }))
     if (knownWork !== null) break
   }
-  const itemId = knownWork?.mediaItemId ?? mediaItemId(ulid())
+  if (knownWork && relationship && knownWork.mediaItemId !== relationship.media_item_id)
+    throw new Error('Hardcover relationship and work refer to different local books')
+  const itemId = knownWork?.mediaItemId ?? mediaItemId(relationship?.media_item_id ?? ulid())
   const identities: ExternalIdentity[] = []
+  if (relationship && !workIds.includes(relationship.work_id)) {
+    identities.push({
+      ...(await findOrCreateIdentity(repository, pendingIdentities, {
+        namespace: 'hardcover',
+        externalType: 'book_id',
+        externalId: String(relationship.work_id),
+        mediaItemId: itemId,
+        sourceRecordId: recordId,
+      })),
+      retiredAt: observedAt,
+    })
+  }
   for (const workId of workIds) {
     identities.push(
       await findOrCreateIdentity(repository, pendingIdentities, {
@@ -306,7 +321,10 @@ async function normalizeBook(
   const defaultConsumedIdentity =
     (book.editionId === null ? null : identityByEditionId.get(String(book.editionId))) ??
     identities.find(
-      (identity) => identity.namespace === 'hardcover' && identity.externalType === 'book_id',
+      (identity) =>
+        identity.namespace === 'hardcover' &&
+        identity.externalType === 'book_id' &&
+        identity.retiredAt === null,
     )?.id ??
     null
   const finishedReads = book.reads.filter((read) => validFinishedDate(read.finishedAt))
@@ -332,6 +350,9 @@ async function normalizeBook(
         : []
   const archiveEntries: ArchiveEntryWrite[] = []
   for (const occurrence of occurrences) {
+    const consumedIdentity = identities.find((identity) => identity.id === occurrence.identityId)
+    if (consumedIdentity && consumedIdentity.mediaItemId !== itemId)
+      throw new Error('Hardcover consumed edition refers to a different local book')
     const existingId = await repository.findArchiveEntryId(connection.id, occurrence.key)
     const entryId = existingId ?? archiveEntryId(ulid())
     const evidence: ArchiveEntryEvidence[] = [
@@ -619,11 +640,12 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
   await repository.saveSyncRun(runningRun)
 
   try {
-    const userId = await fetchHardcoverUserId(token)
+    const userId = await fetchHardcoverUserId(token, bindings.SYNC_FETCH)
     let afterId = 0
     while (true) {
       const response = await fetchHardcoverReadBooksResponse({
         token,
+        fetcher: bindings.SYNC_FETCH ?? fetch,
         userId,
         afterId,
         limit: pageSize,
@@ -656,6 +678,9 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       let page: ReturnType<typeof parseHardcoverReadBooksPage>
       try {
         page = parseHardcoverReadBooksPage(response)
+        bindings.SYNC_BUDGET?.page(
+          page.books.reduce((count, book) => count + 1 + book.reads.length, 0),
+        )
         const embeddedEditionIds = new Set(
           page.books.flatMap((book) =>
             [book.currentEdition?.id, book.defaultCoverEdition?.id].filter(
@@ -680,7 +705,11 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         >()
         for (let start = 0; start < consumedEditionIds.length; start += editionBatchSize) {
           const ids = consumedEditionIds.slice(start, start + editionBatchSize)
-          const editionResponse = await fetchHardcoverEditionsResponse({ token, ids })
+          const editionResponse = await fetchHardcoverEditionsResponse({
+            token,
+            ids,
+            fetcher: bindings.SYNC_FETCH ?? fetch,
+          })
           const editionAcquiredAt = instantNow()
           const editionChecksum = await sha256(editionResponse.bytes)
           const editionStorageKey = `raw/hardcover/sha256/${editionChecksum.slice(0, 2)}/${editionChecksum}.json`
@@ -707,6 +736,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
           await repository.commit({ rawObjects: [editionRawObject] })
           try {
             const editionPage = parseHardcoverEditionsPage(editionResponse)
+            bindings.SYNC_BUDGET?.page(editionPage.editions.length)
             const editionRecords = editionPage.editions.map((edition, index) => {
               const record: SourceRecord = {
                 id: sourceRecordId(ulid()),
@@ -752,6 +782,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
           }
         }
         for (const [index, book] of page.books.entries()) {
+          bindings.SYNC_BUDGET?.check()
           const normalized = await normalizeBook(
             repository,
             connection,
@@ -760,6 +791,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
             index,
             acquiredAt,
             pendingIdentities,
+            await booksRepository.findHardcoverRelationship(connection.id, book.userBookId),
           )
           await repository.commit({
             sourceRecords: [normalized.sourceRecord],
@@ -815,6 +847,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
     }
 
     const finishedAt = instantNow()
+    bindings.SYNC_BUDGET?.check()
     await booksRepository.finalizeHardcoverSnapshot({
       connectionId: connection.id,
       syncRunId: runId,

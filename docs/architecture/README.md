@@ -8,8 +8,8 @@ normalized view suitable for browsing and, later, evidence-backed LLM queries.
 
 The first milestone is ingestion. Recommendations and manually managed Queue
 remain deferred. Read-only source-derived Queue views are implemented in the
-six-media Library. A separate SwiftUI iOS client is now planned, with development
-setup next and no native implementation yet. The [native iOS plan](../planning/ios-app.md)
+six-media Library. A separate SwiftUI iOS setup proof now has a synthetic Books
+scaffold under `apps/ios`; it does not access the live API yet. The [native iOS plan](../planning/ios-app.md)
 records backend reuse, authentication gates, and the build/test workflow.
 
 ## System shape
@@ -28,9 +28,17 @@ External services and exports
 Production deployment must put the web application and normal API traffic
 behind Cloudflare Access. Worker-side token/owner checks and production asset
 exclusion are implemented. A paused Worker and owner-only Access application are
-provisioned; owner MFA/authenticated verification and private-data transfer remain
-pending according to the October 13 deployment record. Missing
-Access configuration denies hosted requests. Local development bypasses
+provisioned; owner sign-in and MFA are confirmed. The database transfer is
+complete; all private R2 objects are checksum/metadata verified within included
+usage. Full hosted database and independent restore verification passed:
+94 tables, 1,798,348 rows, the compatibility view, schema/integrity/sequence
+checks, and all eight search vocabularies matched. The private recovery artifact
+is retained, and temporary verification tables were removed.
+The owner approves the existing $5/month subscription with $0 additional
+charges. The owner confirmed all six media sections, search, filters, item
+details/history, and article excerpts work. Hosted performance and provider-job
+budgets remain pending; background processing stays off. Missing Access
+configuration denies hosted requests. Local development bypasses
 authentication only for explicit loopback requests.
 Hosted webhook/OAuth callback routes are deferred and will require their own
 authentication when introduced.
@@ -42,8 +50,9 @@ under ADR 0005; Managed OAuth is a research candidate, not an implemented flow.
 
 The [private deployment runbook](../planning/deployment.md) records paused
 cutover configuration and a local D1/R2 snapshot/restore rehearsal. Contentless
-FTS token positions are preserved. The utility does not upload data or provide
-generalized replay/remote recovery.
+FTS token positions are preserved. The snapshot utility stays local. A separate guarded transfer utility supports
+ordered native D1 imports, metadata-preserving private R2 uploads, and independent
+remote-derived restore verification; generalized replay remains deferred.
 
 The [storage efficiency plan](../planning/storage-efficiency-plan.md) retains one
 paid D1 initially and evaluates compact references/evidence on private copies.
@@ -62,6 +71,8 @@ historical per-media implementation plans.
 ## Package boundaries
 
 - `apps/web`: React UI. It consumes API contracts and does not access storage.
+- `apps/ios`: separate SwiftUI iPhone client and native tests. Its current setup
+  proof uses bundled synthetic data; live REST integration remains pending.
 - `apps/api`: Hono Worker, HTTP concerns, Cloudflare bindings, cron, and queues.
 - `apps/cli`: explicit local backfills, imports, export, and recovery operations.
 - `packages/domain`: canonical types and pure normalization rules. It must not
@@ -124,8 +135,12 @@ after payload reconnaissance.
 
 ## Current operational implementation
 
-Source imports and resumable chunks run through HTTP; hourly polling runs in the
-deployed scheduled handler. The queue consumer handles bounded Reader article-
+Source imports and resumable chunks run through HTTP. Hosted source polling now
+uses explicit, expiring usage grants, durable daily admission and a cross-entry
+lease. Hourly cron dispatches eligible source jobs to a serial queue consumer;
+local cron retains direct execution. Manual source-sync actions share the same
+admission and resource ceilings. See the [source sync rollout](../planning/source-sync-rollout.md).
+The queue consumer also handles bounded Reader article-
 content acquisition/indexing, TMDB and YouTube catalog refresh, and resumable
 Spotify catalog backfill; generalized replay/recovery jobs remain deferred. Local cron
 triggers are invoked manually. Generalized CLI replay,

@@ -1,0 +1,129 @@
+# Hosted source sync
+
+The owner prioritized sync before further browsing/performance measurements on
+October 17, 2026. Existing provider credentials are installed. The existing
+$5/month Workers plan is approved; additional charges are not.
+
+## Initial activation
+
+Apply migration 0030 before enabling source work. `SYNC_ENABLED=true` alone is
+insufficient in production: `SYNC_SOURCES` explicitly lists enabled polling
+sources and `SYNC_BUDGET_UNTIL` contains a future UTC instant. The deployment
+validator limits a usage grant to 32 days; initial controlled grants last two
+hours. Expiry stops new admissions;
+it does not renew automatically. Check current account-wide included allowances
+before issuing a grant, including rehearsal and deleted-resource usage.
+
+Start one source at a time, inspect its durable attempt and native account usage,
+then add the next source. Initial order: Letterboxd RSS, Hardcover, Readwise,
+Spotify. This moves from the smallest finite feed to full reconciliation and
+rotating credentials. Request new credentials only if a provider rejects those
+already installed.
+
+Both HTTP sync actions and queued source jobs share these controls:
+
+The durable allocation is 10 million observed D1 writes, 1 billion observed D1
+reads, 2 GB acquired response bytes, 20,000 provider requests and 365 daily
+reservations. It covers all rows in the admission ledger and does not reset on
+deployment, grant renewal or a new day. Each admission requires room for a
+2-million-write/200-million-read/64-MiB/128-request reservation. Unknown or failed
+database work keeps the full D1 reservation; measured successful work reconciles
+to its observed totals. Unmeasured non-`first()` statements cannot refund D1
+reservations. Native account analytics remains the billing authority.
+
+Jobs check observed database usage between records/pages at 1 million writes
+or 100 million reads. A SQL operation can cross that threshold before the next
+check; the admission reservation provides headroom. Native database size is
+checked before hosted work and during measured statements; jobs stop at the
+3 GB review threshold, below the account's included 5 GB. Included capacity
+must still be checked account-wide before extending a grant; these controls
+are engineering allocations, not a Cloudflare dollar cap.
+
+- One reservation per source per UTC day, with at least 23 hours between new reservations.
+  `SYNC_RETRY_SOURCE` can explicitly permit up to two recovery attempts for a failed
+  reservation. It subtracts previously consumed requests/bytes/pages/records,
+  retains cumulative provider/database usage and the original admission timestamp, and refuses
+  exhausted or unmeasured reservations. Restarting never resets a budget.
+- A global 20-minute lease serializes source jobs across HTTP and queue consumers.
+- Provider work checks a 10-minute deadline; individual requests time out after
+  30 seconds, reject redirects, and buffer at most 8 MiB each.
+- Failed attempts consume their daily reservation. Crashes retain the reservation
+  and lease until expiry. Provider retries consume the same request cap.
+- Failed or interrupted snapshots do not finalize missing records or advance
+  complete-snapshot watermarks. Previously committed evidence remains durable;
+  the next admitted attempt replays idempotently from the committed watermark.
+  This is a safe restart, not a mid-page continuation.
+
+| Source     | Requests | Parsed pages | Records, including read/highlight children | Response bytes |
+| ---------- | -------: | -----------: | -----------------------------------------: | -------------: |
+| Letterboxd |        2 |            1 |                                        500 |          4 MiB |
+| Hardcover  |      128 |           64 |                                      7,000 |         32 MiB |
+| Readwise   |       64 |           32 |                                     10,000 |         16 MiB |
+| Spotify    |       32 |           24 |                                      1,000 |          8 MiB |
+
+These are initial reconciliation ceilings, not targets or a dollar cap. Hardcover's
+previous observed library was 1,114 relationships across 23 pages; its ceiling
+leaves room for edition/read rows. The verified restore contains 917 Reader
+documents, 16 highlight containers with 26 highlights, 72 saved Spotify episodes
+and 40 saved shows. Those baselines inform the other finite caps; validate their
+current size against controlled first runs. Oversized responses stop before parsing or R2 storage; accepted
+responses are retained before record/page-limit checks. No partial result is
+presented as a complete snapshot. Long Readwise/Hardcover `Retry-After` values
+end an attempt instead of causing an early retry.
+
+An hourly cron enqueues eligible `sync_source` jobs. The source consumer uses
+batch size 1, concurrency 1, and at most one transport retry. Provider failures
+are recorded in sync activity and acknowledged; the next eligible daily attempt
+retries. A transient lease conflict requests delayed redelivery. Admission rows
+record reserved ceilings and actual aggregate counts, including known D1
+reads/writes and the count of statements without metadata. Native account
+analytics remains authoritative for billing; `first()` metadata is unavailable.
+
+Keep `ARTICLE_CONTENT_ENABLED=false`, `SPOTIFY_CATALOG_ENABLED=false`,
+`CATALOG_AUTO_REFRESH=false`, and `MAINTENANCE_ENABLED=false` during this stage.
+Existing content and enrichment jobs remain durable and paused; source sync
+does not enqueue new HTML acquisitions or resume Spotify's catalog backlog.
+The hosted write entry point permits only the four source-sync actions during
+this rollout. Manual imports and enrichment need separately budgeted activation.
+Read-only browsing remains available.
+
+## Spotify credential ownership
+
+Before enabling hosted Spotify, disable Spotify sync in local runtime
+configuration. A copied credential store cannot coordinate token rotation
+across two independent databases. Local cron is manually invoked, but local UI
+sync actions must also respect source selection.
+
+## Coverage and follow-up
+
+Readwise covers Reader document state and highlights; Hardcover reconciles book
+relationships and reads. Letterboxd RSS covers recent public activity, with manual
+exports still required for complete edits/removals/private activity. Spotify
+polling covers discoverable episodes/library state and recent tracks; periodic
+Extended Streaming History exports remain necessary. YouTube watch history still
+requires manual Takeout imports.
+
+After representative native usage is recorded, activate the daily cadence through
+an explicit grant no later than the reviewed billing-cycle end. Grants never
+renew automatically or reset the allocation. Content, enrichment, maintenance,
+and manual history imports need their own budgets before enabling.
+
+## Controlled validation on October 17, 2026
+
+Letterboxd (67 feed entries), Readwise (1,123 parsed records), and Spotify
+(212 parsed records, including credential refresh) completed hosted runs.
+Local sync is paused and its Spotify refresh secret is blank so the two
+independent databases cannot race token rotation; local browsing remains healthy.
+
+Hardcover exposed an upstream work-ID change, now covered by stable-relationship
+and alias-ownership regressions. A later invocation durably processed 900 books
+across 18 pages but was interrupted before finalization. Its admission remains
+running with its full reservation retained; no complete-snapshot cursor advanced.
+Keep Hardcover outside the production allowlist until the interruption is
+explained and a complete controlled run succeeds. Retained Worker-log queries
+currently return HTTP 403 with the available credentials.
+
+Daily activation covers only the three validated sources. The explicit grant
+expires on November 13 at 00:00 UTC, or earlier if the lifetime allocation or
+storage review threshold is reached. Optional content, catalog, maintenance,
+and manual history-import work stays paused. The grant does not renew itself.

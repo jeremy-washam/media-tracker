@@ -472,9 +472,10 @@ async function fetchGraphql(
   token: string,
   query: string,
   variables: Record<string, unknown>,
+  fetcher: typeof fetch = fetch,
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const response = await fetch('https://api.hardcover.app/v1/graphql', {
+    const response = await fetcher('https://api.hardcover.app/v1/graphql', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -500,6 +501,10 @@ async function fetchGraphql(
         ? Number.NaN
         : Date.parse(retryAfter) - Date.now()
     const fallbackDelay = 500 * 2 ** attempt
+    if (Number.isFinite(serverDelay) && serverDelay > 30_000)
+      throw new Error(
+        `Hardcover GraphQL deferred after ${response.status}; Retry-After exceeds this attempt's wait allowance`,
+      )
     const delay = Math.max(
       0,
       Math.min(30_000, Number.isFinite(serverDelay) ? serverDelay : fallbackDelay),
@@ -522,8 +527,8 @@ function parseEnvelope(bytes: Uint8Array): GraphqlEnvelope {
   return envelope
 }
 
-export async function fetchHardcoverUserId(token: string): Promise<number> {
-  const result = await fetchGraphql(token, 'query MediaTrackerMe { me { id } }', {})
+export async function fetchHardcoverUserId(token: string, fetcher?: typeof fetch): Promise<number> {
+  const result = await fetchGraphql(token, 'query MediaTrackerMe { me { id } }', {}, fetcher)
   const data = record(parseEnvelope(result.bytes).data, 'me response')
   const values = Array.isArray(data.me) ? data.me : [data.me]
   const me = record(values[0], 'me')
@@ -534,13 +539,19 @@ export async function fetchHardcoverReadBooksResponse(input: {
   token: string
   userId: number
   afterId: number
+  fetcher?: typeof fetch
   limit?: number
 }): Promise<{ bytes: Uint8Array; contentType: string }> {
-  return fetchGraphql(input.token, libraryBooksQuery, {
-    userId: input.userId,
-    afterId: input.afterId,
-    limit: input.limit ?? 50,
-  })
+  return fetchGraphql(
+    input.token,
+    libraryBooksQuery,
+    {
+      userId: input.userId,
+      afterId: input.afterId,
+      limit: input.limit ?? 50,
+    },
+    input.fetcher,
+  )
 }
 
 export function parseHardcoverReadBooksPage(result: {
@@ -565,8 +576,9 @@ export async function fetchHardcoverReadBooksPage(
 export async function fetchHardcoverEditionsResponse(input: {
   token: string
   ids: readonly number[]
+  fetcher?: typeof fetch
 }): Promise<{ bytes: Uint8Array; contentType: string }> {
-  return fetchGraphql(input.token, editionsQuery, { ids: input.ids })
+  return fetchGraphql(input.token, editionsQuery, { ids: input.ids }, input.fetcher)
 }
 
 export function parseHardcoverEditionsPage(result: {

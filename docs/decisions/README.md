@@ -29,4 +29,6 @@ changes, add a new ADR that supersedes the old one rather than rewriting history
 
 17. [Evidence insertion and replay](./0017-evidence-insert-only-replay.md)
 
-18. [Web styling ownership](./0019-web-styling-ownership.md)
+18. [Separate native iOS client](./0018-native-ios-client.md)
+
+19. [Web styling ownership](./0019-web-styling-ownership.md)
