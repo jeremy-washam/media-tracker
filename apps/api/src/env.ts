@@ -24,6 +24,7 @@ export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BU
   SYNC_ENABLED?: string
   SYNC_SOURCES?: string
   SYNC_BUDGET_UNTIL?: string
+  SYNC_RETRY_SOURCE?: string
   SYNC_BUDGET?: SyncBudget
   SYNC_FETCH?: typeof fetch
   ARTICLE_CONTENT_ENABLED?: string

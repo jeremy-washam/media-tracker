@@ -48,6 +48,28 @@ export class SqlSourceSyncAdmission {
     return result.results.length === 1
   }
 
+  async retryable(source: string, now: number) {
+    return this.db
+      .prepare(
+        `SELECT started_at, reservation_json, usage_json FROM source_sync_admission
+      WHERE source = ? AND day = ? AND outcome = 'failed' AND attempts = 1 AND usage_json IS NOT NULL`,
+      )
+      .bind(source, new Date(now).toISOString().slice(0, 10))
+      .first<{ started_at: number; reservation_json: string; usage_json: string }>()
+  }
+
+  async claimRetry(source: string, started: number): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        `UPDATE source_sync_admission SET attempts = 2, outcome = 'running', finished_at = NULL
+      WHERE source = ? AND day = ? AND started_at = ? AND attempts = 1 AND outcome = 'failed'
+      RETURNING source`,
+      )
+      .bind(source, new Date(started).toISOString().slice(0, 10), started)
+      .all<{ source: string }>()
+    return result.results.length === 1
+  }
+
   async finish(
     source: string,
     started: number,

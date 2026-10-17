@@ -117,6 +117,11 @@ export function validateProductionConfiguration(
       throw new Error(
         'Source rollout requires one bounded source consumer; content, catalog and maintenance remain paused',
       )
+    if (
+      configuration.vars.SYNC_RETRY_SOURCE &&
+      !sources.includes(configuration.vars.SYNC_RETRY_SOURCE)
+    )
+      throw new Error('Controlled retry must name an explicitly enabled source')
   }
   if (configuration.vars.SYNC_ENABLED === 'false') {
     const crons = configuration.triggers.crons

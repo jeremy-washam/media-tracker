@@ -31,6 +31,30 @@ const hosted = () =>
   }) as Bindings
 
 describe('source sync entry points', () => {
+  it('uses only the remainder of a failed reservation for one explicit retry', async () => {
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'reserve').mockResolvedValue(false)
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'retryable').mockResolvedValue({
+      started_at: Date.now() - 60_000,
+      reservation_json: JSON.stringify({ requests: 2, pages: 1, records: 50, bytes: 1024 }),
+      usage_json: JSON.stringify({ requests: 1, pages: 0, records: 0, bytes: 20, rowsWritten: 6 }),
+    })
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'claimRetry').mockResolvedValue(true)
+    const finish = vi.spyOn(SqlSourceSyncAdmission.prototype, 'finish').mockResolvedValue()
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'release').mockResolvedValue()
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    await runSourceSync({ ...hosted(), SYNC_RETRY_SOURCE: 'readwise' }, 'readwise', async (env) => {
+      expect(env.SYNC_BUDGET?.limits).toEqual({ requests: 1, pages: 1, records: 50, bytes: 1004 })
+      env.SYNC_BUDGET?.page(3)
+    })
+    expect(JSON.parse(finish.mock.calls[0]![4])).toMatchObject({
+      requests: 1,
+      pages: 1,
+      records: 3,
+      bytes: 20,
+      rowsWritten: 6,
+    })
+  })
   it('records partial provider results as an unsuccessful admission', async () => {
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'reserve').mockResolvedValue(true)

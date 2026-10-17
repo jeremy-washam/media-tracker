@@ -21,7 +21,11 @@ already installed.
 
 Both HTTP sync actions and queued source jobs share these controls:
 
-- One attempt per source per UTC day, with at least 23 hours between admissions.
+- One reservation per source per UTC day, with at least 23 hours between new reservations.
+  `SYNC_RETRY_SOURCE` can explicitly permit one recovery attempt for a failed
+  reservation. It subtracts previously consumed requests/bytes/pages/records,
+  retains cumulative usage and the original admission timestamp, and refuses
+  exhausted or unmeasured reservations. Restarting never resets a budget.
 - A global 20-minute lease serializes source jobs across HTTP and queue consumers.
 - Provider work checks a 10-minute deadline; individual requests time out after
   30 seconds, reject redirects, and buffer at most 8 MiB each.

@@ -63,11 +63,17 @@ export class SyncBudget {
     const signals = [AbortSignal.timeout(Math.min(30_000, this.deadline - this.clock()))]
     if (init?.signal) signals.push(init.signal)
     else if (input instanceof Request) signals.push(input.signal)
-    const response = await this.fetcher(input, {
+    // Native Workers fetch requires an unbound call, not SyncBudget as `this`.
+    const fetcher = this.fetcher
+    const response = await fetcher(input, {
       ...init,
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.any(signals),
     })
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel()
+      throw new SyncDeferredError('Provider redirect rejected during sync')
+    }
     if (!response.body) return response
     const reader = response.body.getReader()
     const chunks: Uint8Array[] = []

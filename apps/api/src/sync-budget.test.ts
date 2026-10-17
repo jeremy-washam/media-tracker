@@ -4,6 +4,27 @@ import { SyncBudget, SyncDeferredError } from './sync-budget'
 const limits = { requests: 2, pages: 2, records: 3, bytes: 64 }
 
 describe('source sync resource ceilings', () => {
+  it('rejects redirects without forwarding authorization to another origin', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://other.example.test/' },
+      }),
+    )
+    const budget = new SyncBudget(limits, fetcher)
+    await expect(budget.fetch('https://example.test')).rejects.toThrow('redirect rejected')
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(fetcher.mock.calls[0]?.[1]?.redirect).toBe('manual')
+  })
+  it('does not replace the native fetch receiver with a budget instance', async () => {
+    const fetcher = vi.fn<typeof fetch>(async function (this: unknown) {
+      expect(this).toBeUndefined()
+      return new Response('ok')
+    })
+    expect(await (await new SyncBudget(limits, fetcher).fetch('https://example.test')).text()).toBe(
+      'ok',
+    )
+  })
   it('charges failed dispatches and stops before the next network request', async () => {
     const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error('lost response'))
     const budget = new SyncBudget(limits, fetcher)
@@ -45,7 +66,7 @@ describe('source sync resource ceilings', () => {
     expect(await response.text()).toBe('retry')
     expect(budget.usage).toMatchObject({ requests: 1, bytes: 5 })
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
-      redirect: 'error',
+      redirect: 'manual',
       signal: expect.any(AbortSignal),
     })
   })

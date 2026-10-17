@@ -43,6 +43,7 @@ describe('durable source admission', () => {
       expect(await repository.acquire('two', started)).toBe(false)
       expect(await repository.reserve('readwise', started, '{"requests":2}')).toBe(true)
       await repository.finish('readwise', started, started + 1000, 'failed', '{"requests":1}')
+      expect(await repository.retryable('readwise', started)).toMatchObject({ started_at: started })
       await repository.release('two')
       expect(await repository.acquire('two', started + 2000)).toBe(false)
       await repository.release('one')
@@ -51,12 +52,16 @@ describe('durable source admission', () => {
       expect(await repository.reserve('readwise', started + 120_000, '{}')).toBe(false)
       expect(await repository.reserve('hardcover', started + 120_000, '{}')).toBe(true)
       await repository.release('two')
+      expect(await repository.claimRetry('readwise', started)).toBe(true)
+      expect(await repository.claimRetry('readwise', started)).toBe(false)
+      await repository.finish('readwise', started, started + 120_000, 'failed', '{"requests":2}')
+      expect(await repository.retryable('readwise', started)).toBeNull()
       expect(await repository.reserve('readwise', started + 24 * 3600_000, '{}')).toBe(true)
       expect(
         db
           .prepare('SELECT outcome, usage_json FROM source_sync_admission WHERE source=? AND day=?')
           .get('readwise', '2026-10-17'),
-      ).toMatchObject({ outcome: 'failed', usage_json: '{"requests":1}' })
+      ).toMatchObject({ outcome: 'failed', usage_json: '{"requests":2}' })
     } finally {
       db.close()
     }
