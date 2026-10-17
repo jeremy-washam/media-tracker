@@ -8,7 +8,7 @@ import {
 
 describe('Movies route search', () => {
   it('keeps presentation selection out of collection requests', () => {
-    expect(movieCollectionQuerySearch({ q: 'alien', view: 'list', item: 'movie-1' })).toEqual({
+    expect(movieCollectionQuerySearch({ q: 'alien', layout: 'list', item: 'movie-1' })).toEqual({
       q: 'alien',
     })
   })
@@ -59,17 +59,24 @@ describe('Movies route search', () => {
     })
   })
 
+  it('preserves explicit layout from older Movies URLs', () => {
+    expect(parseMoviesRouteSearch({ view: 'list' })).toEqual({ layout: 'list' })
+    const mergedSearch = { view: 'list', layout: 'list' as const }
+    expect(normalizedForMovieCollection(mergedSearch, 'archive')).toEqual({ layout: 'list' })
+    expect(movieCollectionQuerySearch(mergedSearch)).toEqual({})
+  })
+
   it('validates supported URL values', () => {
     expect(
       parseMoviesRouteSearch({
-        view: 'list',
+        layout: 'list',
         ratingMin: '4.5',
         releaseYearUnknown: 'true',
         watchedFrom: '2020-01-01',
         watchedTo: 'not-a-date',
       }),
     ).toEqual({
-      view: 'list',
+      layout: 'list',
       ratingMin: 4.5,
       releaseYearUnknown: true,
       watchedFrom: '2020-01-01',

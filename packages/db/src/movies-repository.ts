@@ -1396,6 +1396,16 @@ export class SqlMoviesRepository {
   }
 
   async listMovies(input: MoviesListInput): Promise<MoviesPageRecord> {
+    const [page, summary] = await Promise.all([
+      this.listMovieItems(input),
+      this.summarizeMovies(input),
+    ])
+    return { ...page, ...summary }
+  }
+
+  async listMovieItems(
+    input: MoviesListInput,
+  ): Promise<Pick<MoviesPageRecord, 'data' | 'nextCursor'>> {
     if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100) {
       throw new RangeError('Movies limit must be an integer from 1 through 100')
     }
@@ -1460,6 +1470,28 @@ export class SqlMoviesRepository {
       [...base.values, ...filter.values, ...cursorValues, input.limit + 1],
     ).all<MovieRow>()
     const pageRows = rows.results.slice(0, input.limit)
+    const last = pageRows.at(-1)
+    return {
+      data: pageRows.map(movieRow),
+      nextCursor:
+        rows.results.length > input.limit && last !== undefined
+          ? encodeCursor({
+              v: 1,
+              fingerprint: key,
+              nullRank: last.sort_null_rank,
+              value: last.sort_value,
+              title: last.normalized_title,
+              id: last.media_item_id,
+            })
+          : null,
+    }
+  }
+
+  async summarizeMovies(
+    input: MoviesListInput,
+  ): Promise<Omit<MoviesPageRecord, 'data' | 'nextCursor'>> {
+    const base = baseSql(input)
+    const filter = filterSql(input)
     const counts = await statement(
       this.#database,
       `WITH b AS (${base.sql}) SELECT COUNT(*) filtered_count,
@@ -1505,20 +1537,7 @@ export class SqlMoviesRepository {
          WHERE c.source='letterboxd'`,
       )
       .first<{ export_at: string | null; rss_at: string | null }>()
-    const last = pageRows.at(-1)
     return {
-      data: pageRows.map(movieRow),
-      nextCursor:
-        rows.results.length > input.limit && last !== undefined
-          ? encodeCursor({
-              v: 1,
-              fingerprint: key,
-              nullRank: last.sort_null_rank,
-              value: last.sort_value,
-              title: last.normalized_title,
-              id: last.media_item_id,
-            })
-          : null,
       totalCount:
         input.collection === 'archive' ? (totals?.archive_items ?? 0) : (totals?.queue_items ?? 0),
       filteredCount: counts?.filtered_count ?? 0,

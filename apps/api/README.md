@@ -156,3 +156,11 @@ sync and catalog job. Each operation receives cloned bindings; reports run in
 `finally`, including failed operations. Queue messages and HTTP requests retain
 their independent scopes. Available D1 metadata remains partial because native
 `first()` does not return it.
+
+## Library reads
+
+All collection routes use `section` and the shared 50-item default. Collection
+responses contain `data` and `nextCursor`; the sibling `/summary` endpoint
+contains counts, facets, and source status and accepts only search/filter state.
+See [Library fetching](../../docs/architecture/library-fetching.md) for the
+current contracts, which supersede older combined-response descriptions.

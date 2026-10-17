@@ -1614,12 +1614,58 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
 
   async listVideos(input: VideosListInput) {
     const at = this.clock()
+    const [page, summary] = await Promise.all([
+      this.listVideoItems(input, at),
+      this.summarizeVideos(input, at),
+    ])
+    return { ...page, ...summary }
+  }
+
+  async summarizeVideos(input: VideosListInput, at = this.clock()) {
+    const channels = input.view === 'channels'
+    const { where, values } = channels ? this.channelFilters(input) : this.videoClauses(input)
+    const ownerOnly = !channels && !this.usesCatalogFilters(input)
+    const count = await this.readStatement(
+      channels
+        ? `SELECT COUNT(*) section_channels,COUNT(*) FILTER (WHERE ${where}) value FROM video_channel_groups p`
+        : `SELECT COUNT(*) value FROM ${ownerOnly ? 'main.video_library_projection' : 'video_library_projection'} p WHERE ${where}`,
+      values,
+      at,
+    ).first<{ value: number; section_channels?: number }>()
+    return {
+      totalCount: count?.value ?? 0,
+      filteredCount: count?.value ?? 0,
+      ...(await this.sharedEnvelope(
+        input.view,
+        where,
+        values,
+        channels ? undefined : this.matchingCte(input),
+        at,
+        count?.section_channels,
+        ownerOnly,
+      )),
+    }
+  }
+
+  private channelFilters(input: VideosListInput) {
+    const clauses = ['1=1']
+    const values: DatabaseValue[] = []
+    if (input.q) {
+      const search = liveSearchPredicate('video_channel_search', 'p.channel_id', input.q)
+      clauses.push(`(p.channel_id=? OR (${search.sql}))`)
+      values.push(input.q, ...search.values)
+    }
+    const where = clauses.join(' AND ')
+    return { where, values }
+  }
+
+  async listVideoItems(input: VideosListInput, at = this.clock()) {
     const read = (query: string, values: readonly DatabaseValue[] = []) =>
       this.readStatement(query, values, at)
 
     const key = JSON.stringify({ ...input, cursor: undefined })
     const requestedCursor = collectionCursor(input.cursor, key)
-    if (input.view === 'channels') return this.listChannels(input, requestedCursor, key, at)
+    if (input.view === 'channels') return this.listChannelItems(input, requestedCursor, key, at)
     const { where, values } = this.videoClauses(input)
     const matching = this.matchingCte(input)
     const ownerOnly = !this.usesCatalogFilters(input)
@@ -1649,10 +1695,6 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     if (requestedCursor !== null && requestedCursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
     const page = pageClause(requestedCursor, direction)
-    const count = await read(
-      `SELECT COUNT(*) value FROM ${ownerOnly ? 'main.video_library_projection' : 'video_library_projection'} p WHERE ${where}`,
-      values,
-    ).first<{ value: number }>()
     const orderFields =
       sort === 'relevance' && input.q
         ? ',p.video_id,p.display_title'
@@ -1686,7 +1728,6 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
        ORDER BY (paged.sort_value IS NULL),paged.sort_value ${direction.toUpperCase()},paged.normalized_title,paged.stable_id`,
       [...matching.values, ...values, ...orderValues, ...page.values, input.limit + 1],
     ).all<Row>()
-    const total = count?.value ?? 0
     const hasMore = rows.results.length > input.limit
     const visibleRows = rows.results.slice(0, input.limit)
     const last = visibleRows.at(-1)
@@ -1704,13 +1745,10 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
               id: String(last.media_item_id),
             })
           : null,
-      totalCount: total,
-      filteredCount: total,
-      ...(await this.sharedEnvelope(input.view, where, values, matching, at, undefined, ownerOnly)),
     }
   }
 
-  private async listChannels(
+  private async listChannelItems(
     input: VideosListInput,
     requestedCursor: CollectionCursor | null,
     key: string,
@@ -1719,14 +1757,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const read = (query: string, values: readonly DatabaseValue[] = []) =>
       this.readStatement(query, values, at)
 
-    const clauses = ['1=1']
-    const values: DatabaseValue[] = []
-    if (input.q) {
-      const search = liveSearchPredicate('video_channel_search', 'p.channel_id', input.q)
-      clauses.push(`(p.channel_id=? OR (${search.sql}))`)
-      values.push(input.q, ...search.values)
-    }
-    const where = clauses.join(' AND ')
+    const { where, values } = this.channelFilters(input)
     const sort = input.sort ?? 'watchCount'
     const direction = input.direction ?? (['channel', 'relevance'].includes(sort) ? 'asc' : 'desc')
     const orderValues: DatabaseValue[] = []
@@ -1749,15 +1780,6 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     if (requestedCursor !== null && requestedCursor.generation !== generation)
       throw new TypeError('Videos pagination cursor is stale')
     const page = pageClause(requestedCursor, direction)
-    // Dynamic association aggregation must run once; cached numeric counts are cheap.
-    // This hint changes query shape only. Every statement still checks the live mode.
-    const includeCounts = generationRow?.channel_mode === 'dynamic'
-    const readCount = () =>
-      read(
-        `SELECT COUNT(*) section_channels,COUNT(*) FILTER (WHERE ${where}) value FROM video_channel_groups p`,
-        values,
-      ).first<{ value: number; section_channels: number }>()
-    let count = includeCounts ? null : await readCount()
     const rows = await read(
       `WITH channel_keys AS (
          SELECT grouped.*,
@@ -1770,7 +1792,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
          LEFT JOIN youtube_published_channel_profiles cp ON cp.channel_id=grouped.channel_id
            AND cp.expires_at>(SELECT at FROM read_clock)
        ), filtered AS (
-         SELECT p.*${includeCounts ? ',COUNT(*) OVER() total_count' : ''} FROM channel_keys p WHERE ${where}
+         SELECT p.* FROM channel_keys p WHERE ${where}
        ), ordered AS (
          SELECT filtered.*,${order} sort_value,normalized_title stable_title,channel_id stable_id
          FROM filtered
@@ -1785,22 +1807,13 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
          (SELECT COUNT(*) FROM youtube_channel_subscriptions s WHERE s.channel_id=paged.channel_id AND s.upstream_state='active') subscription_count,
          paged.archive_video_count,paged.watch_occurrence_count,paged.latest_watched_at,paged.queue_video_count,
          CAST(paged.projection_generation AS TEXT)||':'||(SELECT revision FROM read_generation)||':'||(SELECT deadline FROM read_generation) projection_generation,
-         paged.updated_at,paged.sort_value${includeCounts ? ',paged.total_count,(SELECT COUNT(*) FROM video_channel_groups) section_channels' : ''}
+         paged.updated_at,paged.sort_value
        FROM paged LEFT JOIN main.video_channel_projection owner ON owner.channel_id=paged.channel_id
        LEFT JOIN youtube_published_channel_profiles cp ON cp.channel_id=paged.channel_id
          AND cp.expires_at>(SELECT at FROM read_clock)
        ORDER BY (paged.sort_value IS NULL),paged.sort_value ${direction.toUpperCase()},paged.normalized_title,paged.stable_id`,
       [...values, ...orderValues, ...page.values, input.limit + 1],
     ).all<Row>()
-    if (count === null) {
-      count = rows.results.length
-        ? {
-            value: Number(rows.results[0]?.total_count ?? 0),
-            section_channels: Number(rows.results[0]?.section_channels ?? 0),
-          }
-        : await readCount()
-    }
-    const total = count?.value ?? 0
     const hasMore = rows.results.length > input.limit
     const visibleRows = rows.results.slice(0, input.limit)
     const last = visibleRows.at(-1)
@@ -1816,16 +1829,6 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
               id: String(last.channel_id),
             })
           : null,
-      totalCount: total,
-      filteredCount: total,
-      ...(await this.sharedEnvelope(
-        'channels',
-        where,
-        values,
-        undefined,
-        at,
-        count?.section_channels ?? 0,
-      )),
     }
   }
 

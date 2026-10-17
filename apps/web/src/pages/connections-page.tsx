@@ -1,3 +1,4 @@
+import { activityIsRunning, ACTIVE_POLL_INTERVAL, IDLE_POLL_INTERVAL } from '../connections-queries'
 import { invalidateLibraryQueries } from '../library-queries'
 import { Notice, FileUploadButton } from '@/components/ui-patterns'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,7 +20,13 @@ import { FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { SourceLogo } from '@/components/source-logo'
 import styles from './connections-page.module.css'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useIsMutating,
+} from '@tanstack/react-query'
 
 import {
   fetchConnections,
@@ -57,91 +64,84 @@ const coverageNotes = {
 export function ConnectionsPage() {
   const queryClient = useQueryClient()
   const [youtubeKey, setYoutubeKey] = useState('')
+  const mutating = useIsMutating() > 0
   const runs = useInfiniteQuery({
     queryKey: ['sync-runs'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => fetchSyncRuns(pageParam),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-    refetchInterval: 5000,
+    getNextPageParam: () => undefined,
+    maxPages: 1,
+    refetchInterval: (query) =>
+      mutating || activityIsRunning(query.state.data?.pages[0])
+        ? ACTIVE_POLL_INTERVAL
+        : IDLE_POLL_INTERVAL,
   })
+  const olderRuns = useInfiniteQuery({
+    queryKey: ['sync-runs-history'],
+    enabled: false,
+    staleTime: Infinity,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      fetchSyncRuns(pageParam ?? runs.data?.pages[0]?.nextCursor ?? undefined),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+  const activity = [
+    ...new Map(
+      [
+        ...(olderRuns.data?.pages.flatMap((page) => page.data) ?? []),
+        ...(runs.data?.pages.flatMap((page) => page.data) ?? []),
+      ].map((run) => [run.id, run]),
+    ).values(),
+  ].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+  const hasOlder = olderRuns.data ? olderRuns.hasNextPage : Boolean(runs.data?.pages[0]?.nextCursor)
+  const refreshAfterMutation = async () => {
+    await invalidateLibraryQueries(queryClient)
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['connections'] }),
+      queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
+      queryClient.invalidateQueries({ queryKey: ['media'] }),
+      queryClient.resetQueries({ queryKey: ['sync-runs-history'] }),
+    ])
+  }
   const resumed = useMutation({
     mutationFn: (input: {
       source: 'spotify' | 'youtube'
       importId: string
       connectionId: string
     }) => resumeImport(input.source, input.importId, input.connectionId),
-    onSettled: () => queryClient.invalidateQueries(),
+    onSettled: refreshAfterMutation,
   })
   const connections = useQuery({
     queryKey: ['connections'],
     queryFn: () => fetchConnections(),
-    refetchInterval: 5000,
+    refetchInterval: () =>
+      mutating || activityIsRunning(runs.data?.pages[0])
+        ? ACTIVE_POLL_INTERVAL
+        : IDLE_POLL_INTERVAL,
   })
   const readwiseSync = useMutation({
     mutationFn: () => syncReadwise(),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
   const letterboxdImport = useMutation({
     mutationFn: (archive: File) => importLetterboxd(archive),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
   const hardcoverSync = useMutation({
     mutationFn: () => syncHardcover(),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
   const letterboxdSync = useMutation({
     mutationFn: () => syncLetterboxd(),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
   const spotifyImport = useMutation({
     mutationFn: (archive: File) => importSpotify(archive),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
   const spotifySync = useMutation({
     mutationFn: () => syncSpotify(),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
   const youtubeImport = useMutation({
     mutationFn: (input: { archive: File; connectionId?: string }) =>
@@ -152,14 +152,7 @@ export function ConnectionsPage() {
           ? { connectionKey: youtubeKey.trim(), connectionLabel: youtubeKey.trim() }
           : { connectionId: input.connectionId },
       ),
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['connections'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-        invalidateLibraryQueries(queryClient),
-      ])
-    },
+    onSettled: refreshAfterMutation,
   })
 
   return (
@@ -439,71 +432,72 @@ export function ConnectionsPage() {
             </Button>
           </Notice>
         ) : null}
-        {runs.isSuccess && runs.data.pages.every((page) => page.data.length === 0) ? (
+        {runs.isSuccess && activity.length === 0 ? (
           <p className={styles.muted}>No recent sync activity.</p>
         ) : null}
-        {runs.data?.pages
-          .flatMap((page) => page.data)
-          .map((run) => {
-            const status = run.catalogProgress?.state ?? run.status
-            return (
-              <article className={styles.activityRow} key={run.id}>
-                <div className={styles.activityIcon} aria-hidden="true">
-                  {status === 'succeeded' ? (
-                    <CheckCircle className={styles.connected} />
-                  ) : status === 'failed' ? (
-                    <XCircle className={styles.disconnected} />
-                  ) : status === 'running' ? (
-                    <Spinner />
-                  ) : status === 'partially_succeeded' ? (
-                    <Warning className={styles.degraded} />
-                  ) : (
-                    <Clock />
-                  )}
+        {activity.map((run) => {
+          const status = run.catalogProgress?.state ?? run.status
+          return (
+            <article className={styles.activityRow} key={run.id}>
+              <div className={styles.activityIcon} aria-hidden="true">
+                {status === 'succeeded' ? (
+                  <CheckCircle className={styles.connected} />
+                ) : status === 'failed' ? (
+                  <XCircle className={styles.disconnected} />
+                ) : status === 'running' ? (
+                  <Spinner />
+                ) : status === 'partially_succeeded' ? (
+                  <Warning className={styles.degraded} />
+                ) : (
+                  <Clock />
+                )}
+              </div>
+              <div className={styles.activityCopy}>
+                <div className={styles.activityHeading}>
+                  <strong>{run.connectionLabel}</strong>
+                  <time dateTime={run.startedAt}>{formatTimestamp(run.startedAt)}</time>
                 </div>
-                <div className={styles.activityCopy}>
-                  <div className={styles.activityHeading}>
-                    <strong>{run.connectionLabel}</strong>
-                    <time dateTime={run.startedAt}>{formatTimestamp(run.startedAt)}</time>
-                  </div>
+                <p>
+                  {run.catalogProgress ? 'Catalog refresh' : run.kind} ·{' '}
+                  {status.replaceAll('_', ' ')}
+                </p>
+                {run.catalogProgress ? (
                   <p>
-                    {run.catalogProgress ? 'Catalog refresh' : run.kind} ·{' '}
-                    {status.replaceAll('_', ' ')}
+                    {run.catalogProgress.returnedCount.toLocaleString()} metadata records returned ·{' '}
+                    {run.catalogProgress.unavailableCount.toLocaleString()} unavailable ·{' '}
+                    {run.catalogProgress.requestedCount.toLocaleString()} requested
+                    <br />
+                    Last activity {formatTimestamp(run.catalogProgress.lastActivityAt)}
+                    {run.catalogProgress.nextAttemptAt
+                      ? ` · Next attempt ${formatTimestamp(run.catalogProgress.nextAttemptAt)}`
+                      : ''}
                   </p>
-                  {run.catalogProgress ? (
-                    <p>
-                      {run.catalogProgress.returnedCount.toLocaleString()} metadata records returned
-                      · {run.catalogProgress.unavailableCount.toLocaleString()} unavailable ·{' '}
-                      {run.catalogProgress.requestedCount.toLocaleString()} requested
-                      <br />
-                      Last activity {formatTimestamp(run.catalogProgress.lastActivityAt)}
-                      {run.catalogProgress.nextAttemptAt
-                        ? ` · Next attempt ${formatTimestamp(run.catalogProgress.nextAttemptAt)}`
-                        : ''}
-                    </p>
-                  ) : (
-                    <p>
-                      {run.sourceRecords.toLocaleString()} source records ·{' '}
-                      {run.normalizedRecords.toLocaleString()} normalized ·{' '}
-                      {run.failedRecords.toLocaleString()} failed
-                    </p>
-                  )}
-                  {run.errorMessage === null ? null : (
-                    <Notice>
-                      {run.errorMessage} ({run.errorCode})
-                    </Notice>
-                  )}
-                </div>
-              </article>
-            )
-          })}
-        {runs.hasNextPage ? (
+                ) : (
+                  <p>
+                    {run.sourceRecords.toLocaleString()} source records ·{' '}
+                    {run.normalizedRecords.toLocaleString()} normalized ·{' '}
+                    {run.failedRecords.toLocaleString()} failed
+                  </p>
+                )}
+                {run.errorMessage === null ? null : (
+                  <Notice>
+                    {run.errorMessage} ({run.errorCode})
+                  </Notice>
+                )}
+              </div>
+            </article>
+          )
+        })}
+        {olderRuns.isError ? (
+          <Notice>Older activity could not be loaded. Use Older activity to retry.</Notice>
+        ) : null}
+        {hasOlder ? (
           <Button
             variant="outline"
             type="button"
             size="sm"
-            disabled={runs.isFetchingNextPage}
-            onClick={() => void runs.fetchNextPage()}
+            disabled={olderRuns.isFetching}
+            onClick={() => void olderRuns.fetchNextPage()}
           >
             Older activity
           </Button>

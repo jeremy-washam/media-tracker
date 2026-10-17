@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { MEDIA_TYPES } from '@media-tracker/domain'
 
+export * from './library'
 export * from './books'
 export * from './articles'
 export * from './movies'
@@ -300,3 +301,5 @@ export type SpotifySyncResponse = z.infer<typeof SpotifySyncResponseSchema>
 export type SyncJob = z.infer<typeof SyncJobSchema>
 export type CatalogSyncResponse = z.infer<typeof CatalogSyncResponseSchema>
 export type YoutubeImportResponse = z.infer<typeof YoutubeImportResponseSchema>
+
+export type SyncRunsResponse = z.infer<typeof SyncRunsResponseSchema>

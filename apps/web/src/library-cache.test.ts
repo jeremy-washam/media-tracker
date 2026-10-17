@@ -1,3 +1,13 @@
+import {
+  booksSummaryQueryOptions,
+  moviesSummaryQueryOptions,
+  videosQueryOptions,
+} from './library-queries'
+import {
+  channelPickerQueryOptions,
+  videoChannelQueryOptions,
+  channelVideosQueryOptions,
+} from './features/videos/videos-api'
 import { InfiniteQueryObserver, QueryObserver, type QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,13 +25,8 @@ import {
   invalidateLibraryQueries,
 } from './library-queries'
 
-const page = {
-  data: [],
-  nextCursor: 'next-page',
-  counts: { archive: 0, queue: 0, filteredBooks: 0, supportedReads: 0 },
-  facets: { formats: [], genres: [], series: [] },
-  freshness: { lastSuccessfulSyncAt: null, degraded: false },
-}
+const page = { data: [], nextCursor: 'next-page' }
+
 class MemoryStorage {
   values = new Map<string, string>()
   getItem(key: string) {
@@ -104,7 +109,7 @@ describe('Library initial page cache', () => {
     storage.setItem(
       LIBRARY_CACHE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         entries: [{ path: '/library/books/archive', page, updatedAt: fetchedAt }],
       }),
     )
@@ -125,7 +130,7 @@ describe('Library initial page cache', () => {
       '{broken',
       JSON.stringify({ version: 9, entries: [] }),
       JSON.stringify({
-        version: 1,
+        version: 2,
         entries: [
           { path: '/library/books/archive', updatedAt: Date.now(), page: { data: [] } },
           { path: '/library/books/unknown', updatedAt: Date.now(), page },
@@ -248,12 +253,89 @@ describe('Library background prefetch', () => {
     expect(
       INITIAL_LIBRARY_QUERIES.filter(
         (query) => query.path.includes('/books/') || query.path.includes('/movies/'),
-      ).every((query) => query.pageSize === 48),
+      ).every((query) => query.pageSize === 50),
     ).toBe(true)
     expect(
       INITIAL_LIBRARY_QUERIES.filter(
         (query) => !query.path.includes('/books/') && !query.path.includes('/movies/'),
       ).every((query) => query.pageSize === 50),
     ).toBe(true)
+  })
+})
+
+describe('independent summaries and deep browsing snapshots', () => {
+  it('shares summary identity across sorting/presentation but separates filter combinations', () => {
+    const original = moviesSummaryQueryOptions('archive', { q: 'alien' }).queryKey
+    expect(
+      moviesSummaryQueryOptions('archive', {
+        q: 'alien',
+        sort: 'title',
+        direction: 'desc',
+        layout: 'grid',
+        item: 'movie-one',
+      }).queryKey,
+    ).toEqual(original)
+    expect(
+      moviesSummaryQueryOptions('archive', { q: 'alien', reviewed: 'yes' }).queryKey,
+    ).not.toEqual(original)
+    expect(channelPickerQueryOptions().queryKey).toEqual(
+      videosQueryOptions('channels', { sort: 'channel', direction: 'asc' }).queryKey,
+    )
+    expect(videoChannelQueryOptions('channel-one').queryKey).toEqual([
+      'video-channel',
+      'channel-one',
+    ])
+    expect(channelVideosQueryOptions('channel-one', 'archive').queryKey).toEqual([
+      'video-channel-library',
+      'channel-one',
+      'archive',
+    ])
+  })
+
+  it('persists and invalidates summary snapshots independently of item pages', async () => {
+    const storage = new MemoryStorage()
+    const value = client()
+    cleanups.push(persistLibraryCache(value, storage))
+    const items = booksQueryOptions('archive')
+    const summary = booksSummaryQueryOptions('archive')
+    const aggregate = {
+      counts: { archive: 3, queue: 4, filteredBooks: 3, supportedReads: 5 },
+      facets: { formats: [], series: [], genres: [] },
+      freshness: { lastSuccessfulSyncAt: null, degraded: false },
+    }
+    value.setQueryData(items.queryKey, { pages: [page], pageParams: [undefined] })
+    const itemTime = Date.now()
+    vi.setSystemTime(itemTime + 1000)
+    value.setQueryData(summary.queryKey, aggregate)
+    await vi.advanceTimersByTimeAsync(200)
+    const restored = client(storage)
+    expect(restored.getQueryData(summary.queryKey)).toEqual(aggregate)
+    expect(restored.getQueryState(items.queryKey)?.dataUpdatedAt).toBe(itemTime)
+    expect(restored.getQueryState(summary.queryKey)?.dataUpdatedAt).toBe(itemTime + 1000)
+    await invalidateLibraryQueries(value)
+    expect(client(storage).getQueryData(summary.queryKey)).toBeUndefined()
+  })
+
+  it('retains loaded pages on stale remount, but refreshes the chain after explicit invalidation', async () => {
+    const value = client()
+    const load = vi.fn(async ({ pageParam }: { pageParam: string | undefined }) => ({
+      data: [],
+      nextCursor: pageParam ? null : 'second',
+    }))
+    const options = { ...booksQueryOptions('archive'), queryFn: load }
+    const first = new InfiniteQueryObserver(value, options)
+    const stop = first.subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(1)
+    await first.fetchNextPage()
+    expect(load).toHaveBeenCalledTimes(2)
+    stop()
+    vi.setSystemTime(Date.now() + 11 * 60_000)
+    const revisited = new InfiniteQueryObserver(value, options)
+    cleanups.push(revisited.subscribe(() => {}))
+    await vi.advanceTimersByTimeAsync(1)
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(revisited.getCurrentResult().data?.pages).toHaveLength(2)
+    await invalidateLibraryQueries(value)
+    expect(load).toHaveBeenCalledTimes(4)
   })
 })

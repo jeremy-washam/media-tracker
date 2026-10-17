@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 /** Section totals are unfiltered library facts, shared across collection queries. */
 export function useLibrarySectionCounts<TPage, TCounts>(
@@ -10,10 +10,10 @@ export function useLibrarySectionCounts<TPage, TCounts>(
   const queryClient = useQueryClient()
   const cached = queryClient
     .getQueryCache()
-    .findAll({ queryKey: [media] })
-    .filter((query) => (query.state.data as InfiniteData<TPage> | undefined)?.pages[0])
+    .findAll({ queryKey: [`${media}-summary`] })
+    .filter((query) => query.state.data !== undefined)
     .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)[0]
-  const previousPage = (cached?.state.data as InfiniteData<TPage> | undefined)?.pages[0]
+  const previousPage = cached?.state.data as TPage | undefined
   return previousPage ? select(previousPage) : page ? select(page) : undefined
 }
 
@@ -66,4 +66,13 @@ export function useInspectorPresence(item: string | undefined) {
     return () => window.clearTimeout(timeout)
   }, [item])
   return item ?? retained
+}
+
+export function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay)
+    return () => window.clearTimeout(timer)
+  }, [value, delay])
+  return debounced
 }

@@ -1,3 +1,4 @@
+import { checkLibraryCursorResponse } from '../../library-api'
 import {
   MusicDetailSchema,
   MusicFilterOptionsResponseSchema,
@@ -12,6 +13,7 @@ import type { MusicRouteSearch } from './music-route-search'
 
 async function body(response: Response): Promise<unknown> {
   const value: unknown = await response.json()
+  checkLibraryCursorResponse(response.status, value)
   if (!response.ok) throw new Error(`Request failed (${response.status}).`)
   return value
 }
@@ -23,7 +25,7 @@ function query(value: object) {
 }
 
 export function fetchMusic(
-  request: MusicRouteSearch & { view: string; limit: number; cursor?: string },
+  request: MusicRouteSearch & { section: string; limit: number; cursor?: string },
   signal?: AbortSignal,
 ): Promise<MusicResponse> {
   return fetch(`/api/library/music?${query(request)}`, signal ? { signal } : undefined)
@@ -32,7 +34,7 @@ export function fetchMusic(
 }
 export function fetchMusicFilterOptions(
   request: MusicRouteSearch & {
-    view: 'tracks' | 'albums'
+    section: 'tracks' | 'albums'
     facet: 'artist' | 'album'
     optionQ?: string
     optionLimit: number
@@ -49,11 +51,11 @@ export function fetchMusicFilterOptions(
 }
 export function fetchMusicDetail(
   id: string,
-  view: 'tracks' | 'albums' | 'artists',
+  section: 'tracks' | 'albums' | 'artists',
   signal?: AbortSignal,
 ): Promise<MusicDetail> {
   return fetch(
-    `/api/library/music/${view}/${encodeURIComponent(id)}`,
+    `/api/library/music/${section}/${encodeURIComponent(id)}`,
     signal ? { signal } : undefined,
   )
     .then(body)
@@ -61,12 +63,12 @@ export function fetchMusicDetail(
 }
 export function fetchMusicHistory(
   id: string,
-  view: 'tracks' | 'albums' | 'artists',
+  section: 'tracks' | 'albums' | 'artists',
   cursor?: string,
   signal?: AbortSignal,
 ): Promise<MusicHistoryResponse> {
   return fetch(
-    `/api/library/music/${view}/${encodeURIComponent(id)}/history?${query({ limit: 25, cursor })}`,
+    `/api/library/music/${section}/${encodeURIComponent(id)}/history?${query({ limit: 25, cursor })}`,
     signal ? { signal } : undefined,
   )
     .then(body)

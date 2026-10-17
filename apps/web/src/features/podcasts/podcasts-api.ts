@@ -1,3 +1,4 @@
+import { checkLibraryCursorResponse } from '../../library-api'
 import {
   PodcastDetailSchema,
   PodcastHistoryResponseSchema,
@@ -12,6 +13,7 @@ import type { PodcastsRouteSearch } from './podcasts-route-search'
 
 async function body(response: Response): Promise<unknown> {
   const value: unknown = await response.json()
+  checkLibraryCursorResponse(response.status, value)
   if (!response.ok) throw new Error(`Request failed (${response.status}).`)
   return value
 }
@@ -24,7 +26,7 @@ function query(value: object) {
 }
 
 export function fetchPodcasts(
-  request: PodcastsRouteSearch & { view: string; limit: number; cursor?: string },
+  request: PodcastsRouteSearch & { section: string; limit: number; cursor?: string },
   signal?: AbortSignal,
 ): Promise<PodcastsResponse> {
   return fetch(`/api/library/podcasts?${query(request)}`, signal ? { signal } : undefined)
@@ -34,7 +36,7 @@ export function fetchPodcasts(
 
 export function fetchPodcastFilterOptions(
   request: PodcastsRouteSearch & {
-    view: 'archive' | 'queue' | 'following'
+    section: 'archive' | 'queue' | 'following'
     facet: 'show' | 'publisher' | 'language'
     optionQ?: string
     optionLimit: number

@@ -143,13 +143,14 @@ async function mocks(page: Page) {
       podcasts: podcastsResponse(),
       music: musicResponse(),
       videos: videosResponse(
-        path === '/api/library/videos' && url.searchParams.get('view') === 'channels'
+        path === '/api/library/videos' && url.searchParams.get('section') === 'channels'
           ? [channel]
           : [video],
       ),
     }
     for (const [media, json] of Object.entries(collections)) {
-      if (path === `/api/library/${media}`) return route.fulfill({ json })
+      if (path === `/api/library/${media}` || path === `/api/library/${media}/summary`)
+        return route.fulfill({ json })
     }
     if (path === '/api/library/movies/movie-one') return route.fulfill({ json: movieDetail })
     if (path === '/api/library/books/book-one') return route.fulfill({ json: bookDetail })

@@ -49,6 +49,10 @@ and simulator/physical-phone testing. Development setup and a small installed
 app/test proof are next; no native project or authentication change exists yet.
 Disposable mobile studies do not establish an approved interface.
 
+The [Library fetching contract](../architecture/library-fetching.md) records the
+current section parameters, separate summary endpoints, 50-item default, and
+cache/polling behavior.
+
 ## 1. Product and architectural boundaries
 
 These are fixed unless explicitly revisited:

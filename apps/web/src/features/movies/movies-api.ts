@@ -1,3 +1,4 @@
+import { checkLibraryCursorResponse } from '../../library-api'
 import {
   MovieDetailSchema,
   MovieHistoryResponseSchema,
@@ -10,13 +11,14 @@ import {
 import type { MoviesRouteSearch } from './movies-route-search'
 
 export interface MoviesRequest extends MoviesRouteSearch {
-  collection: 'archive' | 'queue'
+  section: 'archive' | 'queue'
   cursor?: string | undefined
   limit: number
 }
 
 async function json(response: Response): Promise<unknown> {
   const body: unknown = await response.json()
+  checkLibraryCursorResponse(response.status, body)
   if (!response.ok) {
     const message =
       typeof body === 'object' && body !== null && 'error' in body

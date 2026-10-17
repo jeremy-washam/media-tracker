@@ -13,8 +13,8 @@ test('missing Music artwork reflects the kind consistently in collections and in
     kind,
     title: `Synthetic ${kind}`,
   }))
-  await page.route('**/api/library/music?*', (route) => {
-    const view = new URL(route.request().url()).searchParams.get('view') ?? 'tracks'
+  await page.route('**/api/library/music{,/summary}?*', (route) => {
+    const view = new URL(route.request().url()).searchParams.get('section') ?? 'tracks'
     const data = items.filter((item) => `${item.kind}s` === view)
     return route.fulfill({
       json: { ...musicResponse([]), data, totalCount: data.length, filteredCount: data.length },

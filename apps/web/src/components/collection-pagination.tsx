@@ -1,3 +1,4 @@
+import { InvalidLibraryCursorError } from '../library-api'
 import paginationStyles from '@/components/collection-pagination.module.css'
 import { cn } from '@/lib/utils'
 import { useRef, useLayoutEffect, type RefObject, type MouseEvent } from 'react'
@@ -34,8 +35,14 @@ export function CollectionPagination({
   if (!query.hasNextPage && itemCount === 0) return null
   const noun = itemCount === 1 ? label.replace(/s$/, '') : label
   const unsupported = typeof window !== 'undefined' && !('IntersectionObserver' in window)
+  const invalidCursor = query.error instanceof InvalidLibraryCursorError
   const load = (event: MouseEvent<HTMLButtonElement>) => {
     if (query.isFetching) return
+    if (invalidCursor) {
+      keyboardFocus.current = null
+      void query.refetch().catch(() => {})
+      return
+    }
     keyboardFocus.current = event.detail === 0 ? itemCount : null
     void query.fetchNextPage({ cancelRefetch: false }).catch(() => {
       keyboardFocus.current = null
@@ -79,9 +86,13 @@ export function CollectionPagination({
       {query.isFetchNextPageError ? (
         <Alert className="mx-auto max-w-md">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>More {label} could not be loaded.</span>
+            <span>
+              {invalidCursor
+                ? 'This collection changed. Refresh it to load more.'
+                : `More ${label} could not be loaded.`}
+            </span>
             <Button variant="outline" disabled={query.isFetching} onClick={load}>
-              Try again
+              {invalidCursor ? 'Refresh collection' : 'Try again'}
             </Button>
           </AlertDescription>
         </Alert>

@@ -35,7 +35,7 @@ export async function installDefaultApiMocks(page: Page) {
       return route.fulfill({ json: { data: [], nextCursor: null } })
     }
     const media = url.pathname.match(
-      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)$/,
+      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)(?:\/summary)?$/,
     )?.[1] as keyof typeof collections | undefined
     if (media) return route.fulfill({ json: collections[media]() })
     return route.fulfill({

@@ -1,3 +1,4 @@
+import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
@@ -10,7 +11,7 @@ import booksStyles from '@/features/books/books.module.css'
 import { cn } from '@/lib/utils'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
-import { articlesQueryOptions } from '../../library-queries'
+import { articlesQueryOptions, articlesSummaryQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -51,12 +52,7 @@ import {
   X,
 } from '@/components/icons'
 import type { ArticleCollectionItem, ArticleDetail } from '@media-tracker/contracts'
-import {
-  fetchArticle,
-  fetchArticleHighlights,
-  fetchArticleHistory,
-  fetchArticles,
-} from './articles-api'
+import { fetchArticle, fetchArticleHighlights, fetchArticleHistory } from './articles-api'
 import { normalizedForArticleSection, type ArticlesRouteSearch } from './articles-route-search'
 
 type Section = 'archive' | 'queue' | 'feed'
@@ -132,10 +128,11 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
   const inspectorItem = useInspectorPresence(search.item)
   const queryOptions = articlesQueryOptions(section, search)
   const articles = useInfiniteQuery(queryOptions)
+  const summaryQuery = useQuery(articlesSummaryQueryOptions(section, search))
   const pages = articles.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
   const collectionRef = useCollectionScroll(queryOptions.queryKey, 'list', items.length)
-  const summary = pages[0]
+  const summary = summaryQuery.data
   const sectionCounts = useLibrarySectionCounts('articles', summary, (page) => page.sectionCounts)
   const sort = defaultSort(section, search),
     direction = defaultDirection(sort, search.direction)
@@ -297,7 +294,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
           data-ui="collection-summary"
         >
           <span>
-            {articles.isPending
+            {articles.isPending || !summary
               ? null
               : `${(summary?.filteredCount ?? 0).toLocaleString()} of ${(summary?.totalCount ?? 0).toLocaleString()} ${(summary?.totalCount ?? 0) === 1 ? 'article' : 'articles'}${section === 'archive' && summary?.occurrenceCount != null ? ` · ${summary.occurrenceCount.toLocaleString()} archive ${summary.occurrenceCount === 1 ? 'occurrence' : 'occurrences'}` : ''}`}
           </span>
@@ -305,6 +302,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             <small>Reader synced {formatDate(summary.coverage.lastSuccessfulSyncAt)}</small>
           ) : null}
         </div>
+        <CollectionSummaryStatus query={summaryQuery} />
         {articles.isPending ? (
           <LoadingState data-ui="collection-loading">Loading articles…</LoadingState>
         ) : null}
@@ -494,7 +492,7 @@ function ArticleFilters({
 }: {
   section: Section
   search: ArticlesRouteSearch
-  summary: Awaited<ReturnType<typeof fetchArticles>> | undefined
+  summary: import('@media-tracker/contracts').ArticlesSummary | undefined
   onChange: (patch: Partial<ArticlesRouteSearch>) => void
 }) {
   return (

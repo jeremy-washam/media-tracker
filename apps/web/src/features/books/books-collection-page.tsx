@@ -1,3 +1,4 @@
+import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import mediaStyles from '@/components/media-presentation.module.css'
@@ -8,7 +9,7 @@ import inspectorStyles from '@/components/inspector.module.css'
 import { cn } from '@/lib/utils'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
-import { booksQueryOptions } from '../../library-queries'
+import { booksQueryOptions, booksSummaryQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState, Hint } from '@/components/ui-patterns'
@@ -189,10 +190,11 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
 
   const queryOptions = booksQueryOptions(collection, search)
   const books = useInfiniteQuery(queryOptions)
+  const summaryQuery = useQuery(booksSummaryQueryOptions(collection, search))
   const pages = books.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
   const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
-  const summary = pages[0]
+  const summary = summaryQuery.data
   const sectionCounts = useLibrarySectionCounts('books', summary, (page) => page.counts)
   const count = summary?.counts.filteredBooks ?? 0
   const filters = activeFilterCount(search, collection)
@@ -365,7 +367,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           aria-live="polite"
           data-ui="collection-summary"
         >
-          {books.isPending ? null : (
+          {books.isPending || !summary ? null : (
             <span>
               {count.toLocaleString()} {count === 1 ? 'book' : 'books'}
               {collection === 'archive' && summary
@@ -375,6 +377,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
           )}
           {summary?.freshness.degraded ? <strong>Hardcover sync needs attention</strong> : null}
         </div>
+        <CollectionSummaryStatus query={summaryQuery} />
         {books.isPending ? (
           <LoadingState data-ui="collection-loading">Loading books…</LoadingState>
         ) : null}

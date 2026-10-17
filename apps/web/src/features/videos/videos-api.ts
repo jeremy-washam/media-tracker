@@ -1,3 +1,6 @@
+import { checkLibraryCursorResponse } from '../../library-api'
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
+import { LIBRARY_PAGE_SIZE } from '@media-tracker/contracts'
 import {
   VideoChannelDetailSchema,
   VideoChannelLibraryResponseSchema,
@@ -14,6 +17,7 @@ import type { VideosRouteSearch } from './videos-route-search'
 
 async function body(response: Response): Promise<unknown> {
   const value: unknown = await response.json()
+  checkLibraryCursorResponse(response.status, value)
   if (!response.ok) throw new Error(`Request failed (${response.status}).`)
   return value
 }
@@ -29,7 +33,7 @@ function query(value: object) {
 }
 
 export function fetchVideos(
-  request: VideosRouteSearch & { view: string; limit: number; cursor?: string },
+  request: VideosRouteSearch & { section: string; limit: number; cursor?: string },
   signal?: AbortSignal,
 ): Promise<VideosResponse> {
   return fetch(`/api/library/videos?${query(request)}`, signal ? { signal } : undefined)
@@ -72,9 +76,52 @@ export function fetchChannelVideos(
   signal?: AbortSignal,
 ): Promise<VideoChannelLibraryResponse> {
   return fetch(
-    `/api/library/video-channels/${encodeURIComponent(id)}/videos?${query({ membership, limit: 25, cursor })}`,
+    `/api/library/video-channels/${encodeURIComponent(id)}/videos?${query({ section: membership, limit: 25, cursor })}`,
     signal ? { signal } : undefined,
   )
     .then(body)
     .then((value) => VideoChannelLibraryResponseSchema.parse(value))
+}
+
+export function videoChannelQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['video-channel', id],
+    queryFn: ({ signal }) => fetchVideoChannel(id, signal),
+  })
+}
+export function channelVideosQueryOptions(id: string, membership: 'archive' | 'queue') {
+  return infiniteQueryOptions({
+    queryKey: ['video-channel-library', id, membership],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) => fetchChannelVideos(id, membership, pageParam, signal),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+}
+export function channelPickerQueryOptions(q?: string) {
+  return infiniteQueryOptions({
+    queryKey: [
+      'videos',
+      {
+        section: 'channels',
+        sort: q ? 'relevance' : 'channel',
+        direction: 'asc',
+        limit: LIBRARY_PAGE_SIZE,
+        ...(q ? { q } : {}),
+      },
+    ],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      fetchVideos(
+        {
+          section: 'channels',
+          sort: q ? 'relevance' : 'channel',
+          direction: 'asc',
+          limit: LIBRARY_PAGE_SIZE,
+          ...(q ? { q } : {}),
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+        signal,
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
 }

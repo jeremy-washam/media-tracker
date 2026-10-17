@@ -1,3 +1,4 @@
+import { checkLibraryCursorResponse } from '../../library-api'
 import {
   ArticleDetailSchema,
   ArticleHighlightsResponseSchema,
@@ -17,6 +18,7 @@ export interface ArticlesRequest extends ArticlesRouteSearch {
 }
 async function json(response: Response): Promise<unknown> {
   const body: unknown = await response.json()
+  checkLibraryCursorResponse(response.status, body)
   if (!response.ok) {
     const message =
       typeof body === 'object' && body !== null && 'error' in body

@@ -1668,6 +1668,16 @@ export class SqlArticlesRepository {
   }
 
   async listArticles(input: ArticlesListInput): Promise<ArticlesPageRecord> {
+    const [page, summary] = await Promise.all([
+      this.listArticleItems(input),
+      this.summarizeArticles(input),
+    ])
+    return { ...page, ...summary }
+  }
+
+  async listArticleItems(
+    input: ArticlesListInput,
+  ): Promise<Pick<ArticlesPageRecord, 'data' | 'nextCursor'>> {
     if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100) {
       throw new RangeError('Articles limit must be an integer from 1 through 100')
     }
@@ -1793,6 +1803,28 @@ export class SqlArticlesRepository {
       ],
     ).all<ArticleRow & { sort_value: string | number | null; sort_null_rank: number }>()
     const page = rows.results.slice(0, input.limit)
+    return {
+      data: page.map((row) => collectionRecord(row, input.q)),
+      nextCursor:
+        rows.results.length > input.limit && page.length > 0
+          ? await encodeCursor({
+              v: 2,
+              fingerprint,
+              projectionVersion: version,
+              contentIndexVersion,
+              nullRank: page.at(-1)!.sort_null_rank,
+              sortValue: page.at(-1)!.sort_value,
+              normalizedTitle: page.at(-1)!.normalized_title,
+              mediaItemId: page.at(-1)!.media_item_id,
+            })
+          : null,
+    }
+  }
+
+  async summarizeArticles(
+    input: ArticlesListInput,
+  ): Promise<Omit<ArticlesPageRecord, 'data' | 'nextCursor'>> {
+    const where = filters(input)
     const archiveCount = archiveOccurrencePredicate(input, 'count_occurrence')
     const count = await statement(
       this.database,
@@ -1973,20 +2005,6 @@ export class SqlArticlesRepository {
         last_successful_sync_at: string | null
       }>()
     return {
-      data: page.map((row) => collectionRecord(row, input.q)),
-      nextCursor:
-        rows.results.length > input.limit && page.length > 0
-          ? await encodeCursor({
-              v: 2,
-              fingerprint,
-              projectionVersion: version,
-              contentIndexVersion,
-              nullRank: page.at(-1)!.sort_null_rank,
-              sortValue: page.at(-1)!.sort_value,
-              normalizedTitle: page.at(-1)!.normalized_title,
-              mediaItemId: page.at(-1)!.media_item_id,
-            })
-          : null,
       sectionCounts: {
         archive: totals?.archive ?? 0,
         queue: totals?.queue ?? 0,

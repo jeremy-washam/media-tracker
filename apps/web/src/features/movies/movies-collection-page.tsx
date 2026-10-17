@@ -1,3 +1,4 @@
+import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import mediaStyles from '@/components/media-presentation.module.css'
@@ -9,7 +10,7 @@ import booksStyles from '@/features/books/books.module.css'
 import { cn } from '@/lib/utils'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
-import { moviesQueryOptions } from '../../library-queries'
+import { moviesQueryOptions, moviesSummaryQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -167,10 +168,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
   const [draftSearch, setDraftSearch] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedRef = useRef<HTMLButtonElement>(null)
-  const [view, saveLayout] = useLibraryLayout(search.view)
+  const [layout, saveLayout] = useLibraryLayout(search.layout)
 
   const updateSearch = (patch: Partial<MoviesRouteSearch>) => {
-    if (patch.view) saveLayout(patch.view)
+    if (patch.layout) saveLayout(patch.layout)
     const next = { ...search, ...patch }
     for (const [key, value] of Object.entries(next)) {
       if (value === undefined || value === '' || value === false) {
@@ -198,10 +199,11 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
 
   const queryOptions = moviesQueryOptions(collection, search)
   const movies = useInfiniteQuery(queryOptions)
+  const summaryQuery = useQuery(moviesSummaryQueryOptions(collection, search))
   const pages = movies.data?.pages ?? []
   const items = pages.flatMap((page) => page.data)
-  const collectionRef = useCollectionScroll(queryOptions.queryKey, view, items.length)
-  const summary = pages[0]
+  const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
+  const summary = summaryQuery.data
   const sectionCounts = useLibrarySectionCounts('movies', summary, (page) => page.membershipCounts)
   const count = summary?.filteredCount ?? 0
   const filters = activeFilters(search, collection)
@@ -213,7 +215,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
       value={collection}
       render={<section />}
       data-inspector-open={Boolean(search.item)}
-      data-layout={view}
+      data-layout={layout}
       className={workspaceStyles['books-page']}
       aria-labelledby="movies-title"
       data-ui="library-workspace"
@@ -340,7 +342,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
               <ArrowDown aria-hidden="true" />
             )}
           </Button>
-          <LibraryLayoutToggle value={view} onValueChange={(view) => updateSearch({ view })} />
+          <LibraryLayoutToggle
+            value={layout}
+            onValueChange={(layout) => updateSearch({ layout })}
+          />
         </LibraryToolbar>
         {filtersOpen ? (
           <MovieFilters
@@ -355,10 +360,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
           aria-live="polite"
           data-ui="collection-summary"
         >
-          {movies.isPending ? null : (
+          {movies.isPending || !summary ? null : (
             <span>
               {count.toLocaleString()} {count === 1 ? 'movie' : 'movies'}
-              {collection === 'archive' && summary?.filteredOccurrenceCount !== null
+              {collection === 'archive' && summary && summary.filteredOccurrenceCount !== null
                 ? ` · ${summary?.filteredOccurrenceCount.toLocaleString()} ${summary?.filteredOccurrenceCount === 1 ? 'watch' : 'watches'}`
                 : ''}
             </span>
@@ -369,6 +374,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             </small>
           ) : null}
         </div>
+        <CollectionSummaryStatus query={summaryQuery} />
         {movies.isPending ? (
           <LoadingState data-ui="collection-loading">Loading movies…</LoadingState>
         ) : null}
@@ -402,14 +408,14 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
         ) : null}
         {items.length > 0 ? (
           <div
-            className={view === 'grid' ? mediaStyles['movies-grid'] : moviesStyles['movies-list']}
+            className={layout === 'grid' ? mediaStyles['movies-grid'] : moviesStyles['movies-list']}
           >
             {items.map((movie) => (
               <MovieResult
                 key={movie.id}
                 movie={movie}
                 collection={collection}
-                view={view}
+                layout={layout}
                 selected={search.item === movie.id}
                 buttonRef={search.item === movie.id ? selectedRef : undefined}
                 onSelect={() =>
@@ -445,14 +451,14 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
 function MovieResult({
   movie,
   collection,
-  view,
+  layout,
   selected,
   buttonRef,
   onSelect,
 }: {
   movie: MovieCollectionItem
   collection: 'archive' | 'queue'
-  view: 'grid' | 'list'
+  layout: 'grid' | 'list'
   selected: boolean
   buttonRef?: Ref<HTMLButtonElement> | undefined
   onSelect: () => void
@@ -462,7 +468,7 @@ function MovieResult({
     : movie.enrichment.mediaType === 'tv'
       ? 'Creator unavailable'
       : 'Director unavailable'
-  if (view === 'grid') {
+  if (layout === 'grid') {
     return (
       <MediaCard
         data-collection-item={movie.id}
