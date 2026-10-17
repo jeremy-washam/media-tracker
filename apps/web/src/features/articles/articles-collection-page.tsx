@@ -42,15 +42,14 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ArrowDown,
-  ArrowDownWideNarrow,
   ArrowUp,
-  ChevronRight,
-  ExternalLink,
-  FileText,
-  ListFilter,
-  Search,
+  CaretRight,
+  ArrowSquareOut,
+  Article,
+  Funnel,
+  MagnifyingGlass,
   X,
-} from 'lucide-react'
+} from '@/components/icons'
 import type { ArticleCollectionItem, ArticleDetail } from '@media-tracker/contracts'
 import {
   fetchArticle,
@@ -220,7 +219,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                 onChange={(event) => setDraft(event.target.value)}
               />
               <InputGroupAddon>
-                <Search aria-hidden="true" />
+                <MagnifyingGlass aria-hidden="true" />
               </InputGroupAddon>
               {(draft ?? search.q) ? (
                 <InputGroupAddon align="inline-end">
@@ -252,11 +251,10 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             onClick={() => setFiltersOpen((value) => !value)}
             data-ui="toolbar-button"
           >
-            <ListFilter aria-hidden="true" /> Filters{' '}
+            <Funnel aria-hidden="true" /> Filters{' '}
             {activeFilters ? <span>{activeFilters}</span> : null}
           </Button>
           <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort articles</span>
             <LibrarySelect
               aria-label="Sort articles"
@@ -321,7 +319,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
         ) : null}
         {!articles.isPending && !articles.isError && !items.length ? (
           <CollectionEmptyState
-            icon={FileText}
+            icon={Article}
             title={activeFilters || search.q ? 'No matching articles' : `No articles in ${section}`}
             description={
               activeFilters || search.q
@@ -402,7 +400,7 @@ function ArticleRow({
         <img src={item.imageUrl} alt="" loading="lazy" />
       ) : (
         <span className={articlesStyles['article-thumbnail']}>
-          <FileText aria-hidden="true" />
+          <Article aria-hidden="true" />
         </span>
       )}
       <span className={mediaStyles['article-row-copy']}>
@@ -430,7 +428,7 @@ function ArticleRow({
         ) : null}
       </span>
       <span className={mediaStyles['article-row-fact']}>{fact(item, section)}</span>
-      <ChevronRight aria-hidden="true" />
+      <CaretRight aria-hidden="true" />
     </MediaRowButton>
   )
 }
@@ -981,7 +979,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
           articlesStyles['article-inspector-heading'],
         )}
       >
-        {article.imageUrl ? <img src={article.imageUrl} alt="" /> : <FileText aria-hidden="true" />}
+        {article.imageUrl ? <img src={article.imageUrl} alt="" /> : <Article aria-hidden="true" />}
         <div>
           <h2>{article.title}</h2>
           <p>
@@ -1083,7 +1081,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
         </dl>
         <Collapsible className={articlesStyles['article-source-details']}>
           <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
-            Reader source details <ChevronRight aria-hidden="true" />
+            Reader source details <CaretRight aria-hidden="true" />
           </CollapsibleTrigger>
           <CollapsibleContent>
             <ul className={articlesStyles['article-relationships']}>
@@ -1097,7 +1095,7 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
                   <small>Reader ID: {relationship.documentId}</small>
                   {relationship.readerUrl && relationship.readerUrl !== article.links.reader ? (
                     <a href={relationship.readerUrl} target="_blank" rel="noopener noreferrer">
-                      Open in Reader <ExternalLink aria-hidden="true" />
+                      Open in Reader <ArrowSquareOut aria-hidden="true" />
                     </a>
                   ) : null}
                 </li>
@@ -1108,12 +1106,12 @@ function ArticleDetails({ article }: { article: ArticleDetail }) {
         <div className={articlesStyles['article-source-links']} data-ui="article-source-links">
           {article.links.original ? (
             <a href={article.links.original} target="_blank" rel="noopener noreferrer">
-              Open original <ExternalLink aria-hidden="true" />
+              Open original <ArrowSquareOut aria-hidden="true" />
             </a>
           ) : null}
           {article.links.reader ? (
             <a href={article.links.reader} target="_blank" rel="noopener noreferrer">
-              Open in Reader <ExternalLink aria-hidden="true" />
+              Open in Reader <ArrowSquareOut aria-hidden="true" />
             </a>
           ) : null}
         </div>

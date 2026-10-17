@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useId, useState, type ReactNode } from 'react'
 import {
-  ChevronDown,
-  CircleCheck,
-  CircleX,
-  Clock3,
-  RefreshCw,
-  TriangleAlert,
-  Upload,
-} from 'lucide-react'
+  CaretDown,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ArrowsClockwise,
+  Warning,
+  UploadSimple,
+} from '@/components/icons'
 import type { ConnectionsResponse } from '@media-tracker/contracts'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { FieldLabel } from '@/components/ui/field'
@@ -193,7 +193,7 @@ export function ConnectionsPage() {
                   {readwiseSync.isPending ? (
                     <Spinner aria-hidden="true" />
                   ) : (
-                    <RefreshCw aria-hidden="true" />
+                    <ArrowsClockwise aria-hidden="true" />
                   )}
                   {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
                 </Button>
@@ -208,7 +208,7 @@ export function ConnectionsPage() {
                   {hardcoverSync.isPending ? (
                     <Spinner aria-hidden="true" />
                   ) : (
-                    <RefreshCw aria-hidden="true" />
+                    <ArrowsClockwise aria-hidden="true" />
                   )}
                   {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
                 </Button>
@@ -224,7 +224,7 @@ export function ConnectionsPage() {
                     {letterboxdSync.isPending ? (
                       <Spinner aria-hidden="true" />
                     ) : (
-                      <RefreshCw aria-hidden="true" />
+                      <ArrowsClockwise aria-hidden="true" />
                     )}
                     {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
                   </Button>
@@ -238,7 +238,7 @@ export function ConnectionsPage() {
                       event.currentTarget.value = ''
                     }}
                   >
-                    <Upload aria-hidden="true" />
+                    <UploadSimple aria-hidden="true" />
                     {letterboxdImport.isPending ? 'Importing…' : 'Import ZIP'}
                   </FileUploadButton>
                 </div>
@@ -254,7 +254,7 @@ export function ConnectionsPage() {
                     {spotifySync.isPending ? (
                       <Spinner aria-hidden="true" />
                     ) : (
-                      <RefreshCw aria-hidden="true" />
+                      <ArrowsClockwise aria-hidden="true" />
                     )}
                     {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
                   </Button>
@@ -268,7 +268,7 @@ export function ConnectionsPage() {
                       event.currentTarget.value = ''
                     }}
                   >
-                    <Upload aria-hidden="true" />
+                    <UploadSimple aria-hidden="true" />
                     {spotifyImport.isPending ? 'Importing…' : 'Import ZIP'}
                   </FileUploadButton>
                 </div>
@@ -289,7 +289,7 @@ export function ConnectionsPage() {
                     event.currentTarget.value = ''
                   }}
                 >
-                  <Upload aria-hidden="true" />
+                  <UploadSimple aria-hidden="true" />
                   {youtubeImport.isPending ? 'Importing…' : 'Import Takeout'}
                 </FileUploadButton>
               ) : null}
@@ -423,7 +423,7 @@ export function ConnectionsPage() {
               event.currentTarget.value = ''
             }}
           >
-            <Upload aria-hidden="true" />
+            <UploadSimple aria-hidden="true" />
             {youtubeImport.isPending ? 'Importing…' : 'Import a new YouTube account'}
           </FileUploadButton>
         </div>
@@ -450,15 +450,15 @@ export function ConnectionsPage() {
               <article className={styles.activityRow} key={run.id}>
                 <div className={styles.activityIcon} aria-hidden="true">
                   {status === 'succeeded' ? (
-                    <CircleCheck className={styles.connected} />
+                    <CheckCircle className={styles.connected} />
                   ) : status === 'failed' ? (
-                    <CircleX className={styles.disconnected} />
+                    <XCircle className={styles.disconnected} />
                   ) : status === 'running' ? (
                     <Spinner />
                   ) : status === 'partially_succeeded' ? (
-                    <TriangleAlert className={styles.degraded} />
+                    <Warning className={styles.degraded} />
                   ) : (
-                    <Clock3 />
+                    <Clock />
                   )}
                 </div>
                 <div className={styles.activityCopy}>
@@ -540,11 +540,11 @@ function formatTimestamp(value: string) {
 
 function ConnectionStatus({ status }: { status: Connection['status'] }) {
   const appearance = {
-    connected: { icon: CircleCheck, label: 'Connected', className: styles.connected },
-    disconnected: { icon: CircleX, label: 'Disconnected', className: styles.disconnected },
-    degraded: { icon: TriangleAlert, label: 'Needs attention', className: styles.degraded },
+    connected: { icon: CheckCircle, label: 'Connected', className: styles.connected },
+    disconnected: { icon: XCircle, label: 'Disconnected', className: styles.disconnected },
+    degraded: { icon: Warning, label: 'Needs attention', className: styles.degraded },
     reauthorization_required: {
-      icon: CircleX,
+      icon: XCircle,
       label: 'Sign-in required',
       className: styles.disconnected,
     },
@@ -617,7 +617,7 @@ function ConnectionRow({
         ) : null}
         <Collapsible className={styles.details}>
           <CollapsibleTrigger render={<Button variant="ghost" size="xs" />}>
-            Details <ChevronDown aria-hidden="true" />
+            Details <CaretDown aria-hidden="true" />
           </CollapsibleTrigger>
           <CollapsibleContent className={styles.detailsContent}>
             <p>{coverageNotes[connection.source]}</p>
@@ -722,7 +722,7 @@ function PendingImports({
                 })
               }
             >
-              <RefreshCw aria-hidden="true" />
+              <ArrowsClockwise aria-hidden="true" />
               Resume import
             </Button>
           ) : (

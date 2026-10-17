@@ -366,6 +366,24 @@ Keep shared collection/inspector geometry and media presentation in shared modul
 feature modules own their specialized content. Preserve explicit structural hooks
 and accessible identities rather than relying on generated styling classes.
 
+## Production icons
+
+Production desktop icons use Phosphor Regular through
+`apps/web/src/components/icons.ts`, including glyphs inside installed shadcn/Base
+UI controls. The selected media identities are BookOpen, FilmReel, Article,
+Microphone, MusicNotes, and YoutubeLogo. Use the same identity in navigation,
+empty states, and missing media artwork. Source-service marks retain their
+official colors and shapes; Imladris branding remains separate.
+
+All six Library filter actions use Funnel. Sort controls keep their labeled
+Select and ascending/descending action without an extra sort-label glyph.
+Music artwork fallbacks use MusicNotes for tracks, Disc for albums, and User for
+artists in both collections and inspectors. YouTube channel avatars use User.
+Personal-rating stars and liked hearts use Phosphor's filled weight to preserve
+their state treatment; fractional ratings retain the existing clipping overlay.
+Keep role-specific icon sizes, accessible action labels, popup behavior, and
+loading announcements. The native iOS client retains its SF Symbols.
+
 ## Brand identity: compact J2 symbol
 
 On 2026-10-12, the owner selected **J2**, the house-and-waterfall concept, as

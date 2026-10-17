@@ -41,15 +41,16 @@ import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  Disc3,
+  Disc,
+  User,
   ArrowUp,
   ArrowDown,
-  ExternalLink,
-  Music2,
-  Search,
-  SlidersHorizontal,
+  ArrowSquareOut,
+  MusicNotes,
+  MagnifyingGlass,
+  Funnel,
   X,
-} from 'lucide-react'
+} from '@/components/icons'
 import type { MusicCollectionItem } from '@media-tracker/contracts'
 import { fetchMusicDetail, fetchMusicFilterOptions, fetchMusicHistory } from './music-api'
 import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
@@ -200,7 +201,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 onChange={(event) => setDraft(event.target.value)}
               />
               <InputGroupAddon>
-                <Search />
+                <MagnifyingGlass />
               </InputGroupAddon>
               {(draft ?? search.q) ? (
                 <InputGroupAddon align="inline-end">
@@ -245,7 +246,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
             onClick={() => setFiltersOpen((value) => !value)}
             data-ui="toolbar-button"
           >
-            <SlidersHorizontal aria-hidden="true" /> Filters
+            <Funnel aria-hidden="true" /> Filters
           </Button>
           <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <span className="sr-only">Sort music</span>
@@ -477,7 +478,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
           <CollectionEmptyState
-            icon={Music2}
+            icon={MusicNotes}
             title={`No ${view} yet`}
             description="Import Spotify Extended Streaming History or sync Spotify from Connections."
           />
@@ -597,6 +598,11 @@ function MusicFacetPicker({
   )
 }
 
+function MusicArtworkIcon({ kind }: { kind: MusicCollectionItem['kind'] }) {
+  const Icon = kind === 'artist' ? User : kind === 'album' ? Disc : MusicNotes
+  return <Icon aria-hidden="true" />
+}
+
 function MusicItem({
   item,
   selected,
@@ -619,7 +625,7 @@ function MusicItem({
         <img src={item.imageUrl} alt="" loading="lazy" />
       ) : (
         <span className={mediaStyles['spotify-art-fallback']}>
-          {item.kind === 'track' ? <Music2 /> : <Disc3 />}
+          <MusicArtworkIcon kind={item.kind} />
         </span>
       )}
       <span className={mediaStyles['spotify-result-copy']} data-ui="media-item-copy">
@@ -722,7 +728,7 @@ function MusicInspector({
                   <img src={detail.data.imageUrl} alt="" />
                 ) : (
                   <span className={mediaStyles['spotify-art-fallback']}>
-                    <Music2 />
+                    <MusicArtworkIcon kind={detail.data.kind} />
                   </span>
                 )}
                 <div>
@@ -874,7 +880,7 @@ function MusicInspector({
                       ) : null}
                       {detail.data.canonicalUrl ? (
                         <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                          Open in Spotify <ExternalLink />
+                          Open in Spotify <ArrowSquareOut />
                         </a>
                       ) : null}
                     </section>

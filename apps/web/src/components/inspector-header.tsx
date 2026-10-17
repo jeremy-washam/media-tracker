@@ -1,6 +1,6 @@
 import inspectorStyles from '@/components/inspector.module.css'
 import type { ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { X } from '@/components/icons'
 import { AppButton as Button } from '@/components/ui-patterns'
 import { FlatTabsContent } from '@/components/flat-tabs'
 

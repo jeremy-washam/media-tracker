@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import type { LucideIcon } from 'lucide-react'
+import { type AppIcon } from '@/components/icons'
 import { AppButton as Button } from '@/components/ui-patterns'
 import workspaceStyles from '@/components/library-workspace.module.css'
 
@@ -10,7 +10,7 @@ export function CollectionEmptyState({
   onClear,
   clearLabel = 'Clear search and filters',
 }: {
-  icon: LucideIcon
+  icon: AppIcon
   title: string
   description: string
   onClear?: (() => void) | undefined

@@ -46,17 +46,16 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ArrowDown,
-  ArrowDownWideNarrow,
   ArrowUp,
   Check,
-  ChevronRight,
-  ExternalLink,
-  Film,
+  CaretRight,
+  ArrowSquareOut,
+  FilmReel,
   Heart,
-  Search,
-  SlidersHorizontal,
+  MagnifyingGlass,
+  Funnel,
   X,
-} from 'lucide-react'
+} from '@/components/icons'
 
 import type { MovieCollectionItem, MovieDetail, MovieHistoryEntry } from '@media-tracker/contracts'
 
@@ -108,7 +107,7 @@ function MoviePoster({
       role="img"
       aria-label={`No poster available for ${movie.displayTitle}`}
     >
-      <Film aria-hidden="true" />
+      <FilmReel aria-hidden="true" />
       <strong>{movie.displayTitle.slice(0, 1)}</strong>
       {movie.releaseYear ? <small>{movie.releaseYear}</small> : null}
     </span>
@@ -268,7 +267,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                 onChange={(event) => setDraftSearch(event.target.value)}
               />
               <InputGroupAddon>
-                <Search aria-hidden="true" />
+                <MagnifyingGlass aria-hidden="true" />
               </InputGroupAddon>
               {(draftSearch ?? search.q) ? (
                 <InputGroupAddon align="inline-end">
@@ -300,11 +299,10 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             onClick={() => setFiltersOpen((value) => !value)}
             data-ui="toolbar-button"
           >
-            <SlidersHorizontal aria-hidden="true" /> Filters
+            <Funnel aria-hidden="true" /> Filters
             {filters > 0 ? <span>{filters}</span> : null}
           </Button>
           <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort movies</span>
             <LibrarySelect
               aria-label="Sort movies"
@@ -385,7 +383,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
         ) : null}
         {!movies.isPending && !movies.isError && items.length === 0 ? (
           <CollectionEmptyState
-            icon={Film}
+            icon={FilmReel}
             title={filters || search.q ? 'No matching movies' : `No movies in ${collection}`}
             description={
               filters || search.q
@@ -516,7 +514,7 @@ function MovieResult({
       <span className={mediaStyles['movie-row-rating']}>
         {movie.personal.currentRating === null ? '—' : `${movie.personal.currentRating}/5`}
       </span>
-      <ChevronRight aria-hidden="true" />
+      <CaretRight aria-hidden="true" />
     </MediaRowButton>
   )
 }
@@ -931,7 +929,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           ) : null}
           {movie.personal.liked ? (
             <strong className={moviesStyles['movie-liked']}>
-              <Heart aria-hidden="true" /> Liked
+              <Heart weight="fill" aria-hidden="true" /> Liked
             </strong>
           ) : null}
         </div>
@@ -1034,7 +1032,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
         {movie.source.letterboxdUrl ? (
           <p>
             <a href={movie.source.letterboxdUrl} target="_blank" rel="noreferrer">
-              Open on Letterboxd <ExternalLink aria-hidden="true" />
+              Open on Letterboxd <ArrowSquareOut aria-hidden="true" />
             </a>
           </p>
         ) : (
@@ -1058,7 +1056,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
             </a>
             <p>
               <a href={movie.source.tmdbUrl} target="_blank" rel="noreferrer">
-                Open on TMDB <ExternalLink aria-hidden="true" />
+                Open on TMDB <ArrowSquareOut aria-hidden="true" />
               </a>
             </p>
             <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
@@ -1069,7 +1067,7 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
         {movie.source.imdbUrl ? (
           <p>
             <a href={movie.source.imdbUrl} target="_blank" rel="noreferrer">
-              Open on IMDb <ExternalLink aria-hidden="true" />
+              Open on IMDb <ArrowSquareOut aria-hidden="true" />
             </a>
           </p>
         ) : null}
@@ -1129,7 +1127,7 @@ function MovieHistory({
                   rel="noreferrer"
                 >
                   {entry.letterboxdLogUrl ? 'Open Diary entry' : 'Open film on Letterboxd'}{' '}
-                  <ExternalLink aria-hidden="true" />
+                  <ArrowSquareOut aria-hidden="true" />
                 </a>
               ) : null}
               {entry.sourceRecordedAt ? (

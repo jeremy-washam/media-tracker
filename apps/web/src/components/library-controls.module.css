@@ -276,9 +276,6 @@
   padding: 0;
   gap: 0;
 }
-.books-sort > svg {
-  display: none;
-}
 .date-filter .unknown-toggle {
   display: flex;
   align-items: center;

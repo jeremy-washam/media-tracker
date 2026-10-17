@@ -44,17 +44,16 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type R
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  ArrowDownWideNarrow,
   ArrowDown,
   ArrowUp,
   BookOpen,
   Check,
-  ChevronRight,
-  ExternalLink,
-  Search,
-  SlidersHorizontal,
+  CaretRight,
+  ArrowSquareOut,
+  MagnifyingGlass,
+  Funnel,
   X,
-} from 'lucide-react'
+} from '@/components/icons'
 
 import type { BookCollectionItem, BookDetail, BookHistoryEntry } from '@media-tracker/contracts'
 
@@ -264,7 +263,7 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
                 onChange={(event) => setDraftSearch(event.target.value)}
               />
               <InputGroupAddon>
-                <Search aria-hidden="true" />
+                <MagnifyingGlass aria-hidden="true" />
               </InputGroupAddon>
               {(draftSearch ?? search.q) ? (
                 <InputGroupAddon align="inline-end">
@@ -291,11 +290,10 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             onClick={() => setFiltersOpen((value) => !value)}
             data-ui="toolbar-button"
           >
-            <SlidersHorizontal aria-hidden="true" /> Filters
+            <Funnel aria-hidden="true" /> Filters
             {filters > 0 ? <span>{filters}</span> : null}
           </Button>
           <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <ArrowDownWideNarrow aria-hidden="true" />
             <span className="sr-only">Sort books</span>
             <LibrarySelect
               aria-label="Sort books"
@@ -536,7 +534,7 @@ function BookResult({
         {contextLabel(book, collection)}
       </span>
       <RatingStars rating={book.personalRating} />
-      <ChevronRight aria-hidden="true" />
+      <CaretRight aria-hidden="true" />
     </MediaRowButton>
   )
 }
@@ -1016,7 +1014,7 @@ function BookDetails({ book }: { book: BookDetail }) {
           Imported from{' '}
           {book.source.url ? (
             <a href={book.source.url} target="_blank" rel="noreferrer">
-              Hardcover <ExternalLink aria-hidden="true" />
+              Hardcover <ArrowSquareOut aria-hidden="true" />
             </a>
           ) : (
             'Hardcover'

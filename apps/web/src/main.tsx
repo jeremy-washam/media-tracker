@@ -17,6 +17,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
+import { IconContext } from './components/icons'
 
 import { router } from './router'
 import {
@@ -44,8 +45,12 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <IconContext.Provider
+      value={{ size: 24, weight: 'regular', 'aria-hidden': true, focusable: false }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </IconContext.Provider>
   </StrictMode>,
 )

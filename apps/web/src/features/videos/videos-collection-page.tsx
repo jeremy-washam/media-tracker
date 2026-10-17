@@ -43,13 +43,13 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ArrowUp,
   ArrowDown,
-  ExternalLink,
-  PlaySquare,
-  Search,
-  SlidersHorizontal,
-  UserRound,
+  ArrowSquareOut,
+  YoutubeLogo,
+  MagnifyingGlass,
+  Funnel,
+  User,
   X,
-} from 'lucide-react'
+} from '@/components/icons'
 import type { VideoCollectionItem, VideosResponse } from '@media-tracker/contracts'
 import {
   fetchChannelVideos,
@@ -195,7 +195,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
                 onChange={(event) => setDraft(event.target.value)}
               />
               <InputGroupAddon>
-                <Search />
+                <MagnifyingGlass />
               </InputGroupAddon>
               {(draft ?? search.q) ? (
                 <InputGroupAddon align="inline-end">
@@ -227,7 +227,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
             onClick={() => setFiltersOpen((value) => !value)}
             data-ui="toolbar-button"
           >
-            <SlidersHorizontal aria-hidden="true" /> Filters
+            <Funnel aria-hidden="true" /> Filters
           </Button>
           <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <span className="sr-only">Sort videos</span>
@@ -303,7 +303,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
           <CollectionEmptyState
-            icon={PlaySquare}
+            icon={YoutubeLogo}
             title={`No ${view} yet`}
             description="Import YouTube Takeout from Connections."
           />
@@ -780,7 +780,7 @@ function VideoItem({
         aria-pressed={selected}
       >
         <span className={videosStyles['video-channel-avatar']}>
-          {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <UserRound />}
+          {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <User />}
         </span>
         <span className={mediaStyles['video-result-copy']} data-ui="video-result-copy">
           <strong>{item.title}</strong>
@@ -806,7 +806,7 @@ function VideoItem({
       aria-pressed={selected}
     >
       <span className={videosStyles['video-thumbnail']}>
-        {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <PlaySquare />}
+        {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <YoutubeLogo />}
       </span>
       <span className={mediaStyles['video-result-copy']} data-ui="video-result-copy">
         <strong>{item.title}</strong>
@@ -901,7 +901,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                   {detail.data.imageUrl ? (
                     <img src={detail.data.imageUrl} alt="" />
                   ) : (
-                    <PlaySquare />
+                    <YoutubeLogo />
                   )}
                 </span>
                 <div>
@@ -983,7 +983,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                       </div>
                     ) : null}
                     <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                      Open on YouTube <ExternalLink />
+                      Open on YouTube <ArrowSquareOut />
                     </a>
                   </section>
                 </TabsContent>
@@ -1044,7 +1044,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                           pending={channelQueue.isPending}
                         />
                         <a href={channel.data.canonicalUrl} target="_blank" rel="noreferrer">
-                          Open channel <ExternalLink />
+                          Open channel <ArrowSquareOut />
                         </a>
                       </>
                     ) : (
@@ -1139,7 +1139,7 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
             <>
               <div className={inspectorStyles['inspector-hero']} data-ui="inspector-hero">
                 <span className={videosStyles['video-channel-avatar']}>
-                  {detail.data.imageUrl ? <img src={detail.data.imageUrl} alt="" /> : <UserRound />}
+                  {detail.data.imageUrl ? <img src={detail.data.imageUrl} alt="" /> : <User />}
                 </span>
                 <div>
                   <span className={contentStyles['eyebrow']} data-ui="eyebrow">
@@ -1176,7 +1176,7 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                     {detail.data.country ? <p>Country: {detail.data.country}</p> : null}
                     {detail.data.metadataMessage ? <p>{detail.data.metadataMessage}</p> : null}
                     <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                      Open on YouTube <ExternalLink />
+                      Open on YouTube <ArrowSquareOut />
                     </a>
                   </section>
                 </TabsContent>
@@ -1218,7 +1218,7 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                                   {item.imageUrl ? (
                                     <img src={item.imageUrl} alt="" loading="lazy" />
                                   ) : (
-                                    <PlaySquare aria-hidden="true" />
+                                    <YoutubeLogo aria-hidden="true" />
                                   )}
                                 </span>
                                 <strong>{item.title}</strong>

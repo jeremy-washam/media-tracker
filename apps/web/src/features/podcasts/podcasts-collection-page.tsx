@@ -40,14 +40,14 @@ import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  ExternalLink,
+  ArrowSquareOut,
   ArrowUp,
   ArrowDown,
-  Headphones,
-  Search,
-  SlidersHorizontal,
+  Microphone,
+  MagnifyingGlass,
+  Funnel,
   X,
-} from 'lucide-react'
+} from '@/components/icons'
 import type { PodcastCollectionItem } from '@media-tracker/contracts'
 import { fetchPodcast, fetchPodcastFilterOptions, fetchPodcastHistory } from './podcasts-api'
 import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
@@ -199,7 +199,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 onChange={(event) => setDraft(event.target.value)}
               />
               <InputGroupAddon>
-                <Search aria-hidden="true" />
+                <MagnifyingGlass aria-hidden="true" />
               </InputGroupAddon>
               {(draft ?? search.q) ? (
                 <InputGroupAddon align="inline-end">
@@ -246,7 +246,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             onClick={() => setFiltersOpen((value) => !value)}
             data-ui="toolbar-button"
           >
-            <SlidersHorizontal aria-hidden="true" /> Filters
+            <Funnel aria-hidden="true" /> Filters
           </Button>
           <label className={controlsStyles['books-sort']} data-ui="library-sort">
             <span className="sr-only">Sort podcasts</span>
@@ -495,7 +495,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
         ) : null}
         {!result.isPending && !result.isError && items.length === 0 ? (
           <CollectionEmptyState
-            icon={Headphones}
+            icon={Microphone}
             title={`No ${view === 'following' ? 'followed shows' : `episodes in ${view}`}`}
             description="Sync Spotify from Connections to populate this section."
           />
@@ -633,7 +633,7 @@ function PodcastItem({
         <img src={item.imageUrl} alt="" loading="lazy" />
       ) : (
         <span className={mediaStyles['spotify-art-fallback']}>
-          <Headphones />
+          <Microphone />
         </span>
       )}
       <span className={mediaStyles['spotify-result-copy']} data-ui="media-item-copy">
@@ -718,7 +718,7 @@ function PodcastInspector({
                   <img src={detail.data.imageUrl} alt="" />
                 ) : (
                   <span className={mediaStyles['spotify-art-fallback']}>
-                    <Headphones />
+                    <Microphone />
                   </span>
                 )}
                 <div>
@@ -787,7 +787,7 @@ function PodcastInspector({
                       ) : null}
                       {detail.data.canonicalUrl ? (
                         <a href={detail.data.canonicalUrl} target="_blank" rel="noreferrer">
-                          Open in Spotify <ExternalLink />
+                          Open in Spotify <ArrowSquareOut />
                         </a>
                       ) : null}
                     </section>

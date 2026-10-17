@@ -12,31 +12,32 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
-import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
+import { useEffect, useState } from 'react'
+import type { AppIcon } from '@/components/icons'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
 import {
   BookOpen,
-  ChartNoAxesColumn,
-  FileText,
-  Film,
-  Headphones,
-  Library,
-  Menu,
-  MessageSquare,
+  ChartBar,
+  Article,
+  FilmReel,
+  Microphone,
+  Books,
+  List,
+  ChatCircle,
   Moon,
-  Music2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plug,
+  MusicNotes,
+  ArrowLineLeft,
+  ArrowLineRight,
+  Plugs,
   Sun,
-  Video,
-} from 'lucide-react'
+  YoutubeLogo,
+} from '@/components/icons'
 
 import { HealthIndicator } from './health-indicator'
 
 type DisabledNavigationItem = {
   label: string
-  icon: ComponentType<SVGProps<SVGSVGElement>>
+  icon: AppIcon
 }
 
 const unavailableMedia: DisabledNavigationItem[] = []
@@ -111,7 +112,7 @@ export function AppShell() {
           onClick={() => setCollapsed((value) => !value)}
           data-ui="sidebar-collapse"
         >
-          {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+          {collapsed ? <ArrowLineRight aria-hidden="true" /> : <ArrowLineLeft aria-hidden="true" />}
         </Button>
       </div>
 
@@ -120,7 +121,7 @@ export function AppShell() {
         aria-label="Application"
         data-ui="global-navigation"
       >
-        <UnavailableNavigation label="Chat" icon={MessageSquare} collapsed={collapsed} />
+        <UnavailableNavigation label="Chat" icon={ChatCircle} collapsed={collapsed} />
         <Hint content="Library">
           <Link
             to="/library/books/archive"
@@ -129,11 +130,11 @@ export function AppShell() {
             aria-label="Library"
             onClick={() => setMobileOpen(false)}
           >
-            <Library aria-hidden="true" />
+            <Books aria-hidden="true" />
             {!collapsed ? <span>Library</span> : null}
           </Link>
         </Hint>
-        <UnavailableNavigation label="Recaps" icon={ChartNoAxesColumn} collapsed={collapsed} />
+        <UnavailableNavigation label="Recaps" icon={ChartBar} collapsed={collapsed} />
       </nav>
 
       <nav
@@ -164,7 +165,7 @@ export function AppShell() {
             aria-label="Movies"
             onClick={() => setMobileOpen(false)}
           >
-            <Film aria-hidden="true" />
+            <FilmReel aria-hidden="true" />
             {!collapsed ? <span>Movies</span> : null}
           </Link>
         </Hint>
@@ -177,7 +178,7 @@ export function AppShell() {
             aria-label="Articles"
             onClick={() => setMobileOpen(false)}
           >
-            <FileText aria-hidden="true" />
+            <Article aria-hidden="true" />
             {!collapsed ? <span>Articles</span> : null}
           </Link>
         </Hint>
@@ -190,7 +191,7 @@ export function AppShell() {
             aria-label="Podcasts"
             onClick={() => setMobileOpen(false)}
           >
-            <Headphones aria-hidden="true" />
+            <Microphone aria-hidden="true" />
             {!collapsed ? <span>Podcasts</span> : null}
           </Link>
         </Hint>
@@ -203,7 +204,7 @@ export function AppShell() {
             aria-label="Music"
             onClick={() => setMobileOpen(false)}
           >
-            <Music2 aria-hidden="true" />
+            <MusicNotes aria-hidden="true" />
             {!collapsed ? <span>Music</span> : null}
           </Link>
         </Hint>
@@ -216,7 +217,7 @@ export function AppShell() {
             aria-label="Videos"
             onClick={() => setMobileOpen(false)}
           >
-            <Video aria-hidden="true" />
+            <YoutubeLogo aria-hidden="true" />
             {!collapsed ? <span>Videos</span> : null}
           </Link>
         </Hint>
@@ -236,7 +237,7 @@ export function AppShell() {
             aria-label="Connections"
             onClick={() => setMobileOpen(false)}
           >
-            <Plug aria-hidden="true" />
+            <Plugs aria-hidden="true" />
             {!collapsed ? <span>Connections</span> : null}
           </Link>
         </Hint>
@@ -297,7 +298,7 @@ export function AppShell() {
                     />
                   }
                 >
-                  <Menu aria-hidden="true" />
+                  <List aria-hidden="true" />
                 </SheetTrigger>
                 <div className={shellStyles['workspace-breadcrumb']} data-ui="workspace-breadcrumb">
                   {inLibrary ? (

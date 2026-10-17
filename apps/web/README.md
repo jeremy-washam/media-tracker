@@ -119,6 +119,25 @@ screens use these tokens; the separate specimen retains the alternative-theme
 comparison. Future entries should import Tailwind and this stylesheet once.
 Keep component colors on the shared semantic tokens.
 
+## Icons
+
+Production glyphs are Phosphor Regular, re-exported from `src/components/icons.ts`.
+Import icons and the `AppIcon`/`IconProps` types from that module. Its individual
+Phosphor imports avoid eagerly processing the entire catalog during Vite startup.
+The app's IconContext supplies Regular weight, 24px fallback size, currentColor,
+and decorative accessibility defaults; component CSS retains role-specific
+sizes. Meaningful status icons such as Spinner override `aria-hidden` and retain
+their accessible labels. Rating stars and liked hearts explicitly use filled
+weight. The configured shadcn icon library is `phosphor` for future additions.
+
+Media identities are BookOpen, FilmReel, Article, Microphone, MusicNotes, and
+YoutubeLogo. Filters share Funnel; music artwork fallbacks share a kind-specific
+selector between collections and inspectors. See the
+[UI foundation](../../docs/design/ui-foundation.md#production-icons).
+Lucide remains a dependency for isolated historical studies and the specimen.
+Source-service logos, Imladris brand assets, and native iOS SF Symbols retain
+their existing ownership.
+
 ## Styling ownership
 
 Production uses Tailwind v4 and plain CSS Modules alongside the installed

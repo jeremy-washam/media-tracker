@@ -1,7 +1,7 @@
 import mediaStyles from '@/components/media-presentation.module.css'
 import controlsStyles from '@/components/library-controls.module.css'
 import { type ComponentProps } from 'react'
-import { Grid2X2, List, Star } from 'lucide-react'
+import { SquaresFour, List, Star } from '@/components/icons'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import {
@@ -89,9 +89,9 @@ export function RatingStars({ rating }: { rating: number | null }) {
     >
       {Array.from({ length: Math.ceil(rating) }, (_, index) => (
         <span className={mediaStyles['rating-star']} key={index}>
-          <Star aria-hidden="true" />
+          <Star weight="fill" aria-hidden="true" />
           <span style={{ width: `${Math.min(1, rating - index) * 100}%` }}>
-            <Star aria-hidden="true" />
+            <Star weight="fill" aria-hidden="true" />
           </span>
         </span>
       ))}
@@ -136,7 +136,7 @@ export function LibraryLayoutToggle({
         aria-label="Grid view"
         className="text-[length:inherit] font-normal"
       >
-        <Grid2X2 aria-hidden="true" />
+        <SquaresFour aria-hidden="true" />
       </ToggleGroupItem>
     </ToggleGroup>
   )
