@@ -107,3 +107,23 @@ After representative native usage is recorded, activate the daily cadence throug
 an explicit grant no later than the reviewed billing-cycle end. Grants never
 renew automatically or reset the allocation. Content, enrichment, maintenance,
 and manual history imports need their own budgets before enabling.
+
+## Controlled validation on October 17, 2026
+
+Letterboxd (67 feed entries), Readwise (1,123 parsed records), and Spotify
+(212 parsed records, including credential refresh) completed hosted runs.
+Local sync is paused and its Spotify refresh secret is blank so the two
+independent databases cannot race token rotation; local browsing remains healthy.
+
+Hardcover exposed an upstream work-ID change, now covered by stable-relationship
+and alias-ownership regressions. A later invocation durably processed 900 books
+across 18 pages but was interrupted before finalization. Its admission remains
+running with its full reservation retained; no complete-snapshot cursor advanced.
+Keep Hardcover outside the production allowlist until the interruption is
+explained and a complete controlled run succeeds. Retained Worker-log queries
+currently return HTTP 403 with the available credentials.
+
+Daily activation covers only the three validated sources. The explicit grant
+expires on November 13 at 00:00 UTC, or earlier if the lifetime allocation or
+storage review threshold is reached. Optional content, catalog, maintenance,
+and manual history-import work stays paused. The grant does not renew itself.

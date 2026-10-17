@@ -91,6 +91,28 @@ describe('durable source admission', () => {
       db.close()
     }
   })
+  it('retains full reservations when an interrupted recovery has stale usage', async () => {
+    const db = new DatabaseSync(':memory:')
+    try {
+      db.exec(
+        readFileSync(
+          new URL('../migrations/0030_source_sync_admission.sql', import.meta.url),
+          'utf8',
+        ),
+      )
+      const repository = new SqlSourceSyncAdmission(client(db))
+      for (let i = 0; i < 5; i++)
+        db.prepare(
+          `INSERT INTO source_sync_admission
+        (source,day,attempts,started_at,outcome,reservation_json,usage_json)
+        VALUES (?, '2026-10-17', 3, 0, 'running', '{}', ?)`,
+        ).run(String(i), JSON.stringify({ rowsRead: 0, rowsWritten: 0, bytes: 0, requests: 0 }))
+      expect(await repository.withinAllowance()).toBe(false)
+    } finally {
+      db.close()
+    }
+  })
+
   it('migrates the prior schema and prevents overlaps, midnight resets and retry resets', async () => {
     const db = new DatabaseSync(':memory:')
     try {

@@ -10,12 +10,12 @@ export class SqlSourceSyncAdmission {
     const row = await this.db
       .prepare(
         `SELECT COUNT(*) jobs,
-      COALESCE(SUM(CASE WHEN usage_json IS NULL OR COALESCE(json_extract(usage_json,'$.failedOperations'),0)>0 OR COALESCE(json_extract(usage_json,'$.unmeasuredNonFirstStatements'),0)>0
+      COALESCE(SUM(CASE WHEN outcome='running' OR usage_json IS NULL OR COALESCE(json_extract(usage_json,'$.failedOperations'),0)>0 OR COALESCE(json_extract(usage_json,'$.unmeasuredNonFirstStatements'),0)>0
         THEN 2000000 ELSE COALESCE(json_extract(usage_json,'$.rowsWritten'),2000000) END),0) writes,
-      COALESCE(SUM(CASE WHEN usage_json IS NULL OR COALESCE(json_extract(usage_json,'$.failedOperations'),0)>0 OR COALESCE(json_extract(usage_json,'$.unmeasuredNonFirstStatements'),0)>0
+      COALESCE(SUM(CASE WHEN outcome='running' OR usage_json IS NULL OR COALESCE(json_extract(usage_json,'$.failedOperations'),0)>0 OR COALESCE(json_extract(usage_json,'$.unmeasuredNonFirstStatements'),0)>0
         THEN 200000000 ELSE COALESCE(json_extract(usage_json,'$.rowsRead'),200000000) END),0) reads,
-      COALESCE(SUM(COALESCE(json_extract(usage_json,'$.bytes'),67108864)),0) bytes,
-      COALESCE(SUM(COALESCE(json_extract(usage_json,'$.requests'),128)),0) requests
+      COALESCE(SUM(CASE WHEN outcome='running' THEN 67108864 ELSE COALESCE(json_extract(usage_json,'$.bytes'),67108864) END),0) bytes,
+      COALESCE(SUM(CASE WHEN outcome='running' THEN 128 ELSE COALESCE(json_extract(usage_json,'$.requests'),128) END),0) requests
       FROM source_sync_admission`,
       )
       .first<{ jobs: number; writes: number; reads: number; bytes: number; requests: number }>()
