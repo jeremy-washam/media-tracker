@@ -9,7 +9,7 @@ import {
   book,
 } from './ui-fixtures'
 
-const cacheKey = 'media-tracker:library-initial-pages:v1'
+const cacheKey = 'media-tracker:library-initial-pages:v2'
 const sections = [
   ['books', 'archive'],
   ['books', 'queue'],
@@ -63,10 +63,10 @@ async function mockApi(page: Page, hook?: CollectionHook) {
     if (url.pathname === '/api/sync-runs')
       return route.fulfill({ json: { data: [], nextCursor: null } })
     const media = url.pathname.match(
-      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)$/,
+      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)(?:\/summary)?$/,
     )?.[1] as keyof typeof responses | undefined
     if (media) {
-      if (hook && (await hook(route, url))) return
+      if (hook && !url.pathname.endsWith('/summary') && (await hook(route, url))) return
       return route.fulfill({ json: responses[media]() })
     }
     return route.fulfill({
@@ -102,7 +102,7 @@ test('loads the current tab first, then warms all sections with at most two back
     releaseBackground = resolve
   })
   const requests = await mockApi(page, async (_route, url) => {
-    if (url.pathname === '/api/library/videos' && url.searchParams.get('view') === 'archive')
+    if (url.pathname === '/api/library/videos' && url.searchParams.get('section') === 'archive')
       await firstGate
     else await backgroundGate
     return false
@@ -121,11 +121,10 @@ test('loads the current tab first, then warms all sections with at most two back
     await waitForWarmCache(page)
     expect(collections(requests)).toHaveLength(16)
     const visited = collections(requests).map(
-      (url) =>
-        `${url.pathname.split('/').at(-1)}/${url.searchParams.get('collection') ?? url.searchParams.get('section') ?? url.searchParams.get('view')}`,
+      (url) => `${url.pathname.split('/').at(-1)}/${url.searchParams.get('section')}`,
     )
     expect(visited.sort()).toEqual(sections.map(([media, section]) => `${media}/${section}`).sort())
-    expect(requests.some((url) => url.pathname === '/api/connections')).toBe(true)
+    await expect.poll(() => requests.some((url) => url.pathname === '/api/connections')).toBe(true)
     await expect.poll(() => requests.some((url) => url.pathname === '/api/sync-runs')).toBe(true)
   } finally {
     releaseFirst()
@@ -176,7 +175,7 @@ test('persists only the first page and preserves cursor pagination and explicit 
   page,
 }) => {
   const requests = await mockApi(page, async (route, url) => {
-    if (url.pathname !== '/api/library/books' || url.searchParams.get('collection') !== 'archive')
+    if (url.pathname !== '/api/library/books' || url.searchParams.get('section') !== 'archive')
       return false
     if (url.searchParams.has('cursor')) {
       expect(url.searchParams.get('cursor')).toBe('next-books-page')
@@ -233,7 +232,7 @@ test('persists only the first page and preserves cursor pagination and explicit 
     .toBe('book-one')
 })
 
-test('keeps Connections polling at five seconds with the longer Library freshness window', async ({
+test('polls idle Connections once per minute with the longer Library freshness window', async ({
   page,
 }) => {
   const requests = await mockApi(page)
@@ -245,10 +244,41 @@ test('keeps Connections polling at five seconds with the longer Library freshnes
   const connectionCount = requests.filter((url) => url.pathname === '/api/connections').length
   const runCount = requests.filter((url) => url.pathname === '/api/sync-runs').length
   await page.clock.runFor(5100)
+  expect(requests.filter((url) => url.pathname === '/api/connections')).toHaveLength(
+    connectionCount,
+  )
+  expect(requests.filter((url) => url.pathname === '/api/sync-runs')).toHaveLength(runCount)
+  await page.clock.runFor(60_000)
   await expect
     .poll(() => requests.filter((url) => url.pathname === '/api/connections').length)
     .toBeGreaterThan(connectionCount)
   await expect
     .poll(() => requests.filter((url) => url.pathname === '/api/sync-runs').length)
     .toBeGreaterThan(runCount)
+})
+
+test('legacy Movies layout links share the default item cache without presentation parameters', async ({
+  page,
+}) => {
+  const requests = await mockApi(page)
+  await page.goto('/library/movies/archive?view=list')
+  await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await waitForWarmCache(page)
+  const moviePages = () =>
+    collections(requests).filter(
+      (url) =>
+        url.pathname === '/api/library/movies' && url.searchParams.get('section') === 'archive',
+    )
+  expect(moviePages()).toHaveLength(1)
+  expect(
+    moviePages().every((url) => !url.searchParams.has('view') && !url.searchParams.has('layout')),
+  ).toBe(true)
+  await page.getByRole('link', { name: 'Books', exact: true }).click()
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  await page.getByRole('link', { name: 'Movies', exact: true }).click()
+  await expect(page.getByRole('button', { name: /A Distant Movie/ })).toBeVisible()
+  expect(moviePages()).toHaveLength(1)
 })

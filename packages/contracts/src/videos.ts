@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
 
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
@@ -23,7 +24,7 @@ const booleanQuery = z.preprocess(
 export const VideoViewSchema = z.enum(['archive', 'queue', 'channels'])
 export const VideosQuerySchema = z
   .object({
-    view: VideoViewSchema.default('archive'),
+    section: VideoViewSchema.default('archive'),
     q: optionalString,
     account: stringList,
     channel: stringList,
@@ -67,7 +68,7 @@ export const VideosQuerySchema = z
       ])
       .optional(),
     direction: z.enum(['asc', 'desc']).optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(100).default(LIBRARY_PAGE_SIZE),
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((value, context) => {
@@ -88,9 +89,9 @@ export const VideosQuerySchema = z
         message: 'A published-date range requires a start or end boundary.',
       })
     const sorts =
-      value.view === 'archive'
+      value.section === 'archive'
         ? ['watchedAt', 'title', 'channel', 'watchCount', 'publishedAt', 'duration', 'relevance']
-        : value.view === 'queue'
+        : value.section === 'queue'
           ? ['addedAt', 'title', 'channel', 'publishedAt', 'duration', 'relevance']
           : ['watchCount', 'channel', 'watchedAt', 'queueCount', 'relevance']
     if (value.sort && !sorts.includes(value.sort))
@@ -100,7 +101,7 @@ export const VideosQuerySchema = z
         message: 'Sort is not valid for this view.',
       })
     if (
-      value.view === 'channels' &&
+      value.section === 'channels' &&
       (value.account.length > 0 ||
         value.channel.length > 0 ||
         value.watchedFrom ||
@@ -125,10 +126,10 @@ export const VideosQuerySchema = z
         path: ['view'],
         message: 'Video filters are invalid here.',
       })
-    if (value.view === 'archive' && (value.addedFrom || value.addedTo || value.addedUnknown))
+    if (value.section === 'archive' && (value.addedFrom || value.addedTo || value.addedUnknown))
       context.addIssue({ code: 'custom', path: ['addedFrom'], message: 'Added date is for Queue.' })
     if (
-      value.view === 'queue' &&
+      value.section === 'queue' &&
       (value.watchedFrom || value.watchedTo || value.watchedUnknown || value.watchCount !== 'all')
     )
       context.addIssue({
@@ -184,6 +185,9 @@ const FacetValueSchema = z.object({
 export const VideosResponseSchema = z.object({
   data: z.array(VideoCollectionItemSchema),
   nextCursor: z.string().nullable(),
+})
+
+export const VideosSummarySchema = z.object({
   totalCount: z.number().int().nonnegative(),
   filteredCount: z.number().int().nonnegative(),
   sectionCounts: z.object({
@@ -249,7 +253,7 @@ export const VideoHistoryResponseSchema = z.object({
 })
 
 export const VideoChannelLibraryQuerySchema = z.object({
-  membership: z.enum(['archive', 'queue']).default('archive'),
+  section: z.enum(['archive', 'queue']).default('archive'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().max(4000).optional(),
 })
@@ -265,3 +269,7 @@ export type VideoChannelDetail = z.infer<typeof VideoChannelDetailSchema>
 export type VideosResponse = z.infer<typeof VideosResponseSchema>
 export type VideoHistoryResponse = z.infer<typeof VideoHistoryResponseSchema>
 export type VideoChannelLibraryResponse = z.infer<typeof VideoChannelLibraryResponseSchema>
+
+export type VideosSummary = z.infer<typeof VideosSummarySchema>
+
+export const VideosSummaryQuerySchema = librarySummaryQuery(VideosQuerySchema)

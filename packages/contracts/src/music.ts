@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
 
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
@@ -18,7 +19,7 @@ const stringList = z.preprocess(
 export const MusicViewSchema = z.enum(['tracks', 'albums', 'artists'])
 export const MusicQuerySchema = z
   .object({
-    view: MusicViewSchema.default('tracks'),
+    section: MusicViewSchema.default('tracks'),
     q: optionalString,
     from: date.optional(),
     to: date.optional(),
@@ -45,7 +46,7 @@ export const MusicQuerySchema = z
       ])
       .optional(),
     direction: z.enum(['asc', 'desc']).optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(100).default(LIBRARY_PAGE_SIZE),
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((value, context) => {
@@ -58,9 +59,9 @@ export const MusicQuerySchema = z
     if (value.sort === 'relevance' && !value.q)
       context.addIssue({ code: 'custom', path: ['sort'], message: 'Relevance requires search.' })
     const sorts =
-      value.view === 'tracks'
+      value.section === 'tracks'
         ? ['playedAt', 'title', 'artist', 'album', 'playbackCount', 'observedTime', 'relevance']
-        : value.view === 'albums'
+        : value.section === 'albums'
           ? [
               'playedAt',
               'title',
@@ -86,19 +87,19 @@ export const MusicQuerySchema = z
         path: ['sort'],
         message: 'Sort is not valid for this view.',
       })
-    if (value.view !== 'tracks' && (value.album.length > 0 || value.explicit !== 'any'))
+    if (value.section !== 'tracks' && (value.album.length > 0 || value.explicit !== 'any'))
       context.addIssue({
         code: 'custom',
         path: ['view'],
         message: 'Track filters are valid only for Tracks.',
       })
-    if (value.view === 'artists' && value.artist.length > 0)
+    if (value.section === 'artists' && value.artist.length > 0)
       context.addIssue({
         code: 'custom',
         path: ['artist'],
         message: 'Artist filtering is valid only for Tracks and Albums.',
       })
-    if (value.view !== 'albums' && value.albumType !== 'any')
+    if (value.section !== 'albums' && value.albumType !== 'any')
       context.addIssue({
         code: 'custom',
         path: ['albumType'],
@@ -128,6 +129,9 @@ export const MusicCollectionItemSchema = z.object({
 export const MusicResponseSchema = z.object({
   data: z.array(MusicCollectionItemSchema),
   nextCursor: z.string().nullable(),
+})
+
+export const MusicSummarySchema = z.object({
   totalCount: z.number().int().nonnegative(),
   filteredCount: z.number().int().nonnegative(),
   sectionCounts: z.object({
@@ -152,7 +156,7 @@ export const MusicFilterOptionsQuerySchema = MusicQuerySchema.safeExtend({
   optionLimit: z.coerce.number().int().min(1).max(50).default(30),
   optionCursor: z.string().max(4000).optional(),
 }).superRefine((value, context) => {
-  if (value.view === 'artists' || (value.view === 'albums' && value.facet === 'album'))
+  if (value.section === 'artists' || (value.section === 'albums' && value.facet === 'album'))
     context.addIssue({
       code: 'custom',
       path: ['facet'],
@@ -240,3 +244,7 @@ export type MusicDetail = z.infer<typeof MusicDetailSchema>
 export type MusicResponse = z.infer<typeof MusicResponseSchema>
 export type MusicFilterOptionsResponse = z.infer<typeof MusicFilterOptionsResponseSchema>
 export type MusicHistoryResponse = z.infer<typeof MusicHistoryResponseSchema>
+
+export type MusicSummary = z.infer<typeof MusicSummarySchema>
+
+export const MusicSummaryQuerySchema = librarySummaryQuery(MusicQuerySchema)

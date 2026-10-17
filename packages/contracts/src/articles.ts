@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
 
 export const ArticleSectionSchema = z.enum(['archive', 'queue', 'feed'])
 export const ArticleDensitySchema = z.enum(['restrained', 'expanded'])
@@ -75,7 +76,7 @@ export const ArticlesQuerySchema = z
     sort: ArticleSortSchema.optional(),
     direction: z.enum(['asc', 'desc']).optional(),
     density: ArticleDensitySchema.default('restrained'),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(100).default(LIBRARY_PAGE_SIZE),
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((query, context) => {
@@ -222,6 +223,9 @@ export const ArticleFacetOptionSchema = z.object({
 export const ArticlesResponseSchema = z.object({
   data: z.array(ArticleCollectionItemSchema),
   nextCursor: z.string().nullable(),
+})
+
+export const ArticlesSummarySchema = z.object({
   sectionCounts: z.object({
     archive: z.number().int().nonnegative(),
     queue: z.number().int().nonnegative(),
@@ -340,3 +344,7 @@ export type ArticleHistoryResponse = z.infer<typeof ArticleHistoryResponseSchema
 export type ArticleHighlightsResponse = z.infer<typeof ArticleHighlightsResponseSchema>
 export type ArticlesQuery = z.infer<typeof ArticlesQuerySchema>
 export type ArticlesResponse = z.infer<typeof ArticlesResponseSchema>
+
+export type ArticlesSummary = z.infer<typeof ArticlesSummarySchema>
+
+export const ArticlesSummaryQuerySchema = librarySummaryQuery(ArticlesQuerySchema)

@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/library/books?*', (route) =>
+  await page.route('**/api/library/books{,/summary}?*', (route) =>
     route.fulfill({
       json: {
         data: Array.from({ length: 12 }, (_, index) => ({

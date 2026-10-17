@@ -7,11 +7,15 @@ import {
   ArticleHistoryResponseSchema,
   ArticlesQuerySchema,
   ArticlesResponseSchema,
+  ArticlesSummarySchema,
+  ArticlesSummaryQuerySchema,
   BookDetailSchema,
   BookHistoryQuerySchema,
   BookHistoryResponseSchema,
   BooksQuerySchema,
   BooksResponseSchema,
+  BooksSummarySchema,
+  BooksSummaryQuerySchema,
   CatalogSyncResponseSchema,
   ConnectionsResponseSchema,
   HardcoverSyncResponseSchema,
@@ -27,6 +31,8 @@ import {
   MovieHistoryResponseSchema,
   MoviesQuerySchema,
   MoviesResponseSchema,
+  MoviesSummarySchema,
+  MoviesSummaryQuerySchema,
   MusicDetailSchema,
   MusicFilterOptionsQuerySchema,
   MusicFilterOptionsResponseSchema,
@@ -36,11 +42,15 @@ import {
   MusicHistoryResponseSchema,
   MusicQuerySchema,
   MusicResponseSchema,
+  MusicSummarySchema,
+  MusicSummaryQuerySchema,
   PodcastDetailSchema,
   PodcastHistoryQuerySchema,
   PodcastHistoryResponseSchema,
   PodcastsQuerySchema,
   PodcastsResponseSchema,
+  PodcastsSummarySchema,
+  PodcastsSummaryQuerySchema,
   ReadwiseSyncResponseSchema,
   SpotifyImportResponseSchema,
   SpotifyCatalogJobResponseSchema,
@@ -54,6 +64,8 @@ import {
   VideoHistoryResponseSchema,
   VideosQuerySchema,
   VideosResponseSchema,
+  VideosSummarySchema,
+  VideosSummaryQuerySchema,
   YoutubeImportResponseSchema,
 } from '@media-tracker/contracts'
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi'
@@ -147,6 +159,17 @@ const booksRoute = createRoute({
   },
 })
 
+const booksSummaryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/books/summary',
+  tags: ['Library', 'Books'],
+  request: { query: BooksSummaryQuerySchema },
+  responses: {
+    200: jsonContent(BooksSummarySchema, 'Books collection summary'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Books query'),
+  },
+})
+
 const bookDetailRoute = createRoute({
   method: 'get',
   path: '/api/library/books/{mediaItemId}',
@@ -183,6 +206,17 @@ const moviesRoute = createRoute({
   },
 })
 
+const moviesSummaryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/movies/summary',
+  tags: ['Library', 'Movies'],
+  request: { query: MoviesSummaryQuerySchema },
+  responses: {
+    200: jsonContent(MoviesSummarySchema, 'Movies collection summary'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Movies query'),
+  },
+})
+
 const articlesRoute = createRoute({
   method: 'get',
   path: '/api/library/articles',
@@ -190,6 +224,17 @@ const articlesRoute = createRoute({
   request: { query: ArticlesQuerySchema },
   responses: {
     200: jsonContent(ArticlesResponseSchema, 'Articles collection'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Articles query'),
+  },
+})
+
+const articlesSummaryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/articles/summary',
+  tags: ['Library', 'Articles'],
+  request: { query: ArticlesSummaryQuerySchema },
+  responses: {
+    200: jsonContent(ArticlesSummarySchema, 'Articles collection summary'),
     400: jsonContent(ApiErrorSchema, 'Invalid Articles query'),
   },
 })
@@ -279,6 +324,17 @@ const podcastsRoute = createRoute({
   },
 })
 
+const podcastsSummaryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/podcasts/summary',
+  tags: ['Library', 'Podcasts'],
+  request: { query: PodcastsSummaryQuerySchema },
+  responses: {
+    200: jsonContent(PodcastsSummarySchema, 'Podcast library summary'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Podcasts query'),
+  },
+})
+
 const podcastFilterOptionsRoute = createRoute({
   method: 'get',
   path: '/api/library/podcasts/filter-options',
@@ -322,6 +378,17 @@ const musicRoute = createRoute({
   request: { query: MusicQuerySchema },
   responses: {
     200: jsonContent(MusicResponseSchema, 'Music library'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Music query'),
+  },
+})
+
+const musicSummaryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/music/summary',
+  tags: ['Library', 'Music'],
+  request: { query: MusicSummaryQuerySchema },
+  responses: {
+    200: jsonContent(MusicSummarySchema, 'Music library summary'),
     400: jsonContent(ApiErrorSchema, 'Invalid Music query'),
   },
 })
@@ -371,6 +438,17 @@ const videosRoute = createRoute({
   request: { query: VideosQuerySchema },
   responses: {
     200: jsonContent(VideosResponseSchema, 'Videos library'),
+    400: jsonContent(ApiErrorSchema, 'Invalid Videos query'),
+  },
+})
+
+const videosSummaryRoute = createRoute({
+  method: 'get',
+  path: '/api/library/videos/summary',
+  tags: ['Library', 'Videos'],
+  request: { query: VideosSummaryQuerySchema },
+  responses: {
+    200: jsonContent(VideosSummarySchema, 'Videos library summary'),
     400: jsonContent(ApiErrorSchema, 'Invalid Videos query'),
   },
 })
@@ -641,34 +719,54 @@ app.openapi(mediaDetailRoute, async (context) => {
   )
 })
 
+function booksLibraryInput(query: z.infer<typeof BooksQuerySchema>) {
+  return {
+    collection: query.section,
+    ...(query.q === undefined ? {} : { q: query.q }),
+    formats: query.format,
+    series: query.series,
+    genres: query.genre,
+    finishedMode: query.finishedMode,
+    ...(query.finishedFrom === undefined ? {} : { finishedFrom: query.finishedFrom }),
+    ...(query.finishedTo === undefined ? {} : { finishedTo: query.finishedTo }),
+    publishedMode: query.publishedMode,
+    ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+    ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+    addedMode: query.addedMode,
+    ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+    ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+    ratingMode: query.ratingMode,
+    ...(query.minRating === undefined ? {} : { minRating: query.minRating }),
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+    limit: query.limit,
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
+}
+
+app.openapi(booksSummaryRoute, async (context) => {
+  const query = BooksQuerySchema.parse(context.req.valid('query'))
+  try {
+    const page = await createBooksRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).summarizeBooks(booksLibraryInput(query))
+    return context.json(BooksSummarySchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Books pagination cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
 app.openapi(booksRoute, async (context) => {
   const query = context.req.valid('query')
   try {
     const page = await createBooksRepository(
       context.env.DB,
       context.get('databaseUsageObserver'),
-    ).listBooks({
-      collection: query.collection,
-      ...(query.q === undefined ? {} : { q: query.q }),
-      formats: query.format,
-      series: query.series,
-      genres: query.genre,
-      finishedMode: query.finishedMode,
-      ...(query.finishedFrom === undefined ? {} : { finishedFrom: query.finishedFrom }),
-      ...(query.finishedTo === undefined ? {} : { finishedTo: query.finishedTo }),
-      publishedMode: query.publishedMode,
-      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
-      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
-      addedMode: query.addedMode,
-      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
-      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
-      ratingMode: query.ratingMode,
-      ...(query.minRating === undefined ? {} : { minRating: query.minRating }),
-      ...(query.sort === undefined ? {} : { sort: query.sort }),
-      ...(query.direction === undefined ? {} : { direction: query.direction }),
-      limit: query.limit,
-      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-    })
+    ).listBookItems(booksLibraryInput(query))
     return context.json(BooksResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Books pagination cursor') {
@@ -717,6 +815,55 @@ app.openapi(bookHistoryRoute, async (context) => {
   }
 })
 
+function articlesLibraryInput(query: z.infer<typeof ArticlesQuerySchema>) {
+  return {
+    section: query.section,
+    ...(query.q === undefined ? {} : { q: query.q }),
+    types: query.type,
+    authors: query.author,
+    publications: query.publication,
+    ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+    ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+    publishedUnknown: query.publishedUnknown,
+    readingTimes: query.readingTime,
+    progress: query.progress,
+    ...(query.archivedFrom === undefined ? {} : { archivedFrom: query.archivedFrom }),
+    ...(query.archivedTo === undefined ? {} : { archivedTo: query.archivedTo }),
+    archivedUnknown: query.archivedUnknown,
+    currentStates: query.currentState,
+    queueStates: query.queueState,
+    ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+    ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+    addedUnknown: query.addedUnknown,
+    ...(query.arrivedFrom === undefined ? {} : { arrivedFrom: query.arrivedFrom }),
+    ...(query.arrivedTo === undefined ? {} : { arrivedTo: query.arrivedTo }),
+    arrivedUnknown: query.arrivedUnknown,
+    opened: query.opened,
+    history: query.history,
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+    limit: query.limit,
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
+}
+
+app.openapi(articlesSummaryRoute, async (context) => {
+  const query = ArticlesQuerySchema.parse(context.req.valid('query'))
+  try {
+    const repository = createArticlesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    )
+    const page = await repository.summarizeArticles(articlesLibraryInput(query))
+    return context.json(ArticlesSummarySchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Articles pagination cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
 app.openapi(articlesRoute, async (context) => {
   const query = context.req.valid('query')
   try {
@@ -724,35 +871,7 @@ app.openapi(articlesRoute, async (context) => {
       context.env.DB,
       context.get('databaseUsageObserver'),
     )
-    const page = await repository.listArticles({
-      section: query.section,
-      ...(query.q === undefined ? {} : { q: query.q }),
-      types: query.type,
-      authors: query.author,
-      publications: query.publication,
-      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
-      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
-      publishedUnknown: query.publishedUnknown,
-      readingTimes: query.readingTime,
-      progress: query.progress,
-      ...(query.archivedFrom === undefined ? {} : { archivedFrom: query.archivedFrom }),
-      ...(query.archivedTo === undefined ? {} : { archivedTo: query.archivedTo }),
-      archivedUnknown: query.archivedUnknown,
-      currentStates: query.currentState,
-      queueStates: query.queueState,
-      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
-      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
-      addedUnknown: query.addedUnknown,
-      ...(query.arrivedFrom === undefined ? {} : { arrivedFrom: query.arrivedFrom }),
-      ...(query.arrivedTo === undefined ? {} : { arrivedTo: query.arrivedTo }),
-      arrivedUnknown: query.arrivedUnknown,
-      opened: query.opened,
-      history: query.history,
-      ...(query.sort === undefined ? {} : { sort: query.sort }),
-      ...(query.direction === undefined ? {} : { direction: query.direction }),
-      limit: query.limit,
-      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-    })
+    const page = await repository.listArticleItems(articlesLibraryInput(query))
     if (query.q !== undefined) {
       await hydrateArticleTextExcerpts({
         items: page.data,
@@ -827,36 +946,56 @@ app.openapi(articleHighlightsRoute, async (context) => {
   }
 })
 
+function moviesLibraryInput(query: z.infer<typeof MoviesQuerySchema>) {
+  return {
+    collection: query.section,
+    ...(query.q === undefined ? {} : { q: query.q }),
+    watchedMode: query.watched,
+    ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
+    ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
+    addedMode: query.added,
+    ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+    ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+    ...(query.releaseYearFrom === undefined ? {} : { releaseYearFrom: query.releaseYearFrom }),
+    ...(query.releaseYearTo === undefined ? {} : { releaseYearTo: query.releaseYearTo }),
+    releaseYearUnknown: query.releaseYearUnknown,
+    ratingMode: query.rating,
+    ...(query.ratingMin === undefined ? {} : { ratingMin: query.ratingMin }),
+    ...(query.ratingMax === undefined ? {} : { ratingMax: query.ratingMax }),
+    reviewed: query.reviewed,
+    archive: query.archive,
+    runtime: query.runtime,
+    runtimeUnknown: query.runtimeUnknown,
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+    limit: query.limit,
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
+}
+
+app.openapi(moviesSummaryRoute, async (context) => {
+  const query = MoviesQuerySchema.parse(context.req.valid('query'))
+  try {
+    const page = await createMoviesRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).summarizeMovies(moviesLibraryInput(query))
+    return context.json(MoviesSummarySchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Movies pagination cursor') {
+      throw new HTTPException(400, { message: error.message })
+    }
+    throw error
+  }
+})
+
 app.openapi(moviesRoute, async (context) => {
   const query = context.req.valid('query')
   try {
     const page = await createMoviesRepository(
       context.env.DB,
       context.get('databaseUsageObserver'),
-    ).listMovies({
-      collection: query.collection,
-      ...(query.q === undefined ? {} : { q: query.q }),
-      watchedMode: query.watched,
-      ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
-      ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
-      addedMode: query.added,
-      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
-      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
-      ...(query.releaseYearFrom === undefined ? {} : { releaseYearFrom: query.releaseYearFrom }),
-      ...(query.releaseYearTo === undefined ? {} : { releaseYearTo: query.releaseYearTo }),
-      releaseYearUnknown: query.releaseYearUnknown,
-      ratingMode: query.rating,
-      ...(query.ratingMin === undefined ? {} : { ratingMin: query.ratingMin }),
-      ...(query.ratingMax === undefined ? {} : { ratingMax: query.ratingMax }),
-      reviewed: query.reviewed,
-      archive: query.archive,
-      runtime: query.runtime,
-      runtimeUnknown: query.runtimeUnknown,
-      ...(query.sort === undefined ? {} : { sort: query.sort }),
-      ...(query.direction === undefined ? {} : { direction: query.direction }),
-      limit: query.limit,
-      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-    })
+    ).listMovieItems(moviesLibraryInput(query))
     return context.json(MoviesResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Movies pagination cursor') {
@@ -937,6 +1076,48 @@ app.openapi(tmdbCatalogSyncRoute, async (context) => {
   )
 })
 
+function podcastsLibraryInput(query: z.infer<typeof PodcastsQuerySchema>) {
+  return {
+    view: query.section,
+    ...(query.q === undefined ? {} : { q: query.q }),
+    show: query.show,
+    following: query.following,
+    ...(query.dateFrom === undefined ? {} : { dateFrom: query.dateFrom }),
+    ...(query.dateTo === undefined ? {} : { dateTo: query.dateTo }),
+    dateUnknown: query.dateUnknown,
+    ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+    ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+    publishedUnknown: query.publishedUnknown,
+    publisher: query.publisher,
+    language: query.language,
+    libraryEpisodes: query.libraryEpisodes,
+    duration: query.duration,
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+    limit: query.limit,
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
+}
+
+app.openapi(podcastsSummaryRoute, async (context) => {
+  const query = PodcastsQuerySchema.parse(context.req.valid('query'))
+  try {
+    const repository = createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    )
+    const page = await repository.summarizePodcasts(podcastsLibraryInput(query))
+    return context.json(
+      PodcastsSummarySchema.parse({ ...page, coverage: await repository.coverage() }),
+      200,
+    )
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
 app.openapi(podcastsRoute, async (context) => {
   const query = context.req.valid('query')
   try {
@@ -944,30 +1125,8 @@ app.openapi(podcastsRoute, async (context) => {
       context.env.DB,
       context.get('databaseUsageObserver'),
     )
-    const page = await repository.listPodcasts({
-      view: query.view,
-      ...(query.q === undefined ? {} : { q: query.q }),
-      show: query.show,
-      following: query.following,
-      ...(query.dateFrom === undefined ? {} : { dateFrom: query.dateFrom }),
-      ...(query.dateTo === undefined ? {} : { dateTo: query.dateTo }),
-      dateUnknown: query.dateUnknown,
-      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
-      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
-      publishedUnknown: query.publishedUnknown,
-      publisher: query.publisher,
-      language: query.language,
-      libraryEpisodes: query.libraryEpisodes,
-      duration: query.duration,
-      ...(query.sort === undefined ? {} : { sort: query.sort }),
-      ...(query.direction === undefined ? {} : { direction: query.direction }),
-      limit: query.limit,
-      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-    })
-    return context.json(
-      PodcastsResponseSchema.parse({ ...page, coverage: await repository.coverage() }),
-      200,
-    )
+    const page = await repository.listPodcastsItems(podcastsLibraryInput(query))
+    return context.json(PodcastsResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
       throw new HTTPException(400, { message: error.message })
@@ -983,7 +1142,7 @@ app.openapi(podcastFilterOptionsRoute, async (context) => {
       context.get('databaseUsageObserver'),
     ).listPodcastFilterOptions(
       {
-        view: query.view,
+        view: query.section,
         ...(query.q === undefined ? {} : { q: query.q }),
         show: query.show,
         following: query.following,
@@ -1049,6 +1208,46 @@ app.openapi(podcastHistoryRoute, async (context) => {
   }
 })
 
+function musicLibraryInput(query: z.infer<typeof MusicQuerySchema>) {
+  return {
+    view: query.section,
+    ...(query.q === undefined ? {} : { q: query.q }),
+    ...(query.from === undefined ? {} : { from: query.from }),
+    ...(query.to === undefined ? {} : { to: query.to }),
+    source: query.source,
+    ...(query.minPlaybacks === undefined ? {} : { minPlaybacks: query.minPlaybacks }),
+    playbackCount: query.playbackCount,
+    metadata: query.metadata,
+    artist: query.artist,
+    album: query.album,
+    explicit: query.explicit,
+    albumType: query.albumType,
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+    limit: query.limit,
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
+}
+
+app.openapi(musicSummaryRoute, async (context) => {
+  const query = MusicQuerySchema.parse(context.req.valid('query'))
+  try {
+    const repository = createSpotifyLibraryRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    )
+    const page = await repository.summarizeMusic(musicLibraryInput(query))
+    return context.json(
+      MusicSummarySchema.parse({ ...page, coverage: await repository.coverage() }),
+      200,
+    )
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
 app.openapi(musicRoute, async (context) => {
   const query = context.req.valid('query')
   try {
@@ -1056,28 +1255,8 @@ app.openapi(musicRoute, async (context) => {
       context.env.DB,
       context.get('databaseUsageObserver'),
     )
-    const page = await repository.listMusic({
-      view: query.view,
-      ...(query.q === undefined ? {} : { q: query.q }),
-      ...(query.from === undefined ? {} : { from: query.from }),
-      ...(query.to === undefined ? {} : { to: query.to }),
-      source: query.source,
-      ...(query.minPlaybacks === undefined ? {} : { minPlaybacks: query.minPlaybacks }),
-      playbackCount: query.playbackCount,
-      metadata: query.metadata,
-      artist: query.artist,
-      album: query.album,
-      explicit: query.explicit,
-      albumType: query.albumType,
-      ...(query.sort === undefined ? {} : { sort: query.sort }),
-      ...(query.direction === undefined ? {} : { direction: query.direction }),
-      limit: query.limit,
-      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-    })
-    return context.json(
-      MusicResponseSchema.parse({ ...page, coverage: await repository.coverage() }),
-      200,
-    )
+    const page = await repository.listMusicItems(musicLibraryInput(query))
+    return context.json(MusicResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid Spotify Library pagination cursor')
       throw new HTTPException(400, { message: error.message })
@@ -1093,7 +1272,7 @@ app.openapi(musicFilterOptionsRoute, async (context) => {
       context.get('databaseUsageObserver'),
     ).listMusicFilterOptions(
       {
-        view: query.view,
+        view: query.section,
         ...(query.q === undefined ? {} : { q: query.q }),
         ...(query.from === undefined ? {} : { from: query.from }),
         ...(query.to === undefined ? {} : { to: query.to }),
@@ -1160,38 +1339,57 @@ app.openapi(musicHistoryRoute, async (context) => {
   }
 })
 
+function videosLibraryInput(query: z.infer<typeof VideosQuerySchema>) {
+  return {
+    view: query.section,
+    ...(query.q === undefined ? {} : { q: query.q }),
+    account: query.account,
+    channel: query.channel,
+    ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
+    ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
+    watchedUnknown: query.watchedUnknown,
+    ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
+    ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
+    addedUnknown: query.addedUnknown,
+    published: query.published,
+    ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+    ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
+    duration: query.duration,
+    durationUnknown: query.durationUnknown,
+    watchCount: query.watchCount,
+    overlap: query.overlap,
+    format: query.format,
+    availability: query.availability,
+    category: query.category,
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+    limit: query.limit,
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
+}
+
+app.openapi(videosSummaryRoute, async (context) => {
+  const query = VideosQuerySchema.parse(context.req.valid('query'))
+  try {
+    const page = await createVideosRepository(
+      context.env.DB,
+      context.get('databaseUsageObserver'),
+    ).summarizeVideos(videosLibraryInput(query))
+    return context.json(VideosSummarySchema.parse(page), 200)
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
+      throw new HTTPException(400, { message: error.message })
+    throw error
+  }
+})
+
 app.openapi(videosRoute, async (context) => {
   const query = context.req.valid('query')
   try {
     const page = await createVideosRepository(
       context.env.DB,
       context.get('databaseUsageObserver'),
-    ).listVideos({
-      view: query.view,
-      ...(query.q === undefined ? {} : { q: query.q }),
-      account: query.account,
-      channel: query.channel,
-      ...(query.watchedFrom === undefined ? {} : { watchedFrom: query.watchedFrom }),
-      ...(query.watchedTo === undefined ? {} : { watchedTo: query.watchedTo }),
-      watchedUnknown: query.watchedUnknown,
-      ...(query.addedFrom === undefined ? {} : { addedFrom: query.addedFrom }),
-      ...(query.addedTo === undefined ? {} : { addedTo: query.addedTo }),
-      addedUnknown: query.addedUnknown,
-      published: query.published,
-      ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
-      ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
-      duration: query.duration,
-      durationUnknown: query.durationUnknown,
-      watchCount: query.watchCount,
-      overlap: query.overlap,
-      format: query.format,
-      availability: query.availability,
-      category: query.category,
-      ...(query.sort === undefined ? {} : { sort: query.sort }),
-      ...(query.direction === undefined ? {} : { direction: query.direction }),
-      limit: query.limit,
-      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-    })
+    ).listVideoItems(videosLibraryInput(query))
     return context.json(VideosResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))
@@ -1261,7 +1459,7 @@ app.openapi(videoChannelLibraryRoute, async (context) => {
     const page = await createVideosRepository(
       context.env.DB,
       context.get('databaseUsageObserver'),
-    ).listChannelVideos(id, query.membership, query.limit, query.cursor)
+    ).listChannelVideos(id, query.section, query.limit, query.cursor)
     return context.json(VideoChannelLibraryResponseSchema.parse(page), 200)
   } catch (error) {
     if (error instanceof TypeError && error.message.includes('Videos pagination cursor'))

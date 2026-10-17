@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
 
 export const BookCollectionSchema = z.enum(['archive', 'queue'])
 export const BookLayoutSchema = z.enum(['grid', 'list'])
@@ -37,7 +38,7 @@ const publicationBoundary = z.string().regex(/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/)
 
 export const BooksQuerySchema = z
   .object({
-    collection: BookCollectionSchema.default('archive'),
+    section: BookCollectionSchema.default('archive'),
     q: optionalTrimmedString,
     format: csvValues,
     series: csvValues,
@@ -56,12 +57,12 @@ export const BooksQuerySchema = z
     sort: BookSortSchema.optional(),
     direction: BookSortDirectionSchema.optional(),
     layout: BookLayoutSchema.default('grid'),
-    limit: z.coerce.number().int().min(1).max(100).default(48),
+    limit: z.coerce.number().int().min(1).max(100).default(LIBRARY_PAGE_SIZE),
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((query, context) => {
     const allowedSorts =
-      query.collection === 'archive'
+      query.section === 'archive'
         ? new Set([
             'recent_read',
             'earliest_read',
@@ -75,7 +76,7 @@ export const BooksQuerySchema = z
       context.addIssue({
         code: 'custom',
         path: ['sort'],
-        message: `Sort ${query.sort} is not available for ${query.collection}.`,
+        message: `Sort ${query.sort} is not available for ${query.section}.`,
       })
     }
     if (query.ratingMode === 'minimum' && query.minRating === undefined) {
@@ -139,6 +140,9 @@ export const BookFacetValueSchema = z.object({
 export const BooksResponseSchema = z.object({
   data: z.array(BookCollectionItemSchema),
   nextCursor: z.string().nullable(),
+})
+
+export const BooksSummarySchema = z.object({
   counts: z.object({
     archive: z.number().int().nonnegative(),
     queue: z.number().int().nonnegative(),
@@ -254,3 +258,7 @@ export type BookHistoryEntry = z.infer<typeof BookHistoryEntrySchema>
 export type BookHistoryResponse = z.infer<typeof BookHistoryResponseSchema>
 export type BooksQuery = z.infer<typeof BooksQuerySchema>
 export type BooksResponse = z.infer<typeof BooksResponseSchema>
+
+export type BooksSummary = z.infer<typeof BooksSummarySchema>
+
+export const BooksSummaryQuerySchema = librarySummaryQuery(BooksQuerySchema)

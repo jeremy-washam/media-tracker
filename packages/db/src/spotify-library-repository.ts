@@ -1119,9 +1119,60 @@ export class SqlSpotifyLibraryRepository {
   }
 
   async listPodcasts(input: PodcastsListInput) {
+    const [page, summary] = await Promise.all([
+      this.listPodcastsItems(input),
+      this.summarizePodcasts(input),
+    ])
+    return { ...page, ...summary }
+  }
+
+  async summarizePodcasts(input: PodcastsListInput) {
+    return input.view === 'following'
+      ? this.summarizeShowsRows(input)
+      : this.summarizePodcastsRows(input)
+  }
+
+  async listPodcastsItems(input: PodcastsListInput) {
     const key = JSON.stringify({ ...input, cursor: undefined })
     const anchor = cursor(input.cursor, key)
-    if (input.view === 'following') return this.listShows(input, anchor, key)
+    if (input.view === 'following') return this.listShowItems(input, anchor, key)
+    const { where, values, search, dateColumn } = this.podcastEpisodeFilters(input)
+    const sort = input.sort ?? (input.view === 'archive' ? 'activityAt' : 'savedAt')
+    const direction =
+      input.direction ?? (['title', 'show', 'relevance'].includes(sort) ? 'asc' : 'desc')
+    const order =
+      sort === 'relevance' && search
+        ? 'rank.score'
+        : sort === 'title'
+          ? 'p.title'
+          : sort === 'show'
+            ? 'p.show_name'
+            : sort === 'publishedAt'
+              ? 'p.published_at_value'
+              : sort === 'duration'
+                ? 'p.duration_ms'
+                : sort === 'observedTime'
+                  ? 'p.observed_ms'
+                  : dateColumn
+    const page = cursorWhere(anchor, direction)
+    const rows = await statement(
+      this.database,
+      `SELECT * FROM (
+         SELECT p.*,${order} page_sort,p.media_item_id page_id
+         FROM podcast_library_projection p
+         ${search ? 'JOIN (SELECT media_item_id,bm25(podcast_search) score FROM podcast_search WHERE podcast_search MATCH ?) rank ON rank.media_item_id=p.media_item_id' : ''}
+         WHERE ${where}
+       ) WHERE ${page.sql || '1=1'}
+       ORDER BY (page_sort IS NULL),page_sort ${direction.toUpperCase()},page_id LIMIT ?`,
+      [...(search ? [search] : []), ...values, ...page.values, input.limit + 1],
+    ).all<Record<string, string | number | null>>()
+    return {
+      data: rows.results.slice(0, input.limit).map((row) => this.podcastRow(row)),
+      nextCursor: nextCursor(rows.results, input.limit, key),
+    }
+  }
+
+  private podcastEpisodeFilters(input: PodcastsListInput) {
     const clauses = [input.view === 'archive' ? 'p.in_archive=1' : 'p.in_queue=1']
     const values: DatabaseValue[] = []
     const search = input.q?.trim() ? ftsQuery(input.q) : null
@@ -1191,40 +1242,17 @@ export class SqlSpotifyLibraryRepository {
       clauses.push(`(${durations.join(' OR ')})`)
     }
     const where = clauses.join(' AND ')
-    const sort = input.sort ?? (input.view === 'archive' ? 'activityAt' : 'savedAt')
-    const direction =
-      input.direction ?? (['title', 'show', 'relevance'].includes(sort) ? 'asc' : 'desc')
-    const order =
-      sort === 'relevance' && search
-        ? 'rank.score'
-        : sort === 'title'
-          ? 'p.title'
-          : sort === 'show'
-            ? 'p.show_name'
-            : sort === 'publishedAt'
-              ? 'p.published_at_value'
-              : sort === 'duration'
-                ? 'p.duration_ms'
-                : sort === 'observedTime'
-                  ? 'p.observed_ms'
-                  : dateColumn
+    return { where, values, search, dateColumn }
+  }
+
+  private async summarizePodcastsRows(input: PodcastsListInput) {
+    const { where, values } = this.podcastEpisodeFilters(input)
     const count = await statement(
       this.database,
       `SELECT COUNT(*) value FROM podcast_library_projection p WHERE ${where}`,
       values,
     ).first<{ value: number }>()
-    const page = cursorWhere(anchor, direction)
-    const rows = await statement(
-      this.database,
-      `SELECT * FROM (
-         SELECT p.*,${order} page_sort,p.media_item_id page_id
-         FROM podcast_library_projection p
-         ${search ? 'JOIN (SELECT media_item_id,bm25(podcast_search) score FROM podcast_search WHERE podcast_search MATCH ?) rank ON rank.media_item_id=p.media_item_id' : ''}
-         WHERE ${where}
-       ) WHERE ${page.sql || '1=1'}
-       ORDER BY (page_sort IS NULL),page_sort ${direction.toUpperCase()},page_id LIMIT ?`,
-      [...(search ? [search] : []), ...values, ...page.values, input.limit + 1],
-    ).all<Record<string, string | number | null>>()
+
     const counts = await statement(
       this.database,
       `SELECT SUM(in_archive) archive,SUM(in_queue) queue,
@@ -1233,8 +1261,6 @@ export class SqlSpotifyLibraryRepository {
     ).first<{ archive: number; queue: number; following: number }>()
     const total = count?.value ?? 0
     return {
-      data: rows.results.slice(0, input.limit).map((row) => this.podcastRow(row)),
-      nextCursor: nextCursor(rows.results, input.limit, key),
       totalCount: total,
       filteredCount: total,
       sectionCounts: {
@@ -1387,7 +1413,64 @@ export class SqlSpotifyLibraryRepository {
     }
   }
 
-  private async listShows(input: PodcastsListInput, anchor: LibraryCursor | null, key: string) {
+  private async listShowItems(input: PodcastsListInput, anchor: LibraryCursor | null, key: string) {
+    const { where, values } = this.podcastShowFilters(input)
+    const sort = input.sort ?? 'savedAt'
+    const direction =
+      input.direction ?? (['title', 'publisher', 'relevance'].includes(sort) ? 'asc' : 'desc')
+    const order =
+      sort === 'relevance' && input.q
+        ? 'CASE WHEN LOWER(s.name)=LOWER(?) THEN 0 WHEN INSTR(LOWER(s.name),LOWER(?))=1 THEN 1 ELSE 2 END'
+        : sort === 'title'
+          ? 's.name'
+          : sort === 'publisher'
+            ? 's.publisher'
+            : sort === 'episodeCount'
+              ? 's.total_episodes'
+              : 'saved_at'
+    const page = cursorWhere(anchor, direction)
+    const rows = await statement(
+      this.database,
+      `SELECT * FROM (
+         SELECT s.*,MAX(ss.added_at) saved_at,
+           (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_archive=1) archive_count,
+           (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_queue=1) queue_count,
+           ${order === 'saved_at' ? 'MAX(ss.added_at)' : order} page_sort,s.id page_id
+         FROM spotify_podcast_shows s JOIN spotify_saved_shows ss ON ss.show_id=s.id WHERE ${where}
+         GROUP BY s.id
+       ) WHERE ${page.sql || '1=1'}
+       ORDER BY (page_sort IS NULL),page_sort ${direction.toUpperCase()},page_id LIMIT ?`,
+      [
+        ...(sort === 'relevance' && input.q ? [input.q, input.q] : []),
+        ...values,
+        ...page.values,
+        input.limit + 1,
+      ],
+    ).all<Record<string, string | number | null>>()
+    return {
+      data: rows.results.slice(0, input.limit).map((row) => ({
+        id: String(row.id),
+        kind: 'show' as const,
+        title: (row.name as string | null) ?? 'Untitled show',
+        subtitle: row.publisher as string | null,
+        imageUrl: row.image_url as string | null,
+        date: row.saved_at as string | null,
+        durationMs: null,
+        observedMs: 0,
+        playbackCount: 0,
+        inArchive: false,
+        inQueue: false,
+        following: true,
+        archiveEpisodeCount: Number(row.archive_count ?? 0),
+        queueEpisodeCount: Number(row.queue_count ?? 0),
+        totalEpisodes: row.total_episodes as number | null,
+        canonicalUrl: row.canonical_url as string | null,
+      })),
+      nextCursor: nextCursor(rows.results, input.limit, key),
+    }
+  }
+
+  private podcastShowFilters(input: PodcastsListInput) {
     const clauses = ['ss.active=1', podcastShowPredicate]
     const values: DatabaseValue[] = []
     if (input.q) {
@@ -1452,68 +1535,23 @@ export class SqlSpotifyLibraryRepository {
       clauses.push(`(${predicates.join(' OR ')})`)
     }
     const where = clauses.join(' AND ')
+    return { where, values }
+  }
+
+  private async summarizeShowsRows(input: PodcastsListInput) {
+    const { where, values } = this.podcastShowFilters(input)
     const count = await statement(
       this.database,
       `SELECT COUNT(DISTINCT s.id) value FROM spotify_podcast_shows s JOIN spotify_saved_shows ss ON ss.show_id=s.id WHERE ${where}`,
       values,
     ).first<{ value: number }>()
-    const sort = input.sort ?? 'savedAt'
-    const direction =
-      input.direction ?? (['title', 'publisher', 'relevance'].includes(sort) ? 'asc' : 'desc')
-    const order =
-      sort === 'relevance' && input.q
-        ? 'CASE WHEN LOWER(s.name)=LOWER(?) THEN 0 WHEN INSTR(LOWER(s.name),LOWER(?))=1 THEN 1 ELSE 2 END'
-        : sort === 'title'
-          ? 's.name'
-          : sort === 'publisher'
-            ? 's.publisher'
-            : sort === 'episodeCount'
-              ? 's.total_episodes'
-              : 'saved_at'
-    const page = cursorWhere(anchor, direction)
-    const rows = await statement(
-      this.database,
-      `SELECT * FROM (
-         SELECT s.*,MAX(ss.added_at) saved_at,
-           (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_archive=1) archive_count,
-           (SELECT COUNT(*) FROM podcast_library_projection p WHERE p.show_id=s.id AND p.in_queue=1) queue_count,
-           ${order === 'saved_at' ? 'MAX(ss.added_at)' : order} page_sort,s.id page_id
-         FROM spotify_podcast_shows s JOIN spotify_saved_shows ss ON ss.show_id=s.id WHERE ${where}
-         GROUP BY s.id
-       ) WHERE ${page.sql || '1=1'}
-       ORDER BY (page_sort IS NULL),page_sort ${direction.toUpperCase()},page_id LIMIT ?`,
-      [
-        ...(sort === 'relevance' && input.q ? [input.q, input.q] : []),
-        ...values,
-        ...page.values,
-        input.limit + 1,
-      ],
-    ).all<Record<string, string | number | null>>()
-    const total = count?.value ?? 0
+
     const counts = await statement(
       this.database,
       `SELECT SUM(in_archive) archive,SUM(in_queue) queue,${followingCount} following FROM podcast_library_projection`,
     ).first<{ archive: number; queue: number; following: number }>()
+    const total = count?.value ?? 0
     return {
-      data: rows.results.slice(0, input.limit).map((row) => ({
-        id: String(row.id),
-        kind: 'show' as const,
-        title: (row.name as string | null) ?? 'Untitled show',
-        subtitle: row.publisher as string | null,
-        imageUrl: row.image_url as string | null,
-        date: row.saved_at as string | null,
-        durationMs: null,
-        observedMs: 0,
-        playbackCount: 0,
-        inArchive: false,
-        inQueue: false,
-        following: true,
-        archiveEpisodeCount: Number(row.archive_count ?? 0),
-        queueEpisodeCount: Number(row.queue_count ?? 0),
-        totalEpisodes: row.total_episodes as number | null,
-        canonicalUrl: row.canonical_url as string | null,
-      })),
-      nextCursor: nextCursor(rows.results, input.limit, key),
       totalCount: total,
       filteredCount: total,
       sectionCounts: {
@@ -1713,10 +1751,87 @@ export class SqlSpotifyLibraryRepository {
   }
 
   async listMusic(input: MusicListInput) {
+    const [page, summary] = await Promise.all([
+      this.listMusicItems(input),
+      this.summarizeMusic(input),
+    ])
+    return { ...page, ...summary }
+  }
+
+  async summarizeMusic(input: MusicListInput) {
+    return input.view === 'albums'
+      ? this.summarizeAlbumsRows(input)
+      : input.view === 'artists'
+        ? this.summarizeArtistsRows(input)
+        : this.summarizeMusicRows(input)
+  }
+
+  async listMusicItems(input: MusicListInput) {
     const key = JSON.stringify({ ...input, cursor: undefined })
     const anchor = cursor(input.cursor, key)
-    if (input.view === 'albums') return this.listAlbums(input, anchor, key)
-    if (input.view === 'artists') return this.listArtists(input, anchor, key)
+    if (input.view === 'albums') return this.listAlbumItems(input, anchor, key)
+    if (input.view === 'artists') return this.listArtistItems(input, anchor, key)
+    const { scope, values, search, ranked, where } = this.musicTrackFilters(input)
+    const sort = input.sort ?? 'playedAt'
+    const direction =
+      input.direction ?? (['title', 'artist', 'album', 'relevance'].includes(sort) ? 'asc' : 'desc')
+    const order =
+      sort === 'relevance' && search
+        ? 'COALESCE(rank.score,-100)'
+        : sort === 'title'
+          ? 't.title'
+          : sort === 'artist'
+            ? 't.artist_text'
+            : sort === 'album'
+              ? 't.album_name'
+              : sort === 'playbackCount'
+                ? 'm.playback_count'
+                : sort === 'observedTime'
+                  ? 'm.observed_ms'
+                  : 'm.latest_played_at'
+    const page = cursorWhere(anchor, direction)
+    const rows = await statement(
+      this.database,
+      `${scope.cte} SELECT * FROM (
+         SELECT t.*,m.playback_count matching_playback_count,m.observed_ms matching_observed_ms,
+           m.latest_played_at matching_latest_played_at,m.duration_known_count,
+           ${order} page_sort,t.media_item_id page_id
+         FROM spotify_song_tracks t JOIN matching m ON m.media_item_id=t.media_item_id ${ranked} WHERE ${where}
+       ) WHERE ${page.sql || '1=1'}
+       ORDER BY (page_sort IS NULL),page_sort ${direction.toUpperCase()},page_id LIMIT ?`,
+      [
+        ...scope.values,
+        ...(search ? [search] : []),
+        ...values.slice(scope.values.length),
+        ...page.values,
+        input.limit + 1,
+      ],
+    ).all<Record<string, string | number | null>>()
+    return {
+      data: rows.results.slice(0, input.limit).map((row) => ({
+        id: String(row.media_item_id),
+        kind: 'track' as const,
+        title: (row.title as string | null) ?? 'Untitled track',
+        subtitle: row.artist_text as string | null,
+        album: row.album_name as string | null,
+        imageUrl: row.image_url as string | null,
+        latestPlayedAt: row.matching_latest_played_at as string | null,
+        playbackCount: Number(row.matching_playback_count),
+        observedMs: Number(row.matching_observed_ms),
+        observedDurationKnown: Number(row.duration_known_count) > 0,
+        durationUnknownCount:
+          Number(row.matching_playback_count) - Number(row.duration_known_count),
+        trackCount: 1,
+        releaseCount: row.album_id ? 1 : 0,
+        explicit: row.explicit === null ? null : Number(row.explicit) === 1,
+        metadataState: String(row.metadata_state),
+        canonicalUrl: row.canonical_url as string | null,
+      })),
+      nextCursor: nextCursor(rows.results, input.limit, key),
+    }
+  }
+
+  private musicTrackFilters(input: MusicListInput) {
     const scope = this.musicOccurrenceScope(input)
     const clauses = ['1=1']
     const values: DatabaseValue[] = [...scope.values]
@@ -1758,69 +1873,20 @@ export class SqlSpotifyLibraryRepository {
     if (input.explicit === 'no') clauses.push('t.explicit=0')
     if (input.explicit === 'unknown') clauses.push('t.explicit IS NULL')
     const where = clauses.join(' AND ')
-    const sort = input.sort ?? 'playedAt'
-    const direction =
-      input.direction ?? (['title', 'artist', 'album', 'relevance'].includes(sort) ? 'asc' : 'desc')
-    const order =
-      sort === 'relevance' && search
-        ? 'COALESCE(rank.score,-100)'
-        : sort === 'title'
-          ? 't.title'
-          : sort === 'artist'
-            ? 't.artist_text'
-            : sort === 'album'
-              ? 't.album_name'
-              : sort === 'playbackCount'
-                ? 'm.playback_count'
-                : sort === 'observedTime'
-                  ? 'm.observed_ms'
-                  : 'm.latest_played_at'
+    return { scope, values, search, ranked, where }
+  }
+
+  private async summarizeMusicRows(input: MusicListInput) {
+    const { scope, values, search, ranked, where } = this.musicTrackFilters(input)
     const count = await statement(
       this.database,
       `${scope.cte} SELECT COUNT(*) value FROM spotify_song_tracks t JOIN matching m ON m.media_item_id=t.media_item_id ${ranked} WHERE ${where}`,
       [...scope.values, ...(search ? [search] : []), ...values.slice(scope.values.length)],
     ).first<{ value: number }>()
-    const page = cursorWhere(anchor, direction)
-    const rows = await statement(
-      this.database,
-      `${scope.cte} SELECT * FROM (
-         SELECT t.*,m.playback_count matching_playback_count,m.observed_ms matching_observed_ms,
-           m.latest_played_at matching_latest_played_at,m.duration_known_count,
-           ${order} page_sort,t.media_item_id page_id
-         FROM spotify_song_tracks t JOIN matching m ON m.media_item_id=t.media_item_id ${ranked} WHERE ${where}
-       ) WHERE ${page.sql || '1=1'}
-       ORDER BY (page_sort IS NULL),page_sort ${direction.toUpperCase()},page_id LIMIT ?`,
-      [
-        ...scope.values,
-        ...(search ? [search] : []),
-        ...values.slice(scope.values.length),
-        ...page.values,
-        input.limit + 1,
-      ],
-    ).all<Record<string, string | number | null>>()
+
     const counts = await this.musicCounts()
     const total = count?.value ?? 0
     return {
-      data: rows.results.slice(0, input.limit).map((row) => ({
-        id: String(row.media_item_id),
-        kind: 'track' as const,
-        title: (row.title as string | null) ?? 'Untitled track',
-        subtitle: row.artist_text as string | null,
-        album: row.album_name as string | null,
-        imageUrl: row.image_url as string | null,
-        latestPlayedAt: row.matching_latest_played_at as string | null,
-        playbackCount: Number(row.matching_playback_count),
-        observedMs: Number(row.matching_observed_ms),
-        observedDurationKnown: Number(row.duration_known_count) > 0,
-        durationUnknownCount:
-          Number(row.matching_playback_count) - Number(row.duration_known_count),
-        trackCount: 1,
-        releaseCount: row.album_id ? 1 : 0,
-        explicit: row.explicit === null ? null : Number(row.explicit) === 1,
-        metadataState: String(row.metadata_state),
-        canonicalUrl: row.canonical_url as string | null,
-      })),
-      nextCursor: nextCursor(rows.results, input.limit, key),
       totalCount: total,
       filteredCount: total,
       sectionCounts: counts,
@@ -1864,56 +1930,8 @@ export class SqlSpotifyLibraryRepository {
     return { tracks: row?.tracks ?? 0, albums: row?.albums ?? 0, artists: row?.artists ?? 0 }
   }
 
-  private async listAlbums(input: MusicListInput, anchor: LibraryCursor | null, key: string) {
-    const scope = this.musicOccurrenceScope(input)
-    const clauses: string[] = []
-    const filterValues: DatabaseValue[] = []
-    if (input.q) {
-      const q = safeLike(input.q)
-      clauses.push(
-        "(a.name LIKE ? ESCAPE '\\' OR a.artist_text LIKE ? ESCAPE '\\' OR a.spotify_album_uri=? OR a.spotify_album_id=?)",
-      )
-      filterValues.push(q, q, input.q, input.q)
-    }
-    if (input.artist?.length) {
-      clauses.push(
-        `EXISTS(SELECT 1 FROM spotify_song_track_artists ta WHERE ta.media_item_id=t.media_item_id AND ta.artist_id IN (${input.artist
-          .map(() => '?')
-          .join(',')}))`,
-      )
-      filterValues.push(...input.artist)
-    }
-    if (input.albumType === 'album') clauses.push("a.album_type='album'")
-    if (input.albumType === 'single') clauses.push("a.album_type='single'")
-    if (input.albumType === 'compilation') clauses.push("a.album_type='compilation'")
-    if (input.albumType === 'other')
-      clauses.push(
-        "a.album_type IS NOT NULL AND a.album_type NOT IN ('album','single','compilation')",
-      )
-    if (input.albumType === 'unknown') clauses.push('a.album_type IS NULL')
-    if (input.metadata && !['any', 'current'].includes(input.metadata)) clauses.push('1=0')
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
-    const havingClauses: string[] = []
-    const havingValues: DatabaseValue[] = []
-    if (input.minPlaybacks) {
-      havingClauses.push('SUM(m.playback_count)>=?')
-      havingValues.push(input.minPlaybacks)
-    }
-    if (input.playbackCount === 'once') havingClauses.push('SUM(m.playback_count)=1')
-    if (input.playbackCount === '2to9') havingClauses.push('SUM(m.playback_count) BETWEEN 2 AND 9')
-    if (input.playbackCount === '10to49')
-      havingClauses.push('SUM(m.playback_count) BETWEEN 10 AND 49')
-    if (input.playbackCount === '50plus') havingClauses.push('SUM(m.playback_count)>=50')
-    const having = havingClauses.length ? `HAVING ${havingClauses.join(' AND ')}` : ''
-    const values: DatabaseValue[] = [...scope.values, ...filterValues, ...havingValues]
-    const count = await statement(
-      this.database,
-      `${scope.cte} SELECT COUNT(*) value FROM (
-        SELECT a.id FROM spotify_song_albums a JOIN spotify_song_tracks t ON t.album_id=a.id
-        JOIN matching m ON m.media_item_id=t.media_item_id ${where} GROUP BY a.id ${having}
-      )`,
-      values,
-    ).first<{ value: number }>()
+  private async listAlbumItems(input: MusicListInput, anchor: LibraryCursor | null, key: string) {
+    const { scope, filterValues, havingValues, where, having } = this.musicAlbumFilters(input)
     const sort = input.sort ?? 'playbackCount'
     const direction =
       input.direction ?? (['title', 'artist', 'relevance'].includes(sort) ? 'asc' : 'desc')
@@ -1956,7 +1974,6 @@ export class SqlSpotifyLibraryRepository {
         input.limit + 1,
       ],
     ).all<Record<string, string | number | null>>()
-    const total = count?.value ?? 0
     return {
       data: rows.results.slice(0, input.limit).map((row) => ({
         id: String(row.id),
@@ -1978,20 +1995,36 @@ export class SqlSpotifyLibraryRepository {
         canonicalUrl: row.canonical_url as string | null,
       })),
       nextCursor: nextCursor(rows.results, input.limit, key),
-      totalCount: total,
-      filteredCount: total,
-      sectionCounts: await this.musicCounts(),
     }
   }
 
-  private async listArtists(input: MusicListInput, anchor: LibraryCursor | null, key: string) {
+  private musicAlbumFilters(input: MusicListInput) {
     const scope = this.musicOccurrenceScope(input)
     const clauses: string[] = []
     const filterValues: DatabaseValue[] = []
     if (input.q) {
-      clauses.push("(a.name LIKE ? ESCAPE '\\' OR a.spotify_artist_uri=? OR a.spotify_artist_id=?)")
-      filterValues.push(safeLike(input.q), input.q, input.q)
+      const q = safeLike(input.q)
+      clauses.push(
+        "(a.name LIKE ? ESCAPE '\\' OR a.artist_text LIKE ? ESCAPE '\\' OR a.spotify_album_uri=? OR a.spotify_album_id=?)",
+      )
+      filterValues.push(q, q, input.q, input.q)
     }
+    if (input.artist?.length) {
+      clauses.push(
+        `EXISTS(SELECT 1 FROM spotify_song_track_artists ta WHERE ta.media_item_id=t.media_item_id AND ta.artist_id IN (${input.artist
+          .map(() => '?')
+          .join(',')}))`,
+      )
+      filterValues.push(...input.artist)
+    }
+    if (input.albumType === 'album') clauses.push("a.album_type='album'")
+    if (input.albumType === 'single') clauses.push("a.album_type='single'")
+    if (input.albumType === 'compilation') clauses.push("a.album_type='compilation'")
+    if (input.albumType === 'other')
+      clauses.push(
+        "a.album_type IS NOT NULL AND a.album_type NOT IN ('album','single','compilation')",
+      )
+    if (input.albumType === 'unknown') clauses.push('a.album_type IS NULL')
     if (input.metadata && !['any', 'current'].includes(input.metadata)) clauses.push('1=0')
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
     const havingClauses: string[] = []
@@ -2007,14 +2040,30 @@ export class SqlSpotifyLibraryRepository {
     if (input.playbackCount === '50plus') havingClauses.push('SUM(m.playback_count)>=50')
     const having = havingClauses.length ? `HAVING ${havingClauses.join(' AND ')}` : ''
     const values: DatabaseValue[] = [...scope.values, ...filterValues, ...havingValues]
+    return { scope, values, filterValues, havingValues, where, having }
+  }
+
+  private async summarizeAlbumsRows(input: MusicListInput) {
+    const { scope, values, where, having } = this.musicAlbumFilters(input)
     const count = await statement(
       this.database,
       `${scope.cte} SELECT COUNT(*) value FROM (
-        SELECT a.id FROM spotify_song_artists a JOIN spotify_song_track_artists ta ON ta.artist_id=a.id
-        JOIN matching m ON m.media_item_id=ta.media_item_id ${where} GROUP BY a.id ${having}
+        SELECT a.id FROM spotify_song_albums a JOIN spotify_song_tracks t ON t.album_id=a.id
+        JOIN matching m ON m.media_item_id=t.media_item_id ${where} GROUP BY a.id ${having}
       )`,
       values,
     ).first<{ value: number }>()
+
+    const total = count?.value ?? 0
+    return {
+      totalCount: total,
+      filteredCount: total,
+      sectionCounts: await this.musicCounts(),
+    }
+  }
+
+  private async listArtistItems(input: MusicListInput, anchor: LibraryCursor | null, key: string) {
+    const { scope, filterValues, havingValues, where, having } = this.musicArtistFilters(input)
     const sort = input.sort ?? 'playbackCount'
     const direction = input.direction ?? (['title', 'relevance'].includes(sort) ? 'asc' : 'desc')
     const order =
@@ -2055,7 +2104,6 @@ export class SqlSpotifyLibraryRepository {
         input.limit + 1,
       ],
     ).all<Record<string, string | number | null>>()
-    const total = count?.value ?? 0
     return {
       data: rows.results.slice(0, input.limit).map((row) => ({
         id: String(row.id),
@@ -2077,6 +2125,48 @@ export class SqlSpotifyLibraryRepository {
         canonicalUrl: row.canonical_url as string | null,
       })),
       nextCursor: nextCursor(rows.results, input.limit, key),
+    }
+  }
+
+  private musicArtistFilters(input: MusicListInput) {
+    const scope = this.musicOccurrenceScope(input)
+    const clauses: string[] = []
+    const filterValues: DatabaseValue[] = []
+    if (input.q) {
+      clauses.push("(a.name LIKE ? ESCAPE '\\' OR a.spotify_artist_uri=? OR a.spotify_artist_id=?)")
+      filterValues.push(safeLike(input.q), input.q, input.q)
+    }
+    if (input.metadata && !['any', 'current'].includes(input.metadata)) clauses.push('1=0')
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+    const havingClauses: string[] = []
+    const havingValues: DatabaseValue[] = []
+    if (input.minPlaybacks) {
+      havingClauses.push('SUM(m.playback_count)>=?')
+      havingValues.push(input.minPlaybacks)
+    }
+    if (input.playbackCount === 'once') havingClauses.push('SUM(m.playback_count)=1')
+    if (input.playbackCount === '2to9') havingClauses.push('SUM(m.playback_count) BETWEEN 2 AND 9')
+    if (input.playbackCount === '10to49')
+      havingClauses.push('SUM(m.playback_count) BETWEEN 10 AND 49')
+    if (input.playbackCount === '50plus') havingClauses.push('SUM(m.playback_count)>=50')
+    const having = havingClauses.length ? `HAVING ${havingClauses.join(' AND ')}` : ''
+    const values: DatabaseValue[] = [...scope.values, ...filterValues, ...havingValues]
+    return { scope, values, filterValues, havingValues, where, having }
+  }
+
+  private async summarizeArtistsRows(input: MusicListInput) {
+    const { scope, values, where, having } = this.musicArtistFilters(input)
+    const count = await statement(
+      this.database,
+      `${scope.cte} SELECT COUNT(*) value FROM (
+        SELECT a.id FROM spotify_song_artists a JOIN spotify_song_track_artists ta ON ta.artist_id=a.id
+        JOIN matching m ON m.media_item_id=ta.media_item_id ${where} GROUP BY a.id ${having}
+      )`,
+      values,
+    ).first<{ value: number }>()
+
+    const total = count?.value ?? 0
+    return {
       totalCount: total,
       filteredCount: total,
       sectionCounts: await this.musicCounts(),

@@ -144,6 +144,8 @@ export interface CollectionPaginationQuery {
   isFetchingNextPage: boolean
   isFetchNextPageError: boolean
   isPaused: boolean
+  error: unknown
+  refetch: () => Promise<unknown>
   fetchNextPage: (options?: FetchNextPageOptions) => Promise<unknown>
 }
 

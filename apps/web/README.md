@@ -30,28 +30,20 @@ browser; reopening Connections offers Resume import if a previous run stopped.
 
 ## Library loading and caching
 
-Library queries stay fresh for 10 minutes, and inactive in-memory results are
-retained for 30 minutes. After the current page finishes its initial collection
-request, the client prefetches the first page of every remaining Library section,
-Connections, and sync activity with at most two background requests at a time.
-It pauses launching background work while a foreground query is loading, while
-the tab is hidden, or while the browser is offline. Prefetch failures fall back
-to normal fetching when the section is opened.
+All six collection APIs use `section` and default to 50 items per page. Visible
+items and filter-specific summaries load independently in parallel; pagination
+and sorting do not repeat summary work. Default first pages and summaries warm
+with at most two background requests and persist independently across reloads.
+Ten-minute freshness, thirty-minute inactive retention, and the 24-hour bounded
+snapshot lifetime remain in effect. Retained multi-page browsing snapshots avoid
+automatic full-chain refreshes on remount/focus/reconnect while preserving exact
+position; explicit import/sync invalidation still refreshes them safely.
 
-Only the default, unfiltered first page of each of the 16 Library sections is
-saved in browser local storage. Reloads restore those pages before rendering,
-preserving their original fetch times. Results older than 10 minutes refresh in
-the background when opened; snapshots older than 24 hours are discarded. The
-cache is versioned, bounded to 2 million characters, and validated against the
-API response schemas. Filters, subsequent pages, inspectors, content, and
-operational status are not persisted. Storage failures leave normal browsing
-available. This cache contains private Library metadata on the owner's browser.
-
-Completed or failed import/sync attempts invalidate Library results along with
-the existing connection/activity caches. Invalidated entries are removed from
-the persisted snapshot. Connections and sync activity retain five-second polling;
-health retains 30-second polling. Opening the Library does not start provider
-syncs or catalog jobs.
+Connections polls its head activity page and account status every minute while
+idle and every five seconds during active work. Older activity is unpolled.
+Health retains thirty-second polling. See the owning
+[Library fetching contract](../../docs/architecture/library-fetching.md) for
+endpoint shapes, persistence, invalidation, and refresh details.
 
 ## Branding
 

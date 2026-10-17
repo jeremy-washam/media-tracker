@@ -1112,6 +1112,16 @@ export class SqlBooksRepository {
   }
 
   async listBooks(input: BooksListInput): Promise<BooksPageRecord> {
+    const [page, summary] = await Promise.all([
+      this.listBookItems(input),
+      this.summarizeBooks(input),
+    ])
+    return { ...page, ...summary }
+  }
+
+  async listBookItems(
+    input: BooksListInput,
+  ): Promise<Pick<BooksPageRecord, 'data' | 'nextCursor'>> {
     if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100) {
       throw new RangeError('Books limit must be an integer from 1 through 100')
     }
@@ -1219,27 +1229,6 @@ export class SqlBooksRepository {
       authors_json: string
     }>()
     const pageRows = rows.results.slice(0, input.limit)
-    const countsRow = await statement(
-      this.#database,
-      `SELECT COUNT(*) filtered_books, COALESCE(SUM(p.supported_read_count),0) supported_reads
-       FROM book_library_projection p WHERE ${filter.sql}`,
-      filter.values,
-    ).first<{ filtered_books: number; supported_reads: number }>()
-    const totals = await this.#database
-      .prepare(
-        `SELECT COALESCE(SUM(in_archive),0) archive, COALESCE(SUM(in_queue),0) queue
-         FROM book_library_projection`,
-      )
-      .first<{ archive: number; queue: number }>()
-    const facets = await this.#facets(input)
-    const freshness = await this.#database
-      .prepare(
-        `SELECT MAX(s.finished_at) last_successful_sync_at,
-          MAX(CASE WHEN c.status='degraded' THEN 1 ELSE 0 END) degraded
-         FROM connections c LEFT JOIN sync_runs s ON s.connection_id=c.id AND s.status='succeeded'
-         WHERE c.source='hardcover'`,
-      )
-      .first<{ last_successful_sync_at: string | null; degraded: number | null }>()
     const last = pageRows.at(-1)
     return {
       data: pageRows.map((row) => ({
@@ -1275,6 +1264,35 @@ export class SqlBooksRepository {
               id: last.media_item_id,
             })
           : null,
+    }
+  }
+
+  async summarizeBooks(
+    input: BooksListInput,
+  ): Promise<Omit<BooksPageRecord, 'data' | 'nextCursor'>> {
+    const filter = filterSql(input)
+    const countsRow = await statement(
+      this.#database,
+      `SELECT COUNT(*) filtered_books, COALESCE(SUM(p.supported_read_count),0) supported_reads
+       FROM book_library_projection p WHERE ${filter.sql}`,
+      filter.values,
+    ).first<{ filtered_books: number; supported_reads: number }>()
+    const totals = await this.#database
+      .prepare(
+        `SELECT COALESCE(SUM(in_archive),0) archive, COALESCE(SUM(in_queue),0) queue
+         FROM book_library_projection`,
+      )
+      .first<{ archive: number; queue: number }>()
+    const facets = await this.#facets(input)
+    const freshness = await this.#database
+      .prepare(
+        `SELECT MAX(s.finished_at) last_successful_sync_at,
+          MAX(CASE WHEN c.status='degraded' THEN 1 ELSE 0 END) degraded
+         FROM connections c LEFT JOIN sync_runs s ON s.connection_id=c.id AND s.status='succeeded'
+         WHERE c.source='hardcover'`,
+      )
+      .first<{ last_successful_sync_at: string | null; degraded: number | null }>()
+    return {
       counts: {
         archive: totals?.archive ?? 0,
         queue: totals?.queue ?? 0,

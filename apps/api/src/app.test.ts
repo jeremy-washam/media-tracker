@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiErrorSchema,
   BooksResponseSchema,
+  BooksSummarySchema,
   ConnectionsResponseSchema,
   HealthResponseSchema,
   MediaListResponseSchema,
   MoviesResponseSchema,
+  MoviesSummarySchema,
 } from '@media-tracker/contracts'
 
 import app from './app'
@@ -92,16 +94,20 @@ describe('API', () => {
 
   it('returns an empty Books collection through its media-specific contract', async () => {
     const response = await app.request(
-      '/api/library/books?collection=archive',
+      '/api/library/books?section=archive',
       undefined,
       testBindings,
     )
     const payload = BooksResponseSchema.parse(await response.json())
 
     expect(response.status).toBe(200)
-    expect(payload).toMatchObject({
-      data: [],
-      nextCursor: null,
+    expect(payload).toEqual({ data: [], nextCursor: null })
+    const summary = await app.request(
+      '/api/library/books/summary?section=archive',
+      undefined,
+      testBindings,
+    )
+    expect(BooksSummarySchema.parse(await summary.json())).toMatchObject({
       counts: { archive: 0, queue: 0, filteredBooks: 0, supportedReads: 0 },
       facets: { formats: [], series: [], genres: [] },
     })
@@ -109,16 +115,20 @@ describe('API', () => {
 
   it('returns an empty Movies collection through its media-specific contract', async () => {
     const response = await app.request(
-      '/api/library/movies?collection=archive',
+      '/api/library/movies?section=archive',
       undefined,
       testBindings,
     )
     const payload = MoviesResponseSchema.parse(await response.json())
 
     expect(response.status).toBe(200)
-    expect(payload).toMatchObject({
-      data: [],
-      nextCursor: null,
+    expect(payload).toEqual({ data: [], nextCursor: null })
+    const summary = await app.request(
+      '/api/library/movies/summary?section=archive',
+      undefined,
+      testBindings,
+    )
+    expect(MoviesSummarySchema.parse(await summary.json())).toMatchObject({
       totalCount: 0,
       filteredCount: 0,
       filteredOccurrenceCount: 0,
@@ -129,7 +139,7 @@ describe('API', () => {
 
   it('rejects collection-incompatible Movies sorts before querying storage', async () => {
     const response = await app.request(
-      '/api/library/movies?collection=queue&sort=watchedAt',
+      '/api/library/movies?section=queue&sort=watchedAt',
       undefined,
       testBindings,
     )
@@ -138,6 +148,65 @@ describe('API', () => {
     expect(response.status).toBe(400)
     expect(payload.error.code).toBe('BAD_REQUEST')
   })
+
+  it.each([
+    ['books', 'archive'],
+    ['movies', 'queue'],
+    ['articles', 'feed'],
+    ['podcasts', 'following'],
+    ['music', 'artists'],
+    ['videos', 'channels'],
+  ])('separates %s items and summaries using section', async (media, section) => {
+    const items = await app.request(
+      `/api/library/${media}?section=${section}`,
+      undefined,
+      testBindings,
+    )
+    expect(items.status).toBe(200)
+    expect(await items.json()).toEqual({ data: [], nextCursor: null })
+    const summary = await app.request(
+      `/api/library/${media}/summary?section=${section}`,
+      undefined,
+      testBindings,
+    )
+    expect(summary.status).toBe(200)
+    const body = (await summary.json()) as Record<string, unknown>
+    expect(body).not.toHaveProperty('data')
+    expect(body).not.toHaveProperty('nextCursor')
+    expect(body).toHaveProperty(media === 'books' ? 'counts' : 'filteredCount')
+  })
+
+  it('does not run Movies aggregate queries for an item page', async () => {
+    const prepare = vi.spyOn(testBindings.DB, 'prepare')
+    const response = await app.request(
+      '/api/library/movies?section=archive&limit=50',
+      undefined,
+      testBindings,
+    )
+    expect(response.status).toBe(200)
+    expect(prepare).toHaveBeenCalledTimes(1)
+    prepare.mockClear()
+    const summary = await app.request(
+      '/api/library/movies/summary?section=archive',
+      undefined,
+      testBindings,
+    )
+    expect(summary.status).toBe(200)
+    expect(prepare).toHaveBeenCalledTimes(4)
+    expect(prepare.mock.calls.every(([sql]) => !sql.includes('sort_null_rank'))).toBe(true)
+  })
+
+  it.each(['sort=title', 'limit=50', 'cursor=anything', 'layout=list'])(
+    'rejects non-filter summary parameters: %s',
+    async (parameter) => {
+      const response = await app.request(
+        `/api/library/movies/summary?section=archive&${parameter}`,
+        undefined,
+        testBindings,
+      )
+      expect(response.status).toBe(400)
+    },
+  )
 
   it('explains when Readwise has not been configured', async () => {
     const response = await app.request(

@@ -1,3 +1,9 @@
+import { CollectionSummaryStatus } from '../../components/collection-summary-status'
+import {
+  videoChannelQueryOptions,
+  channelVideosQueryOptions,
+  channelPickerQueryOptions,
+} from './videos-api'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
@@ -10,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
-import { videosQueryOptions } from '../../library-queries'
+import { videosQueryOptions, videosSummaryQueryOptions } from '../../library-queries'
 import { MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -50,14 +56,8 @@ import {
   User,
   X,
 } from '@/components/icons'
-import type { VideoCollectionItem, VideosResponse } from '@media-tracker/contracts'
-import {
-  fetchChannelVideos,
-  fetchVideo,
-  fetchVideoChannel,
-  fetchVideoHistory,
-  fetchVideos,
-} from './videos-api'
+import type { VideoCollectionItem, VideosSummary } from '@media-tracker/contracts'
+import { fetchVideo, fetchVideoHistory } from './videos-api'
 import { normalizeVideoSearch, type VideosRouteSearch } from './videos-route-search'
 
 type View = 'archive' | 'queue' | 'channels'
@@ -106,9 +106,10 @@ export function VideosCollectionPage({ view }: { view: View }) {
   const channelInspectorItem = useInspectorPresence(search.channelItem)
   const queryOptions = videosQueryOptions(view, search)
   const result = useInfiniteQuery(queryOptions)
+  const summaryQuery = useQuery(videosSummaryQueryOptions(view, search))
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
-  const summary = result.data?.pages[0]
+  const summary = summaryQuery.data
   const sectionCounts = useLibrarySectionCounts('videos', summary, (page) => page.sectionCounts)
   const sorts: [string, string][] =
     view === 'archive'
@@ -279,7 +280,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
           data-ui="collection-summary"
         >
           <span>
-            {result.isPending
+            {result.isPending || !summary
               ? null
               : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'channels' ? 'channels' : 'videos'}`}
           </span>
@@ -287,6 +288,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
             <small>{countLabel(summary.occurrenceCount, 'supported watch')}</small>
           ) : null}
         </div>
+        <CollectionSummaryStatus query={summaryQuery} />
         {result.isPending ? (
           <LoadingState data-ui="collection-loading">Loading videos…</LoadingState>
         ) : null}
@@ -361,29 +363,13 @@ function VideoChannelPicker({
   update,
 }: {
   search: VideosRouteSearch
-  summary: VideosResponse | undefined
+  summary: VideosSummary | undefined
   update: (patch: Partial<VideosRouteSearch>) => void
 }) {
   const [draft, setDraft] = useState<string | null>(null)
   const [query, setQuery] = useState<string | undefined>(undefined)
   useLiveSearch(draft, query, setQuery, () => setDraft(null))
-  const channels = useInfiniteQuery({
-    queryKey: ['video-channel-options', query],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      fetchVideos(
-        {
-          view: 'channels',
-          sort: query ? 'relevance' : 'channel',
-          direction: 'asc',
-          limit: 50,
-          ...(query ? { q: query } : {}),
-          ...(pageParam ? { cursor: pageParam } : {}),
-        },
-        signal,
-      ),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const channels = useInfiniteQuery(channelPickerQueryOptions(query))
   const options = channels.data?.pages.flatMap((page) => page.data) ?? []
   const selected = search.channel?.[0] ?? ''
   const selectedFacet = summary?.facets.channels.find((option) => option.value === selected)
@@ -454,7 +440,7 @@ function VideoFilters({
 }: {
   view: View
   search: VideosRouteSearch
-  summary: VideosResponse | undefined
+  summary: VideosSummary | undefined
   update: (patch: Partial<VideosRouteSearch>) => void
 }) {
   if (view === 'channels') {
@@ -840,23 +826,20 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
     queryFn: ({ pageParam, signal }) => fetchVideoHistory(id, pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
+  const channelId = detail.data?.channelId ?? ''
   const channel = useQuery({
-    queryKey: ['video-channel-from-video', detail.data?.channelId],
-    enabled: tab === 'channel' && Boolean(detail.data?.channelId),
-    queryFn: ({ signal }) => fetchVideoChannel(detail.data!.channelId!, signal),
+    ...videoChannelQueryOptions(channelId),
+    enabled: tab === 'channel' && Boolean(channelId),
   })
-  const channelArchive = useQuery({
-    queryKey: ['video-channel-preview', detail.data?.channelId, 'archive'],
-    enabled: tab === 'channel' && Boolean(detail.data?.channelId),
-    queryFn: ({ signal }) =>
-      fetchChannelVideos(detail.data!.channelId!, 'archive', undefined, signal),
+  const channelArchive = useInfiniteQuery({
+    ...channelVideosQueryOptions(channelId, 'archive'),
+    enabled: tab === 'channel' && Boolean(channelId),
   })
-  const channelQueue = useQuery({
-    queryKey: ['video-channel-preview', detail.data?.channelId, 'queue'],
-    enabled: tab === 'channel' && Boolean(detail.data?.channelId),
-    queryFn: ({ signal }) =>
-      fetchChannelVideos(detail.data!.channelId!, 'queue', undefined, signal),
+  const channelQueue = useInfiniteQuery({
+    ...channelVideosQueryOptions(channelId, 'queue'),
+    enabled: tab === 'channel' && Boolean(channelId),
   })
+
   return (
     <aside
       className={inspectorStyles['media-inspector']}
@@ -1035,12 +1018,12 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                         </p>
                         <ChannelPreview
                           title="Recently watched"
-                          items={channelArchive.data?.data.slice(0, 5) ?? []}
+                          items={channelArchive.data?.pages[0]?.data.slice(0, 5) ?? []}
                           pending={channelArchive.isPending}
                         />
                         <ChannelPreview
                           title="Recently queued"
-                          items={channelQueue.data?.data.slice(0, 5) ?? []}
+                          items={channelQueue.data?.pages[0]?.data.slice(0, 5) ?? []}
                           pending={channelQueue.isPending}
                         />
                         <a href={channel.data.canonicalUrl} target="_blank" rel="noreferrer">
@@ -1094,17 +1077,12 @@ function ChannelPreview({
 function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) {
   const [tab, setTab] = useState<'details' | 'library'>('details')
   const [membership, setMembership] = useState<'archive' | 'queue'>('archive')
-  const detail = useQuery({
-    queryKey: ['video-channel-detail', id],
-    queryFn: ({ signal }) => fetchVideoChannel(id, signal),
-  })
+  const detail = useQuery(videoChannelQueryOptions(id))
   const library = useInfiniteQuery({
-    queryKey: ['video-channel-library', id, membership],
+    ...channelVideosQueryOptions(id, membership),
     enabled: tab === 'library',
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) => fetchChannelVideos(id, membership, pageParam, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
+
   return (
     <aside
       className={inspectorStyles['media-inspector']}

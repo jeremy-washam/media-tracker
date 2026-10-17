@@ -1,3 +1,4 @@
+import { checkLibraryCursorResponse } from '../../library-api'
 import {
   BookDetailSchema,
   BookHistoryResponseSchema,
@@ -8,7 +9,7 @@ import {
 } from '@media-tracker/contracts'
 
 export interface BooksRequest {
-  collection: 'archive' | 'queue'
+  section: 'archive' | 'queue'
   q?: string | undefined
   format?: string[] | undefined
   series?: string[] | undefined
@@ -33,6 +34,7 @@ export interface BooksRequest {
 
 async function json(response: Response): Promise<unknown> {
   const body: unknown = await response.json()
+  checkLibraryCursorResponse(response.status, body)
   if (!response.ok) {
     const message =
       typeof body === 'object' && body !== null && 'error' in body
@@ -45,14 +47,14 @@ async function json(response: Response): Promise<unknown> {
 
 function booksSearch(request: BooksRequest): URLSearchParams {
   const search = new URLSearchParams()
-  search.set('collection', request.collection)
+  search.set('section', request.section)
   for (const key of ['format', 'series', 'genre'] as const) {
     const values = request[key]
     if (values && values.length > 0) search.set(key, values.join(','))
   }
   for (const [key, value] of Object.entries(request)) {
     if (
-      key === 'collection' ||
+      key === 'section' ||
       key === 'format' ||
       key === 'series' ||
       key === 'genre' ||

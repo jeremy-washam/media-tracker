@@ -52,6 +52,13 @@ bounded maintenance from provider sync, including paused deployment. See
 [ADR 0015](../decisions/0015-clock-safe-youtube-publication.md). Production
 migration, remote usage measurement and controlled activation remain launch gates.
 
+## Library requests
+
+[Library fetching](library-fetching.md) owns the current item/summary API,
+section naming, shared page size, cache/refresh lifecycle, and adaptive polling.
+It supersedes the combined-response and 48-item request descriptions in the
+historical per-media implementation plans.
+
 ## Package boundaries
 
 - `apps/web`: React UI. It consumes API contracts and does not access storage.

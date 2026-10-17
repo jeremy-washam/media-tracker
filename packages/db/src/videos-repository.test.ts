@@ -578,7 +578,7 @@ describe('SqlVideosRepository', () => {
       expect(result.coverage.catalog).toBe(catalog)
       expect(
         prepare.mock.calls.filter(([sql]) => sql.includes('SELECT COUNT(*) section_channels')),
-      ).toHaveLength(catalog === 'partial' ? 0 : 1)
+      ).toHaveLength(1)
       const pageSql = prepare.mock.calls
         .map(([sql]) => sql)
         .find((sql) => sql.includes('FROM paged'))!

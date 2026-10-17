@@ -1,3 +1,5 @@
+import { CollectionSummaryStatus } from '../../components/collection-summary-status'
+import { useDebouncedValue } from '../../components/library-hooks'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
@@ -10,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
-import { musicQueryOptions } from '../../library-queries'
+import { musicQueryOptions, musicSummaryQueryOptions } from '../../library-queries'
 import { MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState, Hint } from '@/components/ui-patterns'
@@ -104,9 +106,10 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
   }
   const queryOptions = musicQueryOptions(view, search)
   const result = useInfiniteQuery(queryOptions)
+  const summaryQuery = useQuery(musicSummaryQueryOptions(view, search))
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
-  const summary = result.data?.pages[0]
+  const summary = summaryQuery.data
   const sectionCounts = useLibrarySectionCounts('music', summary, (page) => page.sectionCounts)
   const sorts: [string, string][] =
     view === 'tracks'
@@ -453,9 +456,12 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           data-ui="collection-summary"
         >
           <span>
-            {result.isPending ? null : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
+            {result.isPending || !summary
+              ? null
+              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
           </span>
         </div>
+        <CollectionSummaryStatus query={summaryQuery} />
         {result.isPending ? (
           <LoadingState data-ui="collection-loading">Loading music…</LoadingState>
         ) : null}
@@ -542,7 +548,14 @@ function MusicFacetPicker({
   onChange: (value: string) => void
 }) {
   const [optionQ, setOptionQ] = useState('')
-  const request = { ...musicQuerySearch(search), view, facet, optionQ, optionLimit: 30 }
+  const debouncedOptionQ = useDebouncedValue(optionQ, 250)
+  const request = {
+    ...musicQuerySearch(search),
+    section: view,
+    facet,
+    optionQ: debouncedOptionQ,
+    optionLimit: 30,
+  }
   const options = useInfiniteQuery({
     queryKey: ['music-filter-options', request],
     initialPageParam: undefined as string | undefined,

@@ -31,12 +31,16 @@ for (const dark of [false, true]) {
         (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
         dark,
       )
-      await page.route(`**/api/library/${media}?*`, (route) => route.fulfill({ json: response() }))
+      await page.route(`**/api/library/${media}{,/summary}?*`, (route) =>
+        route.fulfill({ json: response() }),
+      )
       await page.route(`**/api/library/${media}/**`, (route) =>
-        route.fulfill({
-          status: 404,
-          json: { error: { message: 'Synthetic detail unavailable' } },
-        }),
+        new URL(route.request().url()).pathname.endsWith('/summary')
+          ? route.fallback()
+          : route.fulfill({
+              status: 404,
+              json: { error: { message: 'Synthetic detail unavailable' } },
+            }),
       )
       await page.goto(`/library/${media}/${section}`)
       const row = page
@@ -115,7 +119,9 @@ for (const dark of [false, true]) {
       localStorage.setItem('media-tracker:dark', String(dark))
       localStorage.setItem('media-tracker:sidebar-collapsed', 'false')
     }, dark)
-    await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
+    await page.route('**/api/library/books{,/summary}?*', (route) =>
+      route.fulfill({ json: booksResponse() }),
+    )
     await page.goto('/library/books/archive')
     const aligned = () =>
       page.evaluate(() => {

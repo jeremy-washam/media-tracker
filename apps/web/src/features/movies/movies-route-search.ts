@@ -1,6 +1,6 @@
 export interface MoviesRouteSearch {
   q?: string | undefined
-  view?: 'grid' | 'list' | undefined
+  layout?: 'grid' | 'list' | undefined
   sort?: string | undefined
   direction?: 'asc' | 'desc' | undefined
   item?: string | undefined
@@ -57,8 +57,8 @@ function rating(value: unknown): number | undefined {
 export function parseMoviesRouteSearch(value: Record<string, unknown>): MoviesRouteSearch {
   return {
     ...(stringValue(value.q) ? { q: stringValue(value.q) } : {}),
-    ...(oneOf(value.view, ['grid', 'list'] as const)
-      ? { view: oneOf(value.view, ['grid', 'list'] as const) }
+    ...(oneOf(value.layout ?? value.view, ['grid', 'list'] as const)
+      ? { layout: oneOf(value.layout ?? value.view, ['grid', 'list'] as const) }
       : {}),
     ...(stringValue(value.sort) ? { sort: stringValue(value.sort) } : {}),
     ...(oneOf(value.direction, ['asc', 'desc'] as const)
@@ -102,7 +102,7 @@ export function normalizedForMovieCollection(
   search: MoviesRouteSearch,
   collection: 'archive' | 'queue',
 ): MoviesRouteSearch {
-  const next = { ...search }
+  const next = parseMoviesRouteSearch({ ...search })
   if (collection === 'archive') {
     delete next.added
     delete next.addedFrom
@@ -147,9 +147,9 @@ export function normalizedForMovieCollection(
 }
 
 export function movieCollectionQuerySearch(search: MoviesRouteSearch): MoviesRouteSearch {
-  const query = { ...search }
+  const query = parseMoviesRouteSearch({ ...search })
   delete query.item
-  delete query.view
+  delete query.layout
   if (
     query.watched === 'range' &&
     query.watchedFrom === undefined &&

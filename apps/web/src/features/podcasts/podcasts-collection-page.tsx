@@ -1,3 +1,5 @@
+import { CollectionSummaryStatus } from '../../components/collection-summary-status'
+import { useDebouncedValue } from '../../components/library-hooks'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
@@ -9,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { InspectorHeader, InspectorStatePanels } from '@/components/inspector-header'
 import { CollectionPagination } from '@/components/collection-pagination'
 import { useCollectionScroll } from '@/components/collection-scroll'
-import { podcastsQueryOptions } from '../../library-queries'
+import { podcastsQueryOptions, podcastsSummaryQueryOptions } from '../../library-queries'
 import { MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
 import { Notice, LoadingState } from '@/components/ui-patterns'
@@ -107,9 +109,10 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
   }
   const queryOptions = podcastsQueryOptions(view, search)
   const result = useInfiniteQuery(queryOptions)
+  const summaryQuery = useQuery(podcastsSummaryQueryOptions(view, search))
   const items = result.data?.pages.flatMap((page) => page.data) ?? []
   const collectionRef = useCollectionScroll(queryOptions.queryKey, layout, items.length)
-  const summary = result.data?.pages[0]
+  const summary = summaryQuery.data
   const sectionCounts = useLibrarySectionCounts('podcasts', summary, (page) => page.sectionCounts)
   const sorts: [string, string][] =
     view === 'following'
@@ -468,11 +471,12 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           data-ui="collection-summary"
         >
           <span>
-            {result.isPending
+            {result.isPending || !summary
               ? null
               : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? ((summary?.filteredCount ?? 0) === 1 ? 'show' : 'shows') : (summary?.filteredCount ?? 0) === 1 ? 'episode' : 'episodes'}`}
           </span>
         </div>
+        <CollectionSummaryStatus query={summaryQuery} />
         {result.isPending ? (
           <LoadingState data-ui="collection-loading">Loading podcasts…</LoadingState>
         ) : null}
@@ -555,7 +559,14 @@ function PodcastFacetPicker({
   onChange: (value: string) => void
 }) {
   const [optionQ, setOptionQ] = useState('')
-  const request = { ...podcastQuerySearch(search), view, facet, optionQ, optionLimit: 30 }
+  const debouncedOptionQ = useDebouncedValue(optionQ, 250)
+  const request = {
+    ...podcastQuerySearch(search),
+    section: view,
+    facet,
+    optionQ: debouncedOptionQ,
+    optionLimit: 30,
+  }
   const options = useInfiniteQuery({
     queryKey: ['podcast-filter-options', request],
     initialPageParam: undefined as string | undefined,

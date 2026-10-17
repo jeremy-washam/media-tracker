@@ -55,7 +55,7 @@ const book = {
 }
 
 test('keeps Podcast facet choices URL-backed and self-excluding', async ({ page }) => {
-  await page.route('**/api/library/podcasts?*', (route) =>
+  await page.route('**/api/library/podcasts{,/summary}?*', (route) =>
     route.fulfill({ json: podcastsResponse() }),
   )
   await page.route('**/api/library/podcasts/filter-options?*', (route) => {
@@ -74,7 +74,9 @@ test('keeps Podcast facet choices URL-backed and self-excluding', async ({ page 
 })
 
 test('searches and applies complete Music artist facet options', async ({ page }) => {
-  await page.route('**/api/library/music?*', (route) => route.fulfill({ json: musicResponse() }))
+  await page.route('**/api/library/music{,/summary}?*', (route) =>
+    route.fulfill({ json: musicResponse() }),
+  )
   await page.route('**/api/library/music/filter-options?*', (route) => {
     const url = new URL(route.request().url())
     const facet = url.searchParams.get('facet')
@@ -100,9 +102,10 @@ test('keeps loaded Podcast pages while opening the inspector in list-only Archiv
   page,
 }) => {
   const requested: string[] = []
-  await page.route('**/api/library/podcasts?*', async (route) => {
+  await page.route('**/api/library/podcasts{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    if (url.searchParams.get('view') === 'archive') requested.push(url.search)
+    if (!url.pathname.endsWith('/summary') && url.searchParams.get('section') === 'archive')
+      requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: podcastsResponse(
@@ -157,9 +160,10 @@ test('keeps loaded Music pages while opening the inspector in list-only Tracks',
   page,
 }) => {
   const requested: string[] = []
-  await page.route('**/api/library/music?*', async (route) => {
+  await page.route('**/api/library/music{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    if (url.searchParams.get('view') === 'tracks') requested.push(url.search)
+    if (!url.pathname.endsWith('/summary') && url.searchParams.get('section') === 'tracks')
+      requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: musicResponse(
@@ -224,7 +228,7 @@ test('keeps loaded Music pages while opening the inspector in list-only Tracks',
 })
 
 test('opens bounded Album history and links back to its heard Track', async ({ page }) => {
-  await page.route('**/api/library/music?*', (route) =>
+  await page.route('**/api/library/music{,/summary}?*', (route) =>
     route.fulfill({
       json: musicResponse([
         {
@@ -297,9 +301,10 @@ test('keeps loaded Video pages while changing layout and opening the inspector',
   page,
 }) => {
   const requested: string[] = []
-  await page.route('**/api/library/videos?*', async (route) => {
+  await page.route('**/api/library/videos{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    if (url.searchParams.get('view') === 'archive') requested.push(url.search)
+    if (!url.pathname.endsWith('/summary') && url.searchParams.get('section') === 'archive')
+      requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: videosResponse(
@@ -465,7 +470,7 @@ test('keeps every Article toolbar control visible at intermediate desktop width'
   page,
 }) => {
   await page.setViewportSize({ width: 853, height: 900 })
-  await page.route('**/api/library/articles?*', (route) =>
+  await page.route('**/api/library/articles{,/summary}?*', (route) =>
     route.fulfill({ json: articlesResponse() }),
   )
   await page.goto('/library/articles/archive')
@@ -478,7 +483,9 @@ test('keeps every Article toolbar control visible at intermediate desktop width'
 })
 
 test('uses the dense Music Artist list by default', async ({ page }) => {
-  await page.route('**/api/library/music?*', (route) => route.fulfill({ json: musicResponse([]) }))
+  await page.route('**/api/library/music{,/summary}?*', (route) =>
+    route.fulfill({ json: musicResponse([]) }),
+  )
   await page.goto('/library/music/artists')
   await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
     'aria-pressed',
@@ -577,7 +584,9 @@ const videosResponse = (data = [video], nextCursor: string | null = null) => ({
 
 test.beforeEach(async ({ page }) => {
   await installDefaultApiMocks(page)
-  await page.route('**/api/library/books?*', (route) => route.fulfill({ json: booksResponse() }))
+  await page.route('**/api/library/books{,/summary}?*', (route) =>
+    route.fulfill({ json: booksResponse() }),
+  )
 })
 
 for (const scenario of [
@@ -636,7 +645,7 @@ for (const scenario of [
     const requested = new Promise<void>((resolve) => {
       markRequested = resolve
     })
-    await page.route(`**/api/library/${scenario.media}?*`, async (route) => {
+    await page.route(`**/api/library/${scenario.media}{,/summary}?*`, async (route) => {
       if (hold) {
         markRequested()
         await pending
@@ -677,7 +686,7 @@ for (const scenario of [
       .poll(
         () =>
           page.evaluate((path) => {
-            const saved = localStorage.getItem('media-tracker:library-initial-pages:v1')
+            const saved = localStorage.getItem('media-tracker:library-initial-pages:v2')
             return saved
               ? JSON.parse(saved).entries.some((entry: { path: string }) => entry.path === path)
               : false
@@ -756,10 +765,11 @@ test('shows the production Books shell and preserves Connections', async ({ page
 
 test('keeps Books collection controls in the URL and loads subsequent pages', async ({ page }) => {
   const requested: string[] = []
-  await page.unroute('**/api/library/books?*')
-  await page.route('**/api/library/books?*', async (route) => {
+  await page.unroute('**/api/library/books{,/summary}?*')
+  await page.route('**/api/library/books{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    if (url.searchParams.get('collection') === 'archive') requested.push(url.search)
+    if (!url.pathname.endsWith('/summary') && url.searchParams.get('section') === 'archive')
+      requested.push(url.search)
     const second = url.searchParams.has('cursor')
     const searched = url.searchParams.get('q') === 'Ada'
     await route.fulfill({
@@ -838,9 +848,9 @@ test('keeps Books collection controls in the URL and loads subsequent pages', as
 test('keeps Books range drafts valid until a boundary is entered', async ({ page }) => {
   const invalid: string[] = []
   const requested: URL[] = []
-  await page.route('**/api/library/books?*', async (route) => {
+  await page.route('**/api/library/books{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url)
+    if (!url.pathname.endsWith('/summary')) requested.push(url)
     const bad = ['finished', 'published', 'added'].some(
       (prefix) =>
         url.searchParams.get(`${prefix}Mode`) === 'range' &&
@@ -903,9 +913,9 @@ test('deselects a selected Book by clicking it again', async ({ page }) => {
 
 test('searches Books without Enter and clears the applied query', async ({ page }) => {
   const requested: URL[] = []
-  await page.route('**/api/library/books?*', async (route) => {
+  await page.route('**/api/library/books{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    requested.push(url)
+    if (!url.pathname.endsWith('/summary')) requested.push(url)
     await route.fulfill({ json: booksResponse(url.searchParams.get('q') ? [] : [book]) })
   })
   await page.goto('/library/books/archive')
@@ -930,7 +940,7 @@ for (const media of ['movies', 'articles', 'podcasts', 'music', 'videos'] as con
       videos: videosResponse(),
     }
     const queries: Array<string | null> = []
-    await page.route(`**/api/library/${media}?*`, async (route) => {
+    await page.route(`**/api/library/${media}{,/summary}?*`, async (route) => {
       queries.push(new URL(route.request().url()).searchParams.get('q'))
       await route.fulfill({ json: responses[media] })
     })
@@ -948,7 +958,9 @@ for (const media of ['movies', 'articles', 'podcasts', 'music', 'videos'] as con
 test('shares the saved layout across media and reloads while respecting explicit URLs', async ({
   page,
 }) => {
-  await page.route('**/api/library/movies?*', (route) => route.fulfill({ json: moviesResponse() }))
+  await page.route('**/api/library/movies{,/summary}?*', (route) =>
+    route.fulfill({ json: moviesResponse() }),
+  )
   await page.goto('/library/books/archive')
   await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
     'aria-pressed',
@@ -1045,9 +1057,10 @@ test('opens a selected Book and loads personal activity in History', async ({ pa
 
 test('keeps loaded Movies pages while changing layout and inspecting History', async ({ page }) => {
   const requested: string[] = []
-  await page.route('**/api/library/movies?*', async (route) => {
+  await page.route('**/api/library/movies{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    if (url.searchParams.get('collection') === 'archive') requested.push(url.search)
+    if (!url.pathname.endsWith('/summary') && url.searchParams.get('section') === 'archive')
+      requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: moviesResponse(
@@ -1145,7 +1158,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
 
   const requestsAfterPaging = requested.length
   await page.getByRole('button', { name: 'Grid view' }).click()
-  await expect(page).toHaveURL(/view=grid/)
+  await expect(page).toHaveURL(/layout=grid/)
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
   await page.getByRole('button', { name: /A Distant Movie/ }).click()
   await expect(page).toHaveURL(/item=movie-one/)
@@ -1160,7 +1173,7 @@ test('keeps loaded Movies pages while changing layout and inspecting History', a
   await page.getByRole('button', { name: 'Close inspector' }).last().click()
   await expect(page.getByRole('button', { name: /Second Movie/ })).toBeVisible()
   expect(requested).toHaveLength(requestsAfterPaging)
-  expect(requested.every((value) => !value.includes('view=') && !value.includes('item='))).toBe(
+  expect(requested.every((value) => !value.includes('layout=') && !value.includes('item='))).toBe(
     true,
   )
 })
@@ -1178,7 +1191,7 @@ test('labels TMDB TV creators correctly in a Letterboxd-logged series', async ({
       refreshedAt: '2026-09-21T10:00:00.000Z',
     },
   }
-  await page.route('**/api/library/movies?*', (route) =>
+  await page.route('**/api/library/movies{,/summary}?*', (route) =>
     route.fulfill({ json: moviesResponse([series]) }),
   )
   await page.route('**/api/library/movies/movie-one', (route) =>
@@ -1222,8 +1235,9 @@ test('labels TMDB TV creators correctly in a Letterboxd-logged series', async ({
 
 test('keeps incomplete Movie filter drafts out of API requests', async ({ page }) => {
   const requested: URL[] = []
-  await page.route('**/api/library/movies?*', async (route) => {
-    requested.push(new URL(route.request().url()))
+  await page.route('**/api/library/movies{,/summary}?*', async (route) => {
+    if (!new URL(route.request().url()).pathname.endsWith('/summary'))
+      requested.push(new URL(route.request().url()))
     await route.fulfill({ json: moviesResponse() })
   })
 
@@ -1276,9 +1290,10 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
 
 test('keeps loaded Article pages while inspecting History in expanded rows', async ({ page }) => {
   const requested: string[] = []
-  await page.route('**/api/library/articles?*', async (route) => {
+  await page.route('**/api/library/articles{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    if (url.searchParams.get('section') === 'archive') requested.push(url.search)
+    if (!url.pathname.endsWith('/summary') && url.searchParams.get('section') === 'archive')
+      requested.push(url.search)
     const second = url.searchParams.has('cursor')
     await route.fulfill({
       json: articlesResponse(
@@ -1482,9 +1497,9 @@ test('searches every channel and pages shadcn channel choices', async ({ page })
     channelId: 'channel-z',
     channelTitle: 'Zebra Channel',
   }
-  await page.route('**/api/library/videos?*', async (route) => {
+  await page.route('**/api/library/videos{,/summary}?*', async (route) => {
     const url = new URL(route.request().url())
-    const options = url.searchParams.get('view') === 'channels'
+    const options = url.searchParams.get('section') === 'channels'
     const searching = url.searchParams.get('q') === 'Zebra'
     await route.fulfill({
       json: options
@@ -1519,7 +1534,7 @@ test('searches every channel and pages shadcn channel choices', async ({ page })
     const url = new URL(response.url())
     return (
       url.pathname === '/api/library/videos' &&
-      url.searchParams.get('view') === 'channels' &&
+      url.searchParams.get('section') === 'channels' &&
       url.searchParams.get('q') === 'Zebra'
     )
   })
@@ -1533,7 +1548,7 @@ test('searches every channel and pages shadcn channel choices', async ({ page })
 })
 
 test('shows positive short video duration as under a minute', async ({ page }) => {
-  await page.route('**/api/library/videos?*', (route) =>
+  await page.route('**/api/library/videos{,/summary}?*', (route) =>
     route.fulfill({ json: videosResponse([{ ...video, durationMs: 20000 }]) }),
   )
   await page.goto('/library/videos/archive')
@@ -1581,7 +1596,7 @@ test('uses aligned shadcn toolbars and sorting on every Library media collection
 test('preserves keyboard selection, focus, URL history and clearing with shadcn Select', async ({
   page,
 }) => {
-  await page.route('**/api/library/podcasts?*', (route) =>
+  await page.route('**/api/library/podcasts{,/summary}?*', (route) =>
     route.fulfill({ json: podcastsResponse() }),
   )
   await page.goto('/library/podcasts/archive')
@@ -1638,7 +1653,7 @@ for (const dark of [false, true]) {
       await page.addInitScript((dark) => {
         localStorage.setItem('media-tracker:dark', String(dark))
       }, dark)
-      await page.route(`**/api/library/${media}?*`, (route) =>
+      await page.route(`**/api/library/${media}{,/summary}?*`, (route) =>
         route.fulfill({ json: responses[media] }),
       )
       await page.route(/\/api\/library\/(books|movies|articles|podcasts|music|videos)\//, (route) =>
@@ -1736,8 +1751,8 @@ test('wraps long channel labels inside the viewport without losing the complete 
   const title =
     'A channel with a deliberately long name about films, technology, books, music, and the people who create them'
   await page.setViewportSize({ width: 390, height: 768 })
-  await page.route('**/api/library/videos?*', (route) => {
-    const channels = new URL(route.request().url()).searchParams.get('view') === 'channels'
+  await page.route('**/api/library/videos{,/summary}?*', (route) => {
+    const channels = new URL(route.request().url()).searchParams.get('section') === 'channels'
     return route.fulfill({
       json: channels
         ? videosResponse([
@@ -1787,7 +1802,7 @@ test('uses shared keyboard tabs and associated panels in the Channel inspector',
     archiveVideoCount: 2,
     queueVideoCount: 1,
   }
-  await page.route('**/api/library/videos?*', (route) =>
+  await page.route('**/api/library/videos{,/summary}?*', (route) =>
     route.fulfill({ json: videosResponse([channel]) }),
   )
   await page.route('**/api/library/video-channels/channel-one', (route) =>

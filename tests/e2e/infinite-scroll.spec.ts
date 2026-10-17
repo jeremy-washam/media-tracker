@@ -93,13 +93,12 @@ async function mockApi(
     if (url.pathname === '/api/sync-runs')
       return route.fulfill({ json: { data: [], nextCursor: null } })
     const media = url.pathname.match(
-      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)$/,
+      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)(?:\/summary)?$/,
     )?.[1] as Media | undefined
     if (media) {
-      const requestedSection =
-        url.searchParams.get('collection') ??
-        url.searchParams.get('section') ??
-        url.searchParams.get('view')
+      const requestedSection = url.searchParams.get('section')
+      if (url.pathname.endsWith('/summary'))
+        return route.fulfill({ json: fixtures[media].response() })
       if (media === target && requestedSection === section) return handler(route, url)
       return route.fulfill({ json: fixtures[media].response() })
     }

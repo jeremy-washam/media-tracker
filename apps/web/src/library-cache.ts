@@ -4,7 +4,7 @@ import { fetchConnections, fetchSyncRuns } from './api'
 import { INITIAL_LIBRARY_QUERIES } from './library-queries'
 
 export const LIBRARY_STALE_TIME = 10 * 60_000
-export const LIBRARY_CACHE_KEY = 'media-tracker:library-initial-pages:v1'
+export const LIBRARY_CACHE_KEY = 'media-tracker:library-initial-pages:v2'
 const MAX_CACHE_AGE = 24 * 60 * 60_000
 const MAX_CACHE_LENGTH = 2_000_000
 type CacheStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -23,8 +23,8 @@ export function createAppQueryClient(storage?: CacheStorage) {
       queries: { staleTime: LIBRARY_STALE_TIME, gcTime: 30 * 60_000 },
     },
   })
-  client.setQueryDefaults(['connections'], { staleTime: 5000 })
-  client.setQueryDefaults(['sync-runs'], { staleTime: 5000 })
+  client.setQueryDefaults(['connections'], { staleTime: 60_000 })
+  client.setQueryDefaults(['sync-runs'], { staleTime: 60_000 })
   client.setQueryDefaults(['health'], { staleTime: 30_000 })
   restoreLibraryCache(client, storage)
   return client
@@ -37,11 +37,12 @@ function record(value: unknown): value is Record<string, unknown> {
 export function restoreLibraryCache(client: QueryClient, storage?: CacheStorage) {
   if (!storage) return
   try {
+    storage.removeItem('media-tracker:library-initial-pages:v1')
     const raw = storage.getItem(LIBRARY_CACHE_KEY)
     if (!raw) return
     if (raw.length > MAX_CACHE_LENGTH) throw new Error('Oversized Library cache')
     const saved: unknown = JSON.parse(raw)
-    if (!record(saved) || saved.version !== 1 || !Array.isArray(saved.entries)) {
+    if (!record(saved) || saved.version !== 2 || !Array.isArray(saved.entries)) {
       throw new Error('Unsupported Library cache')
     }
     const now = Date.now()
@@ -49,18 +50,33 @@ export function restoreLibraryCache(client: QueryClient, storage?: CacheStorage)
       if (!record(entry) || typeof entry.path !== 'string' || typeof entry.updatedAt !== 'number')
         continue
       const definition = INITIAL_LIBRARY_QUERIES.find((query) => query.path === entry.path)
+      if (!definition) continue
       const age = now - entry.updatedAt
-      if (!definition || !Number.isFinite(age) || age < 0 || age >= MAX_CACHE_AGE) continue
-      try {
-        const page = definition.parsePage(entry.page)
-        if (page.data.length > definition.pageSize) continue
-        client.setQueryData(
-          definition.queryKey,
-          { pages: [page], pageParams: [undefined] },
-          { updatedAt: entry.updatedAt },
-        )
-      } catch {
-        // An outdated or malformed response is fetched normally when its tab is opened.
+      if (Number.isFinite(age) && age >= 0 && age < MAX_CACHE_AGE) {
+        try {
+          const page = definition.parsePage(entry.page)
+          if (page.data.length <= definition.pageSize)
+            client.setQueryData(
+              definition.queryKey,
+              { pages: [page], pageParams: [undefined] },
+              { updatedAt: entry.updatedAt },
+            )
+        } catch {
+          /* Invalid pages are fetched normally. */
+        }
+      }
+      const summaryAge =
+        typeof entry.summaryUpdatedAt === 'number' ? now - entry.summaryUpdatedAt : NaN
+      if (Number.isFinite(summaryAge) && summaryAge >= 0 && summaryAge < MAX_CACHE_AGE) {
+        try {
+          client.setQueryData(
+            definition.summary.queryKey,
+            definition.summary.parse(entry.summary),
+            { updatedAt: entry.summaryUpdatedAt as number },
+          )
+        } catch {
+          /* Summary restoration is independent of the item page. */
+        }
       }
     }
   } catch {
@@ -80,22 +96,40 @@ export function persistLibraryCache(client: QueryClient, storage?: CacheStorage)
     const now = Date.now()
     const entries = INITIAL_LIBRARY_QUERIES.flatMap((definition) => {
       const query = client.getQueryCache().find({ queryKey: definition.queryKey, exact: true })
-      if (!query || query.state.isInvalidated || now - query.state.dataUpdatedAt >= MAX_CACHE_AGE)
-        return []
-      const data = query.state.data as InfiniteData<unknown> | undefined
-      const page = data?.pages[0]
-      if (!page) return []
-      return [{ path: definition.path, updatedAt: query.state.dataUpdatedAt, page }]
+      const summary = client
+        .getQueryCache()
+        .find({ queryKey: definition.summary.queryKey, exact: true })
+      const valid = (value: typeof query) =>
+        value && !value.state.isInvalidated && now - value.state.dataUpdatedAt < MAX_CACHE_AGE
+      const page = valid(query)
+        ? (query!.state.data as InfiniteData<unknown> | undefined)?.pages[0]
+        : undefined
+      const aggregate = valid(summary) ? summary!.state.data : undefined
+      if (!page && !aggregate) return []
+      return [
+        {
+          path: definition.path,
+          updatedAt: page ? query!.state.dataUpdatedAt : 0,
+          page,
+          summary: aggregate,
+          summaryUpdatedAt: aggregate ? summary!.state.dataUpdatedAt : undefined,
+        },
+      ]
     })
     try {
-      const value = JSON.stringify({ version: 1, entries })
+      const value = JSON.stringify({ version: 2, entries })
       if (value.length <= MAX_CACHE_LENGTH) storage.setItem(LIBRARY_CACHE_KEY, value)
       else storage.removeItem(LIBRARY_CACHE_KEY)
     } catch {
       // Browsing still works when storage is full or unavailable.
     }
   }
-  const hashes = new Set(INITIAL_LIBRARY_QUERIES.map((query) => hashKey(query.queryKey)))
+  const hashes = new Set(
+    INITIAL_LIBRARY_QUERIES.flatMap((query) => [
+      hashKey(query.queryKey),
+      hashKey(query.summary.queryKey),
+    ]),
+  )
   const unsubscribe = client.getQueryCache().subscribe((event) => {
     if (!hashes.has(event.query.queryHash)) return
     if (event.type === 'updated' && event.action.type === 'invalidate') {
@@ -125,6 +159,7 @@ export interface PrefetchTask {
 
 const initialPrefetchTasks: PrefetchTask[] = [
   ...INITIAL_LIBRARY_QUERIES,
+  ...INITIAL_LIBRARY_QUERIES.map((query) => query.summary),
   {
     queryKey: ['connections'],
     prefetch: (client) =>
@@ -181,7 +216,7 @@ export function startInitialPrefetch(
         library === 'library' &&
         query.queryKey[0] === media &&
         record(request) &&
-        (request.collection ?? request.section ?? request.view) === section
+        request.section === section
       )
     })
     if (primary.length === 0 || primary.some((query) => query.state.status !== 'success')) return
@@ -197,6 +232,7 @@ export function startInitialPrefetch(
       const staleTime = client.defaultQueryOptions({ queryKey: task.queryKey }).staleTime
       if (
         query?.isActive() ||
+        ((query?.state.data as InfiniteData<unknown> | undefined)?.pages?.length ?? 0) > 1 ||
         (query &&
           !query.isStaleByTime(typeof staleTime === 'number' ? staleTime : LIBRARY_STALE_TIME))
       )

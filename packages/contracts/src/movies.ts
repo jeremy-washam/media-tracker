@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
 
 export const MovieCollectionSchema = z.enum(['archive', 'queue'])
 export const MovieViewSchema = z.enum(['grid', 'list'])
@@ -28,7 +29,7 @@ const booleanQuery = z.preprocess(
 
 export const MoviesQuerySchema = z
   .object({
-    collection: MovieCollectionSchema.default('archive'),
+    section: MovieCollectionSchema.default('archive'),
     q: optionalTrimmedString,
     watched: MovieDateModeSchema.default('all'),
     watchedFrom: calendarDate.optional(),
@@ -48,13 +49,13 @@ export const MoviesQuerySchema = z
     runtimeUnknown: booleanQuery.default(false),
     sort: MovieSortSchema.optional(),
     direction: z.enum(['asc', 'desc']).optional(),
-    view: MovieViewSchema.default('grid'),
-    limit: z.coerce.number().int().min(1).max(100).default(48),
+    layout: MovieViewSchema.default('grid'),
+    limit: z.coerce.number().int().min(1).max(100).default(LIBRARY_PAGE_SIZE),
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((query, context) => {
     const sorts =
-      query.collection === 'archive'
+      query.section === 'archive'
         ? new Set([
             'watchedAt',
             'title',
@@ -69,7 +70,7 @@ export const MoviesQuerySchema = z
       context.addIssue({
         code: 'custom',
         path: ['sort'],
-        message: `Sort ${query.sort} is not available for ${query.collection}.`,
+        message: `Sort ${query.sort} is not available for ${query.section}.`,
       })
     }
     if (query.sort === 'relevance' && query.q === undefined) {
@@ -147,6 +148,9 @@ export const MovieCollectionItemSchema = z.object({
 export const MoviesResponseSchema = z.object({
   data: z.array(MovieCollectionItemSchema),
   nextCursor: z.string().nullable(),
+})
+
+export const MoviesSummarySchema = z.object({
   totalCount: z.number().int().nonnegative(),
   filteredCount: z.number().int().nonnegative(),
   filteredOccurrenceCount: z.number().int().nonnegative().nullable(),
@@ -263,3 +267,7 @@ export type MovieHistoryEntry = z.infer<typeof MovieHistoryEntrySchema>
 export type MovieHistoryResponse = z.infer<typeof MovieHistoryResponseSchema>
 export type MoviesQuery = z.infer<typeof MoviesQuerySchema>
 export type MoviesResponse = z.infer<typeof MoviesResponseSchema>
+
+export type MoviesSummary = z.infer<typeof MoviesSummarySchema>
+
+export const MoviesSummaryQuerySchema = librarySummaryQuery(MoviesQuerySchema)

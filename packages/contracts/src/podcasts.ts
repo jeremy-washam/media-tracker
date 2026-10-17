@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
 
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
@@ -22,7 +23,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 export const PodcastViewSchema = z.enum(['archive', 'queue', 'following'])
 export const PodcastsQuerySchema = z
   .object({
-    view: PodcastViewSchema.default('archive'),
+    section: PodcastViewSchema.default('archive'),
     q: optionalString,
     show: stringList,
     following: z.enum(['all', 'following', 'not_following']).default('all'),
@@ -67,7 +68,7 @@ export const PodcastsQuerySchema = z
       ])
       .optional(),
     direction: z.enum(['asc', 'desc']).optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(100).default(LIBRARY_PAGE_SIZE),
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((value, context) => {
@@ -86,9 +87,9 @@ export const PodcastsQuerySchema = z
     if (value.sort === 'relevance' && !value.q)
       context.addIssue({ code: 'custom', path: ['sort'], message: 'Relevance requires search.' })
     const sorts =
-      value.view === 'archive'
+      value.section === 'archive'
         ? ['activityAt', 'observedTime', 'publishedAt', 'duration', 'title', 'show', 'relevance']
-        : value.view === 'queue'
+        : value.section === 'queue'
           ? ['savedAt', 'publishedAt', 'duration', 'title', 'show', 'relevance']
           : ['savedAt', 'title', 'publisher', 'episodeCount', 'relevance']
     if (value.sort && !sorts.includes(value.sort))
@@ -98,7 +99,7 @@ export const PodcastsQuerySchema = z
         message: 'Sort is not valid for this view.',
       })
     if (
-      value.view === 'following' &&
+      value.section === 'following' &&
       (value.show.length > 0 ||
         value.following !== 'all' ||
         value.duration.length > 0 ||
@@ -112,7 +113,7 @@ export const PodcastsQuerySchema = z
         message: 'Episode filters are not valid for Following.',
       })
     if (
-      value.view !== 'following' &&
+      value.section !== 'following' &&
       (value.publisher.length > 0 || value.language.length > 0 || value.libraryEpisodes.length > 0)
     )
       context.addIssue({
@@ -128,7 +129,7 @@ export const PodcastFilterOptionsQuerySchema = PodcastsQuerySchema.safeExtend({
   optionLimit: z.coerce.number().int().min(1).max(100).default(30),
   optionCursor: z.string().max(4000).optional(),
 }).superRefine((value, context) => {
-  if ((value.view === 'following') !== (value.facet !== 'show'))
+  if ((value.section === 'following') !== (value.facet !== 'show'))
     context.addIssue({
       code: 'custom',
       path: ['facet'],
@@ -167,6 +168,9 @@ export const PodcastCollectionItemSchema = z.object({
 export const PodcastsResponseSchema = z.object({
   data: z.array(PodcastCollectionItemSchema),
   nextCursor: z.string().nullable(),
+})
+
+export const PodcastsSummarySchema = z.object({
   totalCount: z.number().int().nonnegative(),
   filteredCount: z.number().int().nonnegative(),
   sectionCounts: z.object({
@@ -220,3 +224,7 @@ export type PodcastCollectionItem = z.infer<typeof PodcastCollectionItemSchema>
 export type PodcastDetail = z.infer<typeof PodcastDetailSchema>
 export type PodcastsResponse = z.infer<typeof PodcastsResponseSchema>
 export type PodcastHistoryResponse = z.infer<typeof PodcastHistoryResponseSchema>
+
+export type PodcastsSummary = z.infer<typeof PodcastsSummarySchema>
+
+export const PodcastsSummaryQuerySchema = librarySummaryQuery(PodcastsQuerySchema)

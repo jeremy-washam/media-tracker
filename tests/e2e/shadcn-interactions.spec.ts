@@ -24,7 +24,7 @@ const collections = [
 
 for (const { media, section, response } of collections) {
   test(`activates ${media} shadcn checkboxes by label and keyboard`, async ({ page }) => {
-    await page.route(`**/api/library/${media}?*`, (r) => r.fulfill({ json: response() }))
+    await page.route(`**/api/library/${media}{,/summary}?*`, (r) => r.fulfill({ json: response() }))
     await page.route('**/api/library/**/filter-options?*', (r) =>
       r.fulfill({
         json: {
@@ -59,8 +59,12 @@ for (const dark of [false, true]) {
       dark,
     )
     await page.setViewportSize({ width: 390, height: 768 })
-    await page.route('**/api/library/books?*', (r) => r.fulfill({ json: booksResponse() }))
-    await page.route('**/api/library/movies?*', (r) => r.fulfill({ json: moviesResponse() }))
+    await page.route('**/api/library/books{,/summary}?*', (r) =>
+      r.fulfill({ json: booksResponse() }),
+    )
+    await page.route('**/api/library/movies{,/summary}?*', (r) =>
+      r.fulfill({ json: moviesResponse() }),
+    )
     await page.goto('/library/books/archive')
     const trigger = page.getByRole('button', { name: 'Open navigation', exact: true })
     await trigger.click()
@@ -89,7 +93,7 @@ for (const dark of [false, true]) {
 }
 
 test('shows sidebar hints to keyboard users without browser title hints', async ({ page }) => {
-  await page.route('**/api/library/books?*', (r) => r.fulfill({ json: booksResponse() }))
+  await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
   await page.goto('/library/books/archive')
   await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
   const books = page.getByRole('link', { name: 'Books', exact: true })
@@ -142,7 +146,9 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
 
 test('keeps the Video duration checkbox and its complete label together', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 768 })
-  await page.route('**/api/library/videos?*', (r) => r.fulfill({ json: videosResponse() }))
+  await page.route('**/api/library/videos{,/summary}?*', (r) =>
+    r.fulfill({ json: videosResponse() }),
+  )
   await page.goto('/library/videos/archive')
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   const checkbox = page.getByRole('checkbox', { name: 'Include unknown', exact: true })
