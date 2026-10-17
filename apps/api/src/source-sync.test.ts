@@ -63,7 +63,7 @@ describe('source sync entry points', () => {
     expect(release).toHaveBeenCalledOnce()
   })
 
-  it('uses only the remainder of a failed reservation for one explicit retry', async () => {
+  it('uses only the remainder of a failed reservation for an explicit retry', async () => {
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'reserve').mockResolvedValue(false)
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'retryable').mockResolvedValue({
@@ -87,6 +87,31 @@ describe('source sync entry points', () => {
       rowsWritten: 6,
     })
   })
+  it('does not reset the database allowance during recovery', async () => {
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'reserve').mockResolvedValue(false)
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'retryable').mockResolvedValue({
+      started_at: Date.now() - 60_000,
+      reservation_json: JSON.stringify({ requests: 2, pages: 1, records: 50, bytes: 1024 }),
+      usage_json: JSON.stringify({
+        requests: 1,
+        pages: 0,
+        records: 0,
+        bytes: 20,
+        rowsWritten: 1_000_000,
+      }),
+    })
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'claimRetry').mockResolvedValue(true)
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'finish').mockResolvedValue()
+    vi.spyOn(SqlSourceSyncAdmission.prototype, 'release').mockResolvedValue()
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const operation = vi.fn()
+    await expect(
+      runSourceSync({ ...hosted(), SYNC_RETRY_SOURCE: 'readwise' }, 'readwise', operation),
+    ).rejects.toThrow('database allowance')
+    expect(operation).not.toHaveBeenCalled()
+  })
+
   it('records partial provider results as an unsuccessful admission', async () => {
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'acquire').mockResolvedValue(true)
     vi.spyOn(SqlSourceSyncAdmission.prototype, 'reserve').mockResolvedValue(true)

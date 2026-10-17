@@ -590,6 +590,36 @@ it('preserves the book and reads when a stable Hardcover relationship changes wo
   expect(database.database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
+it('preserves existing work-alias ownership without merging separate books', async () => {
+  stubBook(book)
+  await syncHardcover(bindings)
+  stubBook({
+    ...book,
+    id: 502,
+    book_id: 702,
+    book: { id: 702, title: 'Another synthetic book' },
+    edition_id: 802,
+    edition: { id: 802 },
+  })
+  await syncHardcover(bindings)
+  const alias = database.database
+    .prepare(
+      "SELECT id, media_item_id FROM external_identities WHERE external_type='book_id' AND external_id='702'",
+    )
+    .get()
+  stubBook({ ...book, book: { ...book.book, canonical_id: 702 } })
+  await syncHardcover(bindings)
+  expect(
+    database.database
+      .prepare(
+        "SELECT id, media_item_id FROM external_identities WHERE external_type='book_id' AND external_id='702'",
+      )
+      .get(),
+  ).toEqual(alias)
+  expect(count(database.database, 'media_items')).toBe(2)
+  expect(database.database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
 it('retains the prior snapshot when authoritative Hardcover owners disagree', async () => {
   stubBook(book)
   await syncHardcover(bindings)

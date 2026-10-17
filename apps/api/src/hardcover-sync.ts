@@ -164,8 +164,6 @@ async function findOrCreateIdentity(
       externalId: input.externalId,
       connectionId: null,
     }))
-  if (known && input.namespace === 'hardcover' && known.mediaItemId !== input.mediaItemId)
-    throw new Error('Hardcover authoritative identities refer to different local books')
   const id = known?.id ?? externalIdentityId(ulid())
   const mediaId = known?.mediaItemId ?? input.mediaItemId
   pending.set(key, { id, mediaItemId: mediaId })
@@ -352,6 +350,9 @@ async function normalizeBook(
         : []
   const archiveEntries: ArchiveEntryWrite[] = []
   for (const occurrence of occurrences) {
+    const consumedIdentity = identities.find((identity) => identity.id === occurrence.identityId)
+    if (consumedIdentity && consumedIdentity.mediaItemId !== itemId)
+      throw new Error('Hardcover consumed edition refers to a different local book')
     const existingId = await repository.findArchiveEntryId(connection.id, occurrence.key)
     const entryId = existingId ?? archiveEntryId(ulid())
     const evidence: ArchiveEntryEvidence[] = [

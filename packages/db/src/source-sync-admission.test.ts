@@ -117,7 +117,11 @@ describe('durable source admission', () => {
       expect(await repository.claimRetry('readwise', started)).toBe(true)
       expect(await repository.claimRetry('readwise', started)).toBe(false)
       await repository.finish('readwise', started, started + 120_000, 'failed', '{"requests":2}')
+      expect(await repository.retryable('readwise', started)).not.toBeNull()
+      expect(await repository.claimRetry('readwise', started)).toBe(true)
+      await repository.finish('readwise', started, started + 180_000, 'failed', '{"requests":2}')
       expect(await repository.retryable('readwise', started)).toBeNull()
+      expect(await repository.claimRetry('readwise', started)).toBe(false)
       expect(await repository.reserve('readwise', started + 24 * 3600_000, '{}')).toBe(true)
       expect(
         db

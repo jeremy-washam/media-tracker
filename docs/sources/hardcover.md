@@ -241,9 +241,10 @@ the original source evidence.
 The sync resolves an existing `user_books.id` before allocating a replacement
 local book when its upstream work ID changes. The current work projection follows
 the new ID, the old work identity is retired, and Archive/edition IDs and raw
-history remain intact. Conflicting established relationship/work/edition owners
+history remain intact. Conflicting relationship/work owners or consumed-edition owners
 stop reconciliation and retain the previous complete-snapshot cursor; they are
-not silently reassigned.
+not silently reassigned. Existing non-consumed work aliases keep their owners;
+observing an alias does not itself merge local books.
 
 ## Pagination and checkpoints
 

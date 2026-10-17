@@ -40,9 +40,9 @@ must still be checked account-wide before extending a grant; these controls
 are engineering allocations, not a Cloudflare dollar cap.
 
 - One reservation per source per UTC day, with at least 23 hours between new reservations.
-  `SYNC_RETRY_SOURCE` can explicitly permit one recovery attempt for a failed
+  `SYNC_RETRY_SOURCE` can explicitly permit up to two recovery attempts for a failed
   reservation. It subtracts previously consumed requests/bytes/pages/records,
-  retains cumulative usage and the original admission timestamp, and refuses
+  retains cumulative provider/database usage and the original admission timestamp, and refuses
   exhausted or unmeasured reservations. Restarting never resets a budget.
 - A global 20-minute lease serializes source jobs across HTTP and queue consumers.
 - Provider work checks a 10-minute deadline; individual requests time out after

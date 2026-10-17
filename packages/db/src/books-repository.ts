@@ -549,6 +549,12 @@ export class SqlBooksRepository {
         ),
         statement(
           this.#database,
+          `UPDATE book_library_projection SET work_id=?
+           WHERE connection_id=? AND media_item_id=? AND user_book_id=? AND work_id<>?`,
+          [book.workId, book.connectionId, book.mediaItemId, book.userBookId, book.workId],
+        ),
+        statement(
+          this.#database,
           `INSERT INTO hardcover_book_works (
             connection_id, work_id, media_item_id, canonical_work_id, title, subtitle,
             description, slug, pages, audio_seconds, release_date, release_precision,

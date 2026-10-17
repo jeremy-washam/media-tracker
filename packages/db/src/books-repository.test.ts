@@ -379,6 +379,20 @@ describe('Books projection and repository', () => {
     })
   })
 
+  it('keeps details available while a stable relationship moves to a new work ID', async () => {
+    await repository.upsertHardcoverBooks([projection()])
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00.000Z',
+    })
+    await repository.upsertHardcoverBooks([{ ...projection(), workId: 20 }])
+    await expect(repository.findBook('book-1')).resolves.toMatchObject({
+      title: 'The Left Hand of Darkness',
+    })
+    expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  })
+
   it('matches publication ranges against the full interval implied by date precision', async () => {
     await repository.upsertHardcoverBooks([projection()])
     await repository.finalizeHardcoverSnapshot({

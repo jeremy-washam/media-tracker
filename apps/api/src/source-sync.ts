@@ -29,9 +29,17 @@ export async function runSourceSync<Result>(
     throw new SyncDeferredError('Source sync is paused or its usage grant has expired')
   const started = Date.now()
   const usage = jobUsage(env, `sync_${source}`)
-  let budget = new SyncBudget(sourceSyncLimits[source], fetch, Date.now, usage.snapshot)
-  let admissionStarted = started
   let previousUsage: Record<string, number> = {}
+  const cumulativeDatabaseUsage = () => {
+    const current = usage.snapshot()
+    return {
+      rowsRead: current.rowsRead + (previousUsage.rowsRead ?? 0),
+      rowsWritten: current.rowsWritten + (previousUsage.rowsWritten ?? 0),
+      databaseBytes: Math.max(current.databaseBytes, previousUsage.databaseBytes ?? 0),
+    }
+  }
+  let budget = new SyncBudget(sourceSyncLimits[source], fetch, Date.now, cumulativeDatabaseUsage)
+  let admissionStarted = started
   const admission =
     env.AUTH_MODE === 'access' ? new SqlSourceSyncAdmission(new D1DatabaseClient(env.DB)) : null
   const owner = crypto.randomUUID()
@@ -71,7 +79,7 @@ export async function runSourceSync<Result>(
           }
           reserved = await admission.claimRetry(source, previous.started_at)
           if (reserved) {
-            budget = new SyncBudget(remaining, fetch, Date.now, usage.snapshot)
+            budget = new SyncBudget(remaining, fetch, Date.now, cumulativeDatabaseUsage)
             admissionStarted = previous.started_at
             previousUsage = used
           }
@@ -80,6 +88,7 @@ export async function runSourceSync<Result>(
       if (!reserved)
         throw new SyncDeferredError('Source daily sync allowance exhausted; retry tomorrow')
     }
+    budget.check()
     const result = await operation({ ...usage.env, SYNC_BUDGET: budget, SYNC_FETCH: budget.fetch })
     outcome =
       typeof result === 'object' &&
