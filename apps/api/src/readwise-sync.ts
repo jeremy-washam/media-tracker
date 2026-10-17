@@ -156,6 +156,7 @@ async function syncHighlights(input: {
     const response = await withReadwiseRetry(() =>
       fetchReadwiseHighlightPage({
         token: input.token,
+        fetcher: input.bindings.SYNC_FETCH ?? fetch,
         ...(pageCursor ? { pageCursor } : {}),
       }),
     )
@@ -183,6 +184,9 @@ async function syncHighlights(input: {
     await input.repository.commit({ rawObjects: [pending] })
     try {
       const page = parseReadwiseHighlightPage(response.body)
+      input.bindings.SYNC_BUDGET?.page(
+        page.results.reduce((count, container) => count + 1 + container.highlights.length, 0),
+      )
       const sourceRecords: SourceRecord[] = []
       const containers: ReaderHighlightContainerProjection[] = []
       for (const [index, container] of page.results.entries()) {
@@ -265,6 +269,7 @@ async function syncHighlights(input: {
       throw error
     }
   } while (pageCursor)
+  input.bindings.SYNC_BUDGET?.check()
   await input.articles.finalizeHighlightsSnapshot({
     connectionId: input.connection.id,
     syncRunId: input.runId,
@@ -314,6 +319,7 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
       const response = await withReadwiseRetry(() =>
         fetchReaderDocumentPage({
           token,
+          fetcher: bindings.SYNC_FETCH ?? fetch,
           limit: 100,
           ...(updatedAfter ? { updatedAfter } : {}),
           ...(pageCursor ? { pageCursor } : {}),
@@ -341,6 +347,7 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
       rawObjectCount += 1
       try {
         const page = parseReaderPage(response.body)
+        bindings.SYNC_BUDGET?.page(page.results.length)
         const sourceRecords: SourceRecord[] = [],
           mediaItems: MediaItem[] = [],
           externalIdentities: ExternalIdentity[] = []
@@ -549,6 +556,7 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
       }
     } while (pageCursor)
 
+    bindings.SYNC_BUDGET?.check()
     const highlightCounts = await syncHighlights({
       token,
       bindings,
@@ -601,7 +609,10 @@ export async function syncReadwiseArchive(bindings: Bindings): Promise<ReadwiseS
     )
     await spotifyLibrary.rebuildPodcastProjection()
     await spotifyLibrary.rebuildPodcastSearch()
-    const contentTargets = await articles.reserveContentTargets(connection.id, runId, finishedAt)
+    const contentTargets =
+      bindings.ARTICLE_CONTENT_ENABLED === 'false'
+        ? []
+        : await articles.reserveContentTargets(connection.id, runId, finishedAt)
     for (let index = 0; index < contentTargets.length; index += 100) {
       await bindings.SYNC_QUEUE.sendBatch(
         contentTargets.slice(index, index + 100).map((target, batchIndex) => ({

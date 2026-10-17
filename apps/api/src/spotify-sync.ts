@@ -48,6 +48,7 @@ import {
   createSpotifyLibraryRepository,
 } from './env'
 import { refreshStoredSpotifyToken } from './spotify-credentials'
+import { SyncDeferredError } from './sync-budget'
 
 const parserVersion = 'spotify-saved-episodes@2'
 const savedShowsParserVersion = 'spotify-saved-shows@1'
@@ -254,6 +255,7 @@ async function syncTrackCatalog(input: {
   const acquiredAt = now()
   const response = await fetchSpotifyTracks({
     accessToken: input.accessToken,
+    fetch: input.bindings.SYNC_FETCH ?? fetch,
     ids: backlog.map((item) => item.trackId),
   })
   const raw = await persistApiPage({
@@ -349,6 +351,7 @@ async function syncAdditionalSpotifyLibrary(input: {
       const acquiredAt = now()
       const page = await fetchSpotifySavedShowsPage({
         accessToken: input.accessToken,
+        fetch: input.bindings.SYNC_FETCH ?? fetch,
         offset: showOffset,
       })
       const raw = await persistApiPage({
@@ -361,6 +364,7 @@ async function syncAdditionalSpotifyLibrary(input: {
       })
       const records: SourceRecord[] = []
       const projections = []
+      input.bindings.SYNC_BUDGET?.page(page.items.length)
       for (const [index, show] of page.items.entries()) {
         const usable = show.showId !== null && show.showUri !== null
         const record: SourceRecord = {
@@ -418,6 +422,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     )
   } catch (error) {
     savedShows = 0
+    if (error instanceof SyncDeferredError) throw error
     partialFailures.push('saved_shows')
     console.warn(
       JSON.stringify({
@@ -431,7 +436,11 @@ async function syncAdditionalSpotifyLibrary(input: {
   let playerObserved = false
   try {
     const playerAt = now()
-    const player = await fetchSpotifyPlayer({ accessToken: input.accessToken })
+    const player = await fetchSpotifyPlayer({
+      accessToken: input.accessToken,
+      fetch: input.bindings.SYNC_FETCH ?? fetch,
+    })
+    input.bindings.SYNC_BUDGET?.page(player.item === null ? 0 : 1)
     const playerRaw = await persistApiPage({
       ...input,
       operation: 'player',
@@ -586,6 +595,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     )
   } catch (error) {
     partialFailures.push('player')
+    if (error instanceof SyncDeferredError) throw error
     console.warn(
       JSON.stringify({
         level: 'warn',
@@ -602,7 +612,11 @@ async function syncAdditionalSpotifyLibrary(input: {
       input.connection.id,
       'recent-tracks',
     )
-    const recent = await fetchSpotifyRecentlyPlayed({ accessToken: input.accessToken })
+    const recent = await fetchSpotifyRecentlyPlayed({
+      accessToken: input.accessToken,
+      fetch: input.bindings.SYNC_FETCH ?? fetch,
+    })
+    input.bindings.SYNC_BUDGET?.page(recent.items.length)
     const recentRaw = await persistApiPage({
       ...input,
       operation: 'recent-tracks',
@@ -771,6 +785,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     )
   } catch (error) {
     partialFailures.push('recent_tracks')
+    if (error instanceof SyncDeferredError) throw error
     console.warn(
       JSON.stringify({
         level: 'warn',
@@ -784,6 +799,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     // A durable exact-ID backfill owns the backlog while active. The older
     // opportunistic batch path remains for integrations with batch access.
     if (
+      input.bindings.SPOTIFY_CATALOG_ENABLED !== 'false' &&
       (await createSpotifyCatalogJobsRepository(
         input.bindings.DB,
         input.bindings.DATABASE_USAGE_OBSERVER,
@@ -792,6 +808,7 @@ async function syncAdditionalSpotifyLibrary(input: {
       catalogTracks = await syncTrackCatalog(input)
   } catch (error) {
     partialFailures.push('track_catalog')
+    if (error instanceof SyncDeferredError) throw error
     console.warn(
       JSON.stringify({
         level: 'warn',
@@ -857,6 +874,7 @@ export async function syncSpotifySavedEpisodes(
       const acquiredAt = now()
       const response = await fetchSpotifySavedEpisodesResponse({
         accessToken: refreshed.accessToken,
+        fetch: bindings.SYNC_FETCH ?? fetch,
         offset,
       })
       const checksum = await sha256(response.bytes)
@@ -887,6 +905,7 @@ export async function syncSpotifySavedEpisodes(
       let page: SpotifySavedEpisodesPage
       try {
         page = parseSpotifySavedEpisodesPage(response)
+        bindings.SYNC_BUDGET?.page(page.items.length)
         for (const [index, episode] of page.items.entries()) {
           const disposition = classifySavedEpisode({
             fullyPlayed: episode.fullyPlayed,
@@ -1053,6 +1072,7 @@ export async function syncSpotifySavedEpisodes(
     } while (offset !== null)
 
     const snapshotAt = now()
+    bindings.SYNC_BUDGET?.check()
     await spotifyRepository.finalizeSavedEpisodes(connection.id, observedEpisodeUris, snapshotAt)
     let extended = {
       savedShows: 0,
@@ -1074,6 +1094,7 @@ export async function syncSpotifySavedEpisodes(
       })
     } catch (error) {
       extended.partialFailures.push('optional_library')
+      if (error instanceof SyncDeferredError) throw error
       console.warn(
         JSON.stringify({
           level: 'warn',
@@ -1136,7 +1157,25 @@ export async function syncSpotifySavedEpisodes(
         )
       }
     }
-    await repository.saveConnection({ ...connection, updatedAt: finishedAt })
+    if (extended.partialFailures.length > 0)
+      await repository.saveSyncRun({
+        ...runningRun,
+        status: 'partially_succeeded',
+        finishedAt,
+        counts: {
+          rawObjects: rawObjects.length,
+          sourceRecords: sourceRecordCount,
+          normalizedRecords: archiveEpisodes,
+          failedRecords: 0,
+        },
+        errorCode: 'SPOTIFY_PARTIAL_SYNC',
+        errorMessage: `Some Spotify surfaces failed: ${extended.partialFailures.join(', ')}`,
+      })
+    await repository.saveConnection({
+      ...connection,
+      status: extended.partialFailures.length > 0 ? 'degraded' : 'connected',
+      updatedAt: finishedAt,
+    })
     return {
       archiveEpisodes,
       mode,

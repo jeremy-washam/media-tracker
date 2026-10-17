@@ -21,6 +21,9 @@ export function jobUsage(env: Bindings, scope: string) {
   }
   return {
     env: { ...env, DATABASE_USAGE_OBSERVER: observer },
+    snapshot() {
+      return { ...summary, unmeasuredStatements: summary.statements - summary.measuredStatements }
+    },
     report() {
       try {
         console.info(

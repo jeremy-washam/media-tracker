@@ -2,6 +2,11 @@
 
 Last updated: 2026-10-14
 
+October 17 follow-up: the owner prioritized hosted source sync before additional
+browsing measurements. The [source sync rollout](source-sync-rollout.md) owns
+activation controls, initial finite limits, credential ownership and first-run
+validation. Optional content acquisition and catalog backfills remain paused.
+
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
 Section 20 records the subsequent interface decisions and next design work.

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Bindings } from './env'
 import { syncReadwiseArchive } from './readwise-sync'
+import { SyncBudget } from './sync-budget'
 
 const migration = [
   '0001_canonical_ledger.sql',
@@ -155,6 +156,42 @@ describe('Readwise Archive sync', () => {
     database.database.close()
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('syncs metadata with content acquisition paused', async () => {
+    const bindings = {
+      DB: database,
+      RAW_BUCKET: bucket,
+      READWISE_TOKEN: 'synthetic-token',
+      SYNC_QUEUE: queue,
+      ARTICLE_CONTENT_ENABLED: 'false',
+    } as unknown as Bindings
+    await expect(syncReadwiseArchive(bindings)).resolves.toMatchObject({
+      pages: 1,
+      archiveItems: 5,
+    })
+    expect(queue.batches).toHaveLength(0)
+    expect(count(database.database, 'article_content_jobs')).toBe(0)
+    expect(count(database.database, 'sync_cursors')).toBe(1)
+  })
+
+  it('keeps raw evidence and the prior cursor when a snapshot exceeds its budget', async () => {
+    const bindings = {
+      DB: database,
+      RAW_BUCKET: bucket,
+      READWISE_TOKEN: 'synthetic-token',
+      SYNC_QUEUE: queue,
+      SYNC_BUDGET: new SyncBudget({ requests: 1, bytes: 100_000, pages: 0, records: 1 }),
+    } as unknown as Bindings
+    await expect(syncReadwiseArchive(bindings)).rejects.toThrow('page or record allowance')
+    expect(bucket.objects.size).toBe(1)
+    expect(count(database.database, 'raw_objects')).toBe(1)
+    expect(count(database.database, 'sync_cursors')).toBe(0)
+    expect(count(database.database, 'article_library_projection')).toBe(0)
+    expect(database.database.prepare('SELECT status FROM sync_runs').get()).toMatchObject({
+      status: 'failed',
+    })
+    expect(queue.batches).toHaveLength(0)
   })
 
   it('stores raw evidence and exposes eligible Archive media idempotently', async () => {

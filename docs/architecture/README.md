@@ -128,8 +128,12 @@ after payload reconnaissance.
 
 ## Current operational implementation
 
-Source imports and resumable chunks run through HTTP; hourly polling runs in the
-deployed scheduled handler. The queue consumer handles bounded Reader article-
+Source imports and resumable chunks run through HTTP. Hosted source polling now
+uses explicit, expiring usage grants, durable daily admission and a cross-entry
+lease. Hourly cron dispatches eligible source jobs to a serial queue consumer;
+local cron retains direct execution. Manual source-sync actions share the same
+admission and resource ceilings. See the [source sync rollout](../planning/source-sync-rollout.md).
+The queue consumer also handles bounded Reader article-
 content acquisition/indexing, TMDB and YouTube catalog refresh, and resumable
 Spotify catalog backfill; generalized replay/recovery jobs remain deferred. Local cron
 triggers are invoked manually. Generalized CLI replay,

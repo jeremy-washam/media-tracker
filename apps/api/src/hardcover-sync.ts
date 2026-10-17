@@ -619,11 +619,12 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
   await repository.saveSyncRun(runningRun)
 
   try {
-    const userId = await fetchHardcoverUserId(token)
+    const userId = await fetchHardcoverUserId(token, bindings.SYNC_FETCH)
     let afterId = 0
     while (true) {
       const response = await fetchHardcoverReadBooksResponse({
         token,
+        fetcher: bindings.SYNC_FETCH ?? fetch,
         userId,
         afterId,
         limit: pageSize,
@@ -656,6 +657,9 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       let page: ReturnType<typeof parseHardcoverReadBooksPage>
       try {
         page = parseHardcoverReadBooksPage(response)
+        bindings.SYNC_BUDGET?.page(
+          page.books.reduce((count, book) => count + 1 + book.reads.length, 0),
+        )
         const embeddedEditionIds = new Set(
           page.books.flatMap((book) =>
             [book.currentEdition?.id, book.defaultCoverEdition?.id].filter(
@@ -680,7 +684,11 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         >()
         for (let start = 0; start < consumedEditionIds.length; start += editionBatchSize) {
           const ids = consumedEditionIds.slice(start, start + editionBatchSize)
-          const editionResponse = await fetchHardcoverEditionsResponse({ token, ids })
+          const editionResponse = await fetchHardcoverEditionsResponse({
+            token,
+            ids,
+            fetcher: bindings.SYNC_FETCH ?? fetch,
+          })
           const editionAcquiredAt = instantNow()
           const editionChecksum = await sha256(editionResponse.bytes)
           const editionStorageKey = `raw/hardcover/sha256/${editionChecksum.slice(0, 2)}/${editionChecksum}.json`
@@ -707,6 +715,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
           await repository.commit({ rawObjects: [editionRawObject] })
           try {
             const editionPage = parseHardcoverEditionsPage(editionResponse)
+            bindings.SYNC_BUDGET?.page(editionPage.editions.length)
             const editionRecords = editionPage.editions.map((edition, index) => {
               const record: SourceRecord = {
                 id: sourceRecordId(ulid()),
@@ -815,6 +824,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
     }
 
     const finishedAt = instantNow()
+    bindings.SYNC_BUDGET?.check()
     await booksRepository.finalizeHardcoverSnapshot({
       connectionId: connection.id,
       syncRunId: runId,

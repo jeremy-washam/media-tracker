@@ -12,6 +12,8 @@
     "ACCESS_AUD": "",
     "OWNER_EMAIL": "",
     "SYNC_ENABLED": "true",
+    "ARTICLE_CONTENT_ENABLED": "true",
+    "SPOTIFY_CATALOG_ENABLED": "true",
     "MAINTENANCE_ENABLED": "false",
   },
   "assets": {

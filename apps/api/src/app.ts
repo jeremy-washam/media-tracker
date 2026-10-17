@@ -77,6 +77,8 @@ import { importLetterboxdExport, LetterboxdImportError } from './letterboxd-impo
 import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd-rss-sync'
 import { requestContext, requestLogger, securityHeaders } from './middleware'
 import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
+import { runSourceSync } from './source-sync'
+import { SyncDeferredError } from './sync-budget'
 import { hydrateArticleTextExcerpts } from './article-excerpts'
 import {
   continueSpotifyExtendedHistoryImport,
@@ -1303,10 +1305,14 @@ app.openapi(readwiseSyncRoute, async (context) => {
   try {
     return context.json(
       ReadwiseSyncResponseSchema.parse(
-        await syncReadwiseArchive({
-          ...context.env,
-          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
-        }),
+        await runSourceSync(
+          {
+            ...context.env,
+            DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+          },
+          'readwise',
+          syncReadwiseArchive,
+        ),
       ),
       200,
     )
@@ -1329,10 +1335,14 @@ app.openapi(hardcoverSyncRoute, async (context) => {
   try {
     return context.json(
       HardcoverSyncResponseSchema.parse(
-        await syncHardcover({
-          ...context.env,
-          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
-        }),
+        await runSourceSync(
+          {
+            ...context.env,
+            DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+          },
+          'hardcover',
+          syncHardcover,
+        ),
       ),
       200,
     )
@@ -1399,10 +1409,14 @@ app.openapi(letterboxdSyncRoute, async (context) => {
   try {
     return context.json(
       LetterboxdRssSyncResponseSchema.parse(
-        await syncLetterboxdRss({
-          ...context.env,
-          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
-        }),
+        await runSourceSync(
+          {
+            ...context.env,
+            DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+          },
+          'letterboxd',
+          syncLetterboxdRss,
+        ),
       ),
       200,
     )
@@ -1495,10 +1509,14 @@ app.openapi(spotifySyncRoute, async (context) => {
   try {
     return context.json(
       SpotifySyncResponseSchema.parse(
-        await syncSpotifySavedEpisodes({
-          ...context.env,
-          DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
-        }),
+        await runSourceSync(
+          {
+            ...context.env,
+            DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+          },
+          'spotify',
+          syncSpotifySavedEpisodes,
+        ),
       ),
       200,
     )
@@ -1723,6 +1741,17 @@ app.notFound((context) => {
 })
 
 app.onError((error, context) => {
+  if (error instanceof SyncDeferredError)
+    return context.json(
+      ApiErrorSchema.parse({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: error.message,
+          requestId: context.get('requestId'),
+        },
+      }),
+      503,
+    )
   const status = error instanceof HTTPException ? error.status : 500
   const code: ApiError['error']['code'] =
     status === 400 ? 'BAD_REQUEST' : status === 404 ? 'NOT_FOUND' : 'INTERNAL_ERROR'

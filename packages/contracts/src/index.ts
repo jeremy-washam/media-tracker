@@ -219,6 +219,7 @@ export const SyncJobSchema = z
       'refresh_tmdb_catalog',
       'refresh_youtube_catalog',
       'refresh_spotify_catalog',
+      'sync_source',
     ]),
     connectionId: z.string().optional(),
     documentId: z.string().optional(),
@@ -228,6 +229,14 @@ export const SyncJobSchema = z
     catalogCursor: z.string().optional(),
   })
   .superRefine((job, context) => {
+    if (
+      job.operation === 'sync_source' &&
+      !['readwise', 'hardcover', 'letterboxd', 'spotify'].includes(job.source)
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Source sync requires a supported polling source.',
+      })
     if (
       job.operation === 'acquire_article_content' &&
       (job.source !== 'readwise' || job.connectionId === undefined || job.documentId === undefined)

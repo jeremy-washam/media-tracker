@@ -85,6 +85,39 @@ export function validateProductionConfiguration(
   }
   if (!['true', 'false'].includes(configuration.vars.MAINTENANCE_ENABLED))
     throw new Error('Explicit MAINTENANCE_ENABLED configuration is required')
+  if (configuration.vars.SYNC_ENABLED === 'true') {
+    const sources = (configuration.vars.SYNC_SOURCES ?? '').split(',')
+    const until = Date.parse(configuration.vars.SYNC_BUDGET_UNTIL ?? '')
+    if (
+      sources.length === 0 ||
+      new Set(sources).size !== sources.length ||
+      sources.some(
+        (source: string) => !['readwise', 'hardcover', 'letterboxd', 'spotify'].includes(source),
+      ) ||
+      !Number.isFinite(until) ||
+      until <= Date.now() ||
+      until > Date.now() + 24 * 60 * 60_000
+    )
+      throw new Error(
+        'Source rollout requires explicit sources and an included-usage grant lasting at most 24 hours',
+      )
+    if (
+      configuration.vars.ARTICLE_CONTENT_ENABLED !== 'false' ||
+      configuration.vars.SPOTIFY_CATALOG_ENABLED !== 'false' ||
+      configuration.vars.CATALOG_AUTO_REFRESH !== 'false' ||
+      configuration.vars.MAINTENANCE_ENABLED !== 'false' ||
+      configuration.queues.consumers.length !== 1 ||
+      configuration.queues.consumers[0]?.queue !== 'media-tracker-sync' ||
+      configuration.queues.consumers[0]?.max_batch_size !== 1 ||
+      configuration.queues.consumers[0]?.max_concurrency !== 1 ||
+      configuration.queues.consumers[0]?.max_retries !== 1 ||
+      configuration.triggers.crons.length > 1 ||
+      configuration.triggers.crons.some((cron: string) => cron !== '0 * * * *')
+    )
+      throw new Error(
+        'Source rollout requires one bounded source consumer; content, catalog and maintenance remain paused',
+      )
+  }
   if (configuration.vars.SYNC_ENABLED === 'false') {
     const crons = configuration.triggers.crons
     if (

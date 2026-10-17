@@ -16,6 +16,11 @@ Hosted performance and provider-job budgets remain pending; background
 processing stays off.
 The owner approves the existing $5/month plan with $0 additional charges.
 
+October 17: source sync is the next activation stage, before further browsing
+measurements. Follow the [source sync rollout](source-sync-rollout.md) for
+expiring grants, durable admission, queue settings and first-source validation.
+Do not enable the older unrestricted hourly provider handler in production.
+
 The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
 a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
 names. A Cloudflare-provided `workers.dev` address is sufficient.

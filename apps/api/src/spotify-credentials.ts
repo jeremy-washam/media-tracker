@@ -45,6 +45,7 @@ export async function refreshStoredSpotifyToken(bindings: Bindings, connectionId
         : bootstrap
     const result = await refreshSpotifyAccessToken({
       clientId: bindings.SPOTIFY_CLIENT_ID!.trim(),
+      fetch: bindings.SYNC_FETCH ?? fetch,
       refreshToken,
       ...(bindings.SPOTIFY_CLIENT_SECRET === undefined
         ? {}
