@@ -935,10 +935,16 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
           ]
         : []),
       ...publication,
-      statement(this.database, 'DELETE FROM video_library_projection'),
-      statement(
-        this.database,
-        `INSERT INTO video_library_projection(
+      // Catalog completion changes only provider overlays. Source ingestion has
+      // already rebuilt these owner-only projections; recomputing every watch
+      // and channel assertion here adds library-sized work to the atomic publish.
+      ...(completion
+        ? []
+        : [
+            statement(this.database, 'DELETE FROM video_library_projection'),
+            statement(
+              this.database,
+              `INSERT INTO video_library_projection(
            media_item_id,video_id,display_title,normalized_title,channel_id,
            display_channel_title,normalized_channel_title,canonical_url,image_url,
            published_at,duration_ms,availability_state,metadata_state,source_format,
@@ -973,7 +979,9 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
              WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state='succeeded') THEN 'stale'
              WHEN EXISTS(SELECT 1 FROM catalog_refresh_jobs j WHERE j.provider='youtube' AND j.state='failed') THEN 'error'
              ELSE 'not_configured' END,
-           CASE WHEN EXISTS(SELECT 1 FROM youtube_watch_observations w
+           -- The product-first index scans every music watch per video. Pin the
+           -- existing media-first index to bound this correlated lookup instead.
+           CASE WHEN EXISTS(SELECT 1 FROM youtube_watch_observations w INDEXED BY youtube_watch_rollup_idx
              WHERE w.media_item_id=m.id AND w.product='youtube_music')
              THEN 'youtube_music' ELSE 'unknown' END,
            EXISTS(SELECT 1 FROM archive_entries a WHERE a.media_item_id=m.id AND a.upstream_state='active'
@@ -1005,12 +1013,12 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
                  AND a.admission_reason='youtube_watched_activity')
              OR EXISTS(SELECT 1 FROM queue_entries q WHERE q.media_item_id=m.id
                  AND q.relationship_type='youtube_watch_later' AND q.upstream_state='active'))`,
-        [generation, at, at, at, at],
-      ),
-      statement(this.database, 'DELETE FROM video_channel_projection'),
-      statement(
-        this.database,
-        `INSERT INTO video_channel_projection(
+              [generation, at, at, at, at],
+            ),
+            statement(this.database, 'DELETE FROM video_channel_projection'),
+            statement(
+              this.database,
+              `INSERT INTO video_channel_projection(
            channel_id,display_title,normalized_title,canonical_url,image_url,library_active,
            following_active,subscription_count,archive_video_count,watch_occurrence_count,
            latest_watched_at,queue_video_count,projection_generation,updated_at)
@@ -1030,8 +1038,9 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
          LEFT JOIN youtube_channel_catalog_profiles cp ON cp.channel_id=c.channel_id AND cp.expires_at>? AND 0
          WHERE EXISTS(SELECT 1 FROM video_library_projection p WHERE p.channel_id=c.channel_id
            AND (p.archive_active=1 OR p.queue_active=1))`,
-        [generation, at, at],
-      ),
+              [generation, at, at],
+            ),
+          ]),
       statement(this.database, 'DELETE FROM youtube_published_channel_aggregates'),
       statement(this.database, youtubeChannelAggregateSql, [at, at, at]),
       statement(

@@ -132,6 +132,15 @@ and the [February changes](https://developer.spotify.com/documentation/web-api/r
 The developer dashboard is signed out; owner account input is pending. No new
 app, subscription, reauthorization or credential change was made.
 
+The reviewed legacy October 17 Hardcover and October 28 Spotify source runs had
+no active lease, progress, snapshot admission, catalog role or committed cursor.
+The guarded operator repair closed exactly those two abandoned rows with an
+interruption diagnostic and observed closure time. A repeat was a verified
+zero-write no-op. Counts, evidence and admission accounting were retained; the
+completed October 29 Hardcover snapshot was untouched. Connections now shows
+that snapshot as succeeded and the abandoned Spotify run as interrupted rather
+than polling it indefinitely as running.
+
 Full source closeout remains subject to the acceptance requirements above,
 including actual subsequent eligible scheduled runs. Local clocks and same-day
 duplicate jobs do not establish that daily soak.

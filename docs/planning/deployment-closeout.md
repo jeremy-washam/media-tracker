@@ -22,7 +22,9 @@ Normal operation resumed at approximately 22:59 UTC: native queue delivery open,
 serial consumer attached, four-source allowlist enabled, hourly eligibility and
 catalog scheduling, five-minute maintenance and independent ten-minute operating
 monitor. Native configuration, schedules, bindings, CPU/rate limits and consumer
-settings were checked against the prepared normal configuration. Both protected
+settings were checked against the prepared normal configuration. Catalog refresh
+was subsequently held at 23:17 UTC after a real YouTube finalization CPU failure;
+its diagnostic and recovery are tracked in the catalog policy. Both protected
 GitHub environments now contain that configuration; guarded ordinary main-branch
 CD is enabled. Its successful exact-revision release and smoke receipts belong to
 [main Actions runs](https://github.com/jeremy-washam/media-tracker/actions?query=branch%3Amain).
@@ -166,3 +168,10 @@ The [source rollout](source-sync-rollout.md) and
 idempotence, newly acquired excerpt/FTS and real scheduled-cycle gates. Record
 observed outcomes there. Daily eligibility and continuation recovery are
 separate from hourly scheduler execution.
+
+The reviewed legacy source-run repair passed 18 independent synthetic tests;
+the combined full check passed 891 TypeScript and 147 Python tests after the
+control-consistency merge. It closed exactly two proven abandoned legacy runs
+and a repeated invocation verified a zero-write no-op. Evidence, counters,
+cursors and admission reservations were preserved. Current Hardcover success
+was verified in the live Connections page.
