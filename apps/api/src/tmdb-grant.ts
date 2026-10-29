@@ -31,13 +31,11 @@ export function boundedTmdbEnvironment(env: Bindings) {
   let uncertain = false
   const budget = new SyncBudget(
     { requests: 128, bytes: 16 * 1024 * 1024, pages: 1, records: 10 },
-    fetch,
+    env.SYNC_FETCH ?? fetch,
     Date.now,
     () => {
       if (uncertain || rowsRead >= 50_000_000 || rowsWritten >= 50_000)
         throw new SyncDeferredError('TMDB database allowance needs review')
-      if (!tmdbGrantAllowed(env, env.TMDB_CATALOG_JOB_ID))
-        throw new SyncDeferredError('TMDB refresh grant has expired')
       return { rowsRead, rowsWritten, databaseBytes }
     },
   )

@@ -1045,6 +1045,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
   async listYoutubeCatalogCandidates(input: {
     afterMediaItemId?: string
     at: string
+    refreshBefore?: string
     limit: number
   }): Promise<YoutubeCatalogCandidate[]> {
     const rows = await statement(
@@ -1053,7 +1054,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
        LEFT JOIN youtube_video_catalog_profiles profile ON profile.media_item_id=p.media_item_id
        WHERE p.media_item_id>? AND (profile.media_item_id IS NULL OR profile.expires_at<=?)
        ORDER BY p.media_item_id LIMIT ?`,
-      [input.afterMediaItemId ?? '', input.at, input.limit],
+      [input.afterMediaItemId ?? '', input.refreshBefore ?? input.at, input.limit],
     ).all<{ media_item_id: string; video_id: string }>()
     return rows.results.map((row) => ({ mediaItemId: row.media_item_id, videoId: row.video_id }))
   }

@@ -769,6 +769,7 @@ export class SqlSpotifyLibraryRepository {
 
   async listTracksNeedingMetadata(
     limit = 50,
+    staleBefore?: string,
   ): Promise<{ mediaItemId: string; trackId: string; trackUri: string }[]> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 50)
       throw new TypeError('Spotify metadata backlog limit must be between 1 and 50')
@@ -777,8 +778,9 @@ export class SqlSpotifyLibraryRepository {
       `SELECT media_item_id,spotify_track_id,spotify_track_uri
        FROM spotify_song_tracks
        WHERE metadata_state IN ('export_only','expired','error')
+         OR (? IS NOT NULL AND metadata_observed_at<=?)
        ORDER BY latest_played_at DESC,media_item_id ASC LIMIT ?`,
-      [limit],
+      [staleBefore ?? null, staleBefore ?? null, limit],
     ).all<{ media_item_id: string; spotify_track_id: string; spotify_track_uri: string }>()
     return result.results.map((row) => ({
       mediaItemId: row.media_item_id,
@@ -789,6 +791,7 @@ export class SqlSpotifyLibraryRepository {
 
   async listPodcastEpisodesNeedingMetadata(
     limit = 10,
+    staleBefore?: string,
   ): Promise<{ mediaItemId: string; episodeId: string; episodeUri: string }[]> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 50)
       throw new TypeError('Spotify episode metadata backlog limit must be between 1 and 50')
@@ -797,8 +800,9 @@ export class SqlSpotifyLibraryRepository {
       `SELECT media_item_id,spotify_episode_id,spotify_episode_uri
        FROM spotify_podcast_episodes
        WHERE availability_state IN ('unknown','error')
+         OR (? IS NOT NULL AND metadata_observed_at<=?)
        ORDER BY media_item_id LIMIT ?`,
-      [limit],
+      [staleBefore ?? null, staleBefore ?? null, limit],
     ).all<{ media_item_id: string; spotify_episode_id: string; spotify_episode_uri: string }>()
     return result.results.map((row) => ({
       mediaItemId: row.media_item_id,
@@ -859,17 +863,18 @@ export class SqlSpotifyLibraryRepository {
     await statement(
       this.database,
       `UPDATE spotify_podcast_episodes SET availability_state='unavailable',
-       metadata_observed_at=?,updated_at=? WHERE media_item_id=? AND availability_state!='available'`,
+       metadata_observed_at=?,updated_at=? WHERE media_item_id=?`,
       [at, at, mediaItemId],
     ).run()
   }
 
-  async catalogBacklogCounts() {
+  async catalogBacklogCounts(staleBefore?: string) {
     const row = await statement(
       this.database,
       `SELECT
-       (SELECT COUNT(*) FROM spotify_song_tracks WHERE metadata_state IN ('export_only','expired','error')) tracks,
-       (SELECT COUNT(*) FROM spotify_podcast_episodes WHERE availability_state IN ('unknown','error')) episodes`,
+       (SELECT COUNT(*) FROM spotify_song_tracks WHERE metadata_state IN ('export_only','expired','error') OR (? IS NOT NULL AND metadata_observed_at<=?)) tracks,
+       (SELECT COUNT(*) FROM spotify_podcast_episodes WHERE availability_state IN ('unknown','error') OR (? IS NOT NULL AND metadata_observed_at<=?)) episodes`,
+      [staleBefore ?? null, staleBefore ?? null, staleBefore ?? null, staleBefore ?? null],
     ).first<{ tracks: number; episodes: number }>()
     return { tracks: row?.tracks ?? 0, episodes: row?.episodes ?? 0 }
   }
@@ -881,7 +886,7 @@ export class SqlSpotifyLibraryRepository {
         statement(
           this.database,
           `UPDATE spotify_song_tracks SET metadata_state='unavailable',metadata_observed_at=?,updated_at=?
-           WHERE media_item_id=? AND metadata_state!='current'`,
+           WHERE media_item_id=?`,
           [at, at, id],
         ),
       ),

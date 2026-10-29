@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     syncRunId: 'run-1',
     state: 'pending',
     phase: 'tracks',
+    attemptCount: 0,
     requestedCount: 0,
     returnedCount: 0,
     unavailableCount: 0,
@@ -69,6 +70,7 @@ import { CatalogRetryError } from './catalog-retry'
 describe('Spotify catalog backfill', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.job.attemptCount = 0
     mocks.reserve.mockResolvedValue(1)
     mocks.advance.mockResolvedValue(true)
     mocks.defer.mockResolvedValue(true)
@@ -96,6 +98,21 @@ describe('Spotify catalog backfill', () => {
     })
   })
 
+  it('stops persistent failures instead of perpetually self-enqueueing', async () => {
+    mocks.job.attemptCount = 8
+    await processSpotifyCatalogBackfill(
+      { SYNC_QUEUE: { send: mocks.send } } as unknown as Bindings,
+      {
+        idempotencyKey: 'catalog:spotify:job-1',
+        source: 'spotify',
+        operation: 'refresh_spotify_catalog',
+        catalogJobId: 'job-1',
+      },
+    )
+    expect(mocks.fail).toHaveBeenCalledWith('job-1', 1, expect.any(String), 'retry_limit')
+    expect(mocks.candidates).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
   it('persists the first response and defers after a partial 429 batch', async () => {
     const env = {
       RAW_BUCKET: { put: mocks.put },

@@ -79,6 +79,19 @@ export class SqlCatalogJobsRepository {
     return row?.attempt_count ?? null
   }
 
+  /** Keep provider Retry-After durable across queue loss and hourly resume.
+   * A pending lease timestamp is a not-before boundary, not worker ownership. */
+  async defer(id: string, leaseToken: number, nextAttemptAt: string, at: string): Promise<boolean> {
+    const row = await this.database
+      .prepare(
+        `UPDATE catalog_refresh_jobs SET state='pending',lease_expires_at=?,updated_at=?
+       WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
+      )
+      .bind(nextAttemptAt, at, id, leaseToken)
+      .first<{ id: string }>()
+    return row !== null
+  }
+
   async release(id: string, leaseToken: number, at: string): Promise<boolean> {
     const row = await this.database
       .prepare(

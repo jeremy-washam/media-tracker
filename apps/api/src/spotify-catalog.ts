@@ -1,5 +1,7 @@
 import { CatalogLeaseLostError } from '@media-tracker/db'
 import { CatalogRetryError } from './catalog-retry'
+import { SyncBudget, SyncDeferredError } from './sync-budget'
+import { catalogRetryLimitReached, spotifyStaleBefore, retryAfterSeconds } from './catalog-policy'
 import {
   SpotifyApiError,
   fetchSpotifyEpisodeResponse,
@@ -47,7 +49,7 @@ function afterSeconds(at: string, seconds: number): string {
 
 function retryDelay(error: unknown): number {
   if (error instanceof SpotifyApiError && error.status === 429)
-    return Math.min(43_200, Math.max(900, error.retryAfterSeconds ?? 900))
+    return Math.max(900, retryAfterSeconds(error.retryAfterSeconds))
   return 300
 }
 
@@ -138,8 +140,16 @@ async function responseForCandidate(input: {
   }
   const response =
     input.kind === 'track'
-      ? await fetchSpotifyTrackResponse({ accessToken: input.accessToken, id: input.id })
-      : await fetchSpotifyEpisodeResponse({ accessToken: input.accessToken, id: input.id })
+      ? await fetchSpotifyTrackResponse({
+          accessToken: input.accessToken,
+          id: input.id,
+          fetch: input.env.SYNC_FETCH ?? fetch,
+        })
+      : await fetchSpotifyEpisodeResponse({
+          accessToken: input.accessToken,
+          id: input.id,
+          fetch: input.env.SYNC_FETCH ?? fetch,
+        })
   const raw = await persistResponse({
     ...input,
     response,
@@ -179,7 +189,10 @@ async function recordResponse(input: {
   })
 }
 
-export async function startSpotifyCatalogBackfill(env: Bindings): Promise<string> {
+export async function startSpotifyCatalogBackfill(
+  env: Bindings,
+  scheduledAt?: string,
+): Promise<string> {
   if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_REFRESH_TOKEN || !env.TOKEN_ENCRYPTION_KEY)
     throw new Error('Spotify catalog credentials are not configured')
   const jobs = createSpotifyCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
@@ -187,6 +200,11 @@ export async function startSpotifyCatalogBackfill(env: Bindings): Promise<string
   if (active !== null) {
     await env.SYNC_QUEUE.send(message(active.id))
     return active.id
+  }
+  const dailyId = scheduledAt === undefined ? null : `catalog:spotify:${scheduledAt.slice(0, 10)}`
+  if (dailyId !== null) {
+    const existing = await jobs.find(dailyId)
+    if (existing !== null) return existing.id
   }
   const ledger = createLedgerRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const connection = await ledger.findConnectionBySource('spotify')
@@ -205,7 +223,12 @@ export async function startSpotifyCatalogBackfill(env: Bindings): Promise<string
     errorMessage: null,
   }
   await ledger.saveSyncRun(run)
-  const job = await jobs.create({ id: ulid(), connectionId: connection.id, syncRunId: runId, at })
+  const job = await jobs.create({
+    id: dailyId ?? ulid(),
+    connectionId: connection.id,
+    syncRunId: runId,
+    at,
+  })
   await env.SYNC_QUEUE.send(message(job.id))
   return job.id
 }
@@ -250,6 +273,11 @@ export async function processSpotifyCatalogBackfill(
   const current = await jobs.find(queueJob.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
   const at = new Date().toISOString()
+  const budget = new SyncBudget(
+    { requests: 26, bytes: 16 * 1024 * 1024, pages: 1, records: batchSize },
+    env.SYNC_FETCH ?? fetch,
+  )
+  env = { ...env, SYNC_FETCH: budget.fetch }
   if (current.nextAttemptAt !== null && current.nextAttemptAt > at)
     throw new CatalogRetryError(
       Math.min(
@@ -259,6 +287,10 @@ export async function processSpotifyCatalogBackfill(
     )
   const leaseToken = await jobs.reserve(current.id, current.phase, at, afterSeconds(at, 300))
   if (leaseToken === null) throw new CatalogRetryError(300)
+  if (catalogRetryLimitReached(current, batchSize)) {
+    await jobs.fail(current.id, leaseToken, at, 'retry_limit')
+    return
+  }
   env = { ...env, CATALOG_LEASE: { jobId: current.id, token: leaseToken, kind: 'spotify' } }
   const library = createSpotifyLibraryRepository(
     env.DB,
@@ -272,20 +304,24 @@ export async function processSpotifyCatalogBackfill(
   try {
     const candidates =
       current.phase === 'tracks'
-        ? (await library.listTracksNeedingMetadata(batchSize)).map((value) => ({
-            kind: 'track' as const,
-            id: value.trackId,
-            uri: value.trackUri,
-            mediaItemId: value.mediaItemId,
-          }))
-        : (await library.listPodcastEpisodesNeedingMetadata(batchSize)).map((value) => ({
-            kind: 'episode' as const,
-            id: value.episodeId,
-            uri: value.episodeUri,
-            mediaItemId: value.mediaItemId,
-          }))
+        ? (await library.listTracksNeedingMetadata(batchSize, spotifyStaleBefore(at))).map(
+            (value) => ({
+              kind: 'track' as const,
+              id: value.trackId,
+              uri: value.trackUri,
+              mediaItemId: value.mediaItemId,
+            }),
+          )
+        : (await library.listPodcastEpisodesNeedingMetadata(batchSize, spotifyStaleBefore(at))).map(
+            (value) => ({
+              kind: 'episode' as const,
+              id: value.episodeId,
+              uri: value.episodeUri,
+              mediaItemId: value.mediaItemId,
+            }),
+          )
     if (candidates.length === 0) {
-      const backlog = await library.catalogBacklogCounts()
+      const backlog = await library.catalogBacklogCounts(spotifyStaleBefore(at))
       if (backlog.tracks > 0 || backlog.episodes > 0) {
         advanced = await jobs.advance(current.id, leaseToken, {
           phase: current.phase === 'tracks' ? 'episodes' : 'tracks',
@@ -301,6 +337,7 @@ export async function processSpotifyCatalogBackfill(
       }
       return
     }
+    budget.page(candidates.length)
     const token = await refreshStoredSpotifyToken(env, current.connectionId)
     for (const candidate of candidates) {
       const { id, kind } = candidate
@@ -369,7 +406,9 @@ export async function processSpotifyCatalogBackfill(
       await library.rebuildPodcastSearch()
     }
     advanced = await jobs.advance(current.id, leaseToken, {
-      phase: current.phase === 'tracks' ? 'episodes' : 'tracks',
+      // Drain a phase before switching; alternating into an empty phase would
+      // consume retry reservations for ordinary successful backfill progress.
+      phase: current.phase,
       requested,
       returned,
       unavailable,
@@ -388,11 +427,12 @@ export async function processSpotifyCatalogBackfill(
     }
     const code = safeErrorCode(error)
     if (
-      error instanceof SpotifyApiError &&
-      error.status >= 400 &&
-      error.status < 500 &&
-      error.status !== 401 &&
-      error.status !== 429
+      error instanceof SyncDeferredError ||
+      (error instanceof SpotifyApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 401 &&
+        error.status !== 429)
     ) {
       if (
         !(await jobs.fail(current.id, leaseToken, at, code, { requested, returned, unavailable }))
@@ -408,7 +448,7 @@ export async function processSpotifyCatalogBackfill(
         }))
       )
         throw new CatalogRetryError(300)
-      await env.SYNC_QUEUE.send(message(current.id), { delaySeconds: delay })
+      await env.SYNC_QUEUE.send(message(current.id), { delaySeconds: Math.min(43_200, delay) })
     }
     console.warn(JSON.stringify({ event: 'spotify.catalog_batch_failed', jobId: current.id, code }))
   }

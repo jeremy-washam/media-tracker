@@ -17,6 +17,7 @@ const migration = [
   '0011_article_current_availability.sql',
   '0012_article_content_reliability.sql',
   '0013_article_content_attempts.sql',
+  '0033_article_content_retry_after.sql',
   '0014_podcasts_library.sql',
   '0027_compact_archive_evidence.sql',
   '0028_evidence_view_parent_guard.sql',

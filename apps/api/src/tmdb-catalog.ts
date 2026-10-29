@@ -11,15 +11,21 @@ import {
 } from '@media-tracker/connector-tmdb'
 import type { SyncJob } from '@media-tracker/contracts'
 import type { TmdbMovieProfileProjection } from '@media-tracker/db'
-import { ulid } from 'ulid'
 
 import { createCatalogJobsRepository, createMoviesRepository } from './env'
 import type { Bindings } from './env'
-import { boundedTmdbEnvironment, tmdbGrantAllowed, tmdbGrantAttempts } from './tmdb-grant'
+import {
+  catalogRefreshBefore,
+  catalogRetryLimitReached,
+  dailyCatalogJobId,
+  retryAfterSeconds,
+  tmdbMatcherVersion,
+} from './catalog-policy'
+import { boundedTmdbEnvironment } from './tmdb-grant'
 import { SyncDeferredError } from './sync-budget'
 
 const batchSize = 10
-const matcherVersion = 'tmdb-evidence@2'
+const matcherVersion = tmdbMatcherVersion
 
 function daysAfter(at: string, days: number) {
   return new Date(Date.parse(at) + days * 86_400_000).toISOString()
@@ -51,7 +57,8 @@ export async function startTmdbCatalogRefresh(env: Bindings, at = new Date().toI
     await env.SYNC_QUEUE.send(jobMessage(active.id, active.cursor ?? ''))
     return active
   }
-  const job = await jobs.create(ulid(), 'tmdb', at)
+  const job = await jobs.create(dailyCatalogJobId('tmdb', at), 'tmdb', at)
+  if (job.state === 'succeeded' || job.state === 'failed') return job
   await env.SYNC_QUEUE.send(jobMessage(job.id))
   return job
 }
@@ -59,7 +66,6 @@ export async function startTmdbCatalogRefresh(env: Bindings, at = new Date().toI
 export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Promise<void> {
   if (job.operation !== 'refresh_tmdb_catalog' || job.catalogJobId === undefined) return
   const hosted = env.AUTH_MODE === 'access'
-  if (hosted && !tmdbGrantAllowed(env, job.catalogJobId)) return
   const controlDatabase = env.DB
   const bounded = hosted ? boundedTmdbEnvironment(env) : null
   if (bounded) env = bounded.env
@@ -79,11 +85,14 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     current.cursor,
     at,
     new Date(Date.parse(at) + 5 * 60_000).toISOString(),
-    hosted ? tmdbGrantAttempts : undefined,
   )
   if (reserved === null) throw new CatalogRetryError(300)
   if (env.TMDB_API_READ_TOKEN === undefined) {
     await jobs.fail(job.catalogJobId, reserved, 'not_configured', at)
+    return
+  }
+  if (catalogRetryLimitReached(current, batchSize)) {
+    await jobs.fail(job.catalogJobId, reserved, 'retry_limit', at)
     return
   }
   const lease = { jobId: job.catalogJobId, token: reserved, kind: 'catalog' as const }
@@ -96,12 +105,14 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       retryBefore: daysAfter(at, -90),
       matcherVersion,
       at,
+      refreshBefore: catalogRefreshBefore(at),
       limit: batchSize,
     })
     bounded?.budget.page(candidates.length)
     stage = 'configuration_state'
     const configurationNeeded =
-      current.cursor === null && (await movies.needsTmdbConfigurationRefresh(at))
+      current.cursor === null &&
+      (await movies.needsTmdbConfigurationRefresh(catalogRefreshBefore(at)))
     if (candidates.length === 0) {
       if (configurationNeeded) {
         stage = 'provider_request'
@@ -419,12 +430,18 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       )
       throw error
     }
-    if (!advanced) await stoppingJobs.release(job.catalogJobId, reserved, at)
-    throw new CatalogRetryError(
-      error instanceof TmdbApiError
-        ? Math.min(43_200, Math.max(60, error.retryAfterSeconds ?? 60))
-        : 60,
-      { cause: error },
-    )
+    const delay =
+      error instanceof TmdbApiError ? Math.max(60, retryAfterSeconds(error.retryAfterSeconds)) : 60
+    if (!advanced) {
+      if (error instanceof TmdbApiError && error.status === 429)
+        await stoppingJobs.defer(
+          job.catalogJobId,
+          reserved,
+          new Date(Date.parse(at) + delay * 1000).toISOString(),
+          at,
+        )
+      else await stoppingJobs.release(job.catalogJobId, reserved, at)
+    }
+    throw new CatalogRetryError(Math.min(43_200, delay), { cause: error })
   }
 }

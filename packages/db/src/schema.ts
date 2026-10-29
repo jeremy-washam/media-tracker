@@ -1262,6 +1262,7 @@ export const articleContentJobs = sqliteTable('article_content_jobs', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at'),
   lastAttemptAt: text('last_attempt_at'),
+  nextAttemptAt: text('next_attempt_at'),
   attemptCount: integer('attempt_count').notNull().default(0),
   completedAt: text('completed_at'),
   failureClass: text('failure_class'),

@@ -698,6 +698,77 @@ describe('SqlArticlesRepository', () => {
     ).toEqual([target])
   })
 
+  it('honors durable article not-before deadlines in reservation and duplicate delivery', async () => {
+    await repository.applyDocumentsPage([projection()])
+    await repository.rebuildProjection({
+      connectionId: 'readwise-1',
+      syncRunId: 'run-1',
+      rebuiltAt: now,
+    })
+    await repository.reserveContentTargets('readwise-1', 'first', now, 1)
+    const key = `readwise-content:readwise-1:doc-1:${now}:a1:e1`
+    expect(await repository.startContentJob(key, now)).toBe(1)
+    await repository.deferContentJob(key, now, '2026-09-22T12:00:00.000Z')
+    expect(await repository.startContentJob(key, '2026-09-21T12:00:00.000Z')).toBeNull()
+    expect(
+      await repository.reserveContentTargets('readwise-1', 'early', '2026-09-21T12:00:00.000Z', 1),
+    ).toEqual([])
+    expect(
+      await repository.reserveContentTargets('readwise-1', 'due', '2026-09-22T12:00:00.000Z', 1),
+    ).toHaveLength(1)
+    expect(await repository.startContentJob(key, '2026-09-22T12:00:00.000Z')).toBe(2)
+    await repository.completeContentJob(key, '2026-09-22T12:01:00.000Z')
+    expect(await repository.startContentJob(key, '2026-09-23T12:00:00.000Z')).toBeNull()
+  })
+
+  it('stops acquisition retries per source version and admits a newer version', async () => {
+    await repository.applyDocumentsPage([projection()])
+    await repository.rebuildProjection({
+      connectionId: 'readwise-1',
+      syncRunId: 'run-1',
+      rebuiltAt: now,
+    })
+    await repository.reserveContentTargets('readwise-1', 'first', now, 1)
+    const key = `readwise-content:readwise-1:doc-1:${now}:a1:e1`
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await repository.startContentJob(key, now)
+      await repository.failContentJob(key, now, 'transient_failure')
+    }
+    expect(
+      await repository.reserveContentTargets(
+        'readwise-1',
+        'exhausted',
+        '2026-09-21T12:00:00.000Z',
+        1,
+      ),
+    ).toEqual([])
+    expect(await repository.startContentJob(key, now)).toBeNull()
+    await repository.applyDocumentsPage([projection({ updatedAt: '2026-09-21T12:00:00.000Z' })])
+    expect(
+      await repository.reserveContentTargets(
+        'readwise-1',
+        'new-version',
+        '2026-09-21T12:00:00.000Z',
+        1,
+      ),
+    ).toEqual([expect.objectContaining({ sourceUpdatedAt: '2026-09-21T12:00:00.000Z' })])
+    expect(database.prepare('SELECT COUNT(*) count FROM article_content_jobs').get()).toEqual({
+      count: 2,
+    })
+  })
+
+  it.each([0, 101, 1.5])(
+    'rejects invalid content reservation size %s before writing',
+    async (limit) => {
+      await expect(
+        repository.reserveContentTargets('readwise-1', 'invalid', now, limit),
+      ).rejects.toThrow('reservation limit')
+      expect(database.prepare('SELECT COUNT(*) count FROM article_content_jobs').get()).toEqual({
+        count: 0,
+      })
+    },
+  )
+
   it('indexes selectively acquired content without making it authoritative', async () => {
     await repository.applyDocumentsPage([projection()])
     await repository.finalizeDocumentsSnapshot({

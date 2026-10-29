@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   find: vi.fn(),
   reserve: vi.fn(),
   release: vi.fn(),
+  defer: vi.fn(),
   advance: vi.fn(),
   fail: vi.fn(),
   complete: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('./env', async (original) => ({
     find: mocks.find,
     reserve: mocks.reserve,
     release: mocks.release,
+    defer: mocks.defer,
     advance: mocks.advance,
     fail: mocks.fail,
     complete: mocks.complete,
@@ -110,6 +112,7 @@ beforeEach(() => {
   mocks.find.mockImplementation(async () => ({ ...mocks.job }))
   mocks.reserve.mockResolvedValue(7)
   mocks.release.mockResolvedValue(true)
+  mocks.defer.mockResolvedValue(true)
   mocks.advance.mockImplementation(async (_id, _token, input) => {
     mocks.job.cursor = input.cursor
     return true
@@ -138,6 +141,22 @@ describe.each(['youtube', 'tmdb'] as const)('%s catalog orchestration', (provide
     provider === 'youtube'
       ? vi.mocked(YoutubeDataApiClient.prototype.videos).mockRejectedValue(error)
       : vi.mocked(TmdbClient.prototype.movieDetails).mockRejectedValue(error)
+  it('persists a Retry-After longer than the queue delay ceiling', async () => {
+    candidates()
+    providerFailure(
+      provider === 'youtube' ? new YoutubeApiError(429, 90_000) : new TmdbApiError(429, 90_000),
+    )
+    await expect(process(env, message(provider))).rejects.toMatchObject({ delaySeconds: 43_200 })
+    const call = mocks.defer.mock.calls[0]!
+    expect(Date.parse(call[2] as string) - Date.parse(call[3] as string)).toBe(90_000_000)
+  })
+  it('terminates a repeatedly failing job before making another provider request', async () => {
+    mocks.find.mockResolvedValue({ ...mocks.job, attemptCount: 8, requestedCount: 0 })
+    await process(env, message(provider))
+    expect(mocks.fail).toHaveBeenCalledWith('catalog-1', 7, 'retry_limit', expect.any(String))
+    expect(mocks.candidates).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
   it('completes only after projection rebuild while holding the reserved lease', async () => {
     await process(env, message(provider))
     expect(mocks.factory).toHaveBeenCalledWith(env.DB, undefined, {
@@ -227,7 +246,8 @@ describe.each(['youtube', 'tmdb'] as const)('%s catalog orchestration', (provide
       provider === 'youtube' ? new YoutubeApiError(429, 900) : new TmdbApiError(429, 900),
     )
     await expect(process(env, message(provider))).rejects.toMatchObject({ delaySeconds: 900 })
-    expect(mocks.release).toHaveBeenCalledWith('catalog-1', 7, expect.any(String))
+    expect(mocks.defer).toHaveBeenCalledWith('catalog-1', 7, expect.any(String), expect.any(String))
+    expect(mocks.release).not.toHaveBeenCalled()
   })
 })
 
