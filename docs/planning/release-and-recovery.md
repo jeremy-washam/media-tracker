@@ -358,14 +358,15 @@ monitor can continue; all source artifacts remain subject to strict checks.
 32 MiB; oversized pages halve automatically without committing a failed page or
 advancing its cursor. Native request/read ceilings are persisted across resumes.
 The final-page inventory fix passed against 19 native pages and 18,284 objects.
-The current capture has about 370,000 rows; completion and independent restore
-are still pending. Copy and verify the finished bundle in the accepted protected
+The current database copy is complete. Object capture stopped on a weak HTTP
+ETag representation; read-only diagnostics confirmed matching inventory hashes
+and byte counts. A focused transport fix and independent restore remain pending. Copy and verify the finished bundle in the accepted protected
 Mac backup folder before claiming that new recovery point retained.
 
-The existing protected encryption key remains available. Automatic approval
-review blocked an additional Mac key-escrow copy, which awaits explicit owner
-input. Do not claim that copy exists or make this optional extra copy a blocker
-for the already authorized deployment.
+The owner explicitly approved a separate encryption-key copy; it is saved and
+verified in `/Users/jeremywasham/Backups/Imladris/credentials`, with owner-only
+permissions. Possession of the key and database permits credential decryption.
+Keep both protected, and never place provider credentials or this key in CI.
 
 ## Recovery sequence
 

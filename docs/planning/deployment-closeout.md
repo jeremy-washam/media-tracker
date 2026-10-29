@@ -23,8 +23,10 @@ activation remain pending. Zero active source/catalog leases were confirmed at
 Native account metrics checked October 29 remain within the existing plan's
 included usage. The dashboard showed $0 usage overages; native alerts are saved
 at $5 usage warning and $20 usage emergency, approximately $10/$25 total with
-the base $5 subscription. The first real monitor cron is awaiting 22:10 UTC
-propagation; a scheduled result is not claimed yet. Billing APIs do not establish an actual invoice. No new paid
+the base $5 subscription. The first two real monitor cycles exposed an unsupported Worker redirect option.
+The fix and native runtime regression tests passed, and corrected maintenance
+code was deployed at 22:20:18 UTC. The next scheduled successful collection and
+automatic native queue pause remain to be verified. Billing APIs do not establish an actual invoice. No new paid
 service or subscription is authorized by this closeout.
 
 ## Acceptance checklist
@@ -82,8 +84,9 @@ live evidence remains in this working documentation. Main requires the strict `v
 build/dry runs,11 native Worker tests,257 browser regressions,18 real-stack
 Chromium/WebKit acceptance tests and the separate coverage run. Connections'
 new continuation copy also passed 8 isolated branch-server browser cases in both
-themes, including narrow widths. The latest full `pnpm check` passed 889
-TypeScript and 117 Python tests without skips using bundled Python;
+themes, including narrow widths. The latest full `pnpm check` passed 891
+TypeScript and 125 Python tests without skips using bundled Python; all 13 native
+Worker tests and all 18 real-stack acceptance tests also passed after the monitor fix;
 coverage is 72.44% statements across maintained sources, not a claim that all
 behavior is covered.
 

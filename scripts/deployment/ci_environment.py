@@ -11,7 +11,7 @@ VALUES = {
     'SPOTIFY_CATALOG_ENABLED': 'false',
     'CATALOG_AUTO_REFRESH': 'false',
     'MAINTENANCE_ENABLED': 'false',
-    'OPERATIONS_MONITOR_ENABLED': 'false',
+    'OPERATING_MONITOR_ENABLED': 'false',
 }
 
 

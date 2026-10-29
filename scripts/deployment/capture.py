@@ -177,8 +177,16 @@ class Client:
     def download(self, item, path):
         suffix = '/r2/buckets/' + urllib.parse.quote(self.bucket, safe='') + '/objects/' + urllib.parse.quote(item['key'], safe='')
         with self.open(suffix, headers={'If-Match': '"' + item['etag'].strip('"') + '"'}) as response:
-            if response.headers.get('ETag', '').strip('"') != item['etag'].strip('"'):
+            observed = re.fullmatch(r'(W/)?"([^\"]+)"', response.headers.get('ETag', '').strip())
+            expected = item['etag'].strip('"')
+            if observed is None or observed[2] != expected:
                 raise CaptureError('R2 object changed after inventory')
+            if observed[1] and not re.fullmatch('[0-9a-fA-F]{32}', expected):
+                raise CaptureError('Weak multipart R2 etag cannot prove exact backup bytes')
+            # The account API can weaken its HTTP validator during transport.
+            # Accept that form only for single-part MD5 etags: stream_object
+            # independently proves the exact paused-inventory size AND MD5.
+            # Missing/mismatched validators and weak multipart etags still stop.
             return stream_object(response, path, item)
 
 

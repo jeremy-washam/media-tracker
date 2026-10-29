@@ -369,6 +369,55 @@ class CaptureTests(unittest.TestCase):
             capture.capture_table(self.remote, local, 'adaptive', page_size=2000)
         self.assertIn(' LIMIT 2000', request.call_args_list[0].args[0])
 
+    def download_response(self, content, etag=None):
+        response = io.BytesIO(content)
+        response.headers = {} if etag is None else {'ETag': etag}
+        return response
+
+    def test_native_weak_transport_etag_requires_matching_exact_inventory_md5(self):
+        client = self.inventory_client()
+        item = self.remote.inventory()['content/text']
+        target = self.fixture.root / 'weak-download'
+        response = self.download_response(self.remote.data, 'W/"' + item['etag'] + '"')
+        with patch.object(client, 'open', return_value=response) as request:
+            digest = client.download(item, target)
+        self.assertEqual(digest, hashlib.sha256(self.remote.data).hexdigest())
+        self.assertEqual(target.read_bytes(), self.remote.data)
+        self.assertEqual(request.call_args.kwargs['headers']['If-Match'], '"' + item['etag'] + '"')
+
+    def test_native_mismatched_weak_etag_is_rejected_even_when_bytes_match(self):
+        client = self.inventory_client()
+        item = self.remote.inventory()['content/text']
+        target = self.fixture.root / 'mismatched-download'
+        response = self.download_response(self.remote.data, 'W/"' + '0' * 32 + '"')
+        with patch.object(client, 'open', return_value=response):
+            with self.assertRaisesRegex(capture.CaptureError, 'changed after inventory'):
+                client.download(item, target)
+        self.assertFalse(target.exists())
+
+    def test_native_weak_multipart_and_missing_etags_remain_rejected(self):
+        client = self.inventory_client()
+        item = self.remote.inventory()['content/text']
+        target = self.fixture.root / 'unproved-download'
+        multipart = {**item, 'etag': item['etag'] + '-2'}
+        with patch.object(client, 'open', return_value=self.download_response(self.remote.data, 'W/"' + multipart['etag'] + '"')):
+            with self.assertRaisesRegex(capture.CaptureError, 'Weak multipart'):
+                client.download(multipart, target)
+        with patch.object(client, 'open', return_value=self.download_response(self.remote.data)):
+            with self.assertRaisesRegex(capture.CaptureError, 'changed after inventory'):
+                client.download(item, target)
+        self.assertFalse(target.exists())
+
+    def test_native_matching_weak_etag_cannot_hide_changed_response_bytes(self):
+        client = self.inventory_client()
+        item = self.remote.inventory()['content/text']
+        target = self.fixture.root / 'changed-weak-download'
+        response = self.download_response(b'x' * len(self.remote.data), 'W/"' + item['etag'] + '"')
+        with patch.object(client, 'open', return_value=response):
+            with self.assertRaisesRegex(capture.CaptureError, 'size or etag verification failed'):
+                client.download(item, target)
+        self.assertFalse(target.exists())
+
 
 if __name__ == '__main__':
     unittest.main()
