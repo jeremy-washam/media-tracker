@@ -1,3 +1,4 @@
+import { LibrarySortDirection } from '@/components/library-controls'
 import {
   LibraryCollectionHeader,
   LibraryFiltersTrigger,
@@ -46,16 +47,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  ArrowDown,
-  ArrowUp,
-  CaretRight,
-  ArrowSquareOut,
-  Article,
-  Funnel,
-  MagnifyingGlass,
-  X,
-} from '@/components/icons'
+import { CaretRight, ArrowSquareOut, Article, Funnel, MagnifyingGlass, X } from '@/components/icons'
 import type { ArticleCollectionItem, ArticleDetail } from '@media-tracker/contracts'
 import { fetchArticle, fetchArticleHighlights, fetchArticleHistory } from './articles-api'
 import { normalizedForArticleSection, type ArticlesRouteSearch } from './articles-route-search'
@@ -281,23 +273,13 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
                 ]}
               />
             </label>
-            <Button
-              variant="outline"
-              size="icon"
-              type="button"
-              className={controlsStyles['sort-direction']}
+            <LibrarySortDirection
+              direction={direction}
               disabled={sort === 'relevance'}
-              aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
               onClick={() =>
                 update({ sort, direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
               }
-            >
-              {direction === 'asc' ? (
-                <ArrowUp aria-hidden="true" />
-              ) : (
-                <ArrowDown aria-hidden="true" />
-              )}
-            </Button>
+            />
           </LibraryToolbar>
           <div
             className={workspaceStyles['books-result-summary']}

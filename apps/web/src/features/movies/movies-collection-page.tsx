@@ -1,3 +1,4 @@
+import { LibrarySortDirection } from '@/components/library-controls'
 import {
   LibraryCollectionHeader,
   LibraryFiltersTrigger,
@@ -51,8 +52,6 @@ import { useEffect, useRef, useState, type Ref } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  ArrowDown,
-  ArrowUp,
   Check,
   CaretRight,
   ArrowSquareOut,
@@ -335,13 +334,9 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                 ]}
               />
             </label>
-            <Button
-              variant="outline"
-              size="icon"
-              type="button"
-              className={controlsStyles['sort-direction']}
+            <LibrarySortDirection
+              direction={direction}
               disabled={selectedSort === 'relevance'}
-              aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
               onClick={() =>
                 updateSearch({
                   sort: selectedSort,
@@ -349,13 +344,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
                   item: undefined,
                 })
               }
-            >
-              {direction === 'asc' ? (
-                <ArrowUp aria-hidden="true" />
-              ) : (
-                <ArrowDown aria-hidden="true" />
-              )}
-            </Button>
+            />
             <LibraryLayoutToggle
               value={layout}
               onValueChange={(layout) => updateSearch({ layout })}

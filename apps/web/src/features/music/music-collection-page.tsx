@@ -1,3 +1,4 @@
+import { LibrarySortDirection } from '@/components/library-controls'
 import {
   LibraryCollectionHeader,
   LibraryFiltersTrigger,
@@ -51,8 +52,6 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Disc,
   User,
-  ArrowUp,
-  ArrowDown,
   ArrowSquareOut,
   MusicNotes,
   MagnifyingGlass,
@@ -432,27 +431,15 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
                 options={[...sorts.map(([value, label]) => ({ value, label }))]}
               />
             </label>
-            <Hint content={selectedDirection === 'asc' ? 'Ascending' : 'Descending'}>
-              <Button
-                variant="outline"
-                size="icon"
-                type="button"
-                className={controlsStyles['sort-direction']}
-                aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
-                onClick={() =>
-                  update({
-                    direction: selectedDirection === 'asc' ? 'desc' : 'asc',
-                    item: undefined,
-                  })
-                }
-              >
-                {selectedDirection === 'asc' ? (
-                  <ArrowUp aria-hidden="true" />
-                ) : (
-                  <ArrowDown aria-hidden="true" />
-                )}
-              </Button>
-            </Hint>
+            <LibrarySortDirection
+              direction={selectedDirection}
+              onClick={() =>
+                update({
+                  direction: selectedDirection === 'asc' ? 'desc' : 'asc',
+                  item: undefined,
+                })
+              }
+            />
 
             {view !== 'tracks' ? (
               <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
