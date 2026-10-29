@@ -34,6 +34,13 @@ const batchSize = 25
 const normalDelaySeconds = 60
 const parserVersion = 'spotify-exact-catalog@1'
 
+class StaleCatalogResponseError extends Error {
+  constructor() {
+    super('Catalog acquisition is stale; a new job must request current metadata')
+    this.name = 'StaleCatalogResponseError'
+  }
+}
+
 function message(jobId: string): SyncJob {
   return {
     idempotencyKey: `catalog:spotify:${jobId}`,
@@ -130,6 +137,12 @@ async function responseForCandidate(input: {
     `spotify:${input.runId}:catalog:${input.kind}:${input.id}`,
   )
   if (existing !== null) {
+    const acquired = Date.parse(existing.acquiredAt)
+    if (
+      !Number.isFinite(acquired) ||
+      acquired <= Date.parse(spotifyStaleBefore(new Date().toISOString()))
+    )
+      throw new StaleCatalogResponseError()
     const object = await input.env.RAW_BUCKET.get(existing.storageKey)
     if (object === null) throw new Error('Catalog raw object is missing')
     return {
@@ -371,7 +384,7 @@ export async function processSpotifyCatalogBackfill(
           trackMetadata(
             value as typeof value & { id: string; uri: string },
             candidate.mediaItemId,
-            at,
+            response.raw.acquiredAt,
           ),
           { rebuildSearch: false },
         )
@@ -394,7 +407,7 @@ export async function processSpotifyCatalogBackfill(
           publishedAt: value.releaseDate,
           publishedPrecision: value.releaseDatePrecision,
           durationMs: value.durationMs,
-          observedAt: at,
+          observedAt: response.raw.acquiredAt,
         })
       }
       requested++
@@ -428,6 +441,7 @@ export async function processSpotifyCatalogBackfill(
     const code = safeErrorCode(error)
     if (
       error instanceof SyncDeferredError ||
+      error instanceof StaleCatalogResponseError ||
       (error instanceof SpotifyApiError &&
         error.status >= 400 &&
         error.status < 500 &&

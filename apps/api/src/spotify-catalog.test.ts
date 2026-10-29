@@ -98,6 +98,32 @@ describe('Spotify catalog backfill', () => {
     })
   })
 
+  it('does not relabel stale cached API evidence as a fresh provider observation', async () => {
+    mocks.rawFind.mockResolvedValue({
+      acquiredAt: '2020-01-01T00:00:00.000Z',
+      storageKey: 'raw/old.json',
+    })
+    await processSpotifyCatalogBackfill(
+      { SYNC_QUEUE: { send: mocks.send } } as unknown as Bindings,
+      {
+        idempotencyKey: 'catalog:spotify:job-1',
+        source: 'spotify',
+        operation: 'refresh_spotify_catalog',
+        catalogJobId: 'job-1',
+      },
+    )
+    expect(mocks.fail).toHaveBeenCalledWith(
+      'job-1',
+      1,
+      expect.any(String),
+      'StaleCatalogResponseError',
+      { requested: 0, returned: 0, unavailable: 0 },
+    )
+    expect(mocks.fetchTrack).not.toHaveBeenCalled()
+    expect(mocks.applyTrack).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
+
   it('stops persistent failures instead of perpetually self-enqueueing', async () => {
     mocks.job.attemptCount = 8
     await processSpotifyCatalogBackfill(
