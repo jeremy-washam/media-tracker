@@ -150,6 +150,12 @@ for (const [media, section] of sections) {
     await expect(page.locator('[data-ui~="collection-pagination"] [role="status"]')).toContainText(
       'All 40',
     )
+    const separators = page.locator('[data-ui~="collection-pagination"] [data-slot="separator"]')
+    await expect(separators).toHaveCount(2)
+    for (const separator of await separators.all()) {
+      await expect(separator).toHaveCSS('height', '1px')
+      expect((await separator.boundingBox())!.width).toBeGreaterThan(0)
+    }
     await page.waitForTimeout(200)
     expect(cursors).toEqual(['next'])
   })

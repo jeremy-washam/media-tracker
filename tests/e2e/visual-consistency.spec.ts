@@ -735,3 +735,164 @@ for (const dark of [false, true]) {
     }
   })
 }
+
+const librarySections = [
+  'books/archive',
+  'books/queue',
+  'movies/archive',
+  'movies/queue',
+  'articles/archive',
+  'articles/queue',
+  'articles/feed',
+  'podcasts/archive',
+  'podcasts/queue',
+  'podcasts/following',
+  'music/tracks',
+  'music/albums',
+  'music/artists',
+  'videos/archive',
+  'videos/queue',
+  'videos/channels',
+]
+
+for (const dark of [false, true]) {
+  for (const width of [1280, 390]) {
+    test(`Library controls retain joined corners and equal heights at ${width}px in ${dark ? 'dark' : 'light'}`, async ({
+      page,
+    }) => {
+      await page.addInitScript(
+        (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+        dark,
+      )
+      await page.setViewportSize({ width, height: 844 })
+      await page.route('**/api/library/podcasts{,/summary}?*', (route) =>
+        route.fulfill({
+          json: {
+            ...podcastsResponse(),
+            coverage: { savedShowsAt: null, savedEpisodesAt: null },
+          },
+        }),
+      )
+      await page.route('**/api/library/videos{,/summary}?*', (route) =>
+        route.fulfill({
+          json: {
+            ...videosResponse(),
+            coverage: { watchLater: 'not_provided', catalog: 'not_configured' },
+          },
+        }),
+      )
+      for (const section of librarySections) {
+        await page.goto(`/library/${section}?layout=list`)
+        const toolbar = page.locator('[data-ui~="library-toolbar"]')
+        const sort = toolbar.getByRole('combobox', { name: /^Sort / })
+        await expect(sort).toBeVisible()
+        const radius = await sort.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)
+        expect(Number.parseFloat(radius)).toBeGreaterThan(0)
+        const violations = await toolbar
+          .locator('button, [data-slot="input-group"]')
+          .evaluateAll((els) =>
+            els.flatMap((el) => {
+              const r = el.getBoundingClientRect()
+              if (r.width <= 1 || el.closest('.sr-only')) return []
+              return r.height === 32
+                ? []
+                : [{ name: el.getAttribute('aria-label') || el.textContent, height: r.height }]
+            }),
+          )
+        expect(violations, section).toEqual([])
+        const list = toolbar.getByRole('button', { name: 'List view', exact: true })
+        if (await list.count()) {
+          const grid = toolbar.getByRole('button', { name: 'Grid view', exact: true })
+          await expect(list).toHaveCSS('width', '32px')
+          await expect(grid).toHaveCSS('width', '32px')
+          await expect(list).toHaveCSS('border-top-left-radius', radius)
+          await expect(list).toHaveCSS('border-bottom-left-radius', radius)
+          await expect(list).toHaveCSS('border-top-right-radius', '0px')
+          await expect(grid).toHaveCSS('border-top-right-radius', radius)
+          await expect(grid).toHaveCSS('border-bottom-right-radius', radius)
+          await expect(grid).toHaveCSS('border-top-left-radius', '0px')
+          await expect(list).toHaveCSS('border-right-width', '1px')
+          await expect(grid).toHaveCSS('border-left-width', '0px')
+          expect(
+            Math.abs((await list.boundingBox())!.x + 32 - (await grid.boundingBox())!.x),
+          ).toBeLessThan(1)
+        }
+        const note = page.locator('[data-ui~="library-collection"] > p').first()
+        if (
+          /^(podcasts|music)\//.test(section) ||
+          section === 'videos/archive' ||
+          section === 'videos/queue'
+        ) {
+          await expect(note).toBeVisible()
+          const header = await page.locator('[data-ui~="collection-header"]').boundingBox()
+          const rect = await note.boundingBox()
+          expect(rect!.y - header!.y - header!.height, section).toBeGreaterThanOrEqual(12)
+        }
+      }
+    })
+  }
+
+  test(`Library control hover, selection, and keyboard actions agree in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    await page.goto('/library/books/archive?layout=list')
+    const toolbar = page.locator('[data-ui~="library-toolbar"]')
+    const list = toolbar.getByRole('button', { name: 'List view', exact: true })
+    const grid = toolbar.getByRole('button', { name: 'Grid view', exact: true })
+    await expect(list).toHaveAttribute('aria-pressed', 'true')
+    const selection = await page
+      .getByRole('link', { name: 'Books', exact: true })
+      .evaluate((e) => getComputedStyle(e).backgroundColor)
+    await expect(list).toHaveCSS('background-color', selection)
+    await list.hover()
+    await expect(list).toHaveCSS('background-color', selection)
+    const direction = toolbar.getByRole('button', { name: 'Sort ascending', exact: true })
+    await direction.hover()
+    const hover = await direction.evaluate((e) =>
+      getComputedStyle(e).getPropertyValue('--surface-hover'),
+    )
+    // Resolve the shared token in the browser so color serialization cannot hide a mismatch.
+    const expectedHover = await direction.evaluate((e, value) => {
+      const probe = document.createElement('span')
+      probe.style.color = value
+      e.append(probe)
+      const color = getComputedStyle(probe).color
+      probe.remove()
+      return color
+    }, hover)
+    await expect(direction).toHaveCSS('background-color', expectedHover)
+    await grid.hover()
+    await expect(grid).toHaveCSS('background-color', expectedHover)
+    const sort = toolbar.getByRole('combobox', { name: 'Sort books', exact: true })
+    await sort.hover()
+    await expect(sort).toHaveCSS('background-color', expectedHover)
+    await sort.click()
+    await expect(sort).toHaveCSS('background-color', selection)
+    await sort.press('Escape')
+    await expect(sort).toBeFocused()
+    await list.focus()
+    await list.press('ArrowRight')
+    await expect(grid).toBeFocused()
+    await grid.press('Space')
+    await expect(grid).toHaveAttribute('aria-pressed', 'true')
+    await expect(page).toHaveURL(/layout=grid/)
+    await expect(grid).toHaveCSS('background-color', selection)
+    await list.click()
+    for (const media of ['books', 'movies', 'articles', 'podcasts', 'music', 'videos']) {
+      await page.goto(
+        `/library/${media}/${media === 'music' ? 'tracks' : 'archive'}?direction=desc`,
+      )
+      const action = page.getByRole('button', { name: 'Sort ascending', exact: true })
+      await action.focus()
+      await expect(page.getByRole('tooltip', { name: 'Sort ascending', exact: true })).toBeVisible()
+      await action.press('Escape')
+      await action.press('Enter')
+      await expect(page).toHaveURL(/direction=asc/)
+      await expect(page.getByRole('button', { name: 'Sort descending', exact: true })).toBeVisible()
+    }
+  })
+}
