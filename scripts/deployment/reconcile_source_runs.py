@@ -82,11 +82,17 @@ def save_receipt(path, value):
     return digest(payload)
 
 
-def load_receipt(path):
+def receipt_bytes(path):
     path = protected_path(path, existing=True)
-    if path.stat().st_size > 128 * 1024:
+    with path.open('rb') as stream:
+        payload = stream.read(128 * 1024 + 1)
+    if len(payload) > 128 * 1024:
         raise ReconciliationError('Receipt exceeds the bounded review size')
-    return json.loads(path.read_bytes())
+    return payload
+
+
+def load_receipt(path):
+    return json.loads(receipt_bytes(path))
 
 
 class Remote:
@@ -170,9 +176,10 @@ def row_snapshot(row):
 def apply_plan(remote, path, reviewed_sha256, now=None):
     now = now or datetime.now(timezone.utc)
     path = protected_path(path, existing=True)
-    plan = load_receipt(path)
-    if not re.fullmatch('[a-f0-9]{64}', reviewed_sha256) or digest(path.read_bytes()) != reviewed_sha256:
+    payload = receipt_bytes(path)
+    if not re.fullmatch('[a-f0-9]{64}', reviewed_sha256) or digest(payload) != reviewed_sha256:
         raise ReconciliationError('Reviewed plan fingerprint changed')
+    plan = json.loads(payload)
     if plan.get('version') != 1 or plan.get('target') != remote.target:
         raise ReconciliationError('Reviewed plan target differs')
     rows = plan.get('rows', [])
