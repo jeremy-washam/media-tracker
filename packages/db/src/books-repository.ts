@@ -1,3 +1,7 @@
+import {
+  matchesQueryFingerprint,
+  queryFingerprint as hashQueryFingerprint,
+} from './query-fingerprint'
 import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './database'
 
 export interface HardcoverContributorProjection {
@@ -307,13 +311,16 @@ function boundaryEnd(value: string): string {
   return end.toISOString().slice(0, 10)
 }
 
-function decodeCursor(cursor: string | undefined, fingerprint: string): CursorPayload | null {
+async function decodeCursor(
+  cursor: string | undefined,
+  fingerprint: string,
+): Promise<CursorPayload | null> {
   if (cursor === undefined) return null
   try {
     const parsed = JSON.parse(decodeURIComponent(cursor)) as Partial<CursorPayload>
     if (
       parsed.v !== 1 ||
-      parsed.fingerprint !== fingerprint ||
+      !(await matchesQueryFingerprint(parsed.fingerprint, fingerprint)) ||
       (parsed.nullRank !== 0 && parsed.nullRank !== 1) ||
       (parsed.value !== null &&
         typeof parsed.value !== 'string' &&
@@ -348,8 +355,12 @@ function ftsQuery(value: string): string | null {
     .join(' AND ')
 }
 
-function projectionFingerprint(input: BooksListInput, sort: string, direction: string): string {
-  return JSON.stringify({
+function projectionFingerprint(
+  input: BooksListInput,
+  sort: string,
+  direction: string,
+): Record<string, unknown> {
+  return {
     collection: input.collection,
     q: input.q?.trim() ?? '',
     formats: [...input.formats].sort(),
@@ -361,7 +372,7 @@ function projectionFingerprint(input: BooksListInput, sort: string, direction: s
     rating: [input.ratingMode, input.minRating ?? null],
     sort,
     direction,
-  })
+  }
 }
 
 function filterSql(
@@ -1170,8 +1181,8 @@ export class SqlBooksRepository {
       published: 'p.publication_date',
       added: 'p.queue_added_at',
     }[sort]
-    const fingerprint = projectionFingerprint(input, sort, direction)
-    const cursor = decodeCursor(input.cursor, fingerprint)
+    const fingerprint = await hashQueryFingerprint(projectionFingerprint(input, sort, direction))
+    const cursor = await decodeCursor(input.cursor, fingerprint)
     const filter = filterSql(input)
     const nullRank = `CASE WHEN ${sortColumn} IS NULL OR ${sortColumn}='' THEN 1 ELSE 0 END`
     const comparison = direction === 'asc' ? '>' : '<'

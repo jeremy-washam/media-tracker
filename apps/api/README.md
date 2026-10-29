@@ -39,7 +39,9 @@ handled by durable `acquire_article_content` queue messages and is restricted to
 Archive/Queue documents; metadata sync and browsing remain useful when content
 is unavailable. Exact content responses are retained before parsing, indexing
 is staged in bounded queue invocations, and failed or stale jobs are recoverable
-without exposing a partially indexed manifest.
+without exposing a partially indexed manifest. Indexing resumes manifests marked failed
+by an earlier queue delivery, verifies that every expected chunk and search row
+exists before publication, and does not promote stale source versions.
 
 ## Letterboxd export import
 
@@ -164,3 +166,37 @@ responses contain `data` and `nextCursor`; the sibling `/summary` endpoint
 contains counts, facets, and source status and accepts only search/filter state.
 See [Library fetching](../../docs/architecture/library-fetching.md) for the
 current contracts, which supersede older combined-response descriptions.
+
+## Ingestion reliability and tests
+
+Spotify preserves successful optional API response bytes before JSON/schema
+validation, including saved shows, current player, recent tracks, and opportunistic
+track metadata. Player observations reuse existing canonical identities and
+Archive occurrence IDs. A completed saved-episode scan can commit its watermark
+while optional operations fail; its durable run is `partially_succeeded`, records
+the failed operations and committed record counts, and leaves the connection
+`degraded` until a complete subsequent sync succeeds. Optional checkpoint failures
+are included in the durable result.
+
+Catalog consumers fence publication and progress with the attempt token acquired
+from the durable job lease. A stale attempt cannot publish or mutate a replacement
+attempt. Spotify catalog terminal state and its sync-run summary commit together
+in the same fenced transaction; a failed transaction leaves both retryable.
+Transient provider transport, database, and continuation enqueue failures
+retain retryable work; explicit permanent provider errors and invalid provider
+schemas terminate the job. Continuation retries follow the persisted cursor rather
+than recounting an already committed batch. Provider Retry-After delays and active
+lease delays survive the Worker queue dispatch boundary. A failed scheduled
+catalog dispatch does not suppress the remaining scheduled providers.
+
+The API suites use synthetic provider responses and isolated SQLite databases
+with the complete ordered migrations. They exercise nonempty HTTP collections,
+details and history for all six media families; queue acknowledgment/retry and
+catalog continuations; raw preservation and credential rotation; and staged
+Readwise acquisition/indexing with chunk, database, object-storage, and queue
+failures. Tests never require provider credentials or application data. Run a
+focused API suite from the repository root with:
+
+```sh
+pnpm exec vitest run apps/api/src --maxWorkers=1
+```

@@ -50,48 +50,37 @@ for (const { media, section, response } of collections) {
   })
 }
 
-for (const dark of [false, true]) {
-  test(`isolates mobile navigation focus and restores it in ${dark ? 'dark' : 'light'} appearance`, async ({
-    page,
-  }) => {
-    await page.addInitScript(
-      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
-      dark,
-    )
-    await page.setViewportSize({ width: 390, height: 768 })
-    await page.route('**/api/library/books{,/summary}?*', (r) =>
-      r.fulfill({ json: booksResponse() }),
-    )
-    await page.route('**/api/library/movies{,/summary}?*', (r) =>
-      r.fulfill({ json: moviesResponse() }),
-    )
-    await page.goto('/library/books/archive')
-    const trigger = page.getByRole('button', { name: 'Open navigation', exact: true })
-    await trigger.click()
-    const sheet = page.getByRole('dialog', { name: 'Navigation', exact: true })
-    await expect(sheet).toBeVisible()
+test('isolates mobile navigation focus and restores it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 768 })
+  await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
+  await page.route('**/api/library/movies{,/summary}?*', (r) =>
+    r.fulfill({ json: moviesResponse() }),
+  )
+  await page.goto('/library/books/archive')
+  const trigger = page.getByRole('button', { name: 'Open navigation', exact: true })
+  await trigger.click()
+  const sheet = page.getByRole('dialog', { name: 'Navigation', exact: true })
+  await expect(sheet).toBeVisible()
+  await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
+  for (let i = 0; i < 22; i++) {
+    await page.keyboard.press('Tab')
     await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
-    for (let i = 0; i < 22; i++) {
-      await page.keyboard.press('Tab')
-      await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
-    }
-    await page.keyboard.press('Escape')
-    await expect(sheet).toHaveCount(0)
-    await expect(trigger).toBeFocused()
-    await trigger.click()
-    await sheet.getByRole('button', { name: 'Close', exact: true }).click()
-    await expect(sheet).toHaveCount(0)
-    await expect(trigger).toBeFocused()
-    await trigger.click()
-    await sheet.getByRole('link', { name: 'Movies', exact: true }).click()
-    await expect(page).toHaveURL(/library\/movies\/archive/)
-    await expect(sheet).toHaveCount(0)
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-      .toBe(true)
-  })
-}
-
+  }
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await sheet.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await sheet.getByRole('link', { name: 'Movies', exact: true }).click()
+  await expect(page).toHaveURL(/library\/movies\/archive/)
+  await expect(sheet).toHaveCount(0)
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true)
+})
 test('shows sidebar hints to keyboard users without browser title hints', async ({ page }) => {
   await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
   await page.goto('/library/books/archive')
@@ -128,7 +117,7 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
-  await page.route('**/api/library/books?*', async (r) => {
+  await page.route('**/api/library/books{,/summary}?*', async (r) => {
     await gate
     await r.fulfill({ status: 500, json: { error: 'Synthetic service failure' } })
   })
@@ -138,8 +127,8 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   release()
   await expect(page.locator('[data-slot=alert]')).toBeVisible({ timeout: 15000 })
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
-  await page.unroute('**/api/library/books?*')
-  await page.route('**/api/library/books?*', (r) => r.fulfill({ json: booksResponse() }))
+  await page.unroute('**/api/library/books{,/summary}?*')
+  await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
 })

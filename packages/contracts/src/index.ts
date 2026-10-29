@@ -230,6 +230,21 @@ export const SyncJobSchema = z
     catalogCursor: z.string().optional(),
   })
   .superRefine((job, context) => {
+    const catalogSources = {
+      refresh_tmdb_catalog: 'tmdb',
+      refresh_youtube_catalog: 'youtube',
+      refresh_spotify_catalog: 'spotify',
+    } as const
+    if (
+      job.operation in catalogSources &&
+      job.source !== catalogSources[job.operation as keyof typeof catalogSources]
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['source'],
+        message: 'Catalog operation and source must match.',
+      })
+    }
     if (
       job.operation === 'sync_source' &&
       !['readwise', 'hardcover', 'letterboxd', 'spotify'].includes(job.source)

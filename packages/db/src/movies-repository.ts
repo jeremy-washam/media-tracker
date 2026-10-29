@@ -1,3 +1,7 @@
+import {
+  matchesQueryFingerprint,
+  queryFingerprint as hashQueryFingerprint,
+} from './query-fingerprint'
 import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './database'
 
 export interface LetterboxdMovieSnapshotFilm {
@@ -309,21 +313,28 @@ function ftsQuery(value: string): string | null {
     .join(' AND ')
 }
 
-function fingerprint(input: MoviesListInput, sort: string, direction: string): string {
-  return JSON.stringify({ ...input, cursor: undefined, sort, direction })
+function fingerprint(
+  input: MoviesListInput,
+  sort: string,
+  direction: string,
+): Record<string, unknown> {
+  return { ...input, cursor: undefined, sort, direction }
 }
 
 function encodeCursor(cursor: CursorPayload): string {
   return encodeURIComponent(JSON.stringify(cursor))
 }
 
-function decodeCursor(value: string | undefined, expected: string): CursorPayload | null {
+async function decodeCursor(
+  value: string | undefined,
+  expected: string,
+): Promise<CursorPayload | null> {
   if (value === undefined) return null
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<CursorPayload>
     if (
       parsed.v !== 1 ||
-      parsed.fingerprint !== expected ||
+      !(await matchesQueryFingerprint(parsed.fingerprint, expected)) ||
       (parsed.nullRank !== 0 && parsed.nullRank !== 1) ||
       (parsed.value !== null &&
         typeof parsed.value !== 'string' &&
@@ -1430,8 +1441,8 @@ export class SqlMoviesRepository {
       runtime: 'b.runtime_minutes',
       relevance: 'b.search_rank',
     }[sort]
-    const key = fingerprint(input, sort, direction)
-    const cursor = decodeCursor(input.cursor, key)
+    const key = await hashQueryFingerprint(fingerprint(input, sort, direction))
+    const cursor = await decodeCursor(input.cursor, key)
     const nullRank = `CASE WHEN ${sortColumn} IS NULL OR ${sortColumn}='' THEN 1 ELSE 0 END`
     const comparison = direction === 'asc' ? '>' : '<'
     const cursorSql =

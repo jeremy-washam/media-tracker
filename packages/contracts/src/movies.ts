@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
+import {
+  CalendarDateSchema as calendarDate,
+  QueryTextSchema,
+  rangeIsReversed,
+} from './query-validation'
 
 export const MovieCollectionSchema = z.enum(['archive', 'queue'])
 export const MovieViewSchema = z.enum(['grid', 'list'])
@@ -18,9 +23,8 @@ export const MovieRatingModeSchema = z.enum(['any', 'rated', 'unrated', 'range']
 
 const optionalTrimmedString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-  z.string().trim().optional(),
+  QueryTextSchema.optional(),
 )
-const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const year = z.string().regex(/^\d{4}$/)
 const booleanQuery = z.preprocess(
   (value) => (value === 'true' ? true : value === 'false' ? false : value),
@@ -54,6 +58,13 @@ export const MoviesQuerySchema = z
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((query, context) => {
+    if (rangeIsReversed(query.releaseYearFrom, query.releaseYearTo)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['releaseYearTo'],
+        message: 'The end year must be on or after the start year.',
+      })
+    }
     const sorts =
       query.section === 'archive'
         ? new Set([
@@ -80,6 +91,13 @@ export const MoviesQuerySchema = z
       [query.watched, query.watchedFrom, query.watchedTo, 'watched'],
       [query.added, query.addedFrom, query.addedTo, 'added'],
     ] as const) {
+      if (rangeIsReversed(from, to)) {
+        context.addIssue({
+          code: 'custom',
+          path: [path],
+          message: 'The end date must be on or after the start date.',
+        })
+      }
       if (mode === 'range' && from === undefined && to === undefined) {
         context.addIssue({
           code: 'custom',

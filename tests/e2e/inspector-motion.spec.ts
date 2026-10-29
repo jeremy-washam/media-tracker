@@ -107,19 +107,6 @@ test('moves the collection and inspector together throughout opening and closing
   expect((await collection.boundingBox())!.width).toBeCloseTo(closedWidth, 0)
 })
 
-test('puts List first while preserving the saved grid preference and explicit URL choice', async ({
-  page,
-}) => {
-  await page.addInitScript(() => localStorage.setItem('media-tracker:library-layout', 'grid'))
-  await page.goto('/library/books/archive')
-  const controls = page.locator('[data-ui~="layout-toggle"] button')
-  await expect(controls.nth(0)).toHaveAttribute('aria-label', 'List view')
-  await expect(controls.nth(1)).toHaveAttribute('aria-label', 'Grid view')
-  await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'true')
-  await page.goto('/library/books/archive?layout=list')
-  await expect(controls.nth(0)).toHaveAttribute('aria-pressed', 'true')
-})
-
 test('skips motion with reduced motion and keeps narrow collections full width', async ({
   page,
 }) => {

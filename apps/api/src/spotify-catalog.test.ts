@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   advance: vi.fn(),
   defer: vi.fn(),
   fail: vi.fn(),
+  complete: vi.fn(),
+  saveRun: vi.fn(),
   fetchTrack: vi.fn(),
   candidates: vi.fn(),
   backlog: vi.fn(),
@@ -38,6 +40,7 @@ vi.mock('./env', () => ({
     advance: mocks.advance,
     defer: mocks.defer,
     fail: mocks.fail,
+    complete: mocks.complete,
   }),
   createSpotifyLibraryRepository: () => ({
     listTracksNeedingMetadata: mocks.candidates,
@@ -46,7 +49,11 @@ vi.mock('./env', () => ({
     markTrackMetadataUnavailable: mocks.unavailable,
     rebuildMusicSearch: mocks.rebuildMusic,
   }),
-  createLedgerRepository: () => ({ findRawObject: mocks.rawFind, commit: mocks.rawCommit }),
+  createLedgerRepository: () => ({
+    findRawObject: mocks.rawFind,
+    commit: mocks.rawCommit,
+    saveSyncRun: mocks.saveRun,
+  }),
 }))
 vi.mock('./spotify-credentials', () => ({
   refreshStoredSpotifyToken: async () => ({ accessToken: 'secret' }),
@@ -57,11 +64,16 @@ vi.mock('@media-tracker/connector-spotify', async (original) => ({
 }))
 
 import { processSpotifyCatalogBackfill } from './spotify-catalog'
+import { CatalogRetryError } from './catalog-retry'
 
 describe('Spotify catalog backfill', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.reserve.mockResolvedValue(true)
+    mocks.reserve.mockResolvedValue(1)
+    mocks.advance.mockResolvedValue(true)
+    mocks.defer.mockResolvedValue(true)
+    mocks.fail.mockResolvedValue(true)
+    mocks.complete.mockResolvedValue(true)
     mocks.rawFind.mockResolvedValue(null)
     mocks.candidates.mockResolvedValue([
       { mediaItemId: 'song-1', trackId: 'track1', trackUri: 'spotify:track:track1' },
@@ -98,19 +110,14 @@ describe('Spotify catalog backfill', () => {
     expect(mocks.put).toHaveBeenCalledOnce()
     expect(mocks.rawCommit).toHaveBeenCalledTimes(2)
     expect(mocks.applyTrack).toHaveBeenCalledOnce()
-    expect(mocks.advance).toHaveBeenCalledWith(
-      'job-1',
-      expect.objectContaining({
-        requested: 1,
-        returned: 1,
-        unavailable: 0,
-      }),
-    )
+    expect(mocks.advance).not.toHaveBeenCalled()
     expect(mocks.defer).toHaveBeenCalledWith(
       'job-1',
+      1,
       expect.any(String),
       expect.any(String),
       'spotify_http_429',
+      { requested: 1, returned: 1, unavailable: 0 },
     )
     expect(mocks.send).toHaveBeenCalledWith(
       expect.objectContaining({ catalogJobId: 'job-1' }),
@@ -131,11 +138,75 @@ describe('Spotify catalog backfill', () => {
     })
     expect(mocks.advance).toHaveBeenCalledWith(
       'job-1',
+      1,
       expect.objectContaining({
         phase: 'episodes',
         requested: 0,
       }),
     )
     expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ catalogJobId: 'job-1' }))
+  })
+  const env = {
+    RAW_BUCKET: { put: mocks.put },
+    SYNC_QUEUE: { send: mocks.send },
+  } as unknown as Bindings
+  const job = {
+    idempotencyKey: 'catalog:spotify:job-1',
+    source: 'spotify' as const,
+    operation: 'refresh_spotify_catalog' as const,
+    catalogJobId: 'job-1',
+  }
+  it('delegates completion and its terminal run summary to one repository transition', async () => {
+    mocks.candidates.mockResolvedValue([])
+    mocks.backlog.mockResolvedValue({ tracks: 0, episodes: 0 })
+    await processSpotifyCatalogBackfill(env, job)
+    expect(mocks.complete).toHaveBeenCalledWith('job-1', 1, expect.any(String))
+    expect(mocks.saveRun).not.toHaveBeenCalled()
+    expect(mocks.defer).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
+  it('defers a failed completion transaction without writing a premature terminal summary', async () => {
+    mocks.candidates.mockResolvedValue([])
+    mocks.backlog.mockResolvedValue({ tracks: 0, episodes: 0 })
+    mocks.complete.mockRejectedValueOnce(new Error('Synthetic atomic database interruption'))
+    await processSpotifyCatalogBackfill(env, job)
+    expect(mocks.saveRun).not.toHaveBeenCalled()
+    expect(mocks.defer).toHaveBeenCalledWith(
+      'job-1',
+      1,
+      expect.any(String),
+      expect.any(String),
+      'Error',
+      { requested: 0, returned: 0, unavailable: 0 },
+    )
+    expect(mocks.send).toHaveBeenCalledOnce()
+  })
+  it('retries rejected completion ownership without mutating the replacement attempt', async () => {
+    mocks.candidates.mockResolvedValue([])
+    mocks.backlog.mockResolvedValue({ tracks: 0, episodes: 0 })
+    mocks.complete.mockResolvedValueOnce(false)
+    await expect(processSpotifyCatalogBackfill(env, job)).rejects.toMatchObject({
+      delaySeconds: 300,
+    })
+    expect(mocks.saveRun).not.toHaveBeenCalled()
+    expect(mocks.defer).not.toHaveBeenCalled()
+  })
+  it('delegates permanent failure and its summary to the fenced terminal transaction', async () => {
+    mocks.fetchTrack.mockRejectedValueOnce(new SpotifyApiError('forbidden', 403))
+    await processSpotifyCatalogBackfill(env, job)
+    expect(mocks.fail).toHaveBeenCalledWith('job-1', 1, expect.any(String), 'spotify_http_403', {
+      requested: 0,
+      returned: 0,
+      unavailable: 0,
+    })
+    expect(mocks.saveRun).not.toHaveBeenCalled()
+    expect(mocks.defer).not.toHaveBeenCalled()
+  })
+  it('retries rejected failure ownership without publishing a terminal run', async () => {
+    mocks.fetchTrack.mockRejectedValueOnce(new SpotifyApiError('forbidden', 403))
+    mocks.fail.mockResolvedValueOnce(false)
+    await expect(processSpotifyCatalogBackfill(env, job)).rejects.toBeInstanceOf(CatalogRetryError)
+    expect(mocks.saveRun).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
   })
 })

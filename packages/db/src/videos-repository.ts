@@ -1,3 +1,7 @@
+import {
+  matchesQueryFingerprint,
+  queryFingerprint as hashQueryFingerprint,
+} from './query-fingerprint'
 import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './database'
 
 function statement(database: DatabaseClient, query: string, values: readonly DatabaseValue[] = []) {
@@ -80,12 +84,12 @@ interface DetailCursor {
   id: string
 }
 
-function detailCursor(value: string | undefined, key: string): DetailCursor | null {
+async function detailCursor(value: string | undefined, key: string): Promise<DetailCursor | null> {
   if (value === undefined) return null
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<DetailCursor>
     if (
-      parsed.key !== key ||
+      !(await matchesQueryFingerprint(parsed.key, key)) ||
       !(
         Number.isInteger(parsed.generation) ||
         (typeof parsed.generation === 'string' &&
@@ -114,12 +118,15 @@ interface CollectionCursor {
   id: string
 }
 
-function collectionCursor(value: string | undefined, key: string): CollectionCursor | null {
+async function collectionCursor(
+  value: string | undefined,
+  key: string,
+): Promise<CollectionCursor | null> {
   if (value === undefined) return null
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<CollectionCursor>
     if (
-      parsed.key !== key ||
+      !(await matchesQueryFingerprint(parsed.key, key)) ||
       !(
         Number.isInteger(parsed.generation) ||
         (typeof parsed.generation === 'string' &&
@@ -444,12 +451,17 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     return youtubeSearchRebuildSql.map((sql) => statement(this.database, sql))
   }
 
-  private async publicationStatements(): Promise<DatabaseStatement[]> {
+  private async publicationStatements(completion?: {
+    jobId: string
+    token: number
+  }): Promise<DatabaseStatement[]> {
     const latest = await statement(
       this.database,
       "SELECT id,state FROM catalog_refresh_jobs WHERE provider='youtube' ORDER BY created_at DESC,id DESC LIMIT 1",
     ).first<{ id: string; state: string }>()
-    if (latest && latest.state !== 'succeeded') return []
+    if (completion && (latest?.id !== completion.jobId || latest.state !== 'running'))
+      throw new TypeError('YouTube completion must own the latest running catalog job')
+    if (latest && latest.state !== 'succeeded' && completion === undefined) return []
     const published = await statement(
       this.database,
       'SELECT last_published_job_id FROM youtube_publication_state WHERE singleton_id=1',
@@ -457,10 +469,14 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     if (latest && published?.last_published_job_id === latest.id) return []
     // Every statement pins the completed job again inside the transaction. A
     // newer job can stage and fail between the initial read and this batch.
-    const guard = latest
+    let guard = latest
       ? "NOT EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube' AND state IN ('pending','running')) AND (SELECT id FROM catalog_refresh_jobs WHERE provider='youtube' ORDER BY created_at DESC,id DESC LIMIT 1)=? AND (SELECT state FROM catalog_refresh_jobs WHERE id=?)='succeeded'"
       : "NOT EXISTS(SELECT 1 FROM catalog_refresh_jobs WHERE provider='youtube')"
     const guardValues: DatabaseValue[] = latest ? [latest.id, latest.id] : []
+    if (completion) {
+      guard += ' AND (SELECT attempt_count FROM catalog_refresh_jobs WHERE id=?)=?'
+      guardValues.push(completion.jobId, completion.token)
+    }
     const writes = publishedCatalogTables.flatMap(([staged, published, columns]) => [
       statement(this.database, `DELETE FROM ${published} WHERE ${guard}`, guardValues),
       statement(
@@ -874,7 +890,7 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     await this.rebuild(input.observedAt)
   }
 
-  async rebuild(at: string): Promise<void> {
+  async rebuild(at: string, completion?: { jobId: string; token: number }): Promise<void> {
     const generation = Date.parse(at)
     const latestVideoTitle = `(SELECT w.historical_title
       FROM youtube_watch_observations w
@@ -906,8 +922,18 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
       JOIN raw_objects r ON r.id=sr.raw_object_id
       WHERE a.channel_id=c.channel_id AND a.url IS NOT NULL
       ORDER BY r.acquired_at DESC,a.source_record_id DESC LIMIT 1)`
-    const publication = await this.publicationStatements()
+    const publication = await this.publicationStatements(completion)
     await this.database.batch([
+      ...(completion
+        ? [
+            statement(
+              this.database,
+              `UPDATE catalog_refresh_jobs SET state='succeeded',lease_expires_at=NULL,
+         completed_at=?,updated_at=? WHERE id=? AND state='running' AND attempt_count=?`,
+              [at, at, completion.jobId, completion.token],
+            ),
+          ]
+        : []),
       ...publication,
       statement(this.database, 'DELETE FROM video_library_projection'),
       statement(
@@ -1663,8 +1689,8 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const read = (query: string, values: readonly DatabaseValue[] = []) =>
       this.readStatement(query, values, at)
 
-    const key = JSON.stringify({ ...input, cursor: undefined })
-    const requestedCursor = collectionCursor(input.cursor, key)
+    const key = await hashQueryFingerprint({ ...input, cursor: undefined })
+    const requestedCursor = await collectionCursor(input.cursor, key)
     if (input.view === 'channels') return this.listChannelItems(input, requestedCursor, key, at)
     const { where, values } = this.videoClauses(input)
     const matching = this.matchingCte(input)
@@ -2121,8 +2147,8 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const read = (query: string, values: readonly DatabaseValue[] = []) =>
       this.readStatement(query, values, at)
 
-    const key = JSON.stringify({ id, limit })
-    const cursor = detailCursor(cursorValue, key)
+    const key = await hashQueryFingerprint({ id, limit })
+    const cursor = await detailCursor(cursorValue, key)
     const generationRow = await read(
       'SELECT COUNT(*) generation FROM youtube_watch_observations WHERE media_item_id=?',
       [id],
@@ -2194,8 +2220,8 @@ SELECT COALESCE(vp.channel_id,p.channel_id) channel_id,
     const read = (query: string, values: readonly DatabaseValue[] = []) =>
       this.readStatement(query, values, at)
 
-    const key = JSON.stringify({ channelId, membership, limit })
-    const cursor = detailCursor(cursorValue, key)
+    const key = await hashQueryFingerprint({ channelId, membership, limit })
+    const cursor = await detailCursor(cursorValue, key)
     const column = membership === 'archive' ? 'archive_active' : 'queue_active'
     const date = membership === 'archive' ? 'latest_watched_at' : 'latest_queue_added_at'
     const generationRow = await read(

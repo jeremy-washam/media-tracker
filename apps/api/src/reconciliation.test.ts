@@ -132,6 +132,8 @@ class D1SqliteDatabase {
       '0027_compact_archive_evidence.sql',
       '0028_evidence_view_parent_guard.sql',
       '0029_evidence_insert_only_replay.sql',
+      '0030_source_sync_admission.sql',
+      '0031_catalog_fences_and_partial_cursors.sql',
     ]) {
       this.database.exec(
         readFileSync(
@@ -898,4 +900,17 @@ it('retries Letterboxd after records committed but the connection update failed'
   expect(count(database.database, 'media_items')).toBe(2)
   expect(count(database.database, 'source_records')).toBe(records)
   expect(database.database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it('does not roll an impossible Hardcover source update into another calendar day', async () => {
+  stubBook({ ...book, updated_at: '2026-02-30T12:00:00Z' })
+  await syncHardcover(bindings)
+  expect(
+    database.database
+      .prepare("SELECT source_recorded_at_value FROM source_records WHERE record_type='user_book'")
+      .get(),
+  ).toEqual({ source_recorded_at_value: null })
+  expect(
+    database.database.prepare('SELECT source_updated_at FROM hardcover_user_books').get(),
+  ).toEqual({ source_updated_at: '2026-02-30T12:00:00Z' })
 })

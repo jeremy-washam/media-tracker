@@ -1,64 +1,7 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { applyTestMigrations, SqliteTestClient as SqliteClient } from './test-support/sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  DatabaseAllResult,
-  DatabaseClient,
-  DatabaseRunResult,
-  DatabaseStatement,
-  DatabaseValue,
-} from './database'
 import { SqlSpotifyLibraryRepository } from './spotify-library-repository'
-
-const migrations = readdirSync(new URL('../migrations/', import.meta.url))
-  .filter((name) => name.endsWith('.sql'))
-  .sort()
-  .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
-  .join('\n')
-
-class Statement implements DatabaseStatement {
-  #values: readonly DatabaseValue[] = []
-  constructor(private readonly value: StatementSync) {}
-  bind(...values: readonly DatabaseValue[]) {
-    this.#values = values
-    return this
-  }
-  values() {
-    return this.#values.map((value) =>
-      value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-    )
-  }
-  async run(): Promise<DatabaseRunResult> {
-    this.value.run(...this.values())
-    return { success: true }
-  }
-  async first<Row>(): Promise<Row | null> {
-    return (this.value.get(...this.values()) as Row | undefined) ?? null
-  }
-  async all<Row>(): Promise<DatabaseAllResult<Row>> {
-    return { results: this.value.all(...this.values()) as Row[], success: true }
-  }
-  execute() {
-    this.value.run(...this.values())
-  }
-}
-class Client implements DatabaseClient {
-  constructor(private readonly database: DatabaseSync) {}
-  prepare(sql: string) {
-    return new Statement(this.database.prepare(sql))
-  }
-  async batch(values: readonly DatabaseStatement[]): Promise<readonly DatabaseRunResult[]> {
-    this.database.exec('BEGIN')
-    try {
-      for (const value of values) (value as Statement).execute()
-      this.database.exec('COMMIT')
-      return values.map(() => ({ success: true }))
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
-  }
-}
 
 function seed(database: DatabaseSync) {
   database.exec(`
@@ -78,11 +21,13 @@ function seed(database: DatabaseSync) {
 describe('Spotify library repository', () => {
   let database: DatabaseSync
   let repository: SqlSpotifyLibraryRepository
+  let client: SqliteClient
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
-    database.exec(migrations)
+    applyTestMigrations(database)
     seed(database)
-    repository = new SqlSpotifyLibraryRepository(new Client(database))
+    client = new SqliteClient(database)
+    repository = new SqlSpotifyLibraryRepository(client)
   })
   afterEach(() => database.close())
 
@@ -491,6 +436,33 @@ describe('Spotify library repository', () => {
       albums: 1,
       artists: 1,
     })
+    await expect(
+      repository.listMusicFilterOptions(
+        { view: 'tracks', source: 'recent_api', limit: 10 },
+        'artist',
+        'Art',
+        1,
+      ),
+    ).resolves.toEqual({ data: [{ value: 'artist', label: 'Artist', count: 1 }], nextCursor: null })
+    await expect(
+      repository.listMusicFilterOptions(
+        { view: 'tracks', album: ['missing'], limit: 10 },
+        'artist',
+        undefined,
+        10,
+      ),
+    ).resolves.toEqual({ data: [], nextCursor: null })
+    await expect(
+      repository.listMusicFilterOptions(
+        { view: 'albums', source: 'export', limit: 10 },
+        'artist',
+        undefined,
+        10,
+      ),
+    ).resolves.toMatchObject({ data: [{ value: 'artist', count: 1 }] })
+    await expect(
+      repository.listMusicFilterOptions({ view: 'tracks', limit: 10 }, 'album', 'Alb', 10),
+    ).resolves.toEqual({ data: [{ value: 'album', label: 'Album', count: 1 }], nextCursor: null })
     const recentTracks = await repository.listMusic({
       view: 'tracks',
       source: 'recent_api',
@@ -610,6 +582,24 @@ describe('Spotify library repository', () => {
     })
     expect(firstPodcasts.data.map((item) => item.id)).toEqual(['episode-a'])
     expect(firstPodcasts.nextCursor).not.toBeNull()
+    const podcastInput = { view: 'archive' as const, sort: 'title' as const, limit: 1 }
+    client.queries.length = 0
+    await expect(repository.listPodcastsItems(podcastInput)).resolves.toEqual({
+      data: firstPodcasts.data,
+      nextCursor: firstPodcasts.nextCursor,
+    })
+    expect(
+      client.queries.some(
+        ({ sql }) =>
+          sql.includes('SELECT COUNT(*) value') || sql.includes('SELECT SUM(in_archive)'),
+      ),
+    ).toBe(false)
+    await expect(repository.summarizePodcasts(podcastInput)).resolves.toEqual({
+      totalCount: firstPodcasts.totalCount,
+      filteredCount: firstPodcasts.filteredCount,
+      sectionCounts: firstPodcasts.sectionCounts,
+    })
+
     const secondPodcasts = await repository.listPodcasts({
       view: 'archive',
       sort: 'title',
@@ -617,6 +607,17 @@ describe('Spotify library repository', () => {
       cursor: firstPodcasts.nextCursor!,
     })
     expect(secondPodcasts.data.map((item) => item.id)).toEqual(['episode-b'])
+    const legacy = JSON.parse(decodeURIComponent(firstPodcasts.nextCursor!))
+    legacy.key = JSON.stringify({ view: 'archive', sort: 'title', limit: 1 })
+    await expect(
+      repository.listPodcasts({
+        view: 'archive',
+        sort: 'title',
+        limit: 1,
+        cursor: encodeURIComponent(JSON.stringify(legacy)),
+      }),
+    ).resolves.toMatchObject({ data: [{ id: 'episode-b' }] })
+
     await repository.rebuildPodcastSearch()
     await expect(
       repository.listPodcasts({ view: 'archive', q: 'Al', sort: 'relevance', limit: 1 }),
@@ -668,6 +669,24 @@ describe('Spotify library repository', () => {
     }
     const firstMusic = await repository.listMusic({ view: 'tracks', sort: 'title', limit: 1 })
     expect(firstMusic.data.map((item) => item.id)).toEqual(['song-a'])
+    const musicInput = { view: 'tracks' as const, sort: 'title' as const, limit: 1 }
+    client.queries.length = 0
+    await expect(repository.listMusicItems(musicInput)).resolves.toEqual({
+      data: firstMusic.data,
+      nextCursor: firstMusic.nextCursor,
+    })
+    expect(
+      client.queries.some(
+        ({ sql }) =>
+          sql.includes('SELECT COUNT(*) value') || sql.includes('SELECT (SELECT COUNT(*)'),
+      ),
+    ).toBe(false)
+    await expect(repository.summarizeMusic(musicInput)).resolves.toEqual({
+      totalCount: firstMusic.totalCount,
+      filteredCount: firstMusic.filteredCount,
+      sectionCounts: firstMusic.sectionCounts,
+    })
+
     const secondMusic = await repository.listMusic({
       view: 'tracks',
       sort: 'title',
@@ -683,5 +702,240 @@ describe('Spotify library repository', () => {
       data: [expect.objectContaining({ id: 'song-a' })],
     })
     expect(JSON.parse(decodeURIComponent(firstMusic.nextCursor!))).not.toHaveProperty('offset')
+    for (const id of ['song-a', 'song-b', 'song-c']) {
+      await repository.applyTrackMetadata({
+        mediaItemId: id,
+        trackUri: `spotify:track:${id}`,
+        trackId: id,
+        title: id,
+        artists: [{ id: `artist-${id}`, uri: `spotify:artist:${id}`, name: 'Tied Artist' }],
+        album: {
+          id: `album-${id}`,
+          uri: `spotify:album:${id}`,
+          name: 'Tied Album',
+          albumType: 'album',
+          releaseDate: null,
+          releaseDatePrecision: null,
+          imageUrl: null,
+          artists: [],
+        },
+        canonicalUrl: null,
+        durationMs: null,
+        explicit: null,
+        isrc: null,
+        observedAt: '2026-01-01T00:00:00Z',
+      })
+    }
+    for (const [view, sorts] of [
+      ['tracks', ['playedAt', 'title', 'artist', 'album', 'playbackCount', 'observedTime']],
+      [
+        'albums',
+        [
+          'playedAt',
+          'title',
+          'artist',
+          'playbackCount',
+          'observedTime',
+          'trackCount',
+          'releasedAt',
+        ],
+      ],
+      [
+        'artists',
+        ['playedAt', 'title', 'playbackCount', 'observedTime', 'trackCount', 'releaseCount'],
+      ],
+    ] as const)
+      for (const sort of sorts)
+        for (const direction of ['asc', 'desc'] as const) {
+          const input = { view, sort, direction, limit: 100 }
+          const expected = (await repository.listMusic(input)).data.map((row) => row.id)
+          for (const limit of [1, 2]) {
+            const seen: string[] = []
+            let cursor: string | undefined
+            do {
+              const page = await repository.listMusic({
+                ...input,
+                limit,
+                ...(cursor ? { cursor } : {}),
+              })
+              seen.push(...page.data.map((row) => row.id))
+              cursor = page.nextCursor ?? undefined
+              expect(seen.length).toBeLessThanOrEqual(expected.length)
+            } while (cursor)
+            expect(seen).toEqual(expected)
+            expect(new Set(seen).size).toBe(3)
+          }
+        }
+    database.exec('UPDATE podcast_library_projection SET in_queue=1')
+    for (const [view, sorts] of [
+      ['archive', ['activityAt', 'observedTime', 'publishedAt', 'duration', 'title', 'show']],
+      ['queue', ['savedAt', 'publishedAt', 'duration', 'title', 'show']],
+    ] as const)
+      for (const sort of sorts)
+        for (const direction of ['asc', 'desc'] as const) {
+          const input = { view, sort, direction, limit: 100 }
+          const expected = (await repository.listPodcasts(input)).data.map((row) => row.id)
+          for (const limit of [1, 2]) {
+            const seen: string[] = []
+            let cursor: string | undefined
+            do {
+              const page = await repository.listPodcasts({
+                ...input,
+                limit,
+                ...(cursor ? { cursor } : {}),
+              })
+              seen.push(...page.data.map((row) => row.id))
+              cursor = page.nextCursor ?? undefined
+              expect(seen.length).toBeLessThanOrEqual(expected.length)
+            } while (cursor)
+            expect(seen).toEqual(expected)
+            expect(new Set(seen).size).toBe(3)
+          }
+        }
+  })
+  it.each([0, 97, 98, 150])(
+    'reconciles %i saved episodes and shows across page-sized batches',
+    async (retainedCount) => {
+      const at = '2026-01-01T00:00:00Z'
+      const ids = Array.from({ length: 153 }, (_, index) => `id-${index}`)
+      for (let offset = 0; offset < ids.length; offset += 50) {
+        const page = ids.slice(offset, offset + 50)
+        for (const id of page)
+          database
+            .prepare(
+              'INSERT INTO media_items(id,type,title,created_at,updated_at) VALUES(?,?,?,?,?)',
+            )
+            .run(id, 'podcast_episode', id, at, at)
+        await repository.upsertSavedEpisodes(
+          page.map((id) => ({
+            connectionId: 'spotify',
+            sourceRecordId: 'saved-record',
+            mediaItemId: id,
+            episodeUri: `spotify:episode:${id}`,
+            episodeId: id,
+            addedAt: at,
+            resumePositionMs: 0,
+            fullyPlayed: false,
+            observedAt: at,
+            title: id,
+            showId: id,
+            showUri: `spotify:show:${id}`,
+            showName: id,
+            description: null,
+            imageUrl: null,
+            canonicalUrl: null,
+            publishedAt: null,
+            publishedPrecision: null,
+            durationMs: null,
+          })),
+        )
+        await repository.upsertSavedShows(
+          page.map((id) => ({
+            connectionId: 'spotify',
+            sourceRecordId: 'saved-record',
+            id,
+            showId: id,
+            showUri: `spotify:show:${id}`,
+            addedAt: at,
+            observedAt: at,
+            name: id,
+            publisher: 'Synthetic',
+            description: null,
+            imageUrl: null,
+            canonicalUrl: null,
+            languages: ['en'],
+            totalEpisodes: 1,
+          })),
+        )
+      }
+      const retained = ids.slice(0, retainedCount)
+      const evidenceBefore = database.prepare('SELECT * FROM source_records ORDER BY id').all()
+      const finalize = async () => {
+        await repository.finalizeSavedEpisodes(
+          'spotify',
+          retained.map((id) => `spotify:episode:${id}`),
+          at,
+        )
+        await repository.finalizeSavedShows('spotify', retained, at)
+      }
+      await finalize()
+      await finalize()
+      for (const table of ['spotify_saved_episodes', 'spotify_saved_shows']) {
+        expect(
+          database.prepare(`SELECT COUNT(*) value FROM ${table} WHERE active=1`).get()?.value,
+        ).toBe(retainedCount)
+        expect(database.prepare(`SELECT COUNT(*) value FROM ${table}`).get()?.value).toBe(
+          ids.length,
+        )
+      }
+      expect((await repository.listPodcasts({ view: 'queue', limit: 100 })).totalCount).toBe(
+        retainedCount,
+      )
+      if (retainedCount > 1) {
+        const first = await repository.listPodcastFilterOptions(
+          { view: 'queue', limit: 100 },
+          'show',
+          undefined,
+          1,
+        )
+        expect(first.data).toHaveLength(1)
+        expect(first.nextCursor).not.toBeNull()
+        const next = await repository.listPodcastFilterOptions(
+          { view: 'queue', limit: 100 },
+          'show',
+          undefined,
+          1,
+          first.nextCursor!,
+        )
+        expect(next.data[0]?.value).not.toBe(first.data[0]?.value)
+        await expect(
+          repository.listPodcastFilterOptions(
+            { view: 'queue', duration: ['under30'], limit: 100 },
+            'show',
+            undefined,
+            1,
+            first.nextCursor!,
+          ),
+        ).rejects.toThrow('pagination cursor')
+        await expect(
+          repository.listPodcastFilterOptions(
+            { view: 'following', limit: 100 },
+            'publisher',
+            undefined,
+            10,
+          ),
+        ).resolves.toEqual({
+          data: [{ value: 'Synthetic', label: 'Synthetic', count: retainedCount }],
+          nextCursor: null,
+        })
+        await expect(
+          repository.listPodcastFilterOptions(
+            { view: 'following', publisher: ['missing'], limit: 100 },
+            'language',
+            undefined,
+            10,
+          ),
+        ).resolves.toEqual({ data: [], nextCursor: null })
+      }
+      expect(database.prepare('SELECT * FROM source_records ORDER BY id').all()).toEqual(
+        evidenceBefore,
+      )
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    },
+  )
+
+  it('retries a failed snapshot retirement without losing previously saved state', async () => {
+    database.exec(`INSERT INTO spotify_saved_episodes(connection_id,spotify_episode_uri,media_item_id,source_record_id,active,first_observed_at,last_observed_at)
+      VALUES('spotify','spotify:episode:retained','episode','saved-record',1,'2026-01-01','2026-01-01')`)
+    client.failOnRunCall = client.runCalls + 1
+    await expect(repository.finalizeSavedEpisodes('spotify', [], '2026-01-02')).rejects.toThrow(
+      'synthetic statement failure',
+    )
+    expect(database.prepare('SELECT active FROM spotify_saved_episodes').get()?.active).toBe(1)
+    client.failOnRunCall = null
+    await repository.finalizeSavedEpisodes('spotify', [], '2026-01-02')
+    expect(
+      database.prepare('SELECT active,source_record_id FROM spotify_saved_episodes').get(),
+    ).toEqual({ active: 0, source_record_id: 'saved-record' })
   })
 })

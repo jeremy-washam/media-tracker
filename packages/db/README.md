@@ -12,7 +12,9 @@ the canonical media ledger.
 `SqlCanonicalLedgerRepository.commit()` submits one atomic database batch. When
 the batch includes a sync cursor, the cursor is deliberately written last, after
 all D1 records it covers. The database also rejects cursors that do not refer to
-a successful sync run for the same connection.
+a completed sync run for the same connection. `partially_succeeded` may advance
+a checkpoint only when the primary scan committed successfully and optional
+independent work failed; running, pending and failed runs cannot advance it.
 
 Internal IDs and source occurrence keys must be stable across replay. Raw bytes
 remain in R2; this package stores their immutable manifest and every normalized
@@ -48,3 +50,35 @@ Migration 0029 enforces append-or-replay evidence insertion even under
 reused IDs abort. Ordinary duplicate tuple INSERT is now a no-op. Required fields,
 roles and parent/connection constraints are checked before replay suppression.
 See ADR 0017.
+
+Migration 0031 fences provider writes against catalog job lease generations.
+`reserve()` returns the monotonically increasing attempt count; every job
+transition requires that token and consumes its ownership. Workers wrap their
+media/ledger database client with `fenceCatalogDatabase` so the ownership check
+and each write batch share one transaction. The guard table is empty after both
+successful writes and rolled-back failures. Publish/rebuild before advancing or
+completing the job; enqueue failures retry the persisted continuation, rather
+than mutating a completed attempt. Apply the migration before deploying callers
+that use fenced databases. It also permits checkpoints from completed partial
+runs under the primary-scan rule above.
+Spotify catalog completion/failure updates the durable job and its owning sync
+run in the same fenced transaction. Terminal run counts come from the committed
+job counters, including any final partial-progress delta on failure.
+
+Spotify snapshot membership uses a JSON array bound once, so large saved-show
+and saved-episode snapshots do not exceed D1's 100-parameter statement limit.
+Article content completion verifies its source version in the publication
+transaction; late obsolete indexing cannot replace newer ready text.
+`hasContentChunkRange` verifies contiguous persisted ordinals and their search
+rows before the content pipeline publishes a completed extraction.
+
+Books, Movies, Videos and Spotify pagination hash query fingerprints. This keeps
+cursors bounded as filters grow. Decoders also accept matching legacy raw
+fingerprints so previously persisted pages can continue after a deployment.
+
+Repository tests use the complete current migration chain. Named historical
+migration boundaries are reserved for populated upgrade tests. The shared
+synthetic-only adapter in `src/test-support/sqlite.ts` enables foreign keys,
+atomic rollback and D1's per-statement parameter ceiling, captures actual queries
+for plan checks, and exposes statement/batch failure injection. Local SQLite
+coverage still needs complementary Worker/D1 integration tests.

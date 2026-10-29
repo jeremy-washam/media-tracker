@@ -1857,3 +1857,15 @@ export const connectionRefreshLeases = sqliteTable('connection_refresh_leases', 
   owner: text('owner').notNull(),
   expiresAt: integer('expires_at').notNull(),
 })
+
+export const catalogWriteGuards = sqliteTable(
+  'catalog_write_guards',
+  {
+    singletonId: integer('singleton_id').primaryKey(),
+    leaseOwned: integer('lease_owned').notNull(),
+  },
+  (table) => [
+    check('catalog_write_guards_singleton', sql`${table.singletonId}=1`),
+    check('catalog_lease_owned', sql`${table.leaseOwned}=1`),
+  ],
+)

@@ -50,10 +50,23 @@ export function calendarDate(value: string): CalendarDate {
 }
 
 export function utcInstant(value: string): UtcInstant {
-  if (!/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+  if (!/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
     throw new TypeError('Instant must include a UTC offset')
   }
-
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(
+      value,
+    )
+  if (match === null) throw new TypeError('Invalid instant')
+  assertCalendarParts(Number(match[1]), Number(match[2]), Number(match[3]))
+  if (
+    Number(match[4]) > 23 ||
+    Number(match[5]) > 59 ||
+    Number(match[6]) > 59 ||
+    Number(match[7] ?? 0) > 23 ||
+    Number(match[8] ?? 0) > 59
+  )
+    throw new TypeError('Invalid instant')
   const milliseconds = Date.parse(value)
   if (Number.isNaN(milliseconds)) throw new TypeError('Invalid instant')
   return new Date(milliseconds).toISOString() as UtcInstant

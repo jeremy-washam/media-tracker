@@ -77,3 +77,66 @@ describe('Hardcover read-book parser', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('Hardcover request failures', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+  it.each([401, 403])(
+    'does not retry terminal HTTP %s or expose response content',
+    async (status) => {
+      const request = vi.fn(async () => new Response('synthetic private body', { status }))
+      vi.stubGlobal('fetch', request)
+      await expect(fetchHardcoverUserId('synthetic-token')).rejects.toThrow(`returned ${status}`)
+      expect(request).toHaveBeenCalledOnce()
+    },
+  )
+  it.each([429, 500, 503])('bounds repeated HTTP %s failures to four attempts', async (status) => {
+    vi.useFakeTimers()
+    const request = vi.fn(
+      async () => new Response(null, { status, headers: { 'retry-after': '1' } }),
+    )
+    vi.stubGlobal('fetch', request)
+    const outcome = expect(fetchHardcoverUserId('synthetic-token')).rejects.toThrow(
+      `returned ${status}`,
+    )
+    await vi.runAllTimersAsync()
+    await outcome
+    expect(request).toHaveBeenCalledTimes(4)
+  })
+  it.each([
+    { header: '2', delay: 2000 },
+    { header: 'Thu, 01 Jan 2026 00:00:02 GMT', delay: 2000 },
+    { header: 'nonsense', delay: 500 },
+    { header: '999999', delay: 30000 },
+  ])('honors bounded Retry-After $header', async ({ header, delay }) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 429, headers: { 'retry-after': header } }),
+      )
+      .mockResolvedValueOnce(Response.json({ data: { me: [{ id: 42 }] } }))
+    vi.stubGlobal('fetch', request)
+    const promise = fetchHardcoverUserId('synthetic')
+    await vi.advanceTimersByTimeAsync(delay - 1)
+    expect(request).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await promise).toBe(42)
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+  it.each([
+    { errors: [{ message: 'synthetic GraphQL error' }] },
+    { data: {} },
+    { data: { me: [] } },
+    { data: { me: [{ id: 'invalid' }] } },
+  ])('rejects malformed GraphQL identity envelopes: %j', async (envelope) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(envelope)),
+    )
+    await expect(fetchHardcoverUserId('synthetic')).rejects.toThrow()
+  })
+})

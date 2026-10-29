@@ -6,6 +6,7 @@ import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { useDebouncedValue } from '../../components/library-hooks'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { hasCollectionFilters, clearedCollectionSearch } from '../../library-search'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
 import controlsStyles from '@/components/library-controls.module.css'
@@ -57,7 +58,7 @@ import {
 } from '@/components/icons'
 import type { PodcastCollectionItem } from '@media-tracker/contracts'
 import { fetchPodcast, fetchPodcastFilterOptions, fetchPodcastHistory } from './podcasts-api'
-import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
+import { useInspectorFocus } from '../inspector-focus'
 import {
   normalizePodcastSearch,
   podcastQuerySearch,
@@ -85,6 +86,7 @@ function duration(value: number | null) {
 export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | 'following' }) {
   const raw = useSearch({ strict: false }) as PodcastsRouteSearch
   const search = normalizePodcastSearch(raw, view)
+  const filtered = hasCollectionFilters(search)
   const navigate = useNavigate()
   const [draft, setDraft] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -526,8 +528,24 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
           {!result.isPending && !result.isError && items.length === 0 ? (
             <CollectionEmptyState
               icon={Microphone}
-              title={`No ${view === 'following' ? 'followed shows' : `episodes in ${view}`}`}
-              description="Sync Spotify from Connections to populate this section."
+              title={
+                filtered
+                  ? `No matching ${view === 'following' ? 'shows' : 'episodes'}`
+                  : `No ${view === 'following' ? 'followed shows' : `episodes in ${view}`}`
+              }
+              description={
+                filtered
+                  ? 'Try another search or clear the filters.'
+                  : 'Sync Spotify from Connections to populate this section.'
+              }
+              onClear={
+                filtered
+                  ? () => {
+                      setDraft(null)
+                      update(clearedCollectionSearch(search))
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {items.length ? (
@@ -701,7 +719,7 @@ function PodcastInspector({
   onOpenShow: (id: string) => void
 }) {
   const [tab, setTab] = useState<'details' | 'history'>('details')
-  const inspectorRef = useSpotifyInspectorFocus(onClose, id)
+  const inspectorRef = useInspectorFocus(onClose, id)
   const detail = useQuery({
     queryKey: ['podcast', kind, id],
     queryFn: ({ signal }) => fetchPodcast(id, kind, signal),

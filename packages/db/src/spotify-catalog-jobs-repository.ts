@@ -1,4 +1,5 @@
 import type { DatabaseClient } from './database'
+import { CatalogLeaseLostError, fenceCatalogDatabase } from './catalog-fence'
 
 export interface SpotifyCatalogJob {
   id: string
@@ -33,6 +34,14 @@ function job(row: Row): SpotifyCatalogJob {
     createdAt: String(row.created_at),
   }
 }
+
+export interface SpotifyCatalogProgress {
+  requested: number
+  returned: number
+  unavailable: number
+}
+
+const noProgress: SpotifyCatalogProgress = { requested: 0, returned: 0, unavailable: 0 }
 
 export class SqlSpotifyCatalogJobsRepository {
   constructor(private readonly database: DatabaseClient) {}
@@ -78,7 +87,7 @@ export class SqlSpotifyCatalogJobsRepository {
     phase: SpotifyCatalogJob['phase'],
     at: string,
     leaseExpiresAt: string,
-  ): Promise<boolean> {
+  ): Promise<number | null> {
     const row = await this.database
       .prepare(
         `UPDATE spotify_catalog_backfill_jobs SET state='running',
@@ -86,15 +95,16 @@ export class SqlSpotifyCatalogJobsRepository {
       safe_error_code=NULL,updated_at=?
       WHERE id=? AND phase=? AND state IN ('pending','running')
       AND (lease_expires_at IS NULL OR lease_expires_at<=?)
-      AND (next_attempt_at IS NULL OR next_attempt_at<=?) RETURNING id`,
+      AND (next_attempt_at IS NULL OR next_attempt_at<=?) RETURNING attempt_count`,
       )
       .bind(leaseExpiresAt, at, id, phase, at, at)
-      .first<{ id: string }>()
-    return row !== null
+      .first<{ attempt_count: number }>()
+    return row?.attempt_count ?? null
   }
 
   async advance(
     id: string,
+    leaseToken: number,
     input: {
       phase: SpotifyCatalogJob['phase']
       requested: number
@@ -102,48 +112,118 @@ export class SqlSpotifyCatalogJobsRepository {
       unavailable: number
       at: string
     },
-  ): Promise<void> {
-    await this.database
+  ): Promise<boolean> {
+    const row = await this.database
       .prepare(
         `UPDATE spotify_catalog_backfill_jobs SET state='pending',phase=?,
       requested_count=requested_count+?,returned_count=returned_count+?,
       unavailable_count=unavailable_count+?,lease_expires_at=NULL,
-      next_attempt_at=NULL,updated_at=? WHERE id=? AND state='running'`,
+      next_attempt_at=NULL,updated_at=? WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
       )
-      .bind(input.phase, input.requested, input.returned, input.unavailable, input.at, id)
-      .run()
+      .bind(
+        input.phase,
+        input.requested,
+        input.returned,
+        input.unavailable,
+        input.at,
+        id,
+        leaseToken,
+      )
+      .first<{ id: string }>()
+    return row !== null
   }
 
-  async defer(id: string, at: string, nextAttemptAt: string, safeErrorCode: string): Promise<void> {
-    await this.database
+  async defer(
+    id: string,
+    leaseToken: number,
+    at: string,
+    nextAttemptAt: string,
+    safeErrorCode: string,
+    progress: SpotifyCatalogProgress = noProgress,
+  ): Promise<boolean> {
+    const row = await this.database
       .prepare(
         `UPDATE spotify_catalog_backfill_jobs SET state='pending',
-      lease_expires_at=NULL,next_attempt_at=?,safe_error_code=?,updated_at=?
-      WHERE id=? AND state IN ('pending','running')`,
+      lease_expires_at=NULL,next_attempt_at=?,safe_error_code=?,updated_at=?,
+      requested_count=requested_count+?,returned_count=returned_count+?,unavailable_count=unavailable_count+?
+      WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
       )
-      .bind(nextAttemptAt, safeErrorCode, at, id)
-      .run()
+      .bind(
+        nextAttemptAt,
+        safeErrorCode,
+        at,
+        progress.requested,
+        progress.returned,
+        progress.unavailable,
+        id,
+        leaseToken,
+      )
+      .first<{ id: string }>()
+    return row !== null
   }
 
-  async complete(id: string, at: string): Promise<void> {
-    await this.database
-      .prepare(
-        `UPDATE spotify_catalog_backfill_jobs SET state='succeeded',
-      lease_expires_at=NULL,next_attempt_at=NULL,completed_at=?,updated_at=?
-      WHERE id=? AND state IN ('pending','running')`,
-      )
-      .bind(at, at, id)
-      .run()
+  async complete(id: string, leaseToken: number, at: string): Promise<boolean> {
+    return this.finish(id, leaseToken, at, 'succeeded', null, noProgress)
   }
 
-  async fail(id: string, at: string, safeErrorCode: string): Promise<void> {
-    await this.database
-      .prepare(
-        `UPDATE spotify_catalog_backfill_jobs SET state='failed',
-      lease_expires_at=NULL,next_attempt_at=NULL,safe_error_code=?,completed_at=?,updated_at=?
-      WHERE id=? AND state IN ('pending','running')`,
-      )
-      .bind(safeErrorCode, at, at, id)
-      .run()
+  async fail(
+    id: string,
+    leaseToken: number,
+    at: string,
+    safeErrorCode: string,
+    progress: SpotifyCatalogProgress = noProgress,
+  ): Promise<boolean> {
+    return this.finish(id, leaseToken, at, 'failed', safeErrorCode, progress)
+  }
+
+  private async finish(
+    id: string,
+    leaseToken: number,
+    at: string,
+    state: 'succeeded' | 'failed',
+    safeErrorCode: string | null,
+    progress: SpotifyCatalogProgress,
+  ): Promise<boolean> {
+    const fenced = fenceCatalogDatabase(this.database, {
+      jobId: id,
+      token: leaseToken,
+      kind: 'spotify',
+    })
+    try {
+      await fenced.batch([
+        this.database
+          .prepare(
+            `UPDATE spotify_catalog_backfill_jobs SET state=?,lease_expires_at=NULL,
+           next_attempt_at=NULL,safe_error_code=?,completed_at=?,updated_at=?,
+           requested_count=requested_count+?,returned_count=returned_count+?,
+           unavailable_count=unavailable_count+?
+           WHERE id=? AND state='running' AND attempt_count=?`,
+          )
+          .bind(
+            state,
+            safeErrorCode,
+            at,
+            at,
+            progress.requested,
+            progress.returned,
+            progress.unavailable,
+            id,
+            leaseToken,
+          ),
+        this.database
+          .prepare(
+            `UPDATE sync_runs SET status=?,finished_at=?,error_code=?,error_message=NULL,
+           (raw_object_count,source_record_count,normalized_record_count,failed_record_count)=(
+             SELECT returned_count,returned_count,returned_count,unavailable_count
+             FROM spotify_catalog_backfill_jobs WHERE id=?
+           ) WHERE id=(SELECT sync_run_id FROM spotify_catalog_backfill_jobs WHERE id=?)`,
+          )
+          .bind(state, at, safeErrorCode, id, id),
+      ])
+      return true
+    } catch (error) {
+      if (error instanceof CatalogLeaseLostError) return false
+      throw error
+    }
   }
 }

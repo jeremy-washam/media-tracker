@@ -1,5 +1,12 @@
 import { z } from 'zod'
 import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
+import {
+  CalendarDateSchema as calendarDate,
+  PublicationBoundarySchema as publicationBoundary,
+  QueryTextSchema,
+  rangeIsReversed,
+  validateFacetBudget,
+} from './query-validation'
 
 export const BookCollectionSchema = z.enum(['archive', 'queue'])
 export const BookLayoutSchema = z.enum(['grid', 'list'])
@@ -18,7 +25,7 @@ export const BookRatingModeSchema = z.enum(['any', 'rated', 'unrated', 'minimum'
 
 const optionalTrimmedString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-  z.string().trim().optional(),
+  QueryTextSchema.optional(),
 )
 
 const csvValues = z.preprocess(
@@ -32,9 +39,6 @@ const csvValues = z.preprocess(
   },
   z.array(z.string().min(1)).max(50).default([]),
 )
-
-const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-const publicationBoundary = z.string().regex(/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/)
 
 export const BooksQuerySchema = z
   .object({
@@ -61,6 +65,7 @@ export const BooksQuerySchema = z
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((query, context) => {
+    validateFacetBudget([query.format, query.series, query.genre], context)
     const allowedSorts =
       query.section === 'archive'
         ? new Set([
@@ -91,6 +96,13 @@ export const BooksQuerySchema = z
       [query.publishedMode, query.publishedFrom, query.publishedTo, 'publishedMode'],
       [query.addedMode, query.addedFrom, query.addedTo, 'addedMode'],
     ] as const) {
+      if (rangeIsReversed(from, to)) {
+        context.addIssue({
+          code: 'custom',
+          path: [path],
+          message: 'The end date must be on or after the start date.',
+        })
+      }
       if (mode === 'range' && from === undefined && to === undefined) {
         context.addIssue({
           code: 'custom',

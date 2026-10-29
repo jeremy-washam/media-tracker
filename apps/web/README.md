@@ -50,6 +50,12 @@ Health retains thirty-second polling. See the owning
 [Library fetching contract](../../docs/architecture/library-fetching.md) for
 endpoint shapes, persistence, invalidation, and refresh details.
 
+Completed or failed import/sync attempts, including Resume import, cancel older
+Library reads before invalidating item pages and summaries. Invalidated snapshots
+are removed from browser storage immediately. Storage failures leave browsing
+available. Persisted metadata stays private to the owner’s browser; opening the
+Library never starts provider syncs or catalog jobs.
+
 ## Branding
 
 The expanded sidebar pairs the 30px compact J2 house-and-waterfall symbol with a
@@ -200,3 +206,20 @@ Spinner/status, next-page Alert/Retry, completion, and a keyboard loading fallba
 `useCollectionScroll` owns the collection viewport ref and anchors a visible item
 across presentation changes and same-session cached navigation. Query keys exclude
 presentation state. Facet-option and inspector pagination remain explicit.
+
+## Test coverage and recovery
+
+Web unit tests cover Library request encoding/response validation, route/view
+normalization, chunked import progress and account targeting, and cache
+persistence/prefetch cancellation. Run `pnpm exec vitest run apps/web/src` from
+the repository root. Browser integration tests live in `tests/e2e` and use
+synthetic API responses; the separate real-stack acceptance suite validates the
+Worker and database boundaries.
+
+Video and Channel inspectors share keyboard focus, Escape dismissal, and opener
+focus return with the Spotify surfaces. Direct item links return focus to the
+collection heading. Watch history and channel previews show loading, failure,
+retry, and empty states distinctly. Channel Library panels retain separate
+Archive/Queue query state and fetch only when activated. Filtered empty states
+offer clearing across all media. Browser storage failures preserve browsing and
+in-memory appearance/sidebar preferences.

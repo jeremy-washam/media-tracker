@@ -1,108 +1,114 @@
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-
-import type {
-  DatabaseAllResult,
-  DatabaseClient,
-  DatabaseRunResult,
-  DatabaseStatement,
-  DatabaseValue,
-} from './database'
 import { SqlCatalogJobsRepository } from './catalog-jobs-repository'
+import { CatalogLeaseLostError, fenceCatalogDatabase } from './catalog-fence'
+import { applyTestMigrations, SqliteTestClient } from './test-support/sqlite'
 
-class SqliteStatement implements DatabaseStatement {
-  #values: readonly DatabaseValue[] = []
-
-  constructor(private readonly statement: StatementSync) {}
-
-  bind(...values: readonly DatabaseValue[]) {
-    this.#values = values
-    return this
-  }
-
-  private values() {
-    return this.#values.map((value) =>
-      value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-    )
-  }
-
-  async run(): Promise<DatabaseRunResult> {
-    this.statement.run(...this.values())
-    return { success: true }
-  }
-
-  async first<Row>(): Promise<Row | null> {
-    return (this.statement.get(...this.values()) as Row | undefined) ?? null
-  }
-
-  async all<Row>(): Promise<DatabaseAllResult<Row>> {
-    return { results: this.statement.all(...this.values()) as Row[], success: true }
-  }
-}
-
-class SqliteClient implements DatabaseClient {
-  constructor(private readonly database: DatabaseSync) {}
-
-  prepare(query: string) {
-    return new SqliteStatement(this.database.prepare(query))
-  }
-
-  async batch(): Promise<readonly DatabaseRunResult[]> {
-    throw new Error('not used')
-  }
-}
-
-describe('SqlCatalogJobsRepository', () => {
+describe('catalog job ownership', () => {
   let database: DatabaseSync
-  let repository: SqlCatalogJobsRepository
-
+  let client: SqliteTestClient
+  let jobs: SqlCatalogJobsRepository
+  const at = '2026-01-01T00:00:00.000Z'
+  const expired = '2026-01-01T00:06:00.000Z'
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
-    database.exec(`
-      CREATE TABLE catalog_refresh_jobs (
-        id TEXT PRIMARY KEY NOT NULL,
-        provider TEXT NOT NULL,
-        state TEXT NOT NULL,
-        cursor_value TEXT,
-        attempt_count INTEGER NOT NULL DEFAULT 0,
-        requested_count INTEGER NOT NULL DEFAULT 0,
-        returned_count INTEGER NOT NULL DEFAULT 0,
-        omitted_count INTEGER NOT NULL DEFAULT 0,
-        quota_unit_estimate INTEGER NOT NULL DEFAULT 0,
-        lease_expires_at TEXT,
-        next_attempt_at TEXT,
-        safe_error_code TEXT,
-        started_at TEXT,
-        completed_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE UNIQUE INDEX catalog_refresh_jobs_one_active_provider_idx
-        ON catalog_refresh_jobs(provider) WHERE state IN ('pending','running');
-    `)
-    repository = new SqlCatalogJobsRepository(new SqliteClient(database))
+    applyTestMigrations(database)
+    client = new SqliteTestClient(database)
+    jobs = new SqlCatalogJobsRepository(client)
   })
-
   afterEach(() => database.close())
 
   it('returns the existing active provider job when starts race', async () => {
-    const first = await repository.create('job-1', 'youtube', '2026-01-01T00:00:00.000Z')
-    const second = await repository.create('job-2', 'youtube', '2026-01-01T00:00:01.000Z')
-    expect(first.id).toBe('job-1')
-    expect(second.id).toBe('job-1')
+    expect((await jobs.create('first', 'youtube', at)).id).toBe('first')
+    expect((await jobs.create('second', 'youtube', at)).id).toBe('first')
   })
 
-  it('claims each cursor once until release or lease expiry', async () => {
-    await repository.create('job-1', 'tmdb', '2026-01-01T00:00:00.000Z')
+  it('reserves once and issues a new generation after release or actual expiry', async () => {
+    await jobs.create('job', 'youtube', at)
+    expect(await jobs.reserve('job', null, at, '2026-01-01T00:05:00.000Z')).toBe(1)
+    expect(await jobs.reserve('job', null, at, expired)).toBeNull()
+    expect(await jobs.release('job', 1, at)).toBe(true)
+    expect(await jobs.reserve('job', null, at, '2026-01-01T00:05:00.000Z')).toBe(2)
+    expect(await jobs.reserve('job', null, expired, '2026-01-01T00:11:00.000Z')).toBe(3)
+  })
+
+  it.each(['advance', 'release', 'complete', 'fail'] as const)(
+    'rejects a late worker %s after its lease is replaced',
+    async (operation) => {
+      await jobs.create('job', 'youtube', at)
+      const old = (await jobs.reserve('job', null, at, '2026-01-01T00:05:00.000Z'))!
+      const current = (await jobs.reserve('job', null, expired, '2026-01-01T00:11:00.000Z'))!
+      const before = await jobs.find('job')
+      const changed =
+        operation === 'advance'
+          ? await jobs.advance('job', old, {
+              cursor: 'old',
+              requested: 10,
+              returned: 9,
+              omitted: 1,
+              quotaUnits: 2,
+              at,
+            })
+          : operation === 'release'
+            ? await jobs.release('job', old, at)
+            : operation === 'complete'
+              ? await jobs.complete('job', old, at)
+              : await jobs.fail('job', old, 'late_failure', at)
+      expect(changed).toBe(false)
+      expect(await jobs.find('job')).toEqual(before)
+      expect(
+        await jobs.advance('job', current, {
+          cursor: 'new',
+          requested: 1,
+          returned: 1,
+          omitted: 0,
+          quotaUnits: 1,
+          at: expired,
+        }),
+      ).toBe(true)
+      expect(await jobs.reserve('job', null, expired, '2026-01-01T00:12:00.000Z')).toBeNull()
+      expect(await jobs.reserve('job', 'new', expired, '2026-01-01T00:12:00.000Z')).toBe(3)
+    },
+  )
+
+  it('preserves terminal state after duplicate completion/failure', async () => {
+    await jobs.create('job', 'tmdb', at)
+    const token = (await jobs.reserve('job', null, at, expired))!
+    expect(await jobs.complete('job', token, at)).toBe(true)
+    expect(await jobs.fail('job', token, 'late_failure', at)).toBe(false)
+    expect(await jobs.release('job', token, at)).toBe(false)
+    expect(await jobs.find('job')).toMatchObject({ state: 'succeeded', requestedCount: 0 })
+  })
+
+  it('fences provider writes atomically and leaves no assertion rows', async () => {
+    await jobs.create('job', 'youtube', at)
+    const old = (await jobs.reserve('job', null, at, '2026-01-01T00:05:00.000Z'))!
+    const fenced = fenceCatalogDatabase(client, { jobId: 'job', token: old, kind: 'catalog' })
+    await fenced
+      .prepare("INSERT INTO youtube_categories VALUES('1','US','Retained',1,?,?)")
+      .bind(at, expired)
+      .run()
+    expect(database.prepare('SELECT COUNT(*) value FROM catalog_write_guards').get()?.value).toBe(0)
+    await jobs.reserve('job', null, expired, '2026-01-01T00:11:00.000Z')
     await expect(
-      repository.reserve('job-1', null, '2026-01-01T00:00:01.000Z', '2026-01-01T00:05:01.000Z'),
-    ).resolves.toBe(true)
-    await expect(
-      repository.reserve('job-1', null, '2026-01-01T00:00:02.000Z', '2026-01-01T00:05:02.000Z'),
-    ).resolves.toBe(false)
-    await repository.release('job-1', '2026-01-01T00:00:03.000Z')
-    await expect(
-      repository.reserve('job-1', null, '2026-01-01T00:00:04.000Z', '2026-01-01T00:05:04.000Z'),
-    ).resolves.toBe(true)
+      fenced.batch([
+        fenced.prepare("UPDATE youtube_categories SET title='stale'"),
+        fenced.prepare('DELETE FROM youtube_categories'),
+      ]),
+    ).rejects.toBeInstanceOf(CatalogLeaseLostError)
+    expect(database.prepare('SELECT title FROM youtube_categories').get()?.title).toBe('Retained')
+    expect(database.prepare('SELECT COUNT(*) value FROM catalog_write_guards').get()?.value).toBe(0)
+    expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    expect(database.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok')
+    expect(() =>
+      fenced.prepare("UPDATE youtube_categories SET title='bypass' RETURNING title").first(),
+    ).toThrow('mutations must use')
+    expect(() =>
+      fenced
+        .prepare(
+          "WITH input AS (SELECT 1) UPDATE youtube_categories SET title='bypass' RETURNING title",
+        )
+        .first(),
+    ).toThrow('mutations must use')
   })
 })

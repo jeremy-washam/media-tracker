@@ -64,3 +64,19 @@ describe('Spotify Extended Streaming History ingestion', () => {
     })
   })
 })
+
+it.each(['2026-02-30T12:00:00Z', '2026-04-31T00:00:00Z', '2026-01-01T24:00:00Z'])(
+  'preserves unknown export occurrence time for invalid source instant %s',
+  (ts) => {
+    const result = parseSpotifyHistoryMember(
+      'Streaming_History_Audio_2026.json',
+      bytes([
+        { ts, ms_played: 100, spotify_episode_uri: 'spotify:episode:episode123' },
+        { ts, ms_played: 100, spotify_track_uri: 'spotify:track:track123' },
+      ]),
+    )
+    expect(result.podcastSegments[0]?.occurredAt).toBeNull()
+    expect(result.songSegments[0]?.occurredAt).toBeNull()
+    expect(result.rows).toBe(2)
+  },
+)

@@ -25,6 +25,14 @@ layer, model-access options, and delivery sequence; it is not shipped behavior.
 
 ## Current checkout status (2026-10-14)
 
+The October 17 test audit follow-up hardens Spotify evidence/identity and partial
+failure reporting, catalog lease/publication fencing, timestamp/query validation,
+Reader content publication, and Library recovery/accessibility states. It adds
+real local Worker and browser acceptance suites and shared D1-constrained
+repository fixtures. ADR 0020 and migration 0031 describe the storage change;
+hosted migration and deployment remain separate work. CI and automatic deployment
+are deferred until the local fixes and test portfolio are accepted.
+
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
 root opens Books Archive. Source-derived Queue, Reader Feed, Podcast Following,

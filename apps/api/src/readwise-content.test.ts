@@ -88,6 +88,22 @@ describe('Reader Article content extraction', () => {
     ).toBe('Title & subtitle\n\nFirst paragraph.\n\nSecond.')
   })
 
+  it.each([
+    '&#1114112;',
+    '&#x110000;',
+    '&#55296;',
+    '&#xDFFF;',
+    '&#0;',
+    '&#x0;',
+    `&#${'9'.repeat(400)};`,
+  ])('replaces invalid HTML numeric entity %s without poisoning content extraction', (entity) => {
+    expect(extractArticleText(`<p>Before ${entity} after.</p>`)).toBe('Before \uFFFD after.')
+  })
+
+  it('preserves valid supplementary Unicode numeric entities', () => {
+    expect(extractArticleText('<p>&#128578; &#x1F642; &#65;</p>')).toBe('🙂 🙂 A')
+  })
+
   it('produces exact byte ranges for long ASCII and multibyte paragraphs', async () => {
     const text = `${'longword '.repeat(700)}${'é漢🙂'.repeat(900)}`
     const bytes = new TextEncoder().encode(text)

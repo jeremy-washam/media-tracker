@@ -1,3 +1,4 @@
+import { temporalInstant } from '@media-tracker/domain'
 import { z } from 'zod'
 
 const historyRowSchema = z
@@ -61,8 +62,11 @@ export interface SpotifyHistoryMemberProjection {
 
 function normalizedInstant(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null
-  const milliseconds = Date.parse(value)
-  return Number.isNaN(milliseconds) ? null : new Date(milliseconds).toISOString()
+  try {
+    return temporalInstant(value).value
+  } catch {
+    return null
+  }
 }
 
 function episodeId(uri: string | null): string | null {

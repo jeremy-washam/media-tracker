@@ -43,12 +43,28 @@ type DisabledNavigationItem = {
 const unavailableMedia: DisabledNavigationItem[] = []
 
 function preference(key: string): boolean {
-  return typeof window !== 'undefined' && window.localStorage.getItem(key) === 'true'
+  return storedPreference(key) === 'true'
+}
+
+function storedPreference(key: string): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function savePreference(key: string, value: boolean) {
+  try {
+    window.localStorage.setItem(key, String(value))
+  } catch {
+    // Preferences can remain in memory when browser storage is unavailable.
+  }
 }
 
 function initialDark(): boolean {
   if (typeof window === 'undefined') return false
-  const stored = window.localStorage.getItem('media-tracker:dark')
+  const stored = storedPreference('media-tracker:dark')
   return stored === null
     ? window.matchMedia('(prefers-color-scheme: dark)').matches
     : stored === 'true'
@@ -70,11 +86,11 @@ export function AppShell() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
-    window.localStorage.setItem('media-tracker:dark', String(dark))
+    savePreference('media-tracker:dark', dark)
   }, [dark])
 
   useEffect(() => {
-    window.localStorage.setItem('media-tracker:sidebar-collapsed', String(collapsed))
+    savePreference('media-tracker:sidebar-collapsed', collapsed)
   }, [collapsed])
 
   const navigation = (collapsed: boolean, mobile: boolean) => (

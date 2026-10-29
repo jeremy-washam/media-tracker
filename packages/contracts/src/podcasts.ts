@@ -1,9 +1,14 @@
 import { z } from 'zod'
 import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
+import {
+  CalendarDateSchema as date,
+  QueryTextSchema,
+  validateFacetBudget,
+} from './query-validation'
 
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-  z.string().trim().optional(),
+  QueryTextSchema.optional(),
 )
 const stringList = z.preprocess(
   (value) =>
@@ -12,13 +17,12 @@ const stringList = z.preprocess(
       : (Array.isArray(value) ? value : [value])
           .flatMap((item) => String(item).split(','))
           .filter(Boolean),
-  z.array(z.string()).default([]),
+  z.array(z.string().max(500)).max(50).default([]),
 )
 const booleanFlag = z.preprocess(
   (value) => value === true || value === 'true' || value === '1',
   z.boolean().default(false),
 )
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 export const PodcastViewSchema = z.enum(['archive', 'queue', 'following'])
 export const PodcastsQuerySchema = z
@@ -72,6 +76,10 @@ export const PodcastsQuerySchema = z
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((value, context) => {
+    validateFacetBudget(
+      [value.show, value.publisher, value.language, value.libraryEpisodes, value.duration],
+      context,
+    )
     if (value.dateFrom && value.dateTo && value.dateFrom > value.dateTo)
       context.addIssue({
         code: 'custom',

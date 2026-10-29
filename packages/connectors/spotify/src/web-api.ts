@@ -405,15 +405,22 @@ export function parseSpotifyEpisodeResponse(response: {
   }
 }
 
-export async function fetchSpotifySavedShowsPage(input: {
+export async function fetchSpotifySavedShowsResponse(input: {
   accessToken: string
   offset?: number
   fetch?: typeof fetch
-}): Promise<SpotifySavedShowsPage> {
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
   const url = new URL('https://api.spotify.com/v1/me/shows')
   url.searchParams.set('limit', '50')
   url.searchParams.set('offset', String(input.offset ?? 0))
   const response = await spotifyResponse({ ...input, url })
+  return { bytes: response.bytes, contentType: response.contentType ?? 'application/json' }
+}
+
+export function parseSpotifySavedShowsPage(response: {
+  bytes: Uint8Array
+  contentType: string
+}): SpotifySavedShowsPage {
   const page = savedShowsPageSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes)))
   const consumed = page.offset + page.items.length
   if (page.items.length === 0 && consumed < page.total)
@@ -439,15 +446,22 @@ export async function fetchSpotifySavedShowsPage(input: {
   }
 }
 
-export async function fetchSpotifyRecentlyPlayed(input: {
+export async function fetchSpotifyRecentlyPlayedResponse(input: {
   accessToken: string
   after?: string
   fetch?: typeof fetch
-}): Promise<SpotifyRecentlyPlayedPage> {
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
   const url = new URL('https://api.spotify.com/v1/me/player/recently-played')
   url.searchParams.set('limit', '50')
   if (input.after) url.searchParams.set('after', input.after)
   const response = await spotifyResponse({ ...input, url })
+  return { bytes: response.bytes, contentType: response.contentType ?? 'application/json' }
+}
+
+export function parseSpotifyRecentlyPlayed(response: {
+  bytes: Uint8Array
+  contentType: string
+}): SpotifyRecentlyPlayedPage {
   const page = recentlyPlayedSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes)))
   return {
     after: page.cursors?.after ?? null,
@@ -457,16 +471,23 @@ export async function fetchSpotifyRecentlyPlayed(input: {
   }
 }
 
-export async function fetchSpotifyTracks(input: {
+export async function fetchSpotifyTracksResponse(input: {
   accessToken: string
   ids: readonly string[]
   fetch?: typeof fetch
-}): Promise<SpotifyTracksResponse> {
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
   if (input.ids.length < 1 || input.ids.length > 50)
     throw new TypeError('Spotify track lookup requires between 1 and 50 IDs')
   const url = new URL('https://api.spotify.com/v1/tracks')
   url.searchParams.set('ids', input.ids.join(','))
   const response = await spotifyResponse({ ...input, url })
+  return { bytes: response.bytes, contentType: response.contentType ?? 'application/json' }
+}
+
+export function parseSpotifyTracks(response: {
+  bytes: Uint8Array
+  contentType: string
+}): SpotifyTracksResponse {
   const body = tracksSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes)))
   return {
     bytes: response.bytes,
@@ -475,12 +496,19 @@ export async function fetchSpotifyTracks(input: {
   }
 }
 
-export async function fetchSpotifyPlayer(input: {
+export async function fetchSpotifyPlayerResponse(input: {
   accessToken: string
   fetch?: typeof fetch
-}): Promise<SpotifyPlayerObservation> {
+}): Promise<{ bytes: Uint8Array; contentType: string | null; status: number }> {
   const url = new URL('https://api.spotify.com/v1/me/player')
-  const response = await spotifyResponse({ ...input, url, allowEmpty: true })
+  return spotifyResponse({ ...input, url, allowEmpty: true })
+}
+
+export function parseSpotifyPlayer(response: {
+  bytes: Uint8Array
+  contentType: string | null
+  status: number
+}): SpotifyPlayerObservation {
   if (response.status === 204 || response.bytes.byteLength === 0) {
     return {
       bytes: response.bytes,
@@ -532,4 +560,21 @@ export async function fetchSpotifyPlayer(input: {
     progressMs: value.progress_ms ?? null,
     sourceTimestamp: value.timestamp == null ? null : new Date(value.timestamp).toISOString(),
   }
+}
+
+export async function fetchSpotifySavedShowsPage(
+  input: Parameters<typeof fetchSpotifySavedShowsResponse>[0],
+) {
+  return parseSpotifySavedShowsPage(await fetchSpotifySavedShowsResponse(input))
+}
+export async function fetchSpotifyRecentlyPlayed(
+  input: Parameters<typeof fetchSpotifyRecentlyPlayedResponse>[0],
+) {
+  return parseSpotifyRecentlyPlayed(await fetchSpotifyRecentlyPlayedResponse(input))
+}
+export async function fetchSpotifyTracks(input: Parameters<typeof fetchSpotifyTracksResponse>[0]) {
+  return parseSpotifyTracks(await fetchSpotifyTracksResponse(input))
+}
+export async function fetchSpotifyPlayer(input: Parameters<typeof fetchSpotifyPlayerResponse>[0]) {
+  return parseSpotifyPlayer(await fetchSpotifyPlayerResponse(input))
 }

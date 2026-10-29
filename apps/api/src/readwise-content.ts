@@ -11,12 +11,20 @@ async function digest(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(value)].map((part) => part.toString(16).padStart(2, '0')).join('')
 }
 
+function numericEntity(code: string, radix: 10 | 16): string {
+  const point = Number.parseInt(code, radix)
+  return Number.isInteger(point) &&
+    point > 0 &&
+    point <= 0x10ffff &&
+    (point < 0xd800 || point > 0xdfff)
+    ? String.fromCodePoint(point)
+    : '\uFFFD'
+}
+
 function decodeEntities(value: string): string {
   return value
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\da-f]+);/gi, (_, code: string) =>
-      String.fromCodePoint(Number.parseInt(code, 16)),
-    )
+    .replace(/&#(\d+);/g, (_, code: string) => numericEntity(code, 10))
+    .replace(/&#x([\da-f]+);/gi, (_, code: string) => numericEntity(code, 16))
     .replaceAll('&nbsp;', ' ')
     .replaceAll('&amp;', '&')
     .replaceAll('&lt;', '<')
@@ -264,6 +272,7 @@ export async function indexReadwiseArticleContent(
     )
     return
   }
+  if (manifest.state === 'failed') await repository.resumeContentManifest(job.manifestId)
   if (manifest.state === 'ready') {
     await repository.completeContentJob(job.idempotencyKey, new Date().toISOString())
     return
@@ -271,6 +280,12 @@ export async function indexReadwiseArticleContent(
   const object = await bindings.RAW_BUCKET.get(manifest.extractedObjectKey)
   if (object === null) throw new Error('Extracted Article text is missing')
   const contentChunks = await chunkArticleText(await object.text())
+  if (
+    !Number.isInteger(job.nextOrdinal) ||
+    job.nextOrdinal < 0 ||
+    job.nextOrdinal >= contentChunks.length
+  )
+    throw new RangeError('Article indexing ordinal is outside the extracted content')
   const batch = contentChunks.slice(job.nextOrdinal, job.nextOrdinal + chunksPerInvocation)
   await repository.applyContentChunkBatch(job.manifestId, batch)
   const nextOrdinal = job.nextOrdinal + batch.length
@@ -278,5 +293,7 @@ export async function indexReadwiseArticleContent(
     await bindings.SYNC_QUEUE.send({ ...job, nextOrdinal })
     return
   }
+  if (!(await repository.hasContentChunkRange(job.manifestId, contentChunks.length)))
+    throw new Error('Article indexing chunk range is incomplete; retry the missing delivery')
   await repository.finalizeContent(job.manifestId, job.idempotencyKey, new Date().toISOString())
 }

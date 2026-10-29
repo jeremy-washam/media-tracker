@@ -123,6 +123,7 @@ export const importSpotify = async (
   let chunk = SpotifyImportResponseSchema.parse(await response.json())
   const totals = {
     archiveEpisodes: chunk.archiveEpisodes,
+    songObservations: chunk.songObservations,
     sourceRecords: chunk.sourceRecords,
     unresolvedPodcastSegments: chunk.unresolvedPodcastSegments,
   }
@@ -137,10 +138,14 @@ export const importSpotify = async (
       throw new Error(`Spotify import failed with status ${continuation.status}.`)
     }
     chunk = SpotifyImportResponseSchema.parse(await continuation.json())
-    if (!chunk.completed && (chunk.nextOffset === null || chunk.nextOffset === previousOffset)) {
+    if (
+      !chunk.completed &&
+      (chunk.nextOffset === null || (previousOffset !== null && chunk.nextOffset <= previousOffset))
+    ) {
       throw new Error('Spotify import did not make progress.')
     }
     totals.archiveEpisodes += chunk.archiveEpisodes
+    totals.songObservations += chunk.songObservations
     totals.sourceRecords += chunk.sourceRecords
     totals.unresolvedPodcastSegments += chunk.unresolvedPodcastSegments
   }
@@ -193,7 +198,10 @@ export const importYoutube = async (
       throw new Error(`YouTube import failed with status ${continuation.status}.`)
     }
     chunk = YoutubeImportResponseSchema.parse(await continuation.json())
-    if (!chunk.completed && (chunk.nextOffset === null || chunk.nextOffset === previousOffset)) {
+    if (
+      !chunk.completed &&
+      (chunk.nextOffset === null || (previousOffset !== null && chunk.nextOffset <= previousOffset))
+    ) {
       throw new Error('YouTube import did not make progress.')
     }
     totals.videos += chunk.videos
@@ -228,7 +236,8 @@ export async function resumeImport(
         ? YoutubeImportResponseSchema.parse(body)
         : SpotifyImportResponseSchema.parse(body)
     if (result.completed) return
-    if (result.nextOffset === lastOffset) throw new Error('Import did not make progress.')
+    if (result.nextOffset === null || (lastOffset !== null && result.nextOffset <= lastOffset))
+      throw new Error('Import did not make progress.')
     lastOffset = result.nextOffset
   }
 }

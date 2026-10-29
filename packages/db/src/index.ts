@@ -81,6 +81,8 @@ export type {
 export { SqlVideosRepository } from './videos-repository'
 export type { CatalogJobRecord, CatalogJobState, CatalogProvider } from './catalog-jobs-repository'
 export { SqlCatalogJobsRepository } from './catalog-jobs-repository'
+export { CatalogLeaseLostError, fenceCatalogDatabase } from './catalog-fence'
+export type { CatalogLease } from './catalog-fence'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'
