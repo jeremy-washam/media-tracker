@@ -21,7 +21,7 @@ import {
   retryAfterSeconds,
   tmdbMatcherVersion,
 } from './catalog-policy'
-import { boundedTmdbEnvironment } from './tmdb-grant'
+import { boundedTmdbEnvironment } from './tmdb-budget'
 import { SyncDeferredError } from './sync-budget'
 
 const batchSize = 10

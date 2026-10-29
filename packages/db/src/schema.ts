@@ -40,10 +40,18 @@ export const sourceSyncAdmission = sqliteTable(
     outcome: text('outcome', { enum: ['running', 'succeeded', 'failed'] }).notNull(),
     reservationJson: text('reservation_json').notNull(),
     usageJson: text('usage_json'),
+    snapshotRunId: text('snapshot_run_id').references(() => syncRuns.id, { onDelete: 'restrict' }),
+    retryNotBefore: integer('retry_not_before').notNull().default(0),
+    retryCount: integer('retry_count').notNull().default(0),
+    stopReason: text('stop_reason'),
   },
   (table) => [
     primaryKey({ columns: [table.source, table.day] }),
     index('source_sync_admission_latest').on(table.source, sql`${table.startedAt} DESC`),
+    check(
+      'source_sync_retry_nonnegative',
+      sql`${table.retryCount}>=0 AND ${table.retryNotBefore}>=0`,
+    ),
     check('source_sync_attempts_positive', sql`${table.attempts} > 0`),
     check('source_sync_reservation_valid', sql`json_valid(${table.reservationJson})`),
     check(

@@ -116,9 +116,15 @@ def verify_live(configuration, live, queues):
         raise ReleaseError('Production storage bindings drifted')
     queue_names = {item['queue_id']: item['queue_name'] for item in queues}
     wanted_queues = {(item['binding'], item['queue']) for item in configuration['queues']['producers']}
-    actual_queues = {(item['name'], queue_names.get(item.get('queue_id'))) for item in bindings if item['type'] == 'queue'}
+    actual_queues = {(item['name'], item.get('queue_name') or queue_names.get(item.get('queue_id'))) for item in bindings if item['type'] == 'queue'}
     if wanted_queues != actual_queues:
         raise ReleaseError('Production queue bindings drifted')
+    if configuration['vars'].get('OPERATING_MONITOR_ENABLED') == 'true':
+        monitor_id = configuration['vars'].get('SYNC_QUEUE_ID')
+        producer = next((item for item in bindings if item['name'] == 'SYNC_QUEUE' and item['type'] == 'queue'), {})
+        producer_id = producer.get('queue_id') or next((key for key,value in queue_names.items() if value == producer.get('queue_name')), None)
+        if not monitor_id or monitor_id != producer_id or queue_names.get(monitor_id) != 'media-tracker-sync':
+            raise ReleaseError('Operating monitor must control the actual sync queue')
     if live.get('limits') != configuration.get('limits'):
         raise ReleaseError('Production runtime limits drifted')
     wanted_assets = {configuration.get('assets', {}).get('binding')} - {None}
@@ -146,7 +152,7 @@ def verify_consumers(configuration, queues, consumers_by_queue):
               'max_retries': 'max_retries'}
     for queue in queues:
         consumers = [item for item in consumers_by_queue[queue['queue_id']]
-                     if item.get('script_name') == 'media-tracker']
+                     if item.get('script') == 'media-tracker']
         if consumers:
             if len(consumers) != 1 or queue['queue_name'] in actual:
                 raise ReleaseError('Unexpected production queue consumer')
@@ -242,6 +248,9 @@ def smoke(library=False):
                 raise ReleaseError('Authenticated Library summary smoke failed')
 
 
+ACTIVE_LEASE_SQL = "SELECT (SELECT count(*) FROM source_sync_lease WHERE expires_at>?) + (SELECT count(*) FROM catalog_refresh_jobs WHERE state='running' AND lease_expires_at>?) + (SELECT count(*) FROM spotify_catalog_backfill_jobs WHERE state='running' AND lease_expires_at>?) AS active"
+
+
 def deploy(revision, migration_digest=None):
     verify_revision(revision)
     # Verify smoke credentials before touching any production state.
@@ -283,8 +292,8 @@ def deploy(revision, migration_digest=None):
         verify_quiescence(operating, queues, [item['queue'] for item in configuration['queues']['producers']])
         now = datetime.now(timezone.utc)
         leases = management(account, '/d1/database/' + database + '/query', {
-            'sql': 'SELECT (SELECT count(*) FROM source_sync_lease WHERE expires_at>?) + (SELECT count(*) FROM catalog_refresh_jobs WHERE lease_expires_at>?) AS active',
-            'params': [int(now.timestamp() * 1000), now.isoformat().replace('+00:00', 'Z')],
+            'sql': ACTIVE_LEASE_SQL,
+            'params': [int(now.timestamp() * 1000), now.isoformat().replace('+00:00', 'Z'), now.isoformat().replace('+00:00', 'Z')],
         })
         if leases[0]['results'][0]['active'] != 0:
             raise ReleaseError('Migration requires all source and catalog leases drained')

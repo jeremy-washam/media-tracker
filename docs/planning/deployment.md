@@ -1,29 +1,11 @@
 # Private deployment preparation
 
-Status: the paused production Worker and owner-only Access/MFA are deployed.
-The owner confirmed sign-in, the health response, and the web interface. All
-237 database import files have matching native receipts, and all 18,126 private
-R2 objects have matching SHA-256, size, and metadata. Full hosted database and
-independent restore verification passed on October 14: 94 application tables,
-1,798,348 rows, one compatibility view, exact schema/index/trigger definitions,
-foreign keys, sequence state, and all eight search vocabularies matched. The
-private recovery SQLite artifact passed its final integrity checks, including
-reconstructed contentless search. Temporary verification tables were removed,
-and a fresh D1 Time Travel bookmark was saved. The owner confirmed that Books,
-Movies, Articles, Podcasts, Music, and Videos load in the deployed app. The owner
-also confirmed search, filters, item details/history, and article excerpts work.
-Hosted performance and provider-job budgets remain pending; background
-processing stays off.
-The owner approves the existing $5/month plan with $0 additional charges.
-
-October 17: source sync is the next activation stage, before further browsing
-measurements. Follow the [source sync rollout](source-sync-rollout.md) for
-expiring grants, durable admission, queue settings and first-source validation.
-Do not enable the older unrestricted hourly provider handler in production.
-
-The hosted app is one Worker serving React/Vite and Hono, with D1, private R2,
-a sync queue, and a dead-letter queue. Retain the `media-tracker` infrastructure
-names. A Cloudflare-provided `workers.dev` address is sufficient.
+Current status and remaining acceptance gates are maintained in the
+[deployment closeout](deployment-closeout.md). The private Library is live,
+owner Access/MFA and remote transfer/restore are verified, and daily source sync
+has been activated for three providers. The sections below retain the original
+cutover procedures and dated transfer receipts. They do not establish current
+activation or override the operating policy below.
 
 ## Account prerequisites
 
@@ -42,26 +24,18 @@ See [D1 limits](https://developers.cloudflare.com/d1/platform/limits/) and
 
 ## Cost controls and storage audit
 
-### Owner spending gate
+### Current operating policy
 
-On October 13, the owner instructed: "Do not, under any circumstances, spend
-money. If your actions will cause me to get charged, pause and let me know."
-This supersedes the earlier deployment spending assumptions. Do not resume
-remote imports, object uploads, data queries, verification, provider calls, or
-background processing until remaining included account allowances are verified
-and the work can stay within them. Pause and notify the owner before an action
-that would add a charge; uncertain billing headroom is not permission to proceed.
-Local inspection, code changes, tests, and documentation can continue.
+On October 29 the owner approved the existing $5/month plan with modest ordinary
+overages and requested protection against runaway bills. Warn near $10 total
+and pause near $25 estimated total. New paid services/subscriptions require
+approval. This supersedes the October 13/14 requirement for $0 additional usage
+and per-operation allowance review. Expiring source grants and lifetime quotas
+are retired by[ADR 0021](../decisions/0021-bounded-production-operations.md).
+The[closeout checklist](deployment-closeout.md) records implementation and live
+activation separately. Usage estimates/alerts have lag and are not invoice caps.
 
-On October 14, the owner confirmed that the existing $5/month Workers Paid
-subscription remains approved, with $0 additional charges. The owner supplied
-billing screenshots showing $0 reported usage cost and no usage breakdown for
-the October 14–November 13 cycle. Missing billing data does not establish
-remaining included usage. Do not silently cancel or downgrade it; the current
-Library exceeds the Free plan's per-database size limit. Account subscription
-and billable-usage API reads were denied, so those APIs do not confirm an
-invoice. Remaining included headroom is checked from native account analytics,
-private transfer ledgers, resource sizes, and bounded operation budgets.
+### Historical transfer and October14 audit
 
 After completed verification, the production transfer ledger records 30,473,276
 D1 rows read and 11,977,506 rows written, including the earlier interrupted
@@ -107,9 +81,10 @@ retained 60,000-request/100 ms helper bounds and native usage provide ample
 headroom; these figures are usage evidence, not an invoice or a hard dollar cap.
 No new subscription, paid service, or background processing was enabled.
 
-Workers Paid has no account-wide hard dollar cap. Create a budget alert for
-$1 of usage-based spend in Manage Account → Billing → Billable Usage; the
-recurring $5 plan fee is excluded. Alerts do not stop usage and can arrive the
+Workers Paid has no account-wide hard dollar cap. Use a warning near $10 total (approximately $5 of
+usage-based spend beyond the base plan) in Manage Account → Billing → Billable Usage. The
+recurring $5 plan fee may be excluded by the dashboard metric; verify the alert's
+basis rather than assuming its number is total spend. Alerts do not stop usage and can arrive the
 following day. Account activation is confirmed by the owner. The supplied
 billing screenshot shows two budget alerts; their thresholds are not visible.
 See [budget alerts](https://developers.cloudflare.com/billing/manage/budget-alerts/)

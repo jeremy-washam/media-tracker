@@ -75,6 +75,7 @@ export const HardcoverSyncResponseSchema = z.object({
   queueBooks: z.number().int().nonnegative().default(0),
   works: z.number().int().nonnegative().default(0),
   editions: z.number().int().nonnegative().default(0),
+  continuation: z.boolean().optional(),
 })
 
 export const LetterboxdImportResponseSchema = z.object({

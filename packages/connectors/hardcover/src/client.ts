@@ -501,9 +501,6 @@ async function fetchGraphql(
       return { bytes, contentType: response.headers.get('content-type') ?? 'application/json' }
     }
     const retryable = response.status === 429 || response.status >= 500
-    if (!retryable || attempt === 3) {
-      throw new HardcoverApiError(`Hardcover GraphQL returned ${response.status}`, response.status)
-    }
     const retryAfter = response.headers.get('retry-after')
     const numericSeconds = retryAfter === null ? Number.NaN : Number(retryAfter)
     const serverDelay = Number.isFinite(numericSeconds)
@@ -511,6 +508,13 @@ async function fetchGraphql(
       : retryAfter === null
         ? Number.NaN
         : Date.parse(retryAfter) - Date.now()
+    if (!retryable || attempt === 3) {
+      throw new HardcoverApiError(
+        `Hardcover GraphQL returned ${response.status}`,
+        response.status,
+        Number.isFinite(serverDelay) && serverDelay > 0 ? Math.ceil(serverDelay / 1000) : null,
+      )
+    }
     const fallbackDelay = 500 * 2 ** attempt
     if (Number.isFinite(serverDelay) && serverDelay > 30_000)
       throw new HardcoverApiError(

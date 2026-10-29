@@ -1,3 +1,4 @@
+import { readHostedZip, HostedZipError } from './hosted-zip'
 import {
   inspectYoutubeTakeoutBytes,
   youtubeChannelId,
@@ -874,7 +875,13 @@ export async function continueYoutubeTakeoutImport(
   if (stored === null) {
     throw new YoutubeTakeoutImportError('The YouTube import source is unavailable')
   }
-  const archive = new Uint8Array(await stored.arrayBuffer())
+  const archive =
+    bindings.AUTH_MODE === 'access'
+      ? await readHostedZip(stored).catch((error: unknown) => {
+          if (error instanceof HostedZipError) throw new YoutubeTakeoutImportError(error.message)
+          throw error
+        })
+      : new Uint8Array(await stored.arrayBuffer())
   if ((await checksum(archive)).hex !== importId) {
     throw new YoutubeTakeoutImportError('The YouTube import source failed verification')
   }

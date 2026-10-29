@@ -85,68 +85,69 @@ export function validateProductionConfiguration(
   }
   if (!['true', 'false'].includes(configuration.vars.MAINTENANCE_ENABLED))
     throw new Error('Explicit MAINTENANCE_ENABLED configuration is required')
+  for (const key of [
+    'ARTICLE_CONTENT_ENABLED',
+    'SPOTIFY_CATALOG_ENABLED',
+    'CATALOG_AUTO_REFRESH',
+    'OPERATING_MONITOR_ENABLED',
+  ]) {
+    if (!['true', 'false'].includes(configuration.vars[key]))
+      throw new Error(`Explicit ${key} configuration is required`)
+  }
+  const crons: string[] = configuration.triggers.crons
+  if (
+    new Set(crons).size !== crons.length ||
+    crons.some((cron) => !['0 * * * *', '*/5 * * * *', '*/10 * * * *'].includes(cron))
+  )
+    throw new Error('Only bounded source, maintenance and operating monitor schedules are allowed')
+  if (
+    configuration.vars.SYNC_BUDGET_UNTIL ||
+    configuration.vars.TMDB_CATALOG_JOB_ID ||
+    configuration.vars.TMDB_CATALOG_UNTIL
+  )
+    throw new Error('Expiring rollout grants are retired; use normal bounded operation')
+  if (configuration.vars.OPERATING_MONITOR_ENABLED === 'true') {
+    if (
+      configuration.vars.CLOUDFLARE_ACCOUNT_ID !== configuration.account_id ||
+      !/^[a-f0-9]{32}$/.test(configuration.vars.SYNC_QUEUE_ID ?? '') ||
+      !crons.includes('*/10 * * * *')
+    )
+      throw new Error(
+        'Operating monitor requires the actual account, queue ID and10minute schedule',
+      )
+  } else if (crons.includes('*/10 * * * *'))
+    throw new Error('Monitor schedule requires explicit activation')
+  if (crons.includes('*/5 * * * *') && configuration.vars.OPERATING_MONITOR_ENABLED !== 'true')
+    throw new Error('Background maintenance requires the operating monitor')
   if (configuration.vars.SYNC_ENABLED === 'true') {
     const sources = (configuration.vars.SYNC_SOURCES ?? '').split(',')
-    const until = Date.parse(configuration.vars.SYNC_BUDGET_UNTIL ?? '')
     if (
-      sources.length === 0 ||
+      !sources.length ||
       new Set(sources).size !== sources.length ||
       sources.some(
         (source: string) => !['readwise', 'hardcover', 'letterboxd', 'spotify'].includes(source),
-      ) ||
-      !Number.isFinite(until) ||
-      until <= Date.now() ||
-      until > Date.now() + 32 * 24 * 60 * 60_000
-    )
-      throw new Error(
-        'Source rollout requires explicit sources and an included-usage grant lasting at most 32 days',
       )
-    if (
-      configuration.vars.ARTICLE_CONTENT_ENABLED !== 'false' ||
-      configuration.vars.SPOTIFY_CATALOG_ENABLED !== 'false' ||
-      configuration.vars.CATALOG_AUTO_REFRESH !== 'false' ||
-      configuration.vars.MAINTENANCE_ENABLED !== 'false' ||
-      configuration.queues.consumers.length !== 1 ||
-      configuration.queues.consumers[0]?.queue !== 'media-tracker-sync' ||
-      configuration.queues.consumers[0]?.max_batch_size !== 1 ||
-      configuration.queues.consumers[0]?.max_concurrency !== 1 ||
-      configuration.queues.consumers[0]?.max_retries !== 1 ||
-      configuration.triggers.crons.length > 1 ||
-      configuration.triggers.crons.some((cron: string) => cron !== '0 * * * *')
     )
-      throw new Error(
-        'Source rollout requires one bounded source consumer; content, catalog and maintenance remain paused',
-      )
+      throw new Error('Normal operation requires explicit sources')
+    if (configuration.vars.OPERATING_MONITOR_ENABLED !== 'true')
+      throw new Error('Normal operation requires the operating monitor')
+    const consumers = configuration.queues.consumers
     if (
-      configuration.vars.SYNC_RETRY_SOURCE &&
-      !sources.includes(configuration.vars.SYNC_RETRY_SOURCE)
+      consumers.length !== 1 ||
+      consumers[0]?.queue !== 'media-tracker-sync' ||
+      consumers[0]?.max_batch_size !== 1 ||
+      consumers[0]?.max_concurrency !== 1 ||
+      consumers[0]?.max_retries !== 1 ||
+      consumers[0]?.dead_letter_queue !== 'media-tracker-sync-dead-letter' ||
+      !crons.includes('0 * * * *')
     )
-      throw new Error('Controlled retry must name an explicitly enabled source')
+      throw new Error('Normal operation requires one serial bounded consumer and hourly scheduling')
+  } else {
+    if (configuration.queues.consumers.length || crons.includes('0 * * * *'))
+      throw new Error('Paused deployment cannot run sources or consumers')
   }
-  const tmdbJob = configuration.vars.TMDB_CATALOG_JOB_ID
-  const tmdbUntil = configuration.vars.TMDB_CATALOG_UNTIL
-  if (tmdbJob || tmdbUntil) {
-    const until = Date.parse(tmdbUntil ?? '')
-    if (
-      !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(tmdbJob ?? '') ||
-      configuration.vars.SYNC_ENABLED !== 'true' ||
-      !Number.isFinite(until) ||
-      until <= Date.now() ||
-      until > Date.parse(configuration.vars.SYNC_BUDGET_UNTIL ?? '') ||
-      until > Date.now() + 32 * 86_400_000
-    )
-      throw new Error('TMDB requires one reviewed job and an expiring included-usage grant')
-  }
-  if (configuration.vars.SYNC_ENABLED === 'false') {
-    const crons = configuration.triggers.crons
-    if (
-      configuration.queues.consumers.length ||
-      crons.length > 1 ||
-      crons.some((cron: string) => cron !== '*/5 * * * *') ||
-      (crons.length && configuration.vars.MAINTENANCE_ENABLED !== 'true')
-    )
-      throw new Error('Paused deployment permits only explicitly enabled cache maintenance')
-  }
+  if (crons.includes('*/5 * * * *') && configuration.vars.MAINTENANCE_ENABLED !== 'true')
+    throw new Error('Maintenance schedule requires explicit activation')
 }
 
 export function runDeployment(args: string[]) {

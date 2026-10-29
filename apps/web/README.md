@@ -46,6 +46,8 @@ position; explicit import/sync invalidation still refreshes them safely.
 
 Connections polls its head activity page and account status every minute while
 idle and every five seconds during active work. Older activity is unpolled.
+Hardcover page responses distinguish background continuation from a completed
+reconciliation; the first page does not claim full import completion.
 Health retains thirty-second polling. See the owning
 [Library fetching contract](../../docs/architecture/library-fetching.md) for
 endpoint shapes, persistence, invalidation, and refresh details.

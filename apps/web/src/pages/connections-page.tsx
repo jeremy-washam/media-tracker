@@ -312,9 +312,18 @@ export function ConnectionsPage() {
       ) : null}
       {hardcoverSync.isSuccess ? (
         <p className="checkpoint-note">
-          {hardcoverSync.data.mode === 'backfill' ? 'Imported' : 'Reconciled'}{' '}
-          {hardcoverSync.data.books} read books and {hardcoverSync.data.archiveEntries} supported
-          reading occurrences from Hardcover.
+          {hardcoverSync.data.continuation ? (
+            <>
+              Processed {hardcoverSync.data.books} books from Hardcover. Sync continues in the
+              background.
+            </>
+          ) : (
+            <>
+              {hardcoverSync.data.mode === 'backfill' ? 'Imported' : 'Reconciled'}{' '}
+              {hardcoverSync.data.books} books and {hardcoverSync.data.archiveEntries} supported
+              reading occurrences from Hardcover.
+            </>
+          )}
         </p>
       ) : null}
       {hardcoverSync.isError ? (

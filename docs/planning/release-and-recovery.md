@@ -11,8 +11,10 @@ The repository now defines credential-free pull-request validation, guarded
 production delivery, a separate reviewed migration release, and read-only
 backup verification. Implementation and local synthetic tests do **not** mean
 GitHub environments, credentials, branch rules, or hosted delivery are activated.
-The release owner must record the first successful hosted workflow and recovery
-rehearsal in the deployment runbook. No workflow creates another cloud resource,
+The[deployment closeout](deployment-closeout.md) records current account setup,
+local/native validation and pending live acceptance. The release owner must
+record the first successful hosted workflow and fresh independent recovery
+rehearsal there. No workflow creates another cloud resource,
 changes provider secrets, starts paid services, purges a queue, or automatically
 resumes background work.
 
@@ -78,10 +80,15 @@ Never enable a `pull_request_target` job that executes a contributor's checkout.
 
 ## One-time delivery setup
 
-The current GitHub CLI OAuth token can read/push code but lacks `workflow` scope.
-The owner must authorize that scope before workflow commits can be pushed with
-that credential (`gh auth refresh -h github.com -s workflow`). Do not paste tokens
-into chat. This scope is about maintaining workflows, not buying runner time.
+The configured Git remote uses SSH, and a read-only `git ls-remote origin`
+confirmed that the existing SSH key authenticates successfully. Use that Git
+transport to push the reviewed workflow commits; no GitHub OAuth reauthorization
+is needed for this path. GitHub CLI API access remains separate. If the Git
+transport is later changed to HTTPS with an OAuth token, adding/updating workflow
+files requires that token's `workflow` scope. See
+[GitHub SSH authentication](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/about-ssh)
+and [OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps).
+Never paste tokens into chat; runner pricing is independent of Git authentication.
 
 Create `production` and `production-migrations` GitHub environments, restricted
 to `main`. Require an owner review for the migration environment. Keep ordinary

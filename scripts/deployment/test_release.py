@@ -1,6 +1,7 @@
 import copy
 from datetime import datetime, timedelta, timezone
 import json
+import sqlite3
 from pathlib import Path
 import tempfile
 import unittest
@@ -31,6 +32,17 @@ class ReleaseTests(unittest.TestCase):
         self.queues = [{'queue_id': 'queue', 'queue_name': 'media-tracker-sync', 'settings': {'delivery_paused': True}}]
         self.inventory = [{'name': '0001.sql', 'sha256': '1'}, {'name': '0002.sql', 'sha256': '2'}]
 
+    def test_quiescence_counts_spotify_and_ignores_deferred_catalog_work(self):
+        database = sqlite3.connect(':memory:')
+        try:
+            database.executescript("CREATE TABLE source_sync_lease(expires_at INTEGER); CREATE TABLE catalog_refresh_jobs(state TEXT,lease_expires_at TEXT); CREATE TABLE spotify_catalog_backfill_jobs(state TEXT,lease_expires_at TEXT); INSERT INTO catalog_refresh_jobs VALUES('pending','2026-11-30T00:00:00Z');")
+            params = [0,'2026-10-29T00:00:00Z','2026-10-29T00:00:00Z']
+            self.assertEqual(database.execute(release.ACTIVE_LEASE_SQL,params).fetchone()[0],0)
+            database.execute("INSERT INTO spotify_catalog_backfill_jobs VALUES('running','2026-10-30T00:00:00Z')")
+            self.assertEqual(database.execute(release.ACTIVE_LEASE_SQL,params).fetchone()[0],1)
+        finally:
+            database.close()
+
     def test_migration_history_rejects_unknown_duplicate_and_gaps(self):
         for applied in [['other.sql'], ['0001.sql', '0001.sql'], ['0002.sql']]:
             with self.subTest(applied=applied), self.assertRaises(release.ReleaseError):
@@ -60,12 +72,36 @@ class ReleaseTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(release.ReleaseError):
                 release.verify_live(self.configuration, live, self.queues)
 
+    def test_native_queue_name_bindings_match_the_live_api(self):
+        self.live['bindings'][4] = {'name':'SYNC_QUEUE','type':'queue','queue_name':'media-tracker-sync'}
+        release.verify_live(self.configuration,self.live,self.queues)
+        self.configuration['vars'].update({'OPERATING_MONITOR_ENABLED':'true','SYNC_QUEUE_ID':'queue'})
+        self.live['bindings'].extend([{'name':key,'type':'plain_text','text':value} for key,value in self.configuration['vars'].items() if key in {'OPERATING_MONITOR_ENABLED','SYNC_QUEUE_ID'}])
+        release.verify_live(self.configuration,self.live,self.queues)
+
+    def test_monitor_queue_id_must_match_the_actual_sync_producer(self):
+        self.configuration['vars'].update({'OPERATING_MONITOR_ENABLED': 'true', 'SYNC_QUEUE_ID': 'queue'})
+        self.live['bindings'].extend([
+            {'name': 'OPERATING_MONITOR_ENABLED', 'type': 'plain_text', 'text': 'true'},
+            {'name': 'SYNC_QUEUE_ID', 'type': 'plain_text', 'text': 'queue'},
+        ])
+        release.verify_live(self.configuration, self.live, self.queues)
+        self.queues.append({'queue_id': 'other', 'queue_name': 'unrelated-queue'})
+        self.configuration['vars']['SYNC_QUEUE_ID'] = 'other'
+        self.live['bindings'][-1]['text'] = 'other'
+        with self.assertRaisesRegex(release.ReleaseError, 'actual sync queue'):
+            release.verify_live(self.configuration, self.live, self.queues)
+        self.configuration['vars']['SYNC_QUEUE_ID'] = ''
+        self.live['bindings'][-1]['text'] = ''
+        with self.assertRaisesRegex(release.ReleaseError, 'actual sync queue'):
+            release.verify_live(self.configuration, self.live, self.queues)
+
     def test_consumer_and_schedule_drift_stops_release(self):
         release.verify_schedules(self.configuration, {'schedules': [{'cron': '0 * * * *'}]})
         with self.assertRaises(release.ReleaseError):
             release.verify_schedules(self.configuration, {'schedules': [{'cron': '* * * * *'}]})
         release.verify_consumers(self.configuration, self.queues, {'queue': []})
-        found = {'script_name': 'media-tracker', 'settings': {'batch_size': 1, 'max_concurrency': 1, 'max_retries': 1}}
+        found = {'script': 'media-tracker', 'settings': {'batch_size': 1, 'max_concurrency': 1, 'max_retries': 1}}
         with self.assertRaises(release.ReleaseError):
             release.verify_consumers(self.configuration, self.queues, {'queue': [found]})
         self.configuration['queues']['consumers'] = [{'queue': 'media-tracker-sync', 'max_batch_size': 1, 'max_concurrency': 1, 'max_retries': 1}]

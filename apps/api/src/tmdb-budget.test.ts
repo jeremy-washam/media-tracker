@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bindings } from './env'
-import { boundedTmdbEnvironment, tmdbGrantAllowed } from './tmdb-grant'
+import { boundedTmdbEnvironment } from './tmdb-budget'
 
 const jobId = '01K8QYJ6Q7G6J0Z3VTXYP5CXDD'
 function bindings(changes: Partial<Bindings> = {}) {
@@ -37,22 +37,7 @@ function database(meta: Record<string, number> = {}) {
 }
 afterEach(() => vi.unstubAllGlobals())
 
-describe('reviewed TMDB grant', () => {
-  it('requires the exact job and a valid expiry inside the reviewed source window', () => {
-    expect(tmdbGrantAllowed(bindings(), jobId)).toBe(true)
-    for (const changes of [
-      { AUTH_MODE: 'local' },
-      { SYNC_ENABLED: 'false' },
-      { TMDB_CATALOG_JOB_ID: '' },
-      { TMDB_CATALOG_UNTIL: '' },
-      { TMDB_CATALOG_UNTIL: new Date(Date.now() - 1).toISOString() },
-      { TMDB_CATALOG_UNTIL: new Date(Date.now() + 33 * 86_400_000).toISOString() },
-      { SYNC_BUDGET_UNTIL: new Date(Date.now() + 1).toISOString() },
-    ])
-      expect(tmdbGrantAllowed(bindings(changes), jobId)).toBe(false)
-    expect(tmdbGrantAllowed(bindings({ CATALOG_AUTO_REFRESH: 'true' }), 'another-job')).toBe(false)
-  })
-
+describe('bounded TMDB work', () => {
   it('measures first() mutations, bound statements and batches at the native boundary', async () => {
     const native = database({ rows_written: 25_000 })
     const bounded = boundedTmdbEnvironment(bindings({ DB: native.db }))

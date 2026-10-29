@@ -4,7 +4,7 @@ import type { Bindings } from './env'
 
 type AccessBindings = Pick<
   Bindings,
-  'AUTH_MODE' | 'ACCESS_TEAM_DOMAIN' | 'ACCESS_AUD' | 'OWNER_EMAIL'
+  'AUTH_MODE' | 'ACCESS_TEAM_DOMAIN' | 'ACCESS_AUD' | 'OWNER_EMAIL' | 'SMOKE_SERVICE_TOKEN_ID'
 >
 
 // Cache only public signing keys. No request identity or credential is retained.
@@ -74,8 +74,23 @@ export async function authorizeRequest(
       issuer: issuer.origin,
       audience: env.ACCESS_AUD,
       algorithms: ['RS256'],
-      requiredClaims: ['exp', 'iat', 'sub', 'email'],
+      requiredClaims: ['exp', 'iat', 'sub'],
     })
+    const url = new URL(request.url)
+    const smokePath =
+      url.pathname === '/api/health' ||
+      /^\/api\/library\/(books|movies|articles|podcasts|music|videos)\/summary$/.test(url.pathname)
+    if (
+      env.SMOKE_SERVICE_TOKEN_ID &&
+      payload.type === 'app' &&
+      payload.sub === '' &&
+      payload.email === undefined &&
+      payload.common_name === env.SMOKE_SERVICE_TOKEN_ID &&
+      request.method === 'GET' &&
+      smokePath &&
+      !url.search
+    )
+      return null
     if (
       typeof payload.email !== 'string' ||
       payload.email.toLowerCase() !== env.OWNER_EMAIL!.trim().toLowerCase() ||

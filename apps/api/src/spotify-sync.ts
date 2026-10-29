@@ -492,6 +492,7 @@ async function syncAdditionalSpotifyLibrary(input: {
   } catch (error) {
     savedShows = 0
     if (error instanceof SyncDeferredError) throw error
+    if (error instanceof SpotifyApiError && error.status === 429) throw error
     partialFailures.push('saved_shows')
     diagnostics.push(failureDetails(error).message)
     console.warn(
@@ -678,6 +679,7 @@ async function syncAdditionalSpotifyLibrary(input: {
       playerAt,
     )
   } catch (error) {
+    if (error instanceof SpotifyApiError && error.status === 429) throw error
     partialFailures.push('player')
     diagnostics.push(failureDetails(error).message)
     if (error instanceof SyncDeferredError) throw error
@@ -884,6 +886,7 @@ async function syncAdditionalSpotifyLibrary(input: {
       recentAt,
     )
   } catch (error) {
+    if (error instanceof SpotifyApiError && error.status === 429) throw error
     partialFailures.push('recent_tracks')
     diagnostics.push(failureDetails(error).message)
     if (error instanceof SyncDeferredError) throw error
@@ -909,6 +912,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     )
       catalogTracks = await syncTrackCatalog(input)
   } catch (error) {
+    if (error instanceof SpotifyApiError && error.status === 429) throw error
     partialFailures.push('track_catalog')
     diagnostics.push(failureDetails(error).message)
     if (error instanceof SyncDeferredError) throw error
@@ -1203,6 +1207,7 @@ export async function syncSpotifySavedEpisodes(
         counts: optionalCounts,
       })
     } catch (error) {
+      if (error instanceof SpotifyApiError && error.status === 429) throw error
       extended.partialFailures.push('optional_library')
       extended.diagnostics.push(failureDetails(error).message)
       if (error instanceof SyncDeferredError) throw error

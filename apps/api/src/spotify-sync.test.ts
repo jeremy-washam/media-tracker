@@ -277,3 +277,29 @@ it.each([401, 403, 429, 503])(
     expect(requests).toHaveBeenCalledTimes(2)
   },
 )
+
+it('stops optional Spotify reads immediately on429 so the coordinator can persist cooldown', async () => {
+  provider()
+  const original = fetch,
+    paths: string[] = []
+  vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    paths.push(new URL(url).pathname)
+    if (url.includes('/me/shows'))
+      return new Response('private-provider-body', {
+        status: 429,
+        headers: { 'retry-after': '172800' },
+      })
+    return original(input, init)
+  })
+  await expect(syncSpotifySavedEpisodes(bindings)).rejects.toMatchObject({
+    status: 429,
+    retryAfterSeconds: 172800,
+    operation: 'saved_shows',
+  })
+  expect(paths).toEqual(['/api/token', '/v1/me/episodes', '/v1/me/shows'])
+  expect(
+    database.sqlite.prepare("SELECT error_message FROM sync_runs WHERE status='failed'").get()
+      ?.error_message,
+  ).toContain('172800s')
+})
