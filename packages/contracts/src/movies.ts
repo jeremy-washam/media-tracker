@@ -143,6 +143,14 @@ export const MovieCollectionItemSchema = z.object({
   runtimeMinutes: z.number().int().nonnegative().nullable(),
   personal: z.object({
     currentRating: z.number().min(0.5).max(5).nullable(),
+    viewingRating: z
+      .object({
+        value: z.number().min(0.5).max(5),
+        archiveEntryId: z.string(),
+        watchedOn: calendarDate.nullable(),
+      })
+      .nullable()
+      .default(null),
     liked: z.boolean(),
     reviewed: z.boolean(),
   }),

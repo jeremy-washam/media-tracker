@@ -75,7 +75,12 @@ export interface MovieCollectionRecord {
   posterUrl: string | null
   directors: string[]
   runtimeMinutes: number | null
-  personal: { currentRating: number | null; liked: boolean; reviewed: boolean }
+  personal: {
+    currentRating: number | null
+    viewingRating: { value: number; archiveEntryId: string; watchedOn: string | null } | null
+    liked: boolean
+    reviewed: boolean
+  }
   archive: {
     active: boolean
     lifetimeWatchCount: number
@@ -392,15 +397,30 @@ function baseSql(input: MoviesListInput): { sql: string; values: DatabaseValue[]
       : `(SELECT bm25(movie_search) FROM movie_search
           WHERE movie_search MATCH ? AND media_item_id=p.media_item_id LIMIT 1)`
   return {
-    sql: `SELECT p.*, ${referenceSql} reference_watched_on,
+    sql: `SELECT p.*, v.id reference_viewing_id, v.rating_value viewing_rating_value,
+      v.consumed_at_value viewing_watched_on,
+      ${input.collection === 'archive' ? 'COALESCE(p.current_rating_value,v.rating_value)' : 'p.current_rating_value'} display_rating_value,
+      ${referenceSql} reference_watched_on,
       ${matchingCountSql} matching_watch_count, ${searchRankSql} search_rank
-      FROM movie_library_projection p`,
+      FROM movie_library_projection p
+      ${referenceViewingJoin(occurrence.sql)}`,
     values: [
       ...(input.watchedMode === 'unknown' ? [] : occurrence.values),
       ...occurrence.values,
       ...(search === null || shortSearch ? [] : [search]),
+      ...occurrence.values,
     ],
   }
+}
+
+// Match History ordering, including deterministic ties and undated viewings last.
+// Selecting the viewing before its rating prevents borrowing an older rated watch.
+function referenceViewingJoin(condition = '1=1'): string {
+  return `LEFT JOIN archive_entries v ON v.id=(
+    SELECT a.id FROM archive_entries a
+    WHERE a.media_item_id=p.media_item_id AND a.upstream_state='active' AND ${condition}
+    ORDER BY CASE WHEN a.consumed_at_value IS NULL THEN 1 ELSE 0 END,
+      a.consumed_at_value DESC,a.id LIMIT 1)`
 }
 
 function filterSql(input: MoviesListInput): { sql: string; values: DatabaseValue[] } {
@@ -440,16 +460,16 @@ function filterSql(input: MoviesListInput): { sql: string; values: DatabaseValue
         : range.join(' AND '),
     )
   } else if (input.releaseYearUnknown) clauses.push('b.release_year IS NULL')
-  if (input.ratingMode === 'rated') clauses.push('b.current_rating_value IS NOT NULL')
-  if (input.ratingMode === 'unrated') clauses.push('b.current_rating_value IS NULL')
+  if (input.ratingMode === 'rated') clauses.push('b.display_rating_value IS NOT NULL')
+  if (input.ratingMode === 'unrated') clauses.push('b.display_rating_value IS NULL')
   if (input.ratingMode === 'range') {
-    clauses.push('b.current_rating_value IS NOT NULL')
+    clauses.push('b.display_rating_value IS NOT NULL')
     if (input.ratingMin !== undefined) {
-      clauses.push('b.current_rating_value >= ?')
+      clauses.push('b.display_rating_value >= ?')
       values.push(input.ratingMin)
     }
     if (input.ratingMax !== undefined) {
-      clauses.push('b.current_rating_value <= ?')
+      clauses.push('b.display_rating_value <= ?')
       values.push(input.ratingMax)
     }
   }
@@ -1436,7 +1456,7 @@ export class SqlMoviesRepository {
       addedAt: 'b.queue_added_on',
       title: 'b.normalized_title',
       releaseYear: 'b.release_year',
-      personalRating: 'b.current_rating_value',
+      personalRating: 'b.display_rating_value',
       watchCount: 'b.active_watch_count',
       runtime: 'b.runtime_minutes',
       relevance: 'b.search_rank',
@@ -1524,7 +1544,7 @@ export class SqlMoviesRepository {
         COALESCE(SUM(CASE WHEN b.has_unknown_watched_date=1 THEN 1 ELSE 0 END),0) watched_unknown,
         COALESCE(SUM(CASE WHEN b.queue_added_on IS NULL THEN 1 ELSE 0 END),0) added_unknown,
         COALESCE(SUM(CASE WHEN b.release_year IS NULL THEN 1 ELSE 0 END),0) year_unknown,
-        COALESCE(SUM(CASE WHEN b.current_rating_value IS NULL THEN 1 ELSE 0 END),0) unrated,
+        COALESCE(SUM(CASE WHEN b.display_rating_value IS NULL THEN 1 ELSE 0 END),0) unrated,
         COALESCE(SUM(b.reviewed),0) reviewed,
         COALESCE(SUM(CASE WHEN b.runtime_minutes IS NULL THEN 1 ELSE 0 END),0) runtime_unknown,
         COALESCE(MAX(CASE WHEN b.runtime_minutes IS NOT NULL THEN 1 ELSE 0 END),0) runtime_available
@@ -1580,7 +1600,9 @@ export class SqlMoviesRepository {
     const at = new Date().toISOString()
     const row = await statement(
       this.#database,
-      `SELECT p.*, p.latest_known_watched_on reference_watched_on,
+      `SELECT p.*, v.id reference_viewing_id, v.rating_value viewing_rating_value,
+        v.consumed_at_value viewing_watched_on,
+        p.latest_known_watched_on reference_watched_on,
         p.active_watch_count matching_watch_count, 0 sort_null_rank, NULL sort_value,
         c.label connection_label, c.coverage,
         (SELECT COUNT(*) FROM archive_entries a
@@ -1603,6 +1625,7 @@ export class SqlMoviesRepository {
         tv.genres_json tv_genres_json,tv.cast_json tv_cast_json,
         tv.countries_json tv_countries_json
        FROM movie_library_projection p JOIN connections c ON c.id=p.connection_id
+       ${referenceViewingJoin()}
        LEFT JOIN tmdb_movie_profiles tp ON tp.tmdb_movie_id=p.tmdb_movie_id AND tp.expires_at>?
        LEFT JOIN tmdb_tv_profiles tv ON tv.tmdb_tv_id=p.tmdb_tv_id AND tv.expires_at>?
        LEFT JOIN tmdb_configuration tc ON tc.singleton_id=1 AND tc.expires_at>?
@@ -1845,6 +1868,9 @@ interface MovieRow {
   director_names: string | null
   runtime_minutes: number | null
   current_rating_value: number | null
+  reference_viewing_id: string | null
+  viewing_rating_value: number | null
+  viewing_watched_on: string | null
   liked: number
   reviewed: number
   in_archive: number
@@ -1875,6 +1901,14 @@ function movieRow(row: MovieRow): MovieCollectionRecord {
     runtimeMinutes: row.runtime_minutes,
     personal: {
       currentRating: row.current_rating_value,
+      viewingRating:
+        row.viewing_rating_value === null || row.reference_viewing_id === null
+          ? null
+          : {
+              value: row.viewing_rating_value,
+              archiveEntryId: row.reference_viewing_id,
+              watchedOn: row.viewing_watched_on,
+            },
       liked: row.liked === 1,
       reviewed: row.reviewed === 1,
     },
