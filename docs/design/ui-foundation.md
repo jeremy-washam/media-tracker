@@ -206,6 +206,10 @@ the full inspector height. Check loaded content geometry, not only tab semantics
 
 Book rows share one responsive column definition at the pane width, hiding less
 important metadata at narrow sizes while keeping the title and personal rating.
+Movie row breakpoints also follow the named Library collection container, rather
+than the browser viewport: an open inspector can leave a narrow results pane on
+a wide screen. Reduce secondary columns before their minimum widths overflow,
+and verify row content bounds with inspectors both open and closed in each theme.
 Common toolbar order is Search, optional source/show, Filters, Sort, Direction,
 and optional List/Grid. Reveal the selected section tab on narrow headers without
 moving keyboard focus. Format counts consistently with collection summaries.

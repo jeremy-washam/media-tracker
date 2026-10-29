@@ -364,6 +364,38 @@ test('Book rows omit column headings and fit both collections and inspector pane
   }
 })
 
+for (const dark of [false, true]) {
+  test(`Movie rows fit the available pane with and without the inspector in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    for (const section of ['archive', 'queue']) {
+      await page.goto(`/library/movies/${section}?layout=list&item=movie-one`)
+      const row = page.locator('[data-ui~="movie-row"]').first()
+      const inspector = page.getByRole('complementary', { name: 'Movie inspector' })
+      await expect(
+        inspector.getByRole('heading', { name: movie.displayTitle, exact: true }),
+      ).toBeVisible()
+      for (const width of [1440, 1280, 1200, 1024, 768, 390]) {
+        await page.setViewportSize({ width, height: 768 })
+        await expect
+          .poll(() => row.evaluate((el) => el.scrollWidth <= el.clientWidth + 1))
+          .toBe(true)
+      }
+      await inspector.getByRole('button', { name: 'Close inspector', exact: true }).click()
+      for (const width of [1440, 1280, 1200, 1024, 768, 390]) {
+        await page.setViewportSize({ width, height: 768 })
+        await expect
+          .poll(() => row.evaluate((el) => el.scrollWidth <= el.clientWidth + 1))
+          .toBe(true)
+      }
+    }
+  })
+}
+
 test('selected Music section stays visible on direct mobile navigation and resize', async ({
   page,
 }) => {
