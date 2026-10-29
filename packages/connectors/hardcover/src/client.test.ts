@@ -109,7 +109,6 @@ describe('Hardcover request failures', () => {
     { header: '2', delay: 2000 },
     { header: 'Thu, 01 Jan 2026 00:00:02 GMT', delay: 2000 },
     { header: 'nonsense', delay: 500 },
-    { header: '999999', delay: 30000 },
   ])('honors bounded Retry-After $header', async ({ header, delay }) => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
@@ -120,13 +119,36 @@ describe('Hardcover request failures', () => {
       )
       .mockResolvedValueOnce(Response.json({ data: { me: [{ id: 42 }] } }))
     vi.stubGlobal('fetch', request)
-    const promise = fetchHardcoverUserId('synthetic')
+    const outcome = expect(fetchHardcoverUserId('synthetic')).resolves.toBe(42)
     await vi.advanceTimersByTimeAsync(delay - 1)
     expect(request).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
-    expect(await promise).toBe(42)
+    await outcome
     expect(request).toHaveBeenCalledTimes(2)
   })
+  it.each(['999999', 'Thu, 01 Jan 2026 00:01:00 GMT'])(
+    'defers immediately when Retry-After %s exceeds the attempt wait allowance',
+    async (header) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+      const request = vi.fn(
+        async () =>
+          new Response(null, {
+            status: 429,
+            headers: { 'retry-after': header },
+          }),
+      )
+      vi.stubGlobal('fetch', request)
+      const outcome = expect(fetchHardcoverUserId('synthetic')).rejects.toThrow(
+        "Retry-After exceeds this attempt's wait allowance",
+      )
+      await outcome
+      expect(vi.getTimerCount()).toBe(0)
+      expect(request).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(request).toHaveBeenCalledOnce()
+    },
+  )
   it.each([
     { errors: [{ message: 'synthetic GraphQL error' }] },
     { data: {} },

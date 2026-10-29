@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 import { connectionId } from '@media-tracker/domain'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   SqlMoviesRepository,
@@ -113,7 +113,10 @@ describe('SqlMoviesRepository', () => {
     repository = new SqlMoviesRepository(client)
   })
 
-  afterEach(() => database.close())
+  afterEach(() => {
+    database.close()
+    vi.useRealTimers()
+  })
 
   async function applyFullSnapshot(
     films: LetterboxdMovieSnapshotFilm[] = [
@@ -727,6 +730,8 @@ describe('SqlMoviesRepository', () => {
   })
 
   it('projects a conservative TMDB match into collection and detail metadata', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(now))
     await applyFullSnapshot()
     const matchedMovie: TmdbMovieProfileProjection = {
       mediaItemId: 'movie-1',
@@ -777,13 +782,23 @@ describe('SqlMoviesRepository', () => {
       movies: [matchedMovie],
     })
     await repository.rebuild(now)
-    expect(await repository.findMovie('movie-1')).toMatchObject({
+    const fresh = await repository.findMovie('movie-1')
+    expect(fresh).toMatchObject({
       displayTitle: 'First Movie Restored',
       posterUrl: 'https://image.tmdb.org/t/p/w500/poster.jpg',
       directors: ['Director One'],
       overview: 'A restored synopsis.',
       genres: ['Drama'],
       source: { tmdbUrl: 'https://www.themoviedb.org/movie/101', metadataStatus: 'matched' },
+    })
+    vi.setSystemTime(new Date('2026-10-20T12:00:00.000Z'))
+    expect(await repository.findMovie('movie-1')).toMatchObject({
+      overview: null,
+      backdropUrl: null,
+      tmdbRating: null,
+      personal: fresh!.personal,
+      archive: fresh!.archive,
+      source: { tmdbUrl: 'https://www.themoviedb.org/movie/101' },
     })
     expect(await repository.needsTmdbConfigurationRefresh(now)).toBe(false)
     expect(await repository.needsTmdbConfigurationRefresh('2026-11-01T00:00:00.000Z')).toBe(true)
@@ -808,6 +823,8 @@ describe('SqlMoviesRepository', () => {
   })
 
   it('projects a TMDB TV profile without colliding with movie IDs or changing source year', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(now))
     await applyFullSnapshot()
     await repository.applyTmdbCatalogBatch({
       at: now,
@@ -855,10 +872,21 @@ describe('SqlMoviesRepository', () => {
       directors: ['Creator One'],
       enrichment: { status: 'matched', mediaType: 'tv' },
     })
-    expect(await repository.findMovie('movie-2')).toMatchObject({
+    const fresh = await repository.findMovie('movie-2')
+    expect(fresh).toMatchObject({
       overview: 'A miniseries.',
       genres: ['Animation'],
       cast: [{ name: 'Actor One', character: 'Wirt' }],
+      source: { tmdbUrl: 'https://www.themoviedb.org/tv/61617' },
+    })
+    vi.setSystemTime(new Date('2026-10-20T12:00:00.000Z'))
+    expect(await repository.findMovie('movie-2')).toMatchObject({
+      overview: null,
+      genres: [],
+      cast: [],
+      countries: [],
+      tmdbRating: null,
+      personal: fresh!.personal,
       source: { tmdbUrl: 'https://www.themoviedb.org/tv/61617' },
     })
   })
