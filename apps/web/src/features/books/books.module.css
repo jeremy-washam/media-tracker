@@ -5,41 +5,21 @@
 [data-ui~='inspector-section'] .book-description {
   color: var(--foreground);
 }
-.book-list-head {
-  display: grid;
-  grid-template-columns: minmax(214px, 1fr) 90px 120px 74px 14px;
-  gap: 14px;
-  padding: 8px 12px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  border-bottom: 1px solid var(--border);
-}
-@media (max-width: 1000px) {
-  .book-list-head {
-    grid-template-columns: minmax(194px, 1fr) 74px 100px 65px 12px;
-    gap: 14px;
-  }
-}
 .books-list {
   --book-columns: var(--library-row-cover-width) minmax(0, 1fr) 74px 120px 64px 14px;
   --book-column-gap: 14px;
 }
-.books-list [data-ui~='book-row'],
-.books-list .book-list-head {
+.books-list [data-ui~='book-row'] {
   grid-template-columns: var(--book-columns);
   gap: var(--book-column-gap);
   padding-inline: 12px;
-}
-.book-head-title {
-  grid-column: span 2;
 }
 @container library-collection (max-width: 650px) {
   .books-list {
     --book-columns: var(--library-row-cover-width) minmax(0, 1fr) 110px 64px 14px;
     --book-column-gap: 10px;
   }
-  .books-list [data-ui~='book-row-year'],
-  .books-list .book-head-year {
+  .books-list [data-ui~='book-row-year'] {
     display: none;
   }
 }
@@ -47,8 +27,7 @@
   .books-list {
     --book-columns: var(--library-row-cover-width) minmax(0, 1fr) 64px 14px;
   }
-  .books-list [data-ui~='book-row-context'],
-  .books-list .book-head-context {
+  .books-list [data-ui~='book-row-context'] {
     display: none;
   }
 }

@@ -1,3 +1,8 @@
+import {
+  LibraryCollectionHeader,
+  LibraryFiltersTrigger,
+} from '@/components/library-collection-header'
+import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { useDebouncedValue } from '../../components/library-hooks'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
@@ -157,12 +162,7 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
       )}
       data-ui={cn('library-workspace spotify-library-page music-page', `music-${layout}`)}
     >
-      <FlatTabsContent
-        value={view}
-        className={workspaceStyles['books-collection']}
-        ref={collectionRef}
-        data-ui="library-collection"
-      >
+      <FlatTabsContent value={view} className={workspaceStyles['collection-pane']}>
         <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
           Music
         </h1>
@@ -182,334 +182,348 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
             </Link>
           ))}
         </CollectionTabList>
-        <LibraryToolbar data-ui="library-toolbar">
-          <form
-            className={controlsStyles['books-search']}
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              update({
-                q: (draft ?? search.q ?? '').trim() || undefined,
-                item: undefined,
-                sort: undefined,
-              })
-              setDraft(null)
-            }}
-          >
-            <InputGroup>
-              <InputGroupInput
-                aria-label="Search music"
-                placeholder={`Search ${view}`}
-                value={draft ?? search.q ?? ''}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <InputGroupAddon>
-                <MagnifyingGlass />
-              </InputGroupAddon>
-              {(draft ?? search.q) ? (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setDraft(null)
-                      update({ q: undefined, item: undefined, sort: undefined })
-                    }}
-                  >
-                    <X />
-                  </InputGroupButton>
-                </InputGroupAddon>
+        <LibraryCollectionHeader
+          filtersOpen={filtersOpen}
+          onFiltersOpenChange={setFiltersOpen}
+          filters={
+            <>
+              {filtersOpen ? (
+                <LibraryFilterPanel aria-label="Music filters" data-ui="filter-panel">
+                  <div className={controlsStyles['filter-panel-heading']}>
+                    <strong> Filters</strong>
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() =>
+                        update({
+                          from: undefined,
+                          to: undefined,
+                          playbackCount: undefined,
+                          metadata: undefined,
+                          explicit: undefined,
+                          albumType: undefined,
+                          artist: undefined,
+                          album: undefined,
+                          item: undefined,
+                        })
+                      }
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <div className={controlsStyles['filter-panel-grid']}>
+                    <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
+                      <legend>Playback date</legend>
+                      <label>
+                        From
+                        <Input
+                          type="date"
+                          value={search.from ?? ''}
+                          onChange={(event) =>
+                            update({ from: event.target.value || undefined, item: undefined })
+                          }
+                        />
+                      </label>
+                      <label>
+                        To
+                        <Input
+                          type="date"
+                          value={search.to ?? ''}
+                          onChange={(event) =>
+                            update({ to: event.target.value || undefined, item: undefined })
+                          }
+                        />
+                      </label>
+                    </fieldset>
+                    <label className={controlsStyles['library-inline-filter']}>
+                      <span>Playback observations</span>
+                      <LibrarySelect
+                        value={search.playbackCount ?? 'any'}
+                        onValueChange={(value) =>
+                          update({
+                            playbackCount: value as MusicRouteSearch['playbackCount'],
+                            item: undefined,
+                          })
+                        }
+                        aria-label="Playback observations"
+                        options={[
+                          { value: 'any', label: 'Any count' },
+                          { value: 'once', label: '1' },
+                          { value: '2to9', label: '2–9' },
+                          { value: '10to49', label: '10–49' },
+                          { value: '50plus', label: '50+' },
+                        ]}
+                      />
+                    </label>
+                    <label className={controlsStyles['library-inline-filter']}>
+                      <span>Metadata</span>
+                      <LibrarySelect
+                        value={search.metadata ?? 'any'}
+                        onValueChange={(value) =>
+                          update({
+                            metadata: value as MusicRouteSearch['metadata'],
+                            item: undefined,
+                          })
+                        }
+                        aria-label="Metadata"
+                        options={[
+                          { value: 'any', label: 'Any state' },
+                          { value: 'current', label: 'Current catalog data' },
+                          { value: 'export_only', label: 'Export only' },
+                          { value: 'unavailable', label: 'Unavailable' },
+                        ]}
+                      />
+                    </label>
+                    {view === 'tracks' ? (
+                      <label className={controlsStyles['library-inline-filter']}>
+                        <span>Explicit</span>
+                        <LibrarySelect
+                          value={search.explicit ?? 'any'}
+                          onValueChange={(value) =>
+                            update({
+                              explicit: value as MusicRouteSearch['explicit'],
+                              item: undefined,
+                            })
+                          }
+                          aria-label="Explicit"
+                          options={[
+                            { value: 'any', label: 'Any' },
+                            { value: 'yes', label: 'Explicit' },
+                            { value: 'no', label: 'Not explicit' },
+                            { value: 'unknown', label: 'Unknown' },
+                          ]}
+                        />
+                      </label>
+                    ) : null}
+                    {view === 'albums' ? (
+                      <label className={controlsStyles['library-inline-filter']}>
+                        <span>Album type</span>
+                        <LibrarySelect
+                          value={search.albumType ?? 'any'}
+                          onValueChange={(value) =>
+                            update({
+                              albumType: value as MusicRouteSearch['albumType'],
+                              item: undefined,
+                            })
+                          }
+                          aria-label="Album type"
+                          options={[
+                            { value: 'any', label: 'Any type' },
+                            { value: 'album', label: 'Album' },
+                            { value: 'single', label: 'Single' },
+                            { value: 'compilation', label: 'Compilation' },
+                            { value: 'other', label: 'Other' },
+                            { value: 'unknown', label: 'Unknown' },
+                          ]}
+                        />
+                      </label>
+                    ) : null}
+                    {view !== 'artists' ? (
+                      <MusicFacetPicker
+                        view={view}
+                        facet="artist"
+                        search={search}
+                        selected={search.artist ?? []}
+                        onChange={(value) =>
+                          update({
+                            artist: toggleValue(search.artist, value),
+                            item: undefined,
+                          })
+                        }
+                      />
+                    ) : null}
+                    {view === 'tracks' ? (
+                      <MusicFacetPicker
+                        view="tracks"
+                        facet="album"
+                        search={search}
+                        selected={search.album ?? []}
+                        onChange={(value) =>
+                          update({
+                            album: toggleValue(search.album, value),
+                            item: undefined,
+                          })
+                        }
+                      />
+                    ) : null}
+                  </div>
+                </LibraryFilterPanel>
               ) : null}
-            </InputGroup>
-          </form>
-          <label className={controlsStyles['library-inline-filter']}>
-            <span>Source</span>
-            <LibrarySelect
-              value={search.source ?? 'all'}
-              onValueChange={(value) =>
+            </>
+          }
+        >
+          <LibraryToolbar data-ui="library-toolbar">
+            <form
+              className={controlsStyles['books-search']}
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault()
                 update({
-                  source: value as MusicRouteSearch['source'],
+                  q: (draft ?? search.q ?? '').trim() || undefined,
                   item: undefined,
+                  sort: undefined,
                 })
-              }
-              aria-label="Source"
-              options={[
-                { value: 'all', label: 'All history' },
-                { value: 'export', label: 'Extended history' },
-                { value: 'recent_api', label: 'Recent API' },
-              ]}
-            />
-          </label>
-          <Button
-            variant="outline"
-            type="button"
-            className={controlsStyles['toolbar-button']}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((value) => !value)}
-            data-ui="toolbar-button"
-          >
-            <Funnel aria-hidden="true" /> Filters
-          </Button>
-          <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <span className="sr-only">Sort music</span>
-            <LibrarySelect
-              aria-label="Sort music"
-              value={selectedSort}
-              onValueChange={(value) =>
-                update({ sort: value, direction: undefined, item: undefined })
-              }
-              options={[...sorts.map(([value, label]) => ({ value, label }))]}
-            />
-          </label>
-          <Hint content={selectedDirection === 'asc' ? 'Ascending' : 'Descending'}>
-            <Button
-              variant="outline"
-              size="icon"
-              type="button"
-              className={controlsStyles['sort-direction']}
-              aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
-              onClick={() =>
-                update({
-                  direction: selectedDirection === 'asc' ? 'desc' : 'asc',
-                  item: undefined,
-                })
-              }
+                setDraft(null)
+              }}
             >
-              {selectedDirection === 'asc' ? (
-                <ArrowUp aria-hidden="true" />
-              ) : (
-                <ArrowDown aria-hidden="true" />
-              )}
-            </Button>
-          </Hint>
-
-          {view !== 'tracks' ? (
-            <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
-          ) : null}
-        </LibraryToolbar>
-        {filtersOpen ? (
-          <LibraryFilterPanel aria-label="Music filters" data-ui="filter-panel">
-            <div className={controlsStyles['filter-panel-heading']}>
-              <strong> Filters</strong>
+              <InputGroup>
+                <InputGroupInput
+                  aria-label="Search music"
+                  placeholder={`Search ${view}`}
+                  value={draft ?? search.q ?? ''}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <InputGroupAddon>
+                  <MagnifyingGlass />
+                </InputGroupAddon>
+                {(draft ?? search.q) ? (
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="icon-xs"
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setDraft(null)
+                        update({ q: undefined, item: undefined, sort: undefined })
+                      }}
+                    >
+                      <X />
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                ) : null}
+              </InputGroup>
+            </form>
+            <label className={controlsStyles['library-inline-filter']}>
+              <span>Source</span>
+              <LibrarySelect
+                value={search.source ?? 'all'}
+                onValueChange={(value) =>
+                  update({
+                    source: value as MusicRouteSearch['source'],
+                    item: undefined,
+                  })
+                }
+                aria-label="Source"
+                options={[
+                  { value: 'all', label: 'All history' },
+                  { value: 'export', label: 'Extended history' },
+                  { value: 'recent_api', label: 'Recent API' },
+                ]}
+              />
+            </label>
+            <LibraryFiltersTrigger
+              variant="outline"
+              type="button"
+              className={controlsStyles['toolbar-button']}
+              data-ui="toolbar-button"
+            >
+              <Funnel aria-hidden="true" /> Filters
+            </LibraryFiltersTrigger>
+            <label className={controlsStyles['books-sort']} data-ui="library-sort">
+              <span className="sr-only">Sort music</span>
+              <LibrarySelect
+                aria-label="Sort music"
+                value={selectedSort}
+                onValueChange={(value) =>
+                  update({ sort: value, direction: undefined, item: undefined })
+                }
+                options={[...sorts.map(([value, label]) => ({ value, label }))]}
+              />
+            </label>
+            <Hint content={selectedDirection === 'asc' ? 'Ascending' : 'Descending'}>
               <Button
                 variant="outline"
+                size="icon"
                 type="button"
+                className={controlsStyles['sort-direction']}
+                aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
                 onClick={() =>
                   update({
-                    from: undefined,
-                    to: undefined,
-                    playbackCount: undefined,
-                    metadata: undefined,
-                    explicit: undefined,
-                    albumType: undefined,
-                    artist: undefined,
-                    album: undefined,
+                    direction: selectedDirection === 'asc' ? 'desc' : 'asc',
                     item: undefined,
                   })
                 }
               >
-                Clear
+                {selectedDirection === 'asc' ? (
+                  <ArrowUp aria-hidden="true" />
+                ) : (
+                  <ArrowDown aria-hidden="true" />
+                )}
               </Button>
-            </div>
-            <div className={controlsStyles['filter-panel-grid']}>
-              <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
-                <legend>Playback date</legend>
-                <label>
-                  From
-                  <Input
-                    type="date"
-                    value={search.from ?? ''}
-                    onChange={(event) =>
-                      update({ from: event.target.value || undefined, item: undefined })
-                    }
-                  />
-                </label>
-                <label>
-                  To
-                  <Input
-                    type="date"
-                    value={search.to ?? ''}
-                    onChange={(event) =>
-                      update({ to: event.target.value || undefined, item: undefined })
-                    }
-                  />
-                </label>
-              </fieldset>
-              <label className={controlsStyles['library-inline-filter']}>
-                <span>Playback observations</span>
-                <LibrarySelect
-                  value={search.playbackCount ?? 'any'}
-                  onValueChange={(value) =>
-                    update({
-                      playbackCount: value as MusicRouteSearch['playbackCount'],
-                      item: undefined,
-                    })
-                  }
-                  aria-label="Playback observations"
-                  options={[
-                    { value: 'any', label: 'Any count' },
-                    { value: 'once', label: '1' },
-                    { value: '2to9', label: '2–9' },
-                    { value: '10to49', label: '10–49' },
-                    { value: '50plus', label: '50+' },
-                  ]}
-                />
-              </label>
-              <label className={controlsStyles['library-inline-filter']}>
-                <span>Metadata</span>
-                <LibrarySelect
-                  value={search.metadata ?? 'any'}
-                  onValueChange={(value) =>
-                    update({
-                      metadata: value as MusicRouteSearch['metadata'],
-                      item: undefined,
-                    })
-                  }
-                  aria-label="Metadata"
-                  options={[
-                    { value: 'any', label: 'Any state' },
-                    { value: 'current', label: 'Current catalog data' },
-                    { value: 'export_only', label: 'Export only' },
-                    { value: 'unavailable', label: 'Unavailable' },
-                  ]}
-                />
-              </label>
-              {view === 'tracks' ? (
-                <label className={controlsStyles['library-inline-filter']}>
-                  <span>Explicit</span>
-                  <LibrarySelect
-                    value={search.explicit ?? 'any'}
-                    onValueChange={(value) =>
-                      update({
-                        explicit: value as MusicRouteSearch['explicit'],
-                        item: undefined,
-                      })
-                    }
-                    aria-label="Explicit"
-                    options={[
-                      { value: 'any', label: 'Any' },
-                      { value: 'yes', label: 'Explicit' },
-                      { value: 'no', label: 'Not explicit' },
-                      { value: 'unknown', label: 'Unknown' },
-                    ]}
-                  />
-                </label>
-              ) : null}
-              {view === 'albums' ? (
-                <label className={controlsStyles['library-inline-filter']}>
-                  <span>Album type</span>
-                  <LibrarySelect
-                    value={search.albumType ?? 'any'}
-                    onValueChange={(value) =>
-                      update({
-                        albumType: value as MusicRouteSearch['albumType'],
-                        item: undefined,
-                      })
-                    }
-                    aria-label="Album type"
-                    options={[
-                      { value: 'any', label: 'Any type' },
-                      { value: 'album', label: 'Album' },
-                      { value: 'single', label: 'Single' },
-                      { value: 'compilation', label: 'Compilation' },
-                      { value: 'other', label: 'Other' },
-                      { value: 'unknown', label: 'Unknown' },
-                    ]}
-                  />
-                </label>
-              ) : null}
-              {view !== 'artists' ? (
-                <MusicFacetPicker
-                  view={view}
-                  facet="artist"
-                  search={search}
-                  selected={search.artist ?? []}
-                  onChange={(value) =>
-                    update({
-                      artist: toggleValue(search.artist, value),
-                      item: undefined,
-                    })
-                  }
-                />
-              ) : null}
-              {view === 'tracks' ? (
-                <MusicFacetPicker
-                  view="tracks"
-                  facet="album"
-                  search={search}
-                  selected={search.album ?? []}
-                  onChange={(value) =>
-                    update({
-                      album: toggleValue(search.album, value),
-                      item: undefined,
-                    })
-                  }
-                />
-              ) : null}
-            </div>
-          </LibraryFilterPanel>
-        ) : null}
-        <div
-          className={workspaceStyles['books-result-summary']}
-          aria-live="polite"
-          data-ui="collection-summary"
-        >
-          <span>
-            {result.isPending || !summary
-              ? null
-              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
-          </span>
-        </div>
-        <CollectionSummaryStatus query={summaryQuery} />
-        {result.isPending ? (
-          <LoadingState data-ui="collection-loading">Loading music…</LoadingState>
-        ) : null}
-        {summary?.coverage?.possibleRecentGap ? (
-          <p className={workspaceStyles['library-coverage-note']} role="status">
-            Recent playback coverage may have a gap between Spotify polls. Imported history is
-            retained.
-          </p>
-        ) : !summary?.coverage?.recentPollAt && !result.isPending ? (
-          <p className={workspaceStyles['library-coverage-note']}>
-            Recently Played has not completed a checkpointed poll; imported listening history
-            remains available.
-          </p>
-        ) : null}
-        {result.isError && !result.isFetchNextPageError ? (
-          <Notice className={workspaceStyles['books-state']}>
-            <h2>Music could not be loaded</h2>
-            <p>{result.error.message}</p>
-          </Notice>
-        ) : null}
-        {!result.isPending && !result.isError && items.length === 0 ? (
-          <CollectionEmptyState
-            icon={MusicNotes}
-            title={`No ${view} yet`}
-            description="Import Spotify Extended Streaming History or sync Spotify from Connections."
-          />
-        ) : null}
-        {items.length ? (
-          <div className={mediaStyles['spotify-result-grid']}>
-            {items.map((item) => (
-              <MusicItem
-                key={`${item.kind}:${item.id}`}
-                item={item}
-                selected={search.item === item.id}
-                onSelect={(element) => {
-                  selectedResultRef.current = element
-                  update({ item: search.item === item.id ? undefined : item.id })
-                }}
-              />
-            ))}
+            </Hint>
+
+            {view !== 'tracks' ? (
+              <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
+            ) : null}
+          </LibraryToolbar>
+          <div
+            className={workspaceStyles['books-result-summary']}
+            aria-live="polite"
+            data-ui="collection-summary"
+          >
+            <span>
+              {result.isPending || !summary
+                ? null
+                : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view}`}
+            </span>
           </div>
-        ) : null}
-        <CollectionPagination
-          query={result}
-          scrollRef={collectionRef}
-          itemCount={items.length}
-          label={view}
-        />
+          <LibraryAppliedFilters media="music" search={search} onChange={update} />
+        </LibraryCollectionHeader>
+        <div
+          className={workspaceStyles['books-collection']}
+          ref={collectionRef}
+          data-ui="library-collection"
+        >
+          <CollectionSummaryStatus query={summaryQuery} />
+          {result.isPending ? (
+            <LoadingState data-ui="collection-loading">Loading music…</LoadingState>
+          ) : null}
+          {summary?.coverage?.possibleRecentGap ? (
+            <p className={workspaceStyles['library-coverage-note']} role="status">
+              Recent playback coverage may have a gap between Spotify polls. Imported history is
+              retained.
+            </p>
+          ) : !summary?.coverage?.recentPollAt && !result.isPending ? (
+            <p className={workspaceStyles['library-coverage-note']}>
+              Recently Played has not completed a checkpointed poll; imported listening history
+              remains available.
+            </p>
+          ) : null}
+          {result.isError && !result.isFetchNextPageError ? (
+            <Notice className={workspaceStyles['books-state']}>
+              <h2>Music could not be loaded</h2>
+              <p>{result.error.message}</p>
+            </Notice>
+          ) : null}
+          {!result.isPending && !result.isError && items.length === 0 ? (
+            <CollectionEmptyState
+              icon={MusicNotes}
+              title={`No ${view} yet`}
+              description="Import Spotify Extended Streaming History or sync Spotify from Connections."
+            />
+          ) : null}
+          {items.length ? (
+            <div className={mediaStyles['spotify-result-grid']}>
+              {items.map((item) => (
+                <MusicItem
+                  key={`${item.kind}:${item.id}`}
+                  item={item}
+                  selected={search.item === item.id}
+                  onSelect={(element) => {
+                    selectedResultRef.current = element
+                    update({ item: search.item === item.id ? undefined : item.id })
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          <CollectionPagination
+            query={result}
+            scrollRef={collectionRef}
+            itemCount={items.length}
+            label={view}
+          />
+        </div>
       </FlatTabsContent>
       {inspectorItem ? (
         <MusicInspector

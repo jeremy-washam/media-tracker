@@ -1,3 +1,8 @@
+import {
+  LibraryCollectionHeader,
+  LibraryFiltersTrigger,
+} from '@/components/library-collection-header'
+import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { useDebouncedValue } from '../../components/library-hooks'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
@@ -156,12 +161,7 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
       )}
       data-ui={cn('library-workspace spotify-library-page', `podcasts-${layout}`)}
     >
-      <FlatTabsContent
-        value={view}
-        className={workspaceStyles['books-collection']}
-        ref={collectionRef}
-        data-ui="library-collection"
-      >
+      <FlatTabsContent value={view} className={workspaceStyles['collection-pane']}>
         <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
           Podcasts
         </h1>
@@ -178,353 +178,380 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
             </Link>
           ))}
         </CollectionTabList>
-        <LibraryToolbar data-ui="library-toolbar">
-          <form
-            className={controlsStyles['books-search']}
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              update({
-                q: (draft ?? search.q ?? '').trim() || undefined,
-                item: undefined,
-                sort: undefined,
-              })
-              setDraft(null)
-            }}
-          >
-            <InputGroup>
-              <InputGroupInput
-                aria-label="Search podcasts"
-                placeholder={
-                  view === 'following' ? 'Search shows or publishers' : 'Search episodes or shows'
-                }
-                value={draft ?? search.q ?? ''}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <InputGroupAddon>
-                <MagnifyingGlass aria-hidden="true" />
-              </InputGroupAddon>
-              {(draft ?? search.q) ? (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setDraft(null)
-                      update({ q: undefined, item: undefined, sort: undefined })
-                    }}
-                  >
-                    <X aria-hidden="true" />
-                  </InputGroupButton>
-                </InputGroupAddon>
+        <LibraryCollectionHeader
+          filtersOpen={filtersOpen}
+          onFiltersOpenChange={setFiltersOpen}
+          filters={
+            <>
+              {filtersOpen ? (
+                <LibraryFilterPanel aria-label="Podcast filters" data-ui="filter-panel">
+                  <div className={controlsStyles['filter-panel-heading']}>
+                    <strong> Filters</strong>
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() =>
+                        update({
+                          dateFrom: undefined,
+                          dateTo: undefined,
+                          dateUnknown: undefined,
+                          publishedFrom: undefined,
+                          publishedTo: undefined,
+                          publishedUnknown: undefined,
+                          duration: undefined,
+                          libraryEpisodes: undefined,
+                          following: undefined,
+                          show: undefined,
+                          publisher: undefined,
+                          language: undefined,
+                          item: undefined,
+                        })
+                      }
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <div className={controlsStyles['filter-panel-grid']}>
+                    <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
+                      <legend>{view === 'archive' ? 'Activity date' : 'Saved date'}</legend>
+                      <label>
+                        From
+                        <Input
+                          type="date"
+                          value={search.dateFrom ?? ''}
+                          onChange={(event) =>
+                            update({ dateFrom: event.target.value || undefined, item: undefined })
+                          }
+                        />
+                      </label>
+                      <label>
+                        To
+                        <Input
+                          type="date"
+                          value={search.dateTo ?? ''}
+                          onChange={(event) =>
+                            update({ dateTo: event.target.value || undefined, item: undefined })
+                          }
+                        />
+                      </label>
+                      <FieldLabel>
+                        <Checkbox
+                          checked={search.dateUnknown ?? false}
+                          onCheckedChange={(checked) =>
+                            update({ dateUnknown: checked || undefined, item: undefined })
+                          }
+                        />{' '}
+                        Date unavailable
+                      </FieldLabel>
+                    </fieldset>
+                    {view !== 'following' ? (
+                      <>
+                        <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
+                          <legend>Published</legend>
+                          <label>
+                            From
+                            <Input
+                              type="date"
+                              value={search.publishedFrom ?? ''}
+                              onChange={(event) =>
+                                update({
+                                  publishedFrom: event.target.value || undefined,
+                                  item: undefined,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            To
+                            <Input
+                              type="date"
+                              value={search.publishedTo ?? ''}
+                              onChange={(event) =>
+                                update({
+                                  publishedTo: event.target.value || undefined,
+                                  item: undefined,
+                                })
+                              }
+                            />
+                          </label>
+                          <FieldLabel>
+                            <Checkbox
+                              checked={search.publishedUnknown ?? false}
+                              onCheckedChange={(checked) =>
+                                update({
+                                  publishedUnknown: checked || undefined,
+                                  item: undefined,
+                                })
+                              }
+                            />{' '}
+                            Date unavailable
+                          </FieldLabel>
+                        </fieldset>
+                        <label className={controlsStyles['library-inline-filter']}>
+                          <span>Duration</span>
+                          <LibrarySelect
+                            value={search.duration?.[0] ?? ''}
+                            onValueChange={(value) =>
+                              update({
+                                duration: value
+                                  ? [value as NonNullable<PodcastsRouteSearch['duration']>[number]]
+                                  : undefined,
+                                item: undefined,
+                              })
+                            }
+                            aria-label="Duration"
+                            options={[
+                              { value: '', label: 'Any duration' },
+                              { value: 'under30', label: 'Under 30 min' },
+                              { value: '30to59', label: '30–59 min' },
+                              { value: '1to2hours', label: '1–2 hr' },
+                              { value: 'over2hours', label: 'Over 2 hr' },
+                              { value: 'unknown', label: 'Duration unavailable' },
+                            ]}
+                          />
+                        </label>
+                        <PodcastFacetPicker
+                          view={view}
+                          facet="show"
+                          search={search}
+                          selected={search.show ?? []}
+                          onChange={(value) =>
+                            update({ show: toggleValue(search.show, value), item: undefined })
+                          }
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <label className={controlsStyles['library-inline-filter']}>
+                          <span>Library episodes</span>
+                          <LibrarySelect
+                            value={search.libraryEpisodes?.[0] ?? ''}
+                            onValueChange={(value) =>
+                              update({
+                                libraryEpisodes: value
+                                  ? [
+                                      value as NonNullable<
+                                        PodcastsRouteSearch['libraryEpisodes']
+                                      >[number],
+                                    ]
+                                  : undefined,
+                                item: undefined,
+                              })
+                            }
+                            aria-label="Library episodes"
+                            options={[
+                              { value: '', label: 'Any' },
+                              { value: 'archive', label: 'Has Archive episodes' },
+                              { value: 'queue', label: 'Has Queue episodes' },
+                              { value: 'none', label: 'No Library episodes' },
+                            ]}
+                          />
+                        </label>
+                        <PodcastFacetPicker
+                          view="following"
+                          facet="publisher"
+                          search={search}
+                          selected={search.publisher ?? []}
+                          onChange={(value) =>
+                            update({
+                              publisher: toggleValue(search.publisher, value),
+                              item: undefined,
+                            })
+                          }
+                        />
+                        <PodcastFacetPicker
+                          view="following"
+                          facet="language"
+                          search={search}
+                          selected={search.language ?? []}
+                          onChange={(value) =>
+                            update({
+                              language: toggleValue(search.language, value),
+                              item: undefined,
+                            })
+                          }
+                        />
+                      </>
+                    )}
+                  </div>
+                </LibraryFilterPanel>
               ) : null}
-            </InputGroup>
-          </form>
-          {view !== 'following' ? (
-            <label className={controlsStyles['library-inline-filter']}>
-              <span>Show</span>
+            </>
+          }
+        >
+          <LibraryToolbar data-ui="library-toolbar">
+            <form
+              className={controlsStyles['books-search']}
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault()
+                update({
+                  q: (draft ?? search.q ?? '').trim() || undefined,
+                  item: undefined,
+                  sort: undefined,
+                })
+                setDraft(null)
+              }}
+            >
+              <InputGroup>
+                <InputGroupInput
+                  aria-label="Search podcasts"
+                  placeholder={
+                    view === 'following' ? 'Search shows or publishers' : 'Search episodes or shows'
+                  }
+                  value={draft ?? search.q ?? ''}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <InputGroupAddon>
+                  <MagnifyingGlass aria-hidden="true" />
+                </InputGroupAddon>
+                {(draft ?? search.q) ? (
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="icon-xs"
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setDraft(null)
+                        update({ q: undefined, item: undefined, sort: undefined })
+                      }}
+                    >
+                      <X aria-hidden="true" />
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                ) : null}
+              </InputGroup>
+            </form>
+            {view !== 'following' ? (
+              <label className={controlsStyles['library-inline-filter']}>
+                <span>Show</span>
+                <LibrarySelect
+                  value={search.following ?? 'all'}
+                  onValueChange={(value) =>
+                    update({
+                      following: value as PodcastsRouteSearch['following'],
+                      item: undefined,
+                    })
+                  }
+                  aria-label="Show"
+                  options={[
+                    { value: 'all', label: 'All shows' },
+                    { value: 'following', label: 'Following' },
+                    { value: 'not_following', label: 'Not following' },
+                  ]}
+                />
+              </label>
+            ) : null}
+            <LibraryFiltersTrigger
+              variant="outline"
+              type="button"
+              className={controlsStyles['toolbar-button']}
+              data-ui="toolbar-button"
+            >
+              <Funnel aria-hidden="true" /> Filters
+            </LibraryFiltersTrigger>
+            <label className={controlsStyles['books-sort']} data-ui="library-sort">
+              <span className="sr-only">Sort podcasts</span>
               <LibrarySelect
-                value={search.following ?? 'all'}
+                aria-label="Sort podcasts"
+                value={selectedSort}
                 onValueChange={(value) =>
-                  update({
-                    following: value as PodcastsRouteSearch['following'],
-                    item: undefined,
-                  })
+                  update({ sort: value, direction: undefined, item: undefined })
                 }
-                aria-label="Show"
-                options={[
-                  { value: 'all', label: 'All shows' },
-                  { value: 'following', label: 'Following' },
-                  { value: 'not_following', label: 'Not following' },
-                ]}
+                options={[...sorts.map(([value, label]) => ({ value, label }))]}
               />
             </label>
-          ) : null}
-          <Button
-            variant="outline"
-            type="button"
-            className={controlsStyles['toolbar-button']}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((value) => !value)}
-            data-ui="toolbar-button"
-          >
-            <Funnel aria-hidden="true" /> Filters
-          </Button>
-          <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <span className="sr-only">Sort podcasts</span>
-            <LibrarySelect
-              aria-label="Sort podcasts"
-              value={selectedSort}
-              onValueChange={(value) =>
-                update({ sort: value, direction: undefined, item: undefined })
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className={controlsStyles['sort-direction']}
+              aria-label="Reverse podcast sort"
+              onClick={() =>
+                update({
+                  direction: selectedDirection === 'asc' ? 'desc' : 'asc',
+                  item: undefined,
+                })
               }
-              options={[...sorts.map(([value, label]) => ({ value, label }))]}
-            />
-          </label>
-          <Button
-            variant="outline"
-            size="icon"
-            type="button"
-            className={controlsStyles['sort-direction']}
-            aria-label="Reverse podcast sort"
-            onClick={() =>
-              update({
-                direction: selectedDirection === 'asc' ? 'desc' : 'asc',
-                item: undefined,
-              })
-            }
-          >
-            {selectedDirection === 'asc' ? (
-              <ArrowUp aria-hidden="true" />
-            ) : (
-              <ArrowDown aria-hidden="true" />
-            )}
-          </Button>
-          {view === 'following' ? (
-            <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
-          ) : null}
-        </LibraryToolbar>
-        {filtersOpen ? (
-          <LibraryFilterPanel aria-label="Podcast filters" data-ui="filter-panel">
-            <div className={controlsStyles['filter-panel-heading']}>
-              <strong> Filters</strong>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() =>
-                  update({
-                    dateFrom: undefined,
-                    dateTo: undefined,
-                    dateUnknown: undefined,
-                    publishedFrom: undefined,
-                    publishedTo: undefined,
-                    publishedUnknown: undefined,
-                    duration: undefined,
-                    libraryEpisodes: undefined,
-                    following: undefined,
-                    show: undefined,
-                    publisher: undefined,
-                    language: undefined,
-                    item: undefined,
-                  })
-                }
-              >
-                Clear
-              </Button>
-            </div>
-            <div className={controlsStyles['filter-panel-grid']}>
-              <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
-                <legend>{view === 'archive' ? 'Activity date' : 'Saved date'}</legend>
-                <label>
-                  From
-                  <Input
-                    type="date"
-                    value={search.dateFrom ?? ''}
-                    onChange={(event) =>
-                      update({ dateFrom: event.target.value || undefined, item: undefined })
-                    }
-                  />
-                </label>
-                <label>
-                  To
-                  <Input
-                    type="date"
-                    value={search.dateTo ?? ''}
-                    onChange={(event) =>
-                      update({ dateTo: event.target.value || undefined, item: undefined })
-                    }
-                  />
-                </label>
-                <FieldLabel>
-                  <Checkbox
-                    checked={search.dateUnknown ?? false}
-                    onCheckedChange={(checked) =>
-                      update({ dateUnknown: checked || undefined, item: undefined })
-                    }
-                  />{' '}
-                  Date unavailable
-                </FieldLabel>
-              </fieldset>
-              {view !== 'following' ? (
-                <>
-                  <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
-                    <legend>Published</legend>
-                    <label>
-                      From
-                      <Input
-                        type="date"
-                        value={search.publishedFrom ?? ''}
-                        onChange={(event) =>
-                          update({
-                            publishedFrom: event.target.value || undefined,
-                            item: undefined,
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      To
-                      <Input
-                        type="date"
-                        value={search.publishedTo ?? ''}
-                        onChange={(event) =>
-                          update({ publishedTo: event.target.value || undefined, item: undefined })
-                        }
-                      />
-                    </label>
-                    <FieldLabel>
-                      <Checkbox
-                        checked={search.publishedUnknown ?? false}
-                        onCheckedChange={(checked) =>
-                          update({
-                            publishedUnknown: checked || undefined,
-                            item: undefined,
-                          })
-                        }
-                      />{' '}
-                      Date unavailable
-                    </FieldLabel>
-                  </fieldset>
-                  <label className={controlsStyles['library-inline-filter']}>
-                    <span>Duration</span>
-                    <LibrarySelect
-                      value={search.duration?.[0] ?? ''}
-                      onValueChange={(value) =>
-                        update({
-                          duration: value
-                            ? [value as NonNullable<PodcastsRouteSearch['duration']>[number]]
-                            : undefined,
-                          item: undefined,
-                        })
-                      }
-                      aria-label="Duration"
-                      options={[
-                        { value: '', label: 'Any duration' },
-                        { value: 'under30', label: 'Under 30 min' },
-                        { value: '30to59', label: '30–59 min' },
-                        { value: '1to2hours', label: '1–2 hr' },
-                        { value: 'over2hours', label: 'Over 2 hr' },
-                        { value: 'unknown', label: 'Duration unavailable' },
-                      ]}
-                    />
-                  </label>
-                  <PodcastFacetPicker
-                    view={view}
-                    facet="show"
-                    search={search}
-                    selected={search.show ?? []}
-                    onChange={(value) =>
-                      update({ show: toggleValue(search.show, value), item: undefined })
-                    }
-                  />
-                </>
+            >
+              {selectedDirection === 'asc' ? (
+                <ArrowUp aria-hidden="true" />
               ) : (
-                <>
-                  <label className={controlsStyles['library-inline-filter']}>
-                    <span>Library episodes</span>
-                    <LibrarySelect
-                      value={search.libraryEpisodes?.[0] ?? ''}
-                      onValueChange={(value) =>
-                        update({
-                          libraryEpisodes: value
-                            ? [value as NonNullable<PodcastsRouteSearch['libraryEpisodes']>[number]]
-                            : undefined,
-                          item: undefined,
-                        })
-                      }
-                      aria-label="Library episodes"
-                      options={[
-                        { value: '', label: 'Any' },
-                        { value: 'archive', label: 'Has Archive episodes' },
-                        { value: 'queue', label: 'Has Queue episodes' },
-                        { value: 'none', label: 'No Library episodes' },
-                      ]}
-                    />
-                  </label>
-                  <PodcastFacetPicker
-                    view="following"
-                    facet="publisher"
-                    search={search}
-                    selected={search.publisher ?? []}
-                    onChange={(value) =>
-                      update({ publisher: toggleValue(search.publisher, value), item: undefined })
-                    }
-                  />
-                  <PodcastFacetPicker
-                    view="following"
-                    facet="language"
-                    search={search}
-                    selected={search.language ?? []}
-                    onChange={(value) =>
-                      update({ language: toggleValue(search.language, value), item: undefined })
-                    }
-                  />
-                </>
+                <ArrowDown aria-hidden="true" />
               )}
-            </div>
-          </LibraryFilterPanel>
-        ) : null}
-        <div
-          className={workspaceStyles['books-result-summary']}
-          aria-live="polite"
-          data-ui="collection-summary"
-        >
-          <span>
-            {result.isPending || !summary
-              ? null
-              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? ((summary?.filteredCount ?? 0) === 1 ? 'show' : 'shows') : (summary?.filteredCount ?? 0) === 1 ? 'episode' : 'episodes'}`}
-          </span>
-        </div>
-        <CollectionSummaryStatus query={summaryQuery} />
-        {result.isPending ? (
-          <LoadingState data-ui="collection-loading">Loading podcasts…</LoadingState>
-        ) : null}
-        {!result.isPending &&
-        summary?.coverage &&
-        (view === 'following'
-          ? !summary.coverage.savedShowsAt
-          : !summary.coverage.savedEpisodesAt) ? (
-          <p className={workspaceStyles['library-coverage-note']}>
-            {view === 'following'
-              ? 'Following has not completed a checkpointed Spotify show sync.'
-              : 'Saved episodes have not completed a checkpointed Spotify sync; Queue may be incomplete.'}
-          </p>
-        ) : null}
-        {result.isError && !result.isFetchNextPageError ? (
-          <Notice className={workspaceStyles['books-state']}>
-            <h2>Podcasts could not be loaded</h2>
-            <p>{result.error.message}</p>
-          </Notice>
-        ) : null}
-        {!result.isPending && !result.isError && items.length === 0 ? (
-          <CollectionEmptyState
-            icon={Microphone}
-            title={`No ${view === 'following' ? 'followed shows' : `episodes in ${view}`}`}
-            description="Sync Spotify from Connections to populate this section."
-          />
-        ) : null}
-        {items.length ? (
-          <div className={mediaStyles['spotify-result-grid']}>
-            {items.map((item) => (
-              <PodcastItem
-                key={`${item.kind}:${item.id}`}
-                item={item}
-                selected={search.item === item.id}
-                onSelect={(element) => {
-                  selectedResultRef.current = element
-                  update({ item: search.item === item.id ? undefined : item.id, kind: item.kind })
-                }}
-              />
-            ))}
+            </Button>
+            {view === 'following' ? (
+              <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
+            ) : null}
+          </LibraryToolbar>
+          <div
+            className={workspaceStyles['books-result-summary']}
+            aria-live="polite"
+            data-ui="collection-summary"
+          >
+            <span>
+              {result.isPending || !summary
+                ? null
+                : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'following' ? ((summary?.filteredCount ?? 0) === 1 ? 'show' : 'shows') : (summary?.filteredCount ?? 0) === 1 ? 'episode' : 'episodes'}`}
+            </span>
           </div>
-        ) : null}
-        <CollectionPagination
-          query={result}
-          scrollRef={collectionRef}
-          itemCount={items.length}
-          label={view === 'following' ? 'shows' : 'episodes'}
-        />
+          <LibraryAppliedFilters media="podcasts" search={search} onChange={update} />
+        </LibraryCollectionHeader>
+        <div
+          className={workspaceStyles['books-collection']}
+          ref={collectionRef}
+          data-ui="library-collection"
+        >
+          <CollectionSummaryStatus query={summaryQuery} />
+          {result.isPending ? (
+            <LoadingState data-ui="collection-loading">Loading podcasts…</LoadingState>
+          ) : null}
+          {!result.isPending &&
+          summary?.coverage &&
+          (view === 'following'
+            ? !summary.coverage.savedShowsAt
+            : !summary.coverage.savedEpisodesAt) ? (
+            <p className={workspaceStyles['library-coverage-note']}>
+              {view === 'following'
+                ? 'Following has not completed a checkpointed Spotify show sync.'
+                : 'Saved episodes have not completed a checkpointed Spotify sync; Queue may be incomplete.'}
+            </p>
+          ) : null}
+          {result.isError && !result.isFetchNextPageError ? (
+            <Notice className={workspaceStyles['books-state']}>
+              <h2>Podcasts could not be loaded</h2>
+              <p>{result.error.message}</p>
+            </Notice>
+          ) : null}
+          {!result.isPending && !result.isError && items.length === 0 ? (
+            <CollectionEmptyState
+              icon={Microphone}
+              title={`No ${view === 'following' ? 'followed shows' : `episodes in ${view}`}`}
+              description="Sync Spotify from Connections to populate this section."
+            />
+          ) : null}
+          {items.length ? (
+            <div className={mediaStyles['spotify-result-grid']}>
+              {items.map((item) => (
+                <PodcastItem
+                  key={`${item.kind}:${item.id}`}
+                  item={item}
+                  selected={search.item === item.id}
+                  onSelect={(element) => {
+                    selectedResultRef.current = element
+                    update({ item: search.item === item.id ? undefined : item.id, kind: item.kind })
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          <CollectionPagination
+            query={result}
+            scrollRef={collectionRef}
+            itemCount={items.length}
+            label={view === 'following' ? 'shows' : 'episodes'}
+          />
+        </div>
       </FlatTabsContent>
       {inspectorItem ? (
         <PodcastInspector

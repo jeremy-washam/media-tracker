@@ -121,7 +121,8 @@ They use normal weight (400), muted text color, and fresh response totals when a
 Only Following supports grid within Podcasts, and only Albums/Artists within
 Music. Articles have one expanded row style with no ARTICLE/PDF type label.
 Books list columns are title/author, Publish Year, Read Date (Added Date in Queue),
-and personal Rating; formats do not appear in those rows.
+and personal Rating; formats do not appear in those rows. Books has no separate
+column-heading row, matching the other Library collections.
 All Library media lists, including Video and Channel lists, share a 101px row baseline,
 matching the taller Article/Podcast/Music presentation. Shared list typography
 uses 16px titles and 13px subtitles/metadata. Additional search excerpts or metadata can expand
@@ -142,6 +143,16 @@ remains under review. Filters and Sort use the same toolbar font
 size on every Library page. Search, Filters, Select, sort-direction actions, and
 List/Grid controls use actual shadcn Input Group, Button, Select, and Toggle Group
 components at their default 32px height; obsolete custom toolbar sizing is removed.
+The collection toolbar, result summary, and removable applied-filter groups stay
+above an independently scrolling results viewport in all 16 sections. A subtle
+shadow beneath the controls separates the persistent header from moving results.
+Filters open in the installed Sheet, retain source-specific predicates, trap
+modal focus, and return focus to the Filters trigger on dismissal. Applied-filter
+chips clear complete predicate groups, including dependent date/rating bounds;
+Clear all filters preserves text search and presentation preferences.
+The shared ghost Badge variant has no hover background or hover color change,
+including passive local API status.
+
 Toolbar wrapping follows the collection pane width, including the space occupied
 by an inspector. At narrow pane widths, search occupies a full row and the other
 controls wrap without clipping. Clicking a selected result deselects it and closes
@@ -193,8 +204,8 @@ Use 22px/500 item titles, 11px/600 section headings, and 12px body/metadata/hist
 text. Tabs stretch only within a bounded header; a generic tablist cannot inherit
 the full inspector height. Check loaded content geometry, not only tab semantics.
 
-Book list headings and rows share one responsive column definition at the pane
-width. Hide the same metadata column from both; keep visible ratings under Rating.
+Book rows share one responsive column definition at the pane width, hiding less
+important metadata at narrow sizes while keeping the title and personal rating.
 Common toolbar order is Search, optional source/show, Filters, Sort, Direction,
 and optional List/Grid. Reveal the selected section tab on narrow headers without
 moving keyboard focus. Format counts consistently with collection summaries.

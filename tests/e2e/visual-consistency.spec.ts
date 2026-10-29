@@ -342,40 +342,17 @@ for (const dark of [false, true]) {
   }
 }
 
-test('Book column headings match visible cells in both collections and inspector panes', async ({
+test('Book rows omit column headings and fit both collections and inspector panes', async ({
   page,
 }) => {
   for (const view of ['archive', 'queue']) {
     await page.goto(`/library/books/${view}`)
     const row = page.locator('[data-ui~="book-row"]').first()
     await expect(row).toBeVisible()
+    await expect(page.locator('[data-ui~="collection-column-headings"]')).toHaveCount(0)
     for (const width of [1280, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: 768 })
-      await expect
-        .poll(() =>
-          page.evaluate(() => {
-            const head = document.querySelector('[data-ui~="collection-column-headings"]')!,
-              row = document.querySelector('[data-ui~="book-row"]')!
-            const visible = (el: Element) => el.getBoundingClientRect().width > 0
-            return (
-              [
-                ['[data-ui~="book-head-year"]', '[data-ui~="book-row-year"]'],
-                ['[data-ui~="book-head-context"]', '[data-ui~="book-row-context"]'],
-                ['[data-ui~="book-head-rating"]', '[data-ui~="rating-stars"]'],
-              ].every(([h, c]) => {
-                const heading = head.querySelector(h)!,
-                  cell = row.querySelector(c)!
-                return (
-                  visible(heading) === visible(cell) &&
-                  (!visible(cell) ||
-                    Math.abs(heading.getBoundingClientRect().x - cell.getBoundingClientRect().x) <
-                      1)
-                )
-              }) && row.scrollWidth <= row.clientWidth + 1
-            )
-          }),
-        )
-        .toBe(true)
+      await expect.poll(() => row.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
     }
     await page.setViewportSize({ width: 1024, height: 768 })
     await row.click()
