@@ -21,7 +21,10 @@ activation remain pending. Zero active source/catalog leases were confirmed at
 20-minute minimum pause is enforced before SQL migrations.
 
 Native account metrics checked October 29 remain within the existing plan's
-included usage. Billing APIs do not establish an actual invoice. No new paid
+included usage. The dashboard showed $0 usage overages; native alerts are saved
+at $5 usage warning and $20 usage emergency, approximately $10/$25 total with
+the base $5 subscription. The first real monitor cron is awaiting 22:10 UTC
+propagation; a scheduled result is not claimed yet. Billing APIs do not establish an actual invoice. No new paid
 service or subscription is authorized by this closeout.
 
 ## Acceptance checklist
@@ -33,7 +36,7 @@ service or subscription is authorized by this closeout.
 | Catalog/content           | Recurring finite TMDB/YouTube/Spotify work; refresh before expiry; bounded article acquisition/indexing; provider Retry-After       | Implemented; scheduler/freshness/backoff tests passed; live activation pending                                  |
 | Hosted imports            | Owner-authenticated existing export imports and continuation; streamed size bounds; replay/idempotence                              | Implemented with explicit hosted ZIP limits; native import/resume/bomb tests passed                             |
 | Observability/performance | Private operations state, safe source failures, native metrics; representative hosted list/summary/detail timing                    | Private status and safe diagnostics implemented; hosted timing/activation checks pending                        |
-| Recovery/security         | TimeTravel receipt; private R2 evidence/release manifests; synthetic restore drill; local backup; restricted smoke identity         | Smoke restrictions verified; Mac baseline-copy verification and fresh read-only capture running                 |
+| Recovery/security         | TimeTravel receipt; private R2 evidence/release manifests; synthetic restore drill; local backup; restricted smoke identity         | Smoke restrictions and Mac baseline-copy restore verified; fresh read-only capture running                      |
 | CI/CD                     | Public standard-runner CI; exact-main successful revision; serialized protected production release; migration review; private smoke | Main CI passed; strict validate protection configured; release token installed; bootstrap/CD activation pending |
 | Final acceptance/docs     | Full local gates, controlled deploy, owner-access/no-auth checks, real scheduler cycle, reconciled owning docs                      | Local gates passed; production migration/deploy/scheduler acceptance pending                                    |
 
@@ -73,7 +76,9 @@ The integration branch is `codex/deployment-closeout`, isolated from the primary
 checkout and concurrent UI work. [PR 8](https://github.com/jeremy-washam/media-tracker/pull/8)
 merged into main at `651a2be`;
 [hosted main validation 40949037008](https://github.com/jeremy-washam/media-tracker/actions/runs/40949037008)
-passed. Main requires the strict `validate` check. Local validation passed: `pnpm check`, production
+passed. [PR 9](https://github.com/jeremy-washam/media-tracker/pull/9) contains the
+follow-up recovery tooling and transport fix, initially at `f1e131a`; subsequent
+live evidence remains in this working documentation. Main requires the strict `validate` check. Local validation passed: `pnpm check`, production
 build/dry runs,11 native Worker tests,257 browser regressions,18 real-stack
 Chromium/WebKit acceptance tests and the separate coverage run. Connections'
 new continuation copy also passed 8 isolated branch-server browser cases in both
@@ -90,9 +95,11 @@ are prepared and pass the CLI validator in protected ignored files. Both newly
 supplied account tokens are active; D1/queue reads and the monitor's exact
 analytics query passed, producing a $5 usage estimate. The release token is
 installed in both protected GitHub environments; the monitor secret is active
-in the new maintenance runtime. New coverage includes 18 read-only production
-capture cases, four external local-recovery cases and two deployment transport
-User-Agent/credential-privacy cases.
+in the new maintenance runtime. The latest deployment Python suite passed all
+125 tests with Python 3.12, including 26 capture, four external local-recovery
+and two deployment transport User-Agent/credential-privacy cases. Native R2
+pagination was verified across 19 pages containing 18,284 objects. Capture
+currently has about 370,000 database rows; it is not yet complete.
 
 Live failure drills returned 503 for absent, stale and future operating state;
 the manual pause was restored afterward. The CI identity receives 200 for its
@@ -110,9 +117,13 @@ and Cloudflare. It protects against provider/account loss, not loss of the Mac;
 offsite storage is optional and is not a deployment blocker. Live database and
 objects total about 1.5 GB; reserve 5–6 GB for the full bundle including transfer
 and restore-test copies. The original baseline was copied to
-`/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; verification of
-that Mac copy is running. Fresh production capture is also running under the
-held writer pause; no fresh restore verification is claimed yet.
+`/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; verification
+passed at 21:59:41 UTC with 94 tables, 1,798,348 rows, 18,126 objects and the
+independently restored FTS vocabulary. Fresh production capture is also running under the
+held writer pause; no fresh restore verification is claimed yet. The existing
+protected encryption key is retained. Automatic approval review blocked an
+additional Mac key-escrow copy; explicit owner input is pending for that extra
+copy, which is not a deployment blocker.
 
 The `production` and `production-migrations` GitHub environments now exist,
 restricted to `main`; migrations require owner review with self-approval allowed.

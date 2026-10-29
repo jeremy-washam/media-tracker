@@ -20,7 +20,7 @@ the 10-minute monitor cron is active. Production CD remains disabled. Zero activ
 source/catalog leases were confirmed at 21:59 UTC; fresh read-only capture is
 running under the held pause. SQL migrations await the full 20-minute hold and
 verified recovery bundle. The original baseline's separate Mac-copy verification
-is also running; neither result is claimed complete yet.
+passed at 21:59:41 UTC; the fresh capture is not yet complete.
 The [deployment closeout](deployment-closeout.md) records remaining live
 acceptance and fresh local recovery rehearsal. No workflow creates another cloud resource,
 changes provider secrets, starts paid services, purges a queue, or automatically
@@ -264,7 +264,8 @@ or contentless-FTS recovery.
 
 The original cutover bundle has been copied to
 `/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; its Mac-copy
-verification is running. Fresh read-only production capture has also started;
+verification passed at 21:59:41 UTC: 94 tables, 1,798,348 rows, 18,126 objects and
+the independently restored FTS vocabulary. Fresh read-only production capture has also started;
 its completion and independent restore remain unverified.
 
 Verify a trusted version-2 local bundle without copying records or changing
@@ -315,6 +316,56 @@ indexes but does not itself capture fresh production data. The new read-only
 capture tool is running; no fresh production bundle is verified yet. A naive
 `wrangler d1 export` replacement is insufficient. Offsite copying is optional;
 record it only when actually performed. No new paid backup provider is assumed.
+
+## Fresh read-only production capture
+
+Use Python 3.12 with a SQLite build that permits local FTS shadow reconstruction.
+The bundled Python runtime passed all 125 deployment tests without skips; some
+macOS system Python builds enforce defensive SQLite mode, and capture refuses
+those builds before account reads. Run the deployment tests with the same
+Python interpreter selected for capture:
+
+```sh
+python3.12 -m unittest discover -s scripts/deployment -p 'test_*.py'
+```
+
+After disabling writers and confirming drained leases, run from the repository
+root. The token file must contain only the existing release API token, mode
+`0600`; output stays inside ignored `.private` while capturing:
+
+```sh
+python3.12 scripts/deployment/capture.py \
+  --account '<account-id>' \
+  --database '<database-id>' \
+  --bucket media-tracker-raw \
+  --token-file .private/deployment/release-api-token.txt \
+  --output '.private/deployment/<fresh-capture-name>' \
+  --reuse-bundle .private/deployment/paused-cutover-2026-10-13 \
+  --writers-paused \
+  --pause-id '<unique-uninterrupted-maintenance-window-id>' \
+  --page-size 2000
+```
+
+Use the same pause ID to resume only while that exact writer pause has remained
+uninterrupted. Resume rechecks target, schema and source-object inventory and
+continues committed keyset pages and verified objects. A completed manifest is
+verified/rehearsed locally rather than recaptured. Reuse avoids downloading
+unchanged source objects only after current ETag and local checksum checks.
+Only `operations/operating-state.json` is explicitly excluded so the independent
+monitor can continue; all source artifacts remain subject to strict checks.
+
+`--page-size` is optional and defaults to 2,000 rows. Responses are bounded to
+32 MiB; oversized pages halve automatically without committing a failed page or
+advancing its cursor. Native request/read ceilings are persisted across resumes.
+The final-page inventory fix passed against 19 native pages and 18,284 objects.
+The current capture has about 370,000 rows; completion and independent restore
+are still pending. Copy and verify the finished bundle in the accepted protected
+Mac backup folder before claiming that new recovery point retained.
+
+The existing protected encryption key remains available. Automatic approval
+review blocked an additional Mac key-escrow copy, which awaits explicit owner
+input. Do not claim that copy exists or make this optional extra copy a blocker
+for the already authorized deployment.
 
 ## Recovery sequence
 

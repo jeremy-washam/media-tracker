@@ -173,6 +173,47 @@ describe('operating emergency breaker', () => {
     const query = (JSON.parse(outbound![1]!.body as string) as { query: string }).query
     expect(query).toContain('accountTag:"' + env.CLOUDFLARE_ACCOUNT_ID + '"')
     expect(query).not.toContain(String.fromCharCode(92, 34))
+    expect(api.mock.calls.every(([, init]) => init?.redirect === 'manual')).toBe(true)
+  })
+  it('rejects analytics redirects without following them or reading private error content', async () => {
+    const { env } = environment()
+    const redirected = new Response('synthetic-private-response', {
+      status: 302,
+      headers: { location: 'https://elsewhere.invalid/synthetic-private-location' },
+    })
+    const read = vi.spyOn(redirected, 'json')
+    const api = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      // Match Workers' accepted modes so this catches the original runtime bug.
+      if (init?.redirect !== 'manual') throw new TypeError('Unsupported redirect mode')
+      return redirected
+    })
+    vi.stubGlobal('fetch', api)
+    await expect(collectNativeUsage(env, now)).rejects.toThrow(/^OperatingMonitorHttp302$/)
+    expect(api).toHaveBeenCalledTimes(1)
+    expect(String(api.mock.calls[0]![0])).toBe('https://api.cloudflare.com/client/v4/graphql')
+    expect(read).not.toHaveBeenCalled()
+  })
+  it('keeps the gate closed and errors safe when native queue control redirects', async () => {
+    const { env, state: read } = environment()
+    const normal = fakeApi(70e6)
+    const api = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Response('synthetic-private-response', {
+            status: 302,
+            headers: { location: 'https://elsewhere.invalid/synthetic-private-location' },
+          })
+        : normal(input, init),
+    )
+    vi.stubGlobal('fetch', api)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await monitorOperatingBudget(env, now)
+    expect(read()).toMatchObject({ paused: true, reason: 'spend', queuePaused: false })
+    expect(api.mock.calls.every(([, init]) => init?.redirect === 'manual')).toBe(true)
+    expect(api.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1)
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify({ event: 'operations.queue_pause_failed' }),
+    )
   })
   it.each([
     undefined,
