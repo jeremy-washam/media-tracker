@@ -769,7 +769,13 @@ for (const dark of [false, true]) {
         route.fulfill({
           json: {
             ...podcastsResponse(),
-            coverage: { savedShowsAt: null, savedEpisodesAt: null },
+            coverage: {
+              savedShowsAt: null,
+              savedEpisodesAt: null,
+              playerAt: null,
+              recentPollAt: null,
+              possibleRecentGap: false,
+            },
           },
         }),
       )
@@ -777,7 +783,7 @@ for (const dark of [false, true]) {
         route.fulfill({
           json: {
             ...videosResponse(),
-            coverage: { watchLater: 'not_provided', catalog: 'not_configured' },
+            coverage: { watchLater: 'partial', catalog: 'not_configured' },
           },
         }),
       )
