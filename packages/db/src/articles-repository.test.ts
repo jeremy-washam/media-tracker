@@ -1,74 +1,11 @@
-import { readFileSync } from 'node:fs'
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { applyTestMigrations, SqliteTestClient as SqliteClient } from './test-support/sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  DatabaseAllResult,
-  DatabaseClient,
-  DatabaseRunResult,
-  DatabaseStatement,
-  DatabaseValue,
-} from './database'
 import {
   SqlArticlesRepository,
   type ArticlesListInput,
   type ReaderArticleDocumentProjection,
 } from './articles-repository'
-
-const migrations = [
-  '0001_canonical_ledger.sql',
-  '0006_movies_library.sql',
-  '0008_articles_library.sql',
-  '0009_article_content_search_map.sql',
-  '0010_article_content_jobs.sql',
-  '0011_article_current_availability.sql',
-  '0012_article_content_reliability.sql',
-  '0013_article_content_attempts.sql',
-]
-  .map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
-  .join('\n')
-class SqliteStatement implements DatabaseStatement {
-  #values: readonly DatabaseValue[] = []
-  constructor(private readonly statement: StatementSync) {}
-  bind(...values: readonly DatabaseValue[]) {
-    this.#values = values
-    return this
-  }
-  values() {
-    return this.#values.map((value) =>
-      value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-    )
-  }
-  execute() {
-    this.statement.run(...this.values())
-  }
-  async run(): Promise<DatabaseRunResult> {
-    this.execute()
-    return { success: true }
-  }
-  async first<Row>(): Promise<Row | null> {
-    return (this.statement.get(...this.values()) as Row | undefined) ?? null
-  }
-  async all<Row>(): Promise<DatabaseAllResult<Row>> {
-    return { results: this.statement.all(...this.values()) as Row[], success: true }
-  }
-}
-class SqliteClient implements DatabaseClient {
-  constructor(private readonly database: DatabaseSync) {}
-  prepare(query: string) {
-    return new SqliteStatement(this.database.prepare(query))
-  }
-  async batch(statements: readonly DatabaseStatement[]) {
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      for (const item of statements) (item as SqliteStatement).execute()
-      this.database.exec('COMMIT')
-      return statements.map(() => ({ success: true }))
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
-  }
-}
 
 const now = '2026-09-20T12:00:00.000Z'
 function projection(
@@ -138,7 +75,7 @@ describe('SqlArticlesRepository', () => {
   let database: DatabaseSync, repository: SqlArticlesRepository
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
-    database.exec(migrations)
+    applyTestMigrations(database)
     database.exec(`
       INSERT INTO connections(id,source,label,status,coverage,created_at,updated_at) VALUES('readwise-1','readwise','Reader','connected','partial','${now}','${now}');
       INSERT INTO sync_runs(id,connection_id,kind,status,started_at,finished_at) VALUES('run-1','readwise-1','backfill','running','${now}',NULL);
@@ -878,6 +815,23 @@ describe('SqlArticlesRepository', () => {
       text: `chunk ${ordinal}`,
     }))
     await repository.applyContentChunkBatch('manifest-staged', contentChunks.slice(0, 12))
+    expect(await repository.hasContentChunkRange('manifest-staged', 13)).toBe(false)
+    await repository.failContentJob(idempotencyKey, now, 'synthetic_indexing_failure')
+    expect(await repository.findContentManifest('manifest-staged')).toMatchObject({
+      state: 'failed',
+    })
+    await repository.resumeContentManifest('manifest-staged')
+    expect(await repository.findContentManifest('manifest-staged')).toMatchObject({
+      state: 'pending',
+    })
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) value FROM article_content_chunks WHERE manifest_id='manifest-staged'",
+        )
+        .get()?.value,
+    ).toBe(12)
+
     expect(
       database
         .prepare("SELECT state FROM article_content_manifests WHERE id='manifest-staged'")
@@ -889,6 +843,13 @@ describe('SqlArticlesRepository', () => {
       count: 12,
     })
     await repository.applyContentChunkBatch('manifest-staged', contentChunks.slice(12))
+    expect(await repository.hasContentChunkRange('manifest-staged', 13)).toBe(true)
+    database.exec(
+      "INSERT INTO article_content_search(article_content_search,rowid,content) SELECT 'delete',rowid,'chunk 0' FROM article_content_search_map WHERE manifest_id='manifest-staged' AND chunk_ordinal=0",
+    )
+    expect(await repository.hasContentChunkRange('manifest-staged', 13)).toBe(false)
+    await repository.applyContentChunkBatch('manifest-staged', contentChunks.slice(0, 1))
+    expect(await repository.hasContentChunkRange('manifest-staged', 13)).toBe(true)
     expect(
       database
         .prepare("SELECT state FROM article_content_manifests WHERE id='manifest-staged'")
@@ -998,5 +959,43 @@ describe('SqlArticlesRepository', () => {
         '2026-09-20T13:00:00.000Z',
       ),
     ).toEqual([])
+  })
+  it('does not let old indexing completion displace content for the latest source version', async () => {
+    await repository.applyDocumentsPage([projection()])
+    await repository.rebuildProjection({
+      connectionId: 'readwise-1',
+      syncRunId: 'run-1',
+      rebuiltAt: now,
+    })
+    const base = {
+      connectionId: 'readwise-1',
+      documentId: 'doc-1',
+      readwiseDocumentId: 'readwise-doc-1',
+      mediaItemId: 'article-1',
+      rawObjectKey: 'raw',
+      rawSha256: 'a'.repeat(64),
+      extractedObjectKey: 'text',
+      extractedSha256: 'b'.repeat(64),
+      acquiredAt: now,
+      processedAt: now,
+      coverage: 'full' as const,
+    }
+    await repository.beginContent({ ...base, manifestId: 'old-content', sourceUpdatedAt: now })
+    const latest = '2026-09-21T00:00:00.000Z'
+    await repository.applyDocumentsPage([projection({ updatedAt: latest, observedAt: latest })])
+    await repository.beginContent({ ...base, manifestId: 'new-content', sourceUpdatedAt: latest })
+    await repository.finalizeContent('new-content', '__test__', latest)
+    await repository.finalizeContent('old-content', '__test__', latest)
+    expect(
+      database.prepare('SELECT id,state FROM article_content_manifests ORDER BY id').all(),
+    ).toEqual([
+      { id: 'new-content', state: 'ready' },
+      { id: 'old-content', state: 'expired' },
+    ])
+    expect(
+      database.prepare('SELECT content_available FROM article_library_projection').get()
+        ?.content_available,
+    ).toBe(1)
+    expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
   })
 })

@@ -1,3 +1,5 @@
+import { CatalogLeaseLostError } from '@media-tracker/db'
+import { CatalogRetryError } from './catalog-retry'
 import {
   SpotifyApiError,
   fetchSpotifyEpisodeResponse,
@@ -71,7 +73,11 @@ async function persistResponse(input: {
   response: { bytes: Uint8Array; contentType: string }
   at: ReturnType<typeof utcInstant>
 }): Promise<RawObject> {
-  const ledger = createLedgerRepository(input.env.DB, input.env.DATABASE_USAGE_OBSERVER)
+  const ledger = createLedgerRepository(
+    input.env.DB,
+    input.env.DATABASE_USAGE_OBSERVER,
+    input.env.CATALOG_LEASE,
+  )
   const acquisitionKey = `spotify:${input.runId}:catalog:${input.kind}:${input.id}`
   const existing = await ledger.findRawObject(
     input.connectionId as RawObject['connectionId'],
@@ -112,7 +118,11 @@ async function responseForCandidate(input: {
   id: string
   accessToken: string
 }): Promise<{ bytes: Uint8Array; contentType: string; raw: RawObject }> {
-  const ledger = createLedgerRepository(input.env.DB, input.env.DATABASE_USAGE_OBSERVER)
+  const ledger = createLedgerRepository(
+    input.env.DB,
+    input.env.DATABASE_USAGE_OBSERVER,
+    input.env.CATALOG_LEASE,
+  )
   const existing = await ledger.findRawObject(
     input.connectionId as RawObject['connectionId'],
     `spotify:${input.runId}:catalog:${input.kind}:${input.id}`,
@@ -159,7 +169,11 @@ async function recordResponse(input: {
     upstreamState: 'active',
     errorCode: null,
   }
-  await createLedgerRepository(input.env.DB, input.env.DATABASE_USAGE_OBSERVER).commit({
+  await createLedgerRepository(
+    input.env.DB,
+    input.env.DATABASE_USAGE_OBSERVER,
+    input.env.CATALOG_LEASE,
+  ).commit({
     sourceRecords: [record],
     rawObjects: [{ ...input.raw, processingStatus: 'processed', lastParserVersion: parserVersion }],
   })
@@ -236,8 +250,22 @@ export async function processSpotifyCatalogBackfill(
   const current = await jobs.find(queueJob.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
   const at = new Date().toISOString()
-  if (!(await jobs.reserve(current.id, current.phase, at, afterSeconds(at, 300)))) return
-  const library = createSpotifyLibraryRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
+  if (current.nextAttemptAt !== null && current.nextAttemptAt > at)
+    throw new CatalogRetryError(
+      Math.min(
+        43_200,
+        Math.max(1, Math.ceil((Date.parse(current.nextAttemptAt) - Date.parse(at)) / 1000)),
+      ),
+    )
+  const leaseToken = await jobs.reserve(current.id, current.phase, at, afterSeconds(at, 300))
+  if (leaseToken === null) throw new CatalogRetryError(300)
+  env = { ...env, CATALOG_LEASE: { jobId: current.id, token: leaseToken, kind: 'spotify' } }
+  const library = createSpotifyLibraryRepository(
+    env.DB,
+    env.DATABASE_USAGE_OBSERVER,
+    env.CATALOG_LEASE,
+  )
+  let advanced = false
   let requested = 0
   let returned = 0
   let unavailable = 0
@@ -259,32 +287,17 @@ export async function processSpotifyCatalogBackfill(
     if (candidates.length === 0) {
       const backlog = await library.catalogBacklogCounts()
       if (backlog.tracks > 0 || backlog.episodes > 0) {
-        await jobs.advance(current.id, {
+        advanced = await jobs.advance(current.id, leaseToken, {
           phase: current.phase === 'tracks' ? 'episodes' : 'tracks',
           requested: 0,
           returned: 0,
           unavailable: 0,
           at,
         })
+        if (!advanced) throw new CatalogRetryError(300)
         await env.SYNC_QUEUE.send(message(current.id))
       } else {
-        await createLedgerRepository(env.DB, env.DATABASE_USAGE_OBSERVER).saveSyncRun({
-          id: syncRunId(current.syncRunId),
-          connectionId: current.connectionId as SyncRun['connectionId'],
-          kind: 'backfill',
-          status: 'succeeded',
-          startedAt: utcInstant(current.createdAt),
-          finishedAt: utcInstant(at),
-          counts: {
-            rawObjects: current.returnedCount,
-            sourceRecords: current.returnedCount,
-            normalizedRecords: current.returnedCount,
-            failedRecords: current.unavailableCount,
-          },
-          errorCode: null,
-          errorMessage: null,
-        })
-        await jobs.complete(current.id, at)
+        if (!(await jobs.complete(current.id, leaseToken, at))) throw new CatalogRetryError(300)
       }
       return
     }
@@ -355,17 +368,19 @@ export async function processSpotifyCatalogBackfill(
       await library.rebuildPodcastProjection()
       await library.rebuildPodcastSearch()
     }
-    await jobs.advance(current.id, {
+    advanced = await jobs.advance(current.id, leaseToken, {
       phase: current.phase === 'tracks' ? 'episodes' : 'tracks',
       requested,
       returned,
       unavailable,
       at,
     })
+    if (!advanced) throw new CatalogRetryError(300)
     await env.SYNC_QUEUE.send(message(current.id), { delaySeconds: normalDelaySeconds })
   } catch (error) {
-    if (requested > 0)
-      await jobs.advance(current.id, { phase: current.phase, requested, returned, unavailable, at })
+    if (error instanceof CatalogRetryError) throw error
+    if (advanced || error instanceof CatalogLeaseLostError)
+      throw new CatalogRetryError(60, { cause: error })
     if (current.phase === 'tracks' && returned > 0) await library.rebuildMusicSearch()
     if (current.phase === 'episodes' && returned > 0) {
       await library.rebuildPodcastProjection()
@@ -379,26 +394,20 @@ export async function processSpotifyCatalogBackfill(
       error.status !== 401 &&
       error.status !== 429
     ) {
-      await createLedgerRepository(env.DB, env.DATABASE_USAGE_OBSERVER).saveSyncRun({
-        id: syncRunId(current.syncRunId),
-        connectionId: current.connectionId as SyncRun['connectionId'],
-        kind: 'backfill',
-        status: 'failed',
-        startedAt: utcInstant(current.createdAt),
-        finishedAt: utcInstant(at),
-        counts: {
-          rawObjects: current.returnedCount + returned,
-          sourceRecords: current.returnedCount + returned,
-          normalizedRecords: current.returnedCount + returned,
-          failedRecords: current.unavailableCount + unavailable,
-        },
-        errorCode: code,
-        errorMessage: null,
-      })
-      await jobs.fail(current.id, at, code)
+      if (
+        !(await jobs.fail(current.id, leaseToken, at, code, { requested, returned, unavailable }))
+      )
+        throw new CatalogRetryError(300)
     } else {
       const delay = retryDelay(error)
-      await jobs.defer(current.id, at, afterSeconds(at, delay), code)
+      if (
+        !(await jobs.defer(current.id, leaseToken, at, afterSeconds(at, delay), code, {
+          requested,
+          returned,
+          unavailable,
+        }))
+      )
+        throw new CatalogRetryError(300)
       await env.SYNC_QUEUE.send(message(current.id), { delaySeconds: delay })
     }
     console.warn(JSON.stringify({ event: 'spotify.catalog_batch_failed', jobId: current.id, code }))

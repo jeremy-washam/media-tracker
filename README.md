@@ -119,11 +119,35 @@ replay/export/recovery.
 pnpm check
 pnpm build
 pnpm test:e2e
+pnpm test:runtime
+pnpm test:acceptance
+pnpm test:coverage
 ```
 
-Playwright's Chromium browser is installed once with
-`pnpm exec playwright install chromium`. Real provider credentials must never be
+Playwright's Chromium and WebKit browsers are installed once with
+`pnpm exec playwright install chromium webkit`. Real provider credentials must never be
 committed.
+
+`pnpm check:all` runs static/unit/Python checks, a production build, Worker-runtime
+tests, mocked browser regressions, and real-stack browser acceptance in sequence.
+The two standalone runtime/acceptance commands each rebuild production artifacts
+first. Their Miniflare instances apply every current migration to disposable D1,
+use private temporary R2 and local queues, and seed all six Library families
+through the real import/sync routes. Synthetic provider responses are supplied
+only at the outbound boundary; all other outbound requests fail. They never load
+owner credentials or the development `.wrangler` database.
+
+`pnpm test:coverage` reports maintained TypeScript source, including files not
+imported by tests, to `coverage/` (HTML, LCOV, and JSON summary). Generated routing
+and UI primitives, historical design studies, declaration files, and manual provider
+probes are outside this report. Python deployment tests run once through
+`pnpm test:deployment`. Native iOS build/tests remain separate under
+[`apps/ios`](apps/ios/README.md).
+
+Coverage runs one test file at a time to leave headroom for instrumentation;
+ordinary Vitest runs use at most two workers. Assertions and timeouts stay the same.
+The percentages measure Vitest source coverage; the separate browser and compiled
+Worker runtime suites do not contribute to those percentages.
 
 ## Documentation
 

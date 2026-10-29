@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
+import {
+  CalendarDateSchema as calendarDate,
+  QueryTextSchema,
+  validateFacetBudget,
+} from './query-validation'
 
 export const ArticleSectionSchema = z.enum(['archive', 'queue', 'feed'])
 export const ArticleDensitySchema = z.enum(['restrained', 'expanded'])
@@ -19,7 +24,7 @@ export const ArticleSortSchema = z.enum([
 
 const optionalTrimmedString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-  z.string().trim().optional(),
+  QueryTextSchema.optional(),
 )
 const stringList = z.preprocess(
   (value) => {
@@ -27,9 +32,8 @@ const stringList = z.preprocess(
     const values = Array.isArray(value) ? value : [value]
     return values.flatMap((item) => String(item).split(',')).filter(Boolean)
   },
-  z.array(z.string().trim().min(1)).default([]),
+  z.array(z.string().trim().min(1).max(500)).max(50).default([]),
 )
-const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const booleanFlag = z.preprocess(
   (value) => value === true || value === 'true' || value === '1',
   z.boolean(),
@@ -80,6 +84,20 @@ export const ArticlesQuerySchema = z
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((query, context) => {
+    validateFacetBudget(
+      [
+        query.type,
+        query.author,
+        query.publication,
+        query.readingTime,
+        query.progress,
+        query.currentState,
+        query.queueState,
+        query.opened,
+        query.history,
+      ],
+      context,
+    )
     for (const [fromKey, toKey] of [
       ['publishedFrom', 'publishedTo'],
       ['archivedFrom', 'archivedTo'],

@@ -29,3 +29,53 @@ describe('Spotify token refresh', () => {
     })
   })
 })
+
+describe('Spotify refresh error boundaries', () => {
+  it('uses Basic authorization for confidential clients and preserves replacement credentials', async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).not.toContain('secret')
+      expect(new Headers(init?.headers).get('authorization')).toBe(
+        `Basic ${btoa('client-id:client-secret')}`,
+      )
+      const body = new URLSearchParams(String(init?.body))
+      expect(body.has('client_id')).toBe(false)
+      expect(body.get('refresh_token')).toBe('refresh +/& secret')
+      return Response.json({
+        access_token: 'new-access',
+        refresh_token: 'new-refresh',
+        expires_in: 60,
+        token_type: 'Bearer',
+      })
+    })
+    expect(
+      await refreshSpotifyAccessToken({
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        refreshToken: 'refresh +/& secret',
+        fetch: fetcher,
+      }),
+    ).toMatchObject({ refreshToken: 'new-refresh', accessToken: 'new-access' })
+  })
+  it.each([400, 401, 429, 503])('returns safe token exchange HTTP %s errors', async (status) => {
+    await expect(
+      refreshSpotifyAccessToken({
+        clientId: 'synthetic',
+        refreshToken: 'refresh-secret',
+        fetch: async () => new Response('refresh-secret private response', { status }),
+      }),
+    ).rejects.toThrow(`Spotify token refresh returned ${status}`)
+  })
+  it.each([
+    { access_token: '', expires_in: 3600, token_type: 'Bearer' },
+    { access_token: 'synthetic', expires_in: -1, token_type: 'Bearer' },
+    { access_token: 'synthetic', expires_in: 3600 },
+  ])('rejects invalid refreshed credentials: %j', async (body) => {
+    await expect(
+      refreshSpotifyAccessToken({
+        clientId: 'synthetic',
+        refreshToken: 'synthetic',
+        fetch: async () => Response.json(body),
+      }),
+    ).rejects.toThrow()
+  })
+})

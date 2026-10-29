@@ -79,8 +79,12 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 }
 
 function sourceRecordedAt(book: HardcoverReadBook) {
-  if (book.updatedAt === null || Number.isNaN(Date.parse(book.updatedAt))) return null
-  return temporalInstant(new Date(book.updatedAt).toISOString())
+  if (book.updatedAt === null) return null
+  try {
+    return temporalInstant(book.updatedAt)
+  } catch {
+    return null
+  }
 }
 
 function publishedAt(book: HardcoverReadBook) {

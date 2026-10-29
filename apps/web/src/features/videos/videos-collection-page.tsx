@@ -10,6 +10,7 @@ import {
   channelPickerQueryOptions,
 } from './videos-api'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { hasCollectionFilters, clearedCollectionSearch } from '../../library-search'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
 import videosStyles from '@/features/videos/videos.module.css'
@@ -48,7 +49,8 @@ import {
   useInspectorPresence,
   useLibrarySectionCounts,
 } from '../../components/library-hooks'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useInspectorFocus } from '../inspector-focus'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -90,9 +92,12 @@ function countLabel(value: number, singular: string) {
 export function VideosCollectionPage({ view }: { view: View }) {
   const raw = useSearch({ strict: false }) as VideosRouteSearch
   const search = normalizeVideoSearch(raw, view)
+  const filtered = hasCollectionFilters(search)
   const navigate = useNavigate()
   const [draft, setDraft] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const selectedResultRef = useRef<HTMLButtonElement | null>(null)
+  const headingRef = useRef<HTMLHeadingElement | null>(null)
   const [layout, saveLayout] = useLibraryLayout(search.layout, view !== 'channels')
   const update = (patch: Partial<VideosRouteSearch>) => {
     if (patch.layout) saveLayout(patch.layout)
@@ -107,6 +112,13 @@ export function VideosCollectionPage({ view }: { view: View }) {
     (q) => update({ q, item: undefined, channelItem: undefined }),
     () => setDraft(null),
   )
+  const closeInspector = () => {
+    const target = selectedResultRef.current?.isConnected
+      ? selectedResultRef.current
+      : headingRef.current
+    update({ item: undefined, channelItem: undefined })
+    requestAnimationFrame(() => target?.focus({ preventScroll: true }))
+  }
   const inspectorItem = useInspectorPresence(search.item)
   const channelInspectorItem = useInspectorPresence(search.channelItem)
   const queryOptions = videosQueryOptions(view, search)
@@ -159,7 +171,9 @@ export function VideosCollectionPage({ view }: { view: View }) {
       data-ui={cn('library-workspace videos-page', `videos-${layout}`)}
     >
       <FlatTabsContent value={view} className={workspaceStyles['collection-pane']}>
-        <h1 className="sr-only">Videos</h1>
+        <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
+          Videos
+        </h1>
         <CollectionTabList aria-label="Video sections">
           {(['archive', 'queue', 'channels'] as const).map((target) => (
             <Link
@@ -321,8 +335,24 @@ export function VideosCollectionPage({ view }: { view: View }) {
           {!result.isPending && !result.isError && items.length === 0 ? (
             <CollectionEmptyState
               icon={YoutubeLogo}
-              title={`No ${view} yet`}
-              description="Import YouTube Takeout from Connections."
+              title={
+                filtered
+                  ? `No matching ${view === 'channels' ? 'channels' : 'videos'}`
+                  : `No ${view} yet`
+              }
+              description={
+                filtered
+                  ? 'Try another search or clear the filters.'
+                  : 'Import YouTube Takeout from Connections.'
+              }
+              onClear={
+                filtered
+                  ? () => {
+                      setDraft(null)
+                      update(clearedCollectionSearch(search))
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {items.length ? (
@@ -341,13 +371,14 @@ export function VideosCollectionPage({ view }: { view: View }) {
                   selected={
                     view === 'channels' ? search.channelItem === item.id : search.item === item.id
                   }
-                  onSelect={() =>
+                  onSelect={(element) => {
+                    selectedResultRef.current = element
                     update(
                       view === 'channels'
                         ? { channelItem: search.channelItem === item.id ? undefined : item.id }
                         : { item: search.item === item.id ? undefined : item.id },
                     )
-                  }
+                  }}
                 />
               ))}
             </div>
@@ -360,14 +391,9 @@ export function VideosCollectionPage({ view }: { view: View }) {
           />
         </div>
       </FlatTabsContent>
-      {inspectorItem ? (
-        <VideoInspector id={inspectorItem} onClose={() => update({ item: undefined })} />
-      ) : null}
+      {inspectorItem ? <VideoInspector id={inspectorItem} onClose={closeInspector} /> : null}
       {channelInspectorItem ? (
-        <ChannelInspector
-          id={channelInspectorItem}
-          onClose={() => update({ channelItem: undefined })}
-        />
+        <ChannelInspector id={channelInspectorItem} onClose={closeInspector} />
       ) : null}
     </FlatTabs>
   )
@@ -767,7 +793,7 @@ function VideoItem({
   item: VideoCollectionItem
   view: View
   selected: boolean
-  onSelect: () => void
+  onSelect: (element: HTMLButtonElement) => void
 }) {
   if (item.kind === 'channel') {
     return (
@@ -778,7 +804,7 @@ function VideoItem({
           mediaStyles['video-channel-row'],
           selected ? mediaStyles['selected'] : undefined,
         )}
-        onClick={onSelect}
+        onClick={(event) => onSelect(event.currentTarget)}
         aria-pressed={selected}
       >
         <span className={videosStyles['video-channel-avatar']}>
@@ -803,7 +829,7 @@ function VideoItem({
       data-collection-item={item.id}
       type="button"
       className={cn(mediaStyles['video-result'], selected ? mediaStyles['selected'] : undefined)}
-      onClick={onSelect}
+      onClick={(event) => onSelect(event.currentTarget)}
       data-ui="video-result"
       aria-pressed={selected}
     >
@@ -830,6 +856,7 @@ function VideoItem({
 }
 
 function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
+  const inspectorRef = useInspectorFocus(onClose, id)
   const [tab, setTab] = useState<'details' | 'history' | 'channel'>('details')
   const detail = useQuery({
     queryKey: ['video-detail', id],
@@ -858,6 +885,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
 
   return (
     <aside
+      ref={inspectorRef}
       className={inspectorStyles['media-inspector']}
       aria-label="Video inspector"
       data-ui="media-inspector"
@@ -885,7 +913,12 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
             </InspectorStatePanels>
           ) : detail.isError ? (
             <InspectorStatePanels values={['details', 'history', 'channel']}>
-              <Notice>{detail.error.message}</Notice>
+              <Notice>
+                <p>{detail.error.message}</p>
+                <Button variant="outline" onClick={() => void detail.refetch()}>
+                  Try again
+                </Button>
+              </Notice>
             </InspectorStatePanels>
           ) : detail.data ? (
             <>
@@ -991,6 +1024,27 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                 <TabsContent value="history" className={inspectorStyles['inspector-tab-panel']}>
                   <section>
                     <h3>Watch history</h3>
+                    {history.isPending ? <LoadingState>Loading watch history…</LoadingState> : null}
+                    {history.isError ? (
+                      <Notice>
+                        <p>Watch history could not be loaded.</p>
+                        <Button
+                          variant="outline"
+                          disabled={history.isFetching}
+                          onClick={() =>
+                            void (history.isFetchNextPageError
+                              ? history.fetchNextPage()
+                              : history.refetch())
+                          }
+                        >
+                          Try again
+                        </Button>
+                      </Notice>
+                    ) : null}
+                    {history.isSuccess &&
+                    history.data.pages.every((page) => page.data.length === 0) ? (
+                      <p>No supported watches.</p>
+                    ) : null}
                     <ol className={inspectorStyles['history-list']}>
                       {history.data?.pages
                         .flatMap((page) => page.data)
@@ -1009,6 +1063,7 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                         variant="outline"
                         className={workspaceStyles['load-more']}
                         type="button"
+                        disabled={history.isFetching}
                         onClick={() => void history.fetchNextPage()}
                       >
                         Load more history
@@ -1036,18 +1091,27 @@ function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
                           title="Recently watched"
                           items={channelArchive.data?.pages[0]?.data.slice(0, 5) ?? []}
                           pending={channelArchive.isPending}
+                          error={channelArchive.isError}
+                          onRetry={() => void channelArchive.refetch()}
                         />
                         <ChannelPreview
                           title="Recently queued"
                           items={channelQueue.data?.pages[0]?.data.slice(0, 5) ?? []}
                           pending={channelQueue.isPending}
+                          error={channelQueue.isError}
+                          onRetry={() => void channelQueue.refetch()}
                         />
                         <a href={channel.data.canonicalUrl} target="_blank" rel="noreferrer">
                           Open channel <ArrowSquareOut />
                         </a>
                       </>
                     ) : (
-                      <p>Channel details are unavailable.</p>
+                      <Notice>
+                        <p>Channel details are unavailable.</p>
+                        <Button variant="outline" onClick={() => void channel.refetch()}>
+                          Try again
+                        </Button>
+                      </Notice>
                     )}
                   </section>
                 </TabsContent>
@@ -1064,16 +1128,27 @@ function ChannelPreview({
   title,
   items,
   pending,
+  error,
+  onRetry,
 }: {
   title: string
   items: VideoCollectionItem[]
   pending: boolean
+  error: boolean
+  onRetry: () => void
 }) {
   return (
     <div>
       <h3>{title}</h3>
       {pending ? (
         <LoadingState>Loading…</LoadingState>
+      ) : error ? (
+        <Notice>
+          <p>{title} videos could not be loaded.</p>
+          <Button variant="outline" onClick={onRetry}>
+            Try again
+          </Button>
+        </Notice>
       ) : items.length ? (
         <ol className={inspectorStyles['history-list']}>
           {items.map((item) => (
@@ -1091,16 +1166,13 @@ function ChannelPreview({
 }
 
 function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) {
+  const inspectorRef = useInspectorFocus(onClose, id)
   const [tab, setTab] = useState<'details' | 'library'>('details')
   const [membership, setMembership] = useState<'archive' | 'queue'>('archive')
   const detail = useQuery(videoChannelQueryOptions(id))
-  const library = useInfiniteQuery({
-    ...channelVideosQueryOptions(id, membership),
-    enabled: tab === 'library',
-  })
-
   return (
     <aside
+      ref={inspectorRef}
       className={inspectorStyles['media-inspector']}
       aria-label="Channel inspector"
       data-ui="media-inspector"
@@ -1127,7 +1199,12 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
             </InspectorStatePanels>
           ) : detail.isError ? (
             <InspectorStatePanels values={['details', 'library']}>
-              <Notice>{detail.error.message}</Notice>
+              <Notice>
+                <p>{detail.error.message}</p>
+                <Button variant="outline" onClick={() => void detail.refetch()}>
+                  Try again
+                </Button>
+              </Notice>
             </InspectorStatePanels>
           ) : detail.data ? (
             <>
@@ -1187,54 +1264,19 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
                         <TabsTrigger value="archive">Archive</TabsTrigger>
                         <TabsTrigger value="queue">Queue</TabsTrigger>
                       </TabsList>
-                      <TabsContent
-                        value={membership}
-                        className={inspectorStyles['inspector-tab-panel']}
-                      >
-                        {library.isPending ? <LoadingState>Loading videos…</LoadingState> : null}
-                        {library.isError ? <Notice>{library.error.message}</Notice> : null}
-                        {library.isSuccess &&
-                        library.data.pages.every((page) => page.data.length === 0) ? (
-                          <p>
-                            {membership === 'queue' ? 'No queued videos.' : 'No archived videos.'}
-                          </p>
-                        ) : null}
-                        <ol className={inspectorStyles['history-list']}>
-                          {library.data?.pages
-                            .flatMap((page) => page.data)
-                            .map((item) => (
-                              <li
-                                key={item.id}
-                                className={inspectorStyles['channel-library-video']}
-                                data-ui="channel-library-video"
-                              >
-                                <span className={videosStyles['video-thumbnail']}>
-                                  {item.imageUrl ? (
-                                    <img src={item.imageUrl} alt="" loading="lazy" />
-                                  ) : (
-                                    <YoutubeLogo aria-hidden="true" />
-                                  )}
-                                </span>
-                                <strong>{item.title}</strong>
-                                <span>
-                                  {membership === 'archive'
-                                    ? `Watched ${date(item.date)}`
-                                    : `Added ${date(item.date)}`}
-                                </span>
-                              </li>
-                            ))}
-                        </ol>
-                        {library.hasNextPage ? (
-                          <Button
-                            variant="outline"
-                            className={workspaceStyles['load-more']}
-                            type="button"
-                            onClick={() => void library.fetchNextPage()}
-                          >
-                            Load more videos
-                          </Button>
-                        ) : null}
-                      </TabsContent>
+                      {(['archive', 'queue'] as const).map((value) => (
+                        <TabsContent
+                          key={value}
+                          value={value}
+                          className={inspectorStyles['inspector-tab-panel']}
+                        >
+                          <ChannelLibraryPanel
+                            id={id}
+                            membership={value}
+                            enabled={tab === 'library' && membership === value}
+                          />
+                        </TabsContent>
+                      ))}
                     </Tabs>
                   </section>
                 </TabsContent>
@@ -1244,5 +1286,78 @@ function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) 
         </div>
       </Tabs>
     </aside>
+  )
+}
+
+function ChannelLibraryPanel({
+  id,
+  membership,
+  enabled,
+}: {
+  id: string
+  membership: 'archive' | 'queue'
+  enabled: boolean
+}) {
+  const library = useInfiniteQuery({
+    ...channelVideosQueryOptions(id, membership),
+    enabled,
+  })
+  return (
+    <>
+      {library.isPending ? <LoadingState>Loading videos…</LoadingState> : null}
+      {library.isError ? (
+        <Notice>
+          <p>{library.error.message}</p>
+          <Button
+            variant="outline"
+            disabled={library.isFetching}
+            onClick={() =>
+              void (library.isFetchNextPageError ? library.fetchNextPage() : library.refetch())
+            }
+          >
+            Try again
+          </Button>
+        </Notice>
+      ) : null}
+      {library.isSuccess && library.data.pages.every((page) => page.data.length === 0) ? (
+        <p>{membership === 'queue' ? 'No queued videos.' : 'No archived videos.'}</p>
+      ) : null}
+      <ol className={inspectorStyles['history-list']}>
+        {library.data?.pages
+          .flatMap((page) => page.data)
+          .map((item) => (
+            <li
+              key={item.id}
+              className={inspectorStyles['channel-library-video']}
+              data-ui="channel-library-video"
+            >
+              <span className={videosStyles['video-thumbnail']}>
+                {item.imageUrl ? (
+                  <img src={item.imageUrl} alt="" loading="lazy" />
+                ) : (
+                  <YoutubeLogo aria-hidden="true" />
+                )}
+              </span>
+              <strong>{item.title}</strong>
+              <span>
+                {membership === 'archive'
+                  ? `Watched ${date(item.date)}`
+                  : `Added ${date(item.date)}`}
+              </span>
+            </li>
+          ))}
+      </ol>
+      {library.hasNextPage ? (
+        <Button
+          variant="outline"
+          className={workspaceStyles['load-more']}
+          type="button"
+          disabled={library.isFetching}
+          onClick={() => void library.fetchNextPage()}
+        >
+          Load more videos
+        </Button>
+      ) : null}
+    </>
   )
 }

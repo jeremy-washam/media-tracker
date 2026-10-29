@@ -1,17 +1,11 @@
+import { applyTestMigrations, SqliteTestClient as SqliteClient } from './test-support/sqlite'
 import { readFileSync } from 'node:fs'
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 
 import { connectionId } from '@media-tracker/domain'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type {
-  DatabaseAllResult,
-  DatabaseClient,
-  DatabaseRunResult,
-  DatabaseStatement,
-  DatabaseValue,
-} from './database'
 import {
   SqlMoviesRepository,
   type LetterboxdMovieSnapshotFilm,
@@ -19,72 +13,12 @@ import {
 } from './movies-repository'
 import { SqlCanonicalLedgerRepository } from './repository'
 
-const migrationSql = [
-  '0001_canonical_ledger.sql',
-  '0006_movies_library.sql',
-  '0007_movies_nullable_source_link.sql',
-  '0016_videos_takeout_library.sql',
-  '0017_videos_snapshot_safety.sql',
-  '0018_videos_snapshot_head_backfill.sql',
-  '0019_provider_catalog_caches.sql',
-  '0020_tmdb_match_evidence.sql',
-  '0027_compact_archive_evidence.sql',
-  '0028_evidence_view_parent_guard.sql',
-  '0029_evidence_insert_only_replay.sql',
-].map((name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
-const migrations = migrationSql.join('\n')
-
-class SqliteStatement implements DatabaseStatement {
-  #values: readonly DatabaseValue[] = []
-  constructor(private readonly statement: StatementSync) {}
-  bind(...values: readonly DatabaseValue[]) {
-    this.#values = values
-    return this
-  }
-  values() {
-    return this.#values.map((value) =>
-      value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-    )
-  }
-  execute() {
-    this.statement.run(...this.values())
-  }
-  async run(): Promise<DatabaseRunResult> {
-    this.execute()
-    return { success: true }
-  }
-  async first<Row>(): Promise<Row | null> {
-    return (this.statement.get(...this.values()) as Row | undefined) ?? null
-  }
-  async all<Row>(): Promise<DatabaseAllResult<Row>> {
-    return { results: this.statement.all(...this.values()) as Row[], success: true }
-  }
-}
-
-class SqliteClient implements DatabaseClient {
-  constructor(private readonly database: DatabaseSync) {}
-  prepare(query: string): DatabaseStatement {
-    return new SqliteStatement(this.database.prepare(query))
-  }
-  async batch(statements: readonly DatabaseStatement[]): Promise<readonly DatabaseRunResult[]> {
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      for (const item of statements) (item as SqliteStatement).execute()
-      this.database.exec('COMMIT')
-      return statements.map(() => ({ success: true }))
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
-  }
-}
-
 const now = '2026-09-20T12:00:00.000Z'
 
 it('upgrades existing TMDB match rows while adding separate TV identities', () => {
   const upgrade = new DatabaseSync(':memory:')
   try {
-    upgrade.exec(migrationSql.slice(0, -1).join('\n'))
+    applyTestMigrations(upgrade, { before: '0020_tmdb_match_evidence.sql' })
     upgrade.exec(`
       INSERT INTO media_items(id,type,title,created_at,updated_at)
       VALUES ('movie-old','movie','Old movie','${now}','${now}'),
@@ -94,7 +28,9 @@ it('upgrades existing TMDB match rows while adding separate TV identities', () =
       VALUES ('movie-old',101,'matched','exact_title_year',1,
         'tmdb-conservative@1','${now}','${now}','${now}');
     `)
-    upgrade.exec(migrationSql.at(-1)!)
+    upgrade.exec(
+      readFileSync(new URL('../migrations/0020_tmdb_match_evidence.sql', import.meta.url), 'utf8'),
+    )
     expect(
       upgrade
         .prepare(
@@ -133,10 +69,11 @@ function listInput(overrides: Partial<Parameters<SqlMoviesRepository['listMovies
 describe('SqlMoviesRepository', () => {
   let database: DatabaseSync
   let repository: SqlMoviesRepository
+  let client: SqliteClient
 
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
-    database.exec(migrations)
+    applyTestMigrations(database)
     database.exec(`
       INSERT INTO connections(id, source, label, status, coverage, created_at, updated_at)
       VALUES ('letterboxd-1','letterboxd','Letterboxd','connected','complete','${now}','${now}');
@@ -172,10 +109,14 @@ describe('SqlMoviesRepository', () => {
         ('archive-1-admission','archive-1','diary-1','admission','${now}'),
         ('archive-2-admission','archive-2','diary-2','admission','${now}');
     `)
-    repository = new SqlMoviesRepository(new SqliteClient(database))
+    client = new SqliteClient(database)
+    repository = new SqlMoviesRepository(client)
   })
 
-  afterEach(() => database.close())
+  afterEach(() => {
+    database.close()
+    vi.useRealTimers()
+  })
 
   async function applyFullSnapshot(
     films: LetterboxdMovieSnapshotFilm[] = [
@@ -318,6 +259,21 @@ describe('SqlMoviesRepository', () => {
     await applyFullSnapshot()
     const first = await repository.listMovies(listInput({ collection: 'queue', limit: 1 }))
     expect(first.nextCursor).not.toBeNull()
+    const legacy = JSON.parse(decodeURIComponent(first.nextCursor!))
+    legacy.fingerprint = JSON.stringify({
+      ...listInput({ collection: 'queue', limit: 1 }),
+      sort: 'addedAt',
+      direction: 'desc',
+    })
+    const legacyNext = await repository.listMovies(
+      listInput({
+        collection: 'queue',
+        limit: 1,
+        cursor: encodeURIComponent(JSON.stringify(legacy)),
+      }),
+    )
+    expect(legacyNext.data[0]?.id).not.toBe(first.data[0]?.id)
+
     await expect(
       repository.listMovies(
         listInput({ collection: 'queue', q: 'Movie', cursor: first.nextCursor! }),
@@ -774,6 +730,8 @@ describe('SqlMoviesRepository', () => {
   })
 
   it('projects a conservative TMDB match into collection and detail metadata', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(now))
     await applyFullSnapshot()
     const matchedMovie: TmdbMovieProfileProjection = {
       mediaItemId: 'movie-1',
@@ -824,13 +782,23 @@ describe('SqlMoviesRepository', () => {
       movies: [matchedMovie],
     })
     await repository.rebuild(now)
-    expect(await repository.findMovie('movie-1')).toMatchObject({
+    const fresh = await repository.findMovie('movie-1')
+    expect(fresh).toMatchObject({
       displayTitle: 'First Movie Restored',
       posterUrl: 'https://image.tmdb.org/t/p/w500/poster.jpg',
       directors: ['Director One'],
       overview: 'A restored synopsis.',
       genres: ['Drama'],
       source: { tmdbUrl: 'https://www.themoviedb.org/movie/101', metadataStatus: 'matched' },
+    })
+    vi.setSystemTime(new Date('2026-10-20T12:00:00.000Z'))
+    expect(await repository.findMovie('movie-1')).toMatchObject({
+      overview: null,
+      backdropUrl: null,
+      tmdbRating: null,
+      personal: fresh!.personal,
+      archive: fresh!.archive,
+      source: { tmdbUrl: 'https://www.themoviedb.org/movie/101' },
     })
     expect(await repository.needsTmdbConfigurationRefresh(now)).toBe(false)
     expect(await repository.needsTmdbConfigurationRefresh('2026-11-01T00:00:00.000Z')).toBe(true)
@@ -855,6 +823,8 @@ describe('SqlMoviesRepository', () => {
   })
 
   it('projects a TMDB TV profile without colliding with movie IDs or changing source year', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(now))
     await applyFullSnapshot()
     await repository.applyTmdbCatalogBatch({
       at: now,
@@ -902,11 +872,43 @@ describe('SqlMoviesRepository', () => {
       directors: ['Creator One'],
       enrichment: { status: 'matched', mediaType: 'tv' },
     })
-    expect(await repository.findMovie('movie-2')).toMatchObject({
+    const fresh = await repository.findMovie('movie-2')
+    expect(fresh).toMatchObject({
       overview: 'A miniseries.',
       genres: ['Animation'],
       cast: [{ name: 'Actor One', character: 'Wirt' }],
       source: { tmdbUrl: 'https://www.themoviedb.org/tv/61617' },
     })
+    vi.setSystemTime(new Date('2026-10-20T12:00:00.000Z'))
+    expect(await repository.findMovie('movie-2')).toMatchObject({
+      overview: null,
+      genres: [],
+      cast: [],
+      countries: [],
+      tmdbRating: null,
+      personal: fresh!.personal,
+      source: { tmdbUrl: 'https://www.themoviedb.org/tv/61617' },
+    })
+  })
+  it('uses the media/state lookup index in the actual Movies collection query', async () => {
+    await applyFullSnapshot()
+    client.queries.length = 0
+    const page = await repository.listMovies(listInput())
+    expect(page.data.map((row) => row.id)).toEqual(['movie-1'])
+    const actual = client.queries.find(
+      ({ sql }) => sql.includes('matching_watch_count') && sql.includes('sort_value'),
+    )
+    expect(actual).toBeDefined()
+    const plan = database
+      .prepare(`EXPLAIN QUERY PLAN ${actual!.sql}`)
+      .all(
+        ...actual!.values.map((value) =>
+          value instanceof ArrayBuffer ? new Uint8Array(value) : value,
+        ),
+      )
+      .map((row) => String(row.detail))
+      .join('\n')
+    expect(plan).toContain('archive_entries_media_state_consumed_idx')
+    expect(plan).toContain('media_item_id=? AND upstream_state=?')
   })
 })

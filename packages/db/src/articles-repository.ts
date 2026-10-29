@@ -1399,19 +1399,45 @@ export class SqlArticlesRepository {
     }
   }
 
+  async hasContentChunkRange(manifestId: string, expectedCount: number): Promise<boolean> {
+    if (!Number.isInteger(expectedCount) || expectedCount < 1)
+      throw new RangeError('Content chunk count must be a positive integer')
+    const row = await statement(
+      this.database,
+      `SELECT COUNT(*) chunk_count,MIN(c.ordinal) first_ordinal,MAX(c.ordinal) last_ordinal,
+         COUNT(s.rowid) indexed_count
+       FROM article_content_chunks c
+       LEFT JOIN article_content_search_map m ON m.manifest_id=c.manifest_id AND m.chunk_ordinal=c.ordinal
+       LEFT JOIN article_content_search s ON s.rowid=m.rowid
+       WHERE c.manifest_id=?`,
+      [manifestId],
+    ).first<{
+      chunk_count: number
+      first_ordinal: number | null
+      last_ordinal: number | null
+      indexed_count: number
+    }>()
+    return (
+      row?.chunk_count === expectedCount &&
+      row.first_ordinal === 0 &&
+      row.last_ordinal === expectedCount - 1 &&
+      row.indexed_count === expectedCount
+    )
+  }
+
   async findContentManifest(manifestId: string): Promise<{
     id: string
     connectionId: string
     readwiseDocumentId: string
     mediaItemId: string
     extractedObjectKey: string
-    state: 'pending' | 'ready'
+    state: 'pending' | 'ready' | 'failed'
   } | null> {
     const row = await statement(
       this.database,
       `SELECT m.id,d.connection_id,m.readwise_document_id,m.media_item_id,m.extracted_object_key,m.state
        FROM article_content_manifests m JOIN readwise_documents d ON d.id=m.readwise_document_id
-       WHERE m.id=? AND m.state IN ('pending','ready')`,
+       WHERE m.id=? AND m.state IN ('pending','ready','failed')`,
       [manifestId],
     ).first<{
       id: string
@@ -1419,7 +1445,7 @@ export class SqlArticlesRepository {
       readwise_document_id: string
       media_item_id: string
       extracted_object_key: string
-      state: 'pending' | 'ready'
+      state: 'pending' | 'ready' | 'failed'
     }>()
     return row === null
       ? null
@@ -1431,6 +1457,15 @@ export class SqlArticlesRepository {
           extractedObjectKey: row.extracted_object_key,
           state: row.state,
         }
+  }
+
+  async resumeContentManifest(manifestId: string): Promise<void> {
+    await statement(
+      this.database,
+      `UPDATE article_content_manifests SET state='pending',failure_class=NULL,processed_at=NULL
+       WHERE id=? AND state='failed'`,
+      [manifestId],
+    ).run()
   }
 
   async finalizeContent(
@@ -1447,17 +1482,28 @@ export class SqlArticlesRepository {
     await this.database.batch([
       statement(
         this.database,
-        `UPDATE article_content_manifests SET state='expired' WHERE readwise_document_id=? AND id<>? AND state='ready'`,
-        [manifest.readwise_document_id, manifestId],
+        `UPDATE article_content_manifests SET state='expired'
+         WHERE readwise_document_id=? AND id<>? AND state='ready'
+           AND EXISTS(SELECT 1 FROM article_content_manifests target
+             JOIN readwise_documents d ON d.id=target.readwise_document_id
+             WHERE target.id=? AND target.source_updated_at IS d.updated_at_source)`,
+        [manifest.readwise_document_id, manifestId, manifestId],
       ),
       statement(
         this.database,
-        `UPDATE article_content_manifests SET state='ready',processed_at=?,failure_class=NULL WHERE id=?`,
+        `UPDATE article_content_manifests SET state=CASE WHEN EXISTS(
+           SELECT 1 FROM readwise_documents d
+           WHERE d.id=article_content_manifests.readwise_document_id
+             AND article_content_manifests.source_updated_at IS d.updated_at_source
+         ) THEN 'ready' ELSE 'expired' END,processed_at=?,failure_class=NULL WHERE id=?`,
         [processedAt, manifestId],
       ),
       statement(
         this.database,
-        'UPDATE article_library_projection SET content_available=1 WHERE media_item_id=?',
+        `UPDATE article_library_projection SET content_available=EXISTS(
+           SELECT 1 FROM article_content_manifests m
+           WHERE m.media_item_id=article_library_projection.media_item_id AND m.state='ready'
+         ) WHERE media_item_id=?`,
         [manifest.media_item_id],
       ),
       statement(

@@ -1,11 +1,15 @@
 import { z } from 'zod'
 import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
+import {
+  CalendarDateSchema as date,
+  QueryTextSchema,
+  validateFacetBudget,
+} from './query-validation'
 
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-  z.string().trim().optional(),
+  QueryTextSchema.optional(),
 )
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const stringList = z.preprocess(
   (value) =>
     value === undefined
@@ -13,7 +17,7 @@ const stringList = z.preprocess(
       : (Array.isArray(value) ? value : [value])
           .flatMap((item) => String(item).split(','))
           .filter(Boolean),
-  z.array(z.string()).default([]),
+  z.array(z.string().max(500)).max(50).default([]),
 )
 
 export const MusicViewSchema = z.enum(['tracks', 'albums', 'artists'])
@@ -50,6 +54,7 @@ export const MusicQuerySchema = z
     cursor: z.string().max(4000).optional(),
   })
   .superRefine((value, context) => {
+    validateFacetBudget([value.artist, value.album], context)
     if (value.from && value.to && value.from > value.to)
       context.addIssue({
         code: 'custom',

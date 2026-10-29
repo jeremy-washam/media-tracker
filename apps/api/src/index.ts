@@ -1,3 +1,5 @@
+import { ZodError } from 'zod'
+import { CatalogRetryError } from './catalog-retry'
 import { SyncJobSchema } from '@media-tracker/contracts'
 import { D1DatabaseClient, SqlSourceSyncAdmission } from '@media-tracker/db'
 import { SyncDeferredError, type SyncSource } from './sync-budget'
@@ -254,7 +256,25 @@ const worker = {
     if (env.SPOTIFY_CATALOG_ENABLED !== 'false')
       tasks.push(() => scheduledJob(env, 'scheduled_spotify_catalog', resumeSpotifyCatalogBackfill))
     if (tasks.length > 0) {
-      context.waitUntil(tasks.reduce((chain, task) => chain.then(task), Promise.resolve()))
+      context.waitUntil(
+        tasks.reduce(
+          (chain, task) =>
+            chain.then(async () => {
+              try {
+                await task()
+              } catch (error) {
+                console.error(
+                  JSON.stringify({
+                    level: 'error',
+                    event: 'scheduled.job_failed',
+                    errorName: error instanceof Error ? error.name : 'UnknownError',
+                  }),
+                )
+              }
+            }),
+          Promise.resolve(),
+        ),
+      )
     }
   },
   async queue(batch, env) {
@@ -334,14 +354,18 @@ const worker = {
             else await indexReadwiseArticleContent(usage.env, result.data)
             message.ack()
           } catch (error) {
-            await createArticlesRepository(
-              usage.env.DB,
-              usage.env.DATABASE_USAGE_OBSERVER,
-            ).failContentJob(
-              result.data.idempotencyKey,
-              new Date().toISOString(),
-              error instanceof Error ? error.name : 'UnknownError',
-            )
+            try {
+              await createArticlesRepository(
+                usage.env.DB,
+                usage.env.DATABASE_USAGE_OBSERVER,
+              ).failContentJob(
+                result.data.idempotencyKey,
+                new Date().toISOString(),
+                error instanceof Error ? error.name : 'UnknownError',
+              )
+            } catch {
+              /* The original queue delivery still needs retrying when D1 is unavailable. */
+            }
             console.error(
               JSON.stringify({
                 level: 'error',
@@ -374,12 +398,15 @@ const worker = {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
               }),
             )
-            if (
-              (error instanceof TmdbApiError && error.retryable) ||
-              (error instanceof YoutubeApiError && error.retryable)
-            )
-              message.retry()
-            else message.ack()
+            const terminal =
+              error instanceof ZodError ||
+              (error instanceof TmdbApiError && !error.retryable) ||
+              (error instanceof YoutubeApiError && !error.retryable)
+            if (terminal) message.ack()
+            else
+              message.retry({
+                delaySeconds: error instanceof CatalogRetryError ? error.delaySeconds : 60,
+              })
           }
           continue
         }
@@ -397,7 +424,9 @@ const worker = {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
               }),
             )
-            message.retry()
+            message.retry({
+              delaySeconds: error instanceof CatalogRetryError ? error.delaySeconds : 60,
+            })
           }
           continue
         }

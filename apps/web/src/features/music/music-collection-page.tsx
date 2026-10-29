@@ -6,6 +6,7 @@ import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { useDebouncedValue } from '../../components/library-hooks'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
+import { hasCollectionFilters, clearedCollectionSearch } from '../../library-search'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
 import workspaceStyles from '@/components/library-workspace.module.css'
 import inspectorStyles from '@/components/inspector.module.css'
@@ -60,7 +61,7 @@ import {
 } from '@/components/icons'
 import type { MusicCollectionItem } from '@media-tracker/contracts'
 import { fetchMusicDetail, fetchMusicFilterOptions, fetchMusicHistory } from './music-api'
-import { useSpotifyInspectorFocus } from '../spotify-inspector-focus'
+import { useInspectorFocus } from '../inspector-focus'
 import { musicQuerySearch, normalizeMusicSearch, type MusicRouteSearch } from './music-route-search'
 
 function date(value: string | null | undefined) {
@@ -82,6 +83,7 @@ function listened(value: number) {
 export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'artists' }) {
   const raw = useSearch({ strict: false }) as MusicRouteSearch
   const search = normalizeMusicSearch(raw, view)
+  const filtered = hasCollectionFilters(search)
   const navigate = useNavigate()
   const [draft, setDraft] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -498,8 +500,20 @@ export function MusicCollectionPage({ view }: { view: 'tracks' | 'albums' | 'art
           {!result.isPending && !result.isError && items.length === 0 ? (
             <CollectionEmptyState
               icon={MusicNotes}
-              title={`No ${view} yet`}
-              description="Import Spotify Extended Streaming History or sync Spotify from Connections."
+              title={filtered ? `No matching ${view}` : `No ${view} yet`}
+              description={
+                filtered
+                  ? 'Try another search or clear the filters.'
+                  : 'Import Spotify Extended Streaming History or sync Spotify from Connections.'
+              }
+              onClear={
+                filtered
+                  ? () => {
+                      setDraft(null)
+                      update(clearedCollectionSearch(search))
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {items.length ? (
@@ -703,7 +717,7 @@ function MusicInspector({
   matchingItem: MusicCollectionItem | null
 }) {
   const [tab, setTab] = useState<'details' | 'history'>('details')
-  const inspectorRef = useSpotifyInspectorFocus(onClose, id)
+  const inspectorRef = useInspectorFocus(onClose, id)
   const detail = useQuery({
     queryKey: ['music-detail', view, id],
     queryFn: ({ signal }) => fetchMusicDetail(id, view, signal),

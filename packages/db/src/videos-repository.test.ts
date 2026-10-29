@@ -1,3 +1,4 @@
+import { fenceCatalogDatabase } from './catalog-fence'
 import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -508,12 +509,16 @@ describe('SqlVideosRepository', () => {
       channel: ['channel-1', 'channel-3', ...Array.from({ length: 78 }, (_, i) => `unused-${i}`)],
       limit: 1,
     })
-    expect(VideosQuerySchema.safeParse(selection).success).toBe(true)
+    expect(VideosQuerySchema.safeParse({ ...selection, section: selection.view }).success).toBe(
+      true,
+    )
     const first = await repository.listVideos(selection)
     expect(first.data.map((row) => row.id)).toEqual(['video-1'])
     expect(first.nextCursor).not.toBeNull()
     const secondSelection = input({ ...selection, cursor: first.nextCursor! })
-    expect(VideosQuerySchema.safeParse(secondSelection).success).toBe(true)
+    expect(
+      VideosQuerySchema.safeParse({ ...secondSelection, section: secondSelection.view }).success,
+    ).toBe(true)
     const second = await repository.listVideos(secondSelection)
     expect(second.data.map((row) => row.id)).toEqual(['video-3'])
     expect(second).toMatchObject({ totalCount: 2, filteredCount: 2, nextCursor: null })
@@ -719,10 +724,42 @@ describe('SqlVideosRepository', () => {
   it('paginates collections by stable keys and rejects stale projection generations', async () => {
     const first = await repository.listVideos(input({ limit: 1, sort: 'title', direction: 'asc' }))
     expect(first.nextCursor).not.toBeNull()
+    const query = input({ limit: 1, sort: 'title', direction: 'asc' })
+    const itemsSpy = vi.spyOn(repository, 'listVideoItems')
+    const summarySpy = vi.spyOn(repository, 'summarizeVideos')
+    await expect(repository.listVideoItems(query)).resolves.toEqual({
+      data: first.data,
+      nextCursor: first.nextCursor,
+    })
+    expect(summarySpy).not.toHaveBeenCalled()
+    itemsSpy.mockClear()
+    const expectedSummary = Object.fromEntries(
+      Object.entries(first).filter(([key]) => key !== 'data' && key !== 'nextCursor'),
+    )
+    await expect(repository.summarizeVideos(query)).resolves.toEqual(expectedSummary)
+    expect(itemsSpy).not.toHaveBeenCalled()
+    itemsSpy.mockRestore()
+    summarySpy.mockRestore()
+
     const second = await repository.listVideos(
       input({ limit: 1, sort: 'title', direction: 'asc', cursor: first.nextCursor! }),
     )
     expect(second.data[0]?.id).not.toBe(first.data[0]?.id)
+    const legacy = JSON.parse(decodeURIComponent(first.nextCursor!))
+    legacy.key = JSON.stringify(input({ limit: 1, sort: 'title', direction: 'asc' }))
+    expect(
+      (
+        await repository.listVideos(
+          input({
+            limit: 1,
+            sort: 'title',
+            direction: 'asc',
+            cursor: encodeURIComponent(JSON.stringify(legacy)),
+          }),
+        )
+      ).data,
+    ).toEqual(second.data)
+
     await repository.rebuild(later)
     await expect(
       repository.listVideos(
@@ -1608,5 +1645,31 @@ describe('SqlVideosRepository', () => {
     } finally {
       legacy.close()
     }
+  })
+  it('completes the owning catalog attempt and publishes its staged cache atomically', async () => {
+    await seedPublishedCatalog()
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,attempt_count,created_at,updated_at) VALUES('catalog-2','youtube','running',1,'${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET current_title='Atomically published';`)
+    const leased = new SqlVideosRepository(
+      fenceCatalogDatabase(client, { jobId: 'catalog-2', token: 1, kind: 'catalog' }),
+      () => clockNow,
+    )
+    database.exec(
+      "CREATE TRIGGER fail_video_publish BEFORE INSERT ON youtube_published_video_profiles BEGIN SELECT RAISE(ABORT,'synthetic publication failure'); END",
+    )
+    await expect(leased.rebuild(later, { jobId: 'catalog-2', token: 1 })).rejects.toThrow(
+      'synthetic publication failure',
+    )
+    expect(
+      database.prepare("SELECT state FROM catalog_refresh_jobs WHERE id='catalog-2'").get()?.state,
+    ).toBe('running')
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Current Video Title' })
+    database.exec('DROP TRIGGER fail_video_publish')
+    await leased.rebuild(later, { jobId: 'catalog-2', token: 1 })
+    expect(
+      database.prepare("SELECT state FROM catalog_refresh_jobs WHERE id='catalog-2'").get()?.state,
+    ).toBe('succeeded')
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Atomically published' })
+    expect(database.prepare('SELECT COUNT(*) value FROM catalog_write_guards').get()?.value).toBe(0)
   })
 })

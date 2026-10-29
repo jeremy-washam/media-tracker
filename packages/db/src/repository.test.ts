@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { applyTestMigrations, SqliteTestClient as SqliteClient } from './test-support/sqlite'
+import { DatabaseSync } from 'node:sqlite'
 
 import {
   archiveEntryEvidenceId,
@@ -26,90 +26,10 @@ import {
 } from '@media-tracker/domain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type {
-  DatabaseAllResult,
-  DatabaseClient,
-  DatabaseRunResult,
-  DatabaseStatement,
-  DatabaseValue,
-} from './database'
 import { SqlCanonicalLedgerRepository } from './repository'
 
-const migration = readFileSync(
-  new URL('../migrations/0001_canonical_ledger.sql', import.meta.url),
-  'utf8',
-)
 const now = utcInstant('2026-09-12T20:00:00Z')
 const later = utcInstant('2026-09-12T21:00:00Z')
-
-class SqliteStatement implements DatabaseStatement {
-  readonly #statement: StatementSync
-  #values: readonly DatabaseValue[] = []
-
-  constructor(statement: StatementSync) {
-    this.#statement = statement
-  }
-
-  bind(...values: readonly DatabaseValue[]): DatabaseStatement {
-    this.#values = values
-    return this
-  }
-
-  async run(): Promise<DatabaseRunResult> {
-    this.execute()
-    return { success: true }
-  }
-
-  async first<Row>(): Promise<Row | null> {
-    const row = this.#statement.get(
-      ...this.#values.map((value) =>
-        value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-      ),
-    )
-    return (row as Row | undefined) ?? null
-  }
-
-  async all<Row>(): Promise<DatabaseAllResult<Row>> {
-    const results = this.#statement.all(
-      ...this.#values.map((value) =>
-        value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-      ),
-    ) as Row[]
-    return { results, success: true }
-  }
-
-  execute(): void {
-    this.#statement.run(
-      ...this.#values.map((value) =>
-        value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-      ),
-    )
-  }
-}
-
-class SqliteClient implements DatabaseClient {
-  readonly #database: DatabaseSync
-
-  constructor(database: DatabaseSync) {
-    this.#database = database
-  }
-
-  prepare(query: string): DatabaseStatement {
-    return new SqliteStatement(this.#database.prepare(query))
-  }
-
-  async batch(statements: readonly DatabaseStatement[]): Promise<readonly DatabaseRunResult[]> {
-    this.#database.exec('BEGIN IMMEDIATE')
-    try {
-      for (const statement of statements) (statement as SqliteStatement).execute()
-      this.#database.exec('COMMIT')
-      return statements.map(() => ({ success: true }))
-    } catch (error) {
-      this.#database.exec('ROLLBACK')
-      throw error
-    }
-  }
-}
 
 function count(database: DatabaseSync, table: string): number {
   const row = database.prepare(`SELECT count(*) AS count FROM ${table}`).get() as {
@@ -252,19 +172,7 @@ describe('canonical ledger migration and repository', () => {
 
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
-    database.exec(migration)
-    database.exec(
-      readFileSync(
-        new URL('../migrations/0027_compact_archive_evidence.sql', import.meta.url),
-        'utf8',
-      ),
-    )
-    database.exec(
-      readFileSync(
-        new URL('../migrations/0022_spotify_catalog_backfill.sql', import.meta.url),
-        'utf8',
-      ),
-    )
+    applyTestMigrations(database)
     repository = new SqlCanonicalLedgerRepository(new SqliteClient(database))
   })
 
@@ -777,4 +685,32 @@ describe('canonical ledger migration and repository', () => {
         ),
     ).toThrow()
   })
+  it.each(['pending', 'running', 'failed', 'succeeded', 'partially_succeeded'] as const)(
+    'checkpoints only committed primary scans: %s',
+    async (status) => {
+      const data = fixtures()
+      await repository.saveConnection(data.connection)
+      await repository.saveSyncRun({ ...data.runningSyncRun, status })
+      const commit = repository.commit({ cursor: data.cursor })
+      if (status === 'succeeded' || status === 'partially_succeeded') {
+        await expect(commit).resolves.toBeUndefined()
+        expect(await repository.findSyncCursor(data.connection.id, data.cursor.name)).toEqual(
+          data.cursor,
+        )
+      } else {
+        await expect(commit).rejects.toThrow('completed sync run')
+        expect(count(database, 'sync_cursors')).toBe(0)
+      }
+      await repository.saveConnection({ ...data.connection, id: connectionId('other') })
+      await expect(
+        repository.commit({
+          cursor: {
+            ...data.cursor,
+            id: syncCursorId('other-cursor'),
+            connectionId: connectionId('other'),
+          },
+        }),
+      ).rejects.toThrow('same connection')
+    },
+  )
 })

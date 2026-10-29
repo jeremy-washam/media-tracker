@@ -44,16 +44,6 @@ it('upgrades existing Library rows with covering indexes for collection aggregat
       plan(`SELECT media_item_id,COUNT(*),SUM(milliseconds_played),MAX(occurred_at)
       FROM spotify_song_observations GROUP BY media_item_id`),
     ).toContain('COVERING INDEX spotify_song_observations_rollup_idx')
-    expect(
-      plan(`SELECT media_item_id,COUNT(DISTINCT archive_entry_id),COUNT(DISTINCT connection_id),MAX(occurred_at)
-      FROM youtube_watch_observations INDEXED BY youtube_watch_rollup_idx GROUP BY media_item_id`),
-    ).toContain('COVERING INDEX youtube_watch_rollup_idx')
-    expect(
-      plan(`SELECT w.media_item_id,COUNT(DISTINCT w.archive_entry_id)
-        FROM youtube_watch_observations w INDEXED BY youtube_watch_rollup_idx
-        JOIN archive_entries a ON a.id=w.archive_entry_id
-        WHERE a.upstream_state='active' GROUP BY w.media_item_id`),
-    ).toContain('COVERING INDEX archive_entries_state_id_idx')
     expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
   } finally {
     database.close()

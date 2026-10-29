@@ -128,3 +128,11 @@ Playback dates are monotonic across export imports: an older snapshot can add
 evidence but cannot replace a later positive playback date. Successful API
 responses are stored before JSON/schema validation, so malformed pages remain
 available as failed raw evidence.
+
+Optional library readers expose separate `fetch…Response` and `parse…` functions
+so orchestration can retain exact successful response bytes before parsing.
+The convenience `fetchSpotifySavedShowsPage`, `fetchSpotifyRecentlyPlayed`,
+`fetchSpotifyPlayer`, and `fetchSpotifyTracks` functions remain available for
+non-ingesting consumers. Worker sync uses the raw-response boundary; malformed
+optional responses remain replayable evidence, and partial failures are persisted
+in the sync run and connection state.

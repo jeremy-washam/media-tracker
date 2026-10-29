@@ -62,6 +62,7 @@ afterEach(() => {
   cleanups.splice(0).forEach((stop) => stop())
   clients.splice(0).forEach((value) => value.clear())
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 describe('Library initial page cache', () => {
@@ -173,18 +174,120 @@ describe('Library initial page cache', () => {
     })
     await vi.advanceTimersByTimeAsync(200)
     value.setQueryData(['book', 'detail-one'], { title: 'Previous metadata' })
-    value.setQueryData(['music-filter-options', { view: 'tracks' }], { data: [] })
+    value.setQueryData(['music-filter-options', { section: 'tracks' }], { data: [] })
     await invalidateLibraryQueries(value)
     expect(value.getQueryState(['book', 'detail-one'])?.isInvalidated).toBe(true)
-    expect(value.getQueryState(['music-filter-options', { view: 'tracks' }])?.isInvalidated).toBe(
-      true,
-    )
+    expect(
+      value.getQueryState(['music-filter-options', { section: 'tracks' }])?.isInvalidated,
+    ).toBe(true)
     expect(client(storage).getQueryData(booksQueryOptions('archive').queryKey)).toBeUndefined()
     expect(value.getQueryState(booksQueryOptions('archive').queryKey)?.isInvalidated).toBe(true)
+  })
+
+  it('cancels an obsolete in-flight prefetch so its result cannot become fresh or persisted', async () => {
+    const storage = new MemoryStorage()
+    const value = client()
+    cleanups.push(persistLibraryCache(value, storage))
+    const pending = deferred<typeof page>()
+    let signal: AbortSignal | undefined
+    const options = booksQueryOptions('archive')
+    const prefetch = value.prefetchInfiniteQuery({
+      ...options,
+      queryFn: (context) => {
+        signal = context.signal
+        return pending.promise
+      },
+    })
+    await invalidateLibraryQueries(value)
+    expect(signal?.aborted).toBe(true)
+    pending.resolve(page)
+    await prefetch
+    await vi.advanceTimersByTimeAsync(200)
+    expect(value.getQueryData(options.queryKey)).toBeUndefined()
+    expect(client(storage).getQueryData(options.queryKey)).toBeUndefined()
+  })
+
+  it('discards oversized snapshots and pages beyond the request bound', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(LIBRARY_CACHE_KEY, ' '.repeat(2_000_001))
+    expect(client(storage).getQueryCache().getAll()).toHaveLength(0)
+    expect(storage.getItem(LIBRARY_CACHE_KEY)).toBeNull()
+    // An oversized page must be discarded even when the envelope is otherwise valid.
+    const item = {
+      id: 'book-one',
+      title: 'Synthetic book',
+      subtitle: null,
+      authors: [],
+      coverUrl: null,
+      coverColor: null,
+      publicationDate: null,
+      publicationPrecision: null,
+      primarySeries: null,
+      memberships: { archive: true, queue: false, currentlyReading: false },
+      latestReadDate: null,
+      latestReadPrecision: null,
+      latestReadFormat: null,
+      personalRating: null,
+      addedToHardcoverDate: null,
+      supportedReadCount: 1,
+    }
+    const invalidPage = {
+      ...page,
+      data: Array.from({ length: 51 }, (_, index) => ({ ...item, id: `book-${index}` })),
+    }
+    storage.setItem(
+      LIBRARY_CACHE_KEY,
+      JSON.stringify({
+        version: 2,
+        entries: [{ path: '/library/books/archive', updatedAt: Date.now(), page: invalidPage }],
+      }),
+    )
+    expect(client(storage).getQueryCache().getAll()).toHaveLength(0)
   })
 })
 
 describe('Library background prefetch', () => {
+  it('waits for visibility and connectivity, and stops launching tasks after cleanup', async () => {
+    const browser = new EventTarget()
+    const document = Object.assign(new EventTarget(), { visibilityState: 'hidden' })
+    const navigator = { onLine: false }
+    vi.stubGlobal('window', browser)
+    vi.stubGlobal('document', document)
+    vi.stubGlobal('navigator', navigator)
+    const value = client()
+    const primary = new InfiniteQueryObserver(value, {
+      ...booksQueryOptions('archive'),
+      queryFn: async () => page,
+    })
+    cleanups.push(primary.subscribe(() => {}))
+    const pending = deferred<void>()
+    const loads = [
+      vi.fn(() => pending.promise),
+      vi.fn(() => pending.promise),
+      vi.fn(async () => {}),
+    ]
+    const stop = startInitialPrefetch(
+      value,
+      () => '/library/books/archive',
+      loads.map((load, index) => ({ queryKey: ['background', index], prefetch: load })),
+    )
+    cleanups.push(stop)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(loads[0]).not.toHaveBeenCalled()
+    document.visibilityState = 'visible'
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(1)
+    expect(loads[0]).not.toHaveBeenCalled()
+    navigator.onLine = true
+    browser.dispatchEvent(new Event('online'))
+    await vi.advanceTimersByTimeAsync(1)
+    expect(loads[0]).toHaveBeenCalledTimes(1)
+    expect(loads[1]).toHaveBeenCalledTimes(1)
+    stop()
+    pending.resolve()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(loads[2]).not.toHaveBeenCalled()
+  })
   it('waits for foreground content, limits concurrency to two, and pauses for new foreground work', async () => {
     const value = client()
     const first = deferred<typeof page>()

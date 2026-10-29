@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchHealth,
@@ -10,7 +10,10 @@ import {
   syncLetterboxd,
   syncReadwise,
   syncSpotify,
+  resumeImport,
 } from './api'
+
+afterEach(() => vi.unstubAllGlobals())
 
 const validHealthResponse = {
   status: 'ok',
@@ -243,4 +246,162 @@ describe('API client', () => {
       expect.objectContaining({ method: 'POST' }),
     )
   })
+})
+
+function chunk(
+  source: 'spotify' | 'youtube',
+  completed: boolean,
+  nextOffset: number | null,
+  count = 1,
+) {
+  const common = {
+    syncRunId: 'synthetic-run',
+    importId: 'synthetic-import',
+    alreadyImported: false,
+    completed,
+    nextOffset,
+    sourceRecords: count,
+  }
+  return source === 'spotify'
+    ? {
+        ...common,
+        totalPodcastSegments: 20,
+        totalArchiveEpisodes: 6,
+        archiveEpisodes: count,
+        totalSongSegments: 20,
+        totalArchiveTracks: 6,
+        songObservations: count,
+        unresolvedPodcastSegments: 0,
+      }
+    : {
+        ...common,
+        totalRecords: 20,
+        activityCards: 20,
+        videos: count,
+        archiveEntries: count,
+        unresolvedRecords: 0,
+        ignoredRecords: 0,
+        watchLaterRecords: count,
+        queueEntries: count,
+        subscriptionRecords: count,
+        channels: count,
+        components: [],
+      }
+}
+
+describe('Chunked import recovery boundaries', () => {
+  for (const source of ['spotify', 'youtube'] as const) {
+    const archive = new File(['synthetic'], `${source}.zip`, { type: 'application/zip' })
+    const importArchive = (fetcher: typeof fetch) =>
+      source === 'youtube'
+        ? importYoutube(archive, fetcher, { connectionId: 'account /?&' })
+        : importSpotify(archive, fetcher)
+
+    it(`${source} aggregates three chunks and keeps the exact continuation account`, async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(Response.json(chunk(source, false, 5, 2)))
+        .mockResolvedValueOnce(Response.json(chunk(source, false, 10, 3)))
+        .mockResolvedValueOnce(Response.json(chunk(source, true, null, 1)))
+      const result = await importArchive(fetcher)
+      expect(result).toMatchObject({
+        completed: true,
+        sourceRecords: 6,
+        ...(source === 'spotify'
+          ? { archiveEpisodes: 6, songObservations: 6 }
+          : { archiveEntries: 6, videos: 6, queueEntries: 6, channels: 6 }),
+      })
+      expect(fetcher).toHaveBeenCalledTimes(3)
+      for (const call of fetcher.mock.calls.slice(1)) {
+        const url = new URL(call[0] as string, 'http://localhost')
+        expect(url.pathname).toBe(`/api/connections/${source}/import/synthetic-import/continue`)
+        expect(url.searchParams.get('connectionId')).toBe(
+          source === 'youtube' ? 'account /?&' : null,
+        )
+        expect(call[1]).toMatchObject({ method: 'POST' })
+      }
+    })
+
+    it.each([5, 4, null])(
+      `${source} rejects an incomplete continuation with offset %s`,
+      async (offset) => {
+        const fetcher = vi
+          .fn()
+          .mockResolvedValueOnce(Response.json(chunk(source, false, 5)))
+          .mockResolvedValueOnce(Response.json(chunk(source, false, offset)))
+        await expect(importArchive(fetcher)).rejects.toThrow('did not make progress')
+        expect(fetcher).toHaveBeenCalledTimes(2)
+      },
+    )
+
+    it(`${source} stops on initial, continuation, and malformed response failures`, async () => {
+      for (const responses of [
+        [Response.json({}, { status: 413 })],
+        [Response.json({ completed: true })],
+        [Response.json(chunk(source, false, 5)), Response.json({}, { status: 500 })],
+        [Response.json(chunk(source, false, 5)), Response.json({ completed: true })],
+      ]) {
+        const fetcher = vi.fn()
+        for (const response of responses) fetcher.mockResolvedValueOnce(response)
+        await expect(importArchive(fetcher)).rejects.toThrow()
+        expect(fetcher).toHaveBeenCalledTimes(responses.length)
+      }
+    })
+
+    it(`${source} returns an already imported archive without continuing it`, async () => {
+      const fetcher = vi.fn(async () =>
+        Response.json({ ...chunk(source, true, null, 0), alreadyImported: true }),
+      )
+      await expect(importArchive(fetcher)).resolves.toMatchObject({
+        alreadyImported: true,
+        completed: true,
+      })
+      expect(fetcher).toHaveBeenCalledTimes(1)
+    })
+
+    it(`${source} resumes multiple chunks with encoded import/account identities`, async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(Response.json(chunk(source, false, 5)))
+        .mockResolvedValueOnce(Response.json(chunk(source, false, 10)))
+        .mockResolvedValueOnce(Response.json(chunk(source, true, null)))
+      vi.stubGlobal('fetch', fetcher)
+      await expect(resumeImport(source, 'import /?&', 'account /?&')).resolves.toBeUndefined()
+      expect(fetcher).toHaveBeenCalledTimes(3)
+      for (const call of fetcher.mock.calls) {
+        expect(call[0]).toBe(
+          `/api/connections/${source}/import/import%20%2F%3F%26/continue?connectionId=account%20%2F%3F%26`,
+        )
+        expect(call[1]).toMatchObject({ method: 'POST' })
+      }
+    })
+
+    it.each([5, 4, null])(
+      `${source} refuses a resumed import that stalls or retreats to %s`,
+      async (offset) => {
+        const fetcher = vi
+          .fn()
+          .mockResolvedValueOnce(Response.json(chunk(source, false, 5)))
+          .mockResolvedValueOnce(Response.json(chunk(source, false, offset)))
+        vi.stubGlobal('fetch', fetcher)
+        await expect(resumeImport(source, 'one', 'account')).rejects.toThrow(
+          'did not make progress',
+        )
+        expect(fetcher).toHaveBeenCalledTimes(2)
+      },
+    )
+
+    it(`${source} fails a resume immediately on HTTP or schema errors`, async () => {
+      for (const response of [
+        Response.json({}, { status: 500 }),
+        Response.json({ completed: true }),
+        Response.json(chunk(source, false, null)),
+      ]) {
+        const fetcher = vi.fn(async () => response)
+        vi.stubGlobal('fetch', fetcher)
+        await expect(resumeImport(source, 'one', 'account')).rejects.toThrow()
+        expect(fetcher).toHaveBeenCalledTimes(1)
+      }
+    })
+  }
 })

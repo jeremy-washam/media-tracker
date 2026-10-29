@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BooksQuerySchema,
-  HealthResponseSchema,
   MediaTypeSchema,
   MovieDetailSchema,
   MoviesQuerySchema,
@@ -18,18 +17,6 @@ import {
 } from './index'
 
 describe('API contracts', () => {
-  it('accepts a valid health response', () => {
-    const result = HealthResponseSchema.safeParse({
-      status: 'ok',
-      service: 'media-tracker-api',
-      version: '0.0.0',
-      timestamp: '2026-07-18T12:00:00.000Z',
-      requestId: 'request-1',
-    })
-
-    expect(result.success).toBe(true)
-  })
-
   it('requires queue jobs to carry an idempotency key', () => {
     const result = SyncJobSchema.safeParse({
       idempotencyKey: '',
@@ -74,7 +61,8 @@ describe('API contracts', () => {
   })
 
   it('rejects source records that are not standalone Archive media', () => {
-    expect(MediaTypeSchema.safeParse('article').success).toBe(true)
+    for (const type of ['article', 'video', 'podcast_episode', 'movie', 'book', 'song'])
+      expect(MediaTypeSchema.safeParse(type).success).toBe(true)
     expect(MediaTypeSchema.safeParse('document').success).toBe(false)
     expect(MediaTypeSchema.safeParse('social_post').success).toBe(false)
     expect(MediaTypeSchema.safeParse('note').success).toBe(false)

@@ -466,22 +466,6 @@ const articlesResponse = (data = [article], nextCursor: string | null = null) =>
   },
 })
 
-test('keeps every Article toolbar control visible at intermediate desktop width', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 853, height: 900 })
-  await page.route('**/api/library/articles{,/summary}?*', (route) =>
-    route.fulfill({ json: articlesResponse() }),
-  )
-  await page.goto('/library/articles/archive')
-  await expect(page.getByRole('button', { name: 'Expanded' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Compact' })).toHaveCount(0)
-  const box = await page.getByRole('button', { name: 'Filters', exact: true }).boundingBox()
-  expect(box).not.toBeNull()
-  expect(box!.x + box!.width).toBeLessThanOrEqual(853)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(853)
-})
-
 test('uses the dense Music Artist list by default', async ({ page }) => {
   await page.route('**/api/library/music{,/summary}?*', (route) =>
     route.fulfill({ json: musicResponse([]) }),
@@ -962,6 +946,9 @@ test('shares the saved layout across media and reloads while respecting explicit
     route.fulfill({ json: moviesResponse() }),
   )
   await page.goto('/library/books/archive')
+  const layouts = page.locator('[data-ui~="layout-toggle"] button')
+  await expect(layouts.nth(0)).toHaveAttribute('aria-label', 'List view')
+  await expect(layouts.nth(1)).toHaveAttribute('aria-label', 'Grid view')
   await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -1677,10 +1664,17 @@ for (const dark of [false, true]) {
               rect.bottom <= bounds.bottom + 1,
           )
         })
-      for (const width of [1280, 1024, 768, 390]) {
+      for (const width of [1280, 1024, 853, 768, 390]) {
         await page.setViewportSize({ width, height: 768 })
         await page.goto(`/library/${media}/${media === 'music' ? 'tracks' : 'archive'}`)
         await expect(trigger).toBeVisible()
+        if (media === 'articles') {
+          await expect(page.getByRole('button', { name: 'Expanded' })).toHaveCount(0)
+          await expect(page.getByRole('button', { name: 'Compact' })).toHaveCount(0)
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          width,
+        )
         await expect.poll(measure, { message: `${media} toolbar at ${width}px` }).toBe(true)
         await trigger.click()
         const menu = page.getByRole('listbox')

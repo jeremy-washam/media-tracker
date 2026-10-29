@@ -1,3 +1,7 @@
+import {
+  matchesQueryFingerprint,
+  queryFingerprint as hashQueryFingerprint,
+} from './query-fingerprint'
 import type { DatabaseClient, DatabaseStatement, DatabaseValue } from './database'
 
 // Spotify also returns audiobooks from /me/shows with type=show. Only exclude
@@ -33,7 +37,7 @@ interface LibraryCursor {
   id: string
 }
 
-function cursor(value: string | undefined, key: string): LibraryCursor | null {
+async function cursor(value: string | undefined, key: string): Promise<LibraryCursor | null> {
   if (value === undefined) return null
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as {
@@ -42,7 +46,7 @@ function cursor(value: string | undefined, key: string): LibraryCursor | null {
       key?: unknown
     }
     if (
-      parsed.key !== key ||
+      !(await matchesQueryFingerprint(parsed.key, key)) ||
       typeof parsed.id !== 'string' ||
       parsed.id.length === 0 ||
       parsed.id.length > 256 ||
@@ -331,8 +335,13 @@ export class SqlSpotifyLibraryRepository {
       COUNT(DISTINCT ${countBy}) page_sort
       FROM eligible_tracks ${eligibleAlbumJoin} ${joins} ${optionFilter}
       GROUP BY option_entity.id`
-    const key = JSON.stringify({ input: { ...input, cursor: undefined }, facet, optionQ, limit })
-    const page = cursorWhere(cursor(cursorValue, key), 'desc')
+    const key = await hashQueryFingerprint({
+      input: { ...input, cursor: undefined },
+      facet,
+      optionQ,
+      limit,
+    })
+    const page = cursorWhere(await cursor(cursorValue, key), 'desc')
     const rows = await statement(
       this.database,
       `SELECT * FROM (${query}) WHERE ${page.sql || '1=1'}
@@ -593,12 +602,11 @@ export class SqlSpotifyLibraryRepository {
         [at, at, connectionId],
       ).run()
     } else {
-      const placeholders = observedUris.map(() => '?').join(',')
       await statement(
         this.database,
         `UPDATE spotify_saved_episodes SET active=0,retired_observed_at=?,last_observed_at=?
-         WHERE connection_id=? AND active=1 AND spotify_episode_uri NOT IN (${placeholders})`,
-        [at, at, connectionId, ...observedUris],
+         WHERE connection_id=? AND active=1 AND spotify_episode_uri NOT IN (SELECT value FROM json_each(?))`,
+        [at, at, connectionId, JSON.stringify(observedUris)],
       ).run()
     }
     await this.rebuildPodcastQueue(connectionId, at)
@@ -749,11 +757,10 @@ export class SqlSpotifyLibraryRepository {
         [at, at, connectionId],
       ).run()
     } else {
-      const placeholders = showIds.map(() => '?').join(',')
       await statement(
         this.database,
-        `UPDATE spotify_saved_shows SET active=0,retired_observed_at=?,last_observed_at=? WHERE connection_id=? AND active=1 AND show_id NOT IN (${placeholders})`,
-        [at, at, connectionId, ...showIds],
+        `UPDATE spotify_saved_shows SET active=0,retired_observed_at=?,last_observed_at=? WHERE connection_id=? AND active=1 AND show_id NOT IN (SELECT value FROM json_each(?))`,
+        [at, at, connectionId, JSON.stringify(showIds)],
       ).run()
     }
     await this.rebuildPodcastProjection()
@@ -1133,8 +1140,8 @@ export class SqlSpotifyLibraryRepository {
   }
 
   async listPodcastsItems(input: PodcastsListInput) {
-    const key = JSON.stringify({ ...input, cursor: undefined })
-    const anchor = cursor(input.cursor, key)
+    const key = await hashQueryFingerprint({ ...input, cursor: undefined })
+    const anchor = await cursor(input.cursor, key)
     if (input.view === 'following') return this.listShowItems(input, anchor, key)
     const { where, values, search, dateColumn } = this.podcastEpisodeFilters(input)
     const sort = input.sort ?? (input.view === 'archive' ? 'activityAt' : 'savedAt')
@@ -1390,8 +1397,13 @@ export class SqlSpotifyLibraryRepository {
           ? `SELECT COALESCE(s.publisher,'__unknown__') page_id,COALESCE(s.publisher,'Unknown publisher') label,COUNT(DISTINCT s.id) page_sort FROM ${source} WHERE ${clauses.join(' AND ')} GROUP BY page_id`
           : `SELECT COALESCE(language.value,'__unknown__') page_id,COALESCE(language.value,'Unknown language') label,COUNT(DISTINCT s.id) page_sort FROM ${source} LEFT JOIN json_each(s.languages_json) language WHERE ${clauses.join(' AND ')} GROUP BY page_id`
     }
-    const key = JSON.stringify({ input: { ...input, cursor: undefined }, facet, optionQ, limit })
-    const page = cursorWhere(cursor(cursorValue, key), 'desc')
+    const key = await hashQueryFingerprint({
+      input: { ...input, cursor: undefined },
+      facet,
+      optionQ,
+      limit,
+    })
+    const page = cursorWhere(await cursor(cursorValue, key), 'desc')
     const filtered = optionQ?.trim() ? "label LIKE ? ESCAPE '\\'" : '1=1'
     const rows = await statement(
       this.database,
@@ -1709,8 +1721,8 @@ export class SqlSpotifyLibraryRepository {
   }
 
   async listPodcastHistory(id: string, limit: number, cursorValue?: string) {
-    const key = JSON.stringify({ id, limit })
-    const page = cursorWhere(cursor(cursorValue, key), 'desc')
+    const key = await hashQueryFingerprint({ id, limit })
+    const page = cursorWhere(await cursor(cursorValue, key), 'desc')
     const count = await statement(
       this.database,
       `SELECT
@@ -1767,8 +1779,8 @@ export class SqlSpotifyLibraryRepository {
   }
 
   async listMusicItems(input: MusicListInput) {
-    const key = JSON.stringify({ ...input, cursor: undefined })
-    const anchor = cursor(input.cursor, key)
+    const key = await hashQueryFingerprint({ ...input, cursor: undefined })
+    const anchor = await cursor(input.cursor, key)
     if (input.view === 'albums') return this.listAlbumItems(input, anchor, key)
     if (input.view === 'artists') return this.listArtistItems(input, anchor, key)
     const { scope, values, search, ranked, where } = this.musicTrackFilters(input)
@@ -2299,8 +2311,8 @@ export class SqlSpotifyLibraryRepository {
     limit: number,
     cursorValue?: string,
   ) {
-    const key = JSON.stringify({ id, kind, limit })
-    const page = cursorWhere(cursor(cursorValue, key), 'desc')
+    const key = await hashQueryFingerprint({ id, kind, limit })
+    const page = cursorWhere(await cursor(cursorValue, key), 'desc')
     const join =
       kind === 'artist'
         ? 'JOIN spotify_song_track_artists ta ON ta.media_item_id=t.media_item_id'

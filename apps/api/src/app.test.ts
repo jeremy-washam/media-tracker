@@ -13,37 +13,24 @@ import {
 
 import app from './app'
 import type { Bindings } from './env'
+import { TestDatabase, TestBucket, seedReaderArticle } from './testing/storage'
 
-const emptyStatement = {
-  bind() {
-    return this
-  },
-  async first() {
-    return null
-  },
-  async all() {
-    return { results: [], success: true }
-  },
-  async run() {
-    return { success: true }
-  },
-}
-
-const testBindings = {
-  DB: {
-    prepare: () => ({ ...emptyStatement }),
-    async batch(statements: unknown[]) {
-      return statements.map(() => ({ success: true }))
-    },
-  },
-} as unknown as Bindings
+let database: TestDatabase
+let testBindings: Bindings
 
 describe('API', () => {
   beforeEach(() => {
+    database = new TestDatabase()
+    testBindings = {
+      DB: database,
+      RAW_BUCKET: new TestBucket(),
+      SYNC_QUEUE: { send: vi.fn(), sendBatch: vi.fn() },
+    } as unknown as Bindings
     vi.spyOn(console, 'info').mockImplementation(() => undefined)
   })
 
   afterEach(() => {
+    database.sqlite.close()
     vi.restoreAllMocks()
   })
 
@@ -79,17 +66,19 @@ describe('API', () => {
     ])
   })
 
-  it('returns media from the database contract', async () => {
-    const response = await app.request('/api/media', undefined, testBindings)
+  it('returns persisted media through the public database contract', async () => {
+    seedReaderArticle(database)
+    database.sqlite.exec(
+      "INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,admission_reason,upstream_state,created_at,updated_at) VALUES('archive-1','article-1','readwise-1','reader-document:doc-1','readwise_archive_state','active','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",
+    )
+    const response = await app.request('/api/media?type=article&limit=1', undefined, testBindings)
     const payload = MediaListResponseSchema.parse(await response.json())
-
-    expect(payload).toEqual({
-      data: [],
-      nextCursor: null,
-      totalCount: 0,
-      filteredCount: 0,
-      counts: { article: 0, book: 0, movie: 0, podcast_episode: 0, song: 0, video: 0 },
-    })
+    expect(response.status).toBe(200)
+    expect(payload.data).toEqual([
+      expect.objectContaining({ id: 'article-1', type: 'article', title: 'Example' }),
+    ])
+    expect(payload.totalCount).toBe(1)
+    expect(payload.counts.article).toBe(1)
   })
 
   it('returns an empty Books collection through its media-specific contract', async () => {

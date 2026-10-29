@@ -63,7 +63,7 @@ export class SqlCatalogJobsRepository {
     cursor: string | null,
     at: string,
     leaseExpiresAt: string,
-  ): Promise<boolean> {
+  ): Promise<number | null> {
     const row = await this.database
       .prepare(
         `UPDATE catalog_refresh_jobs SET state='running',attempt_count=attempt_count+1,
@@ -71,25 +71,27 @@ export class SqlCatalogJobsRepository {
          WHERE id=? AND state IN ('pending','running')
            AND COALESCE(cursor_value,'')=COALESCE(?,'')
            AND (lease_expires_at IS NULL OR lease_expires_at<=?)
-         RETURNING id`,
+         RETURNING attempt_count`,
       )
       .bind(at, leaseExpiresAt, at, id, cursor, at)
+      .first<{ attempt_count: number }>()
+    return row?.attempt_count ?? null
+  }
+
+  async release(id: string, leaseToken: number, at: string): Promise<boolean> {
+    const row = await this.database
+      .prepare(
+        `UPDATE catalog_refresh_jobs SET state='pending',lease_expires_at=NULL,updated_at=?
+         WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
+      )
+      .bind(at, id, leaseToken)
       .first<{ id: string }>()
     return row !== null
   }
 
-  async release(id: string, at: string): Promise<void> {
-    await this.database
-      .prepare(
-        `UPDATE catalog_refresh_jobs SET state='pending',lease_expires_at=NULL,updated_at=?
-         WHERE id=? AND state='running'`,
-      )
-      .bind(at, id)
-      .run()
-  }
-
   async advance(
     id: string,
+    leaseToken: number,
     input: {
       cursor: string
       requested: number
@@ -98,12 +100,13 @@ export class SqlCatalogJobsRepository {
       quotaUnits: number
       at: string
     },
-  ): Promise<void> {
-    await this.database
+  ): Promise<boolean> {
+    const row = await this.database
       .prepare(
-        `UPDATE catalog_refresh_jobs SET cursor_value=?,requested_count=requested_count+?,
+        `UPDATE catalog_refresh_jobs SET state='pending',cursor_value=?,requested_count=requested_count+?,
            returned_count=returned_count+?,omitted_count=omitted_count+?,
-           quota_unit_estimate=quota_unit_estimate+?,lease_expires_at=NULL,updated_at=? WHERE id=?`,
+           quota_unit_estimate=quota_unit_estimate+?,lease_expires_at=NULL,updated_at=?
+           WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
       )
       .bind(
         input.cursor,
@@ -113,28 +116,32 @@ export class SqlCatalogJobsRepository {
         input.quotaUnits,
         input.at,
         id,
+        leaseToken,
       )
-      .run()
+      .first<{ id: string }>()
+    return row !== null
   }
 
-  async complete(id: string, at: string): Promise<void> {
-    await this.database
+  async complete(id: string, leaseToken: number, at: string): Promise<boolean> {
+    const row = await this.database
       .prepare(
         `UPDATE catalog_refresh_jobs SET state='succeeded',lease_expires_at=NULL,
-           completed_at=?,updated_at=? WHERE id=?`,
+           completed_at=?,updated_at=? WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
       )
-      .bind(at, at, id)
-      .run()
+      .bind(at, at, id, leaseToken)
+      .first<{ id: string }>()
+    return row !== null
   }
 
-  async fail(id: string, safeErrorCode: string, at: string): Promise<void> {
-    await this.database
+  async fail(id: string, leaseToken: number, safeErrorCode: string, at: string): Promise<boolean> {
+    const row = await this.database
       .prepare(
         `UPDATE catalog_refresh_jobs SET state='failed',lease_expires_at=NULL,
-           safe_error_code=?,completed_at=?,updated_at=? WHERE id=?`,
+           safe_error_code=?,completed_at=?,updated_at=? WHERE id=? AND state='running' AND attempt_count=? RETURNING id`,
       )
-      .bind(safeErrorCode, at, at, id)
-      .run()
+      .bind(safeErrorCode, at, at, id, leaseToken)
+      .first<{ id: string }>()
+    return row !== null
   }
 }
 

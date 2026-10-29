@@ -1,86 +1,10 @@
+import { applyTestMigrations, SqliteTestClient as SqliteClient } from './test-support/sqlite'
 import { readFileSync } from 'node:fs'
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import type {
-  DatabaseAllResult,
-  DatabaseClient,
-  DatabaseRunResult,
-  DatabaseStatement,
-  DatabaseValue,
-} from './database'
 import { SqlBooksRepository, type HardcoverBookProjection } from './books-repository'
-
-const migrationNames = [
-  '0001_canonical_ledger.sql',
-  '0002_rotating_credentials.sql',
-  '0003_books_library.sql',
-  '0004_books_review_facts.sql',
-  '0005_books_format_projection.sql',
-]
-const migrationSql = migrationNames.map((name) =>
-  readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'),
-)
-const migrations = migrationSql.join('\n')
-
-class SqliteStatement implements DatabaseStatement {
-  readonly #statement: StatementSync
-  #values: readonly DatabaseValue[] = []
-
-  constructor(statement: StatementSync) {
-    this.#statement = statement
-  }
-
-  bind(...values: readonly DatabaseValue[]): DatabaseStatement {
-    this.#values = values
-    return this
-  }
-
-  async run(): Promise<DatabaseRunResult> {
-    this.execute()
-    return { success: true }
-  }
-
-  async first<Row>(): Promise<Row | null> {
-    const row = this.#statement.get(...this.values())
-    return (row as Row | undefined) ?? null
-  }
-
-  async all<Row>(): Promise<DatabaseAllResult<Row>> {
-    return { results: this.#statement.all(...this.values()) as Row[], success: true }
-  }
-
-  execute(): void {
-    this.#statement.run(...this.values())
-  }
-
-  private values() {
-    return this.#values.map((value) =>
-      value instanceof ArrayBuffer ? new Uint8Array(value) : value,
-    )
-  }
-}
-
-class SqliteClient implements DatabaseClient {
-  constructor(private readonly database: DatabaseSync) {}
-
-  prepare(query: string): DatabaseStatement {
-    return new SqliteStatement(this.database.prepare(query))
-  }
-
-  async batch(statements: readonly DatabaseStatement[]): Promise<readonly DatabaseRunResult[]> {
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      for (const item of statements) (item as SqliteStatement).execute()
-      this.database.exec('COMMIT')
-      return statements.map(() => ({ success: true }))
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
-  }
-}
 
 function seedLedger(database: DatabaseSync) {
   database.exec(`
@@ -233,37 +157,79 @@ const baseQuery = {
 describe('Books projection and repository', () => {
   let database: DatabaseSync
   let repository: SqlBooksRepository
+  let client: SqliteClient
 
   beforeEach(() => {
     database = new DatabaseSync(':memory:')
-    database.exec(migrations)
+    applyTestMigrations(database)
     seedLedger(database)
-    repository = new SqlBooksRepository(new SqliteClient(database))
+    client = new SqliteClient(database)
+    repository = new SqlBooksRepository(client)
   })
 
   afterEach(() => database.close())
 
-  it('upgrades the prior Books schema without replacing existing data', () => {
+  it('upgrades populated Books facts and backfills formats without changing provenance', async () => {
     const upgrade = new DatabaseSync(':memory:')
-    upgrade.exec(migrationSql.slice(0, 3).join('\n'))
-    upgrade.exec(`
-      INSERT INTO connections(id, source, label, status, coverage, created_at, updated_at)
-      VALUES ('upgrade-check', 'hardcover', 'Hardcover', 'connected', 'complete',
-        '2026-09-20T10:00:00.000Z', '2026-09-20T10:00:00.000Z')
-    `)
-    upgrade.exec(migrationSql.slice(3).join('\n'))
-
-    expect(
-      upgrade
-        .prepare(
-          "SELECT name FROM pragma_table_info('hardcover_user_books') WHERE name='reviewed_at'",
-        )
-        .get(),
-    ).toEqual({ name: 'reviewed_at' })
-    expect(upgrade.prepare("SELECT id FROM connections WHERE id='upgrade-check'").get()).toEqual({
-      id: 'upgrade-check',
-    })
-    upgrade.close()
+    try {
+      applyTestMigrations(upgrade, { through: '0003_books_library.sql' })
+      seedLedger(upgrade)
+      upgrade.exec(`INSERT INTO hardcover_user_books(connection_id,user_book_id,media_item_id,work_id,status_id,personal_rating,review_text,source_record_id,last_seen_run_id,upstream_state,first_observed_at,last_observed_at)
+        VALUES('connection-hardcover',1,'book-1',2,2,4.5,'Retained legacy review','record-1','run-1','active','2026-09-20','2026-09-20')`)
+      const legacyFacts = upgrade
+        .prepare('SELECT personal_rating,review_text,source_record_id FROM hardcover_user_books')
+        .get()
+      upgrade.exec(
+        readFileSync(new URL('../migrations/0004_books_review_facts.sql', import.meta.url), 'utf8'),
+      )
+      expect(
+        upgrade
+          .prepare('SELECT personal_rating,review_text,source_record_id FROM hardcover_user_books')
+          .get(),
+      ).toEqual(legacyFacts)
+      expect(
+        upgrade.prepare('SELECT reviewed_at FROM hardcover_user_books').get()?.reviewed_at,
+      ).toBeNull()
+      const oldRepository = new SqlBooksRepository(new SqliteClient(upgrade))
+      await oldRepository.upsertHardcoverBooks([projection()])
+      await oldRepository.finalizeHardcoverSnapshot({
+        connectionId: 'connection-hardcover',
+        syncRunId: 'run-1',
+        refreshedAt: '2026-09-20T10:01:00.000Z',
+      })
+      const retained = () => ({
+        reads: upgrade.prepare('SELECT * FROM hardcover_user_book_reads').all(),
+        userBooks: upgrade.prepare('SELECT * FROM hardcover_user_books').all(),
+        evidence: upgrade.prepare('SELECT * FROM source_records').all(),
+        archive: upgrade.prepare('SELECT * FROM archive_entries').all(),
+      })
+      const before = retained()
+      upgrade.exec(
+        "UPDATE book_library_projection SET latest_read_format='physical book',current_edition_format='physical book',projection_version=1",
+      )
+      upgrade.exec(
+        readFileSync(
+          new URL('../migrations/0005_books_format_projection.sql', import.meta.url),
+          'utf8',
+        ),
+      )
+      expect(retained()).toEqual(before)
+      expect(
+        upgrade
+          .prepare(
+            'SELECT latest_read_format,current_edition_format,projection_version FROM book_library_projection',
+          )
+          .get(),
+      ).toEqual({
+        latest_read_format: 'Physical',
+        current_edition_format: 'Physical',
+        projection_version: 2,
+      })
+      expect(upgrade.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+      expect(upgrade.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok')
+    } finally {
+      upgrade.close()
+    }
   })
 
   it('builds overlapping Archive and Queue views with searchable source metadata', async () => {
@@ -469,5 +435,191 @@ describe('Books projection and repository', () => {
       cursor: first.nextCursor!,
     })
     expect(second.data.map((item) => item.title)).toEqual(['Beta Unknown'])
+    const legacy = JSON.parse(decodeURIComponent(first.nextCursor!))
+    legacy.fingerprint = JSON.stringify({
+      collection: 'queue',
+      q: '',
+      formats: [],
+      series: [],
+      genres: [],
+      finished: ['any', '', ''],
+      published: ['any', '', ''],
+      added: ['any', '', ''],
+      rating: ['any', null],
+      sort: 'author',
+      direction: 'asc',
+    })
+    const legacyNext = await repository.listBooks({
+      ...baseQuery,
+      collection: 'queue',
+      sort: 'author',
+      limit: 2,
+      cursor: encodeURIComponent(JSON.stringify(legacy)),
+    })
+    expect(legacyNext.data).toEqual(second.data)
+  })
+  it('rolls back snapshot publication and retirement together, then retries without losing Archive', async () => {
+    await repository.upsertHardcoverBooks([projection()])
+    const first = {
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00.000Z',
+    }
+    await repository.finalizeHardcoverSnapshot(first)
+    database.exec(
+      "INSERT INTO sync_runs(id,connection_id,kind,status,started_at) VALUES('run-2','connection-hardcover','reconcile','running','2026-09-21T10:00:00Z')",
+    )
+    const before = database.prepare('SELECT * FROM book_library_projection').all()
+    database.exec(
+      "CREATE TRIGGER reject_book_publication BEFORE INSERT ON book_library_projection BEGIN SELECT RAISE(ABORT,'synthetic publication failure'); END",
+    )
+    const next = { ...first, syncRunId: 'run-2', refreshedAt: '2026-09-21T10:01:00.000Z' }
+    await expect(repository.finalizeHardcoverSnapshot(next)).rejects.toThrow(
+      'synthetic publication failure',
+    )
+    expect(database.prepare('SELECT * FROM book_library_projection').all()).toEqual(before)
+    expect(
+      database.prepare('SELECT upstream_state FROM hardcover_user_books').get()?.upstream_state,
+    ).toBe('active')
+    database.exec('DROP TRIGGER reject_book_publication')
+    await repository.finalizeHardcoverSnapshot(next)
+    expect((await repository.listBooks(baseQuery)).data[0]?.memberships).toEqual({
+      archive: true,
+      queue: false,
+      currentlyReading: false,
+    })
+    expect(database.prepare('SELECT COUNT(*) value FROM source_records').get()?.value).toBe(1)
+  })
+
+  it('replays partially committed metadata chunks before publishing a complete snapshot', async () => {
+    const book = projection()
+    const expanded = {
+      ...book,
+      contributors: Array.from({ length: 100 }, (_, index) => ({
+        ...book.contributors[0]!,
+        id: index + 100,
+        name: `Synthetic ${index}`,
+        position: index,
+      })),
+    }
+    client.failOnBatchCall = client.batchCalls + 2
+    await expect(repository.upsertHardcoverBooks([expanded])).rejects.toThrow(
+      'synthetic batch failure',
+    )
+    expect(
+      database.prepare('SELECT COUNT(*) value FROM book_library_projection').get()?.value,
+    ).toBe(0)
+    client.failOnBatchCall = null
+    await repository.upsertHardcoverBooks([expanded])
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00.000Z',
+    })
+    expect(
+      database.prepare('SELECT COUNT(*) value FROM hardcover_work_contributors').get()?.value,
+    ).toBe(100)
+    expect((await repository.listBooks(baseQuery)).data).toHaveLength(1)
+    expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  })
+
+  it.each([
+    ['archive', 'recent_read'],
+    ['archive', 'earliest_read'],
+    ['archive', 'title'],
+    ['archive', 'author'],
+    ['archive', 'personal_rating'],
+    ['archive', 'published'],
+    ['queue', 'added'],
+    ['queue', 'title'],
+    ['queue', 'author'],
+    ['queue', 'published'],
+  ] as const)(
+    'traverses every %s/%s page exactly once across tied and null values',
+    async (collection, sort) => {
+      for (let index = 0; index < 6; index += 1) {
+        const id = `page-${index}`
+        database
+          .prepare('INSERT INTO media_items(id,type,title,created_at,updated_at) VALUES(?,?,?,?,?)')
+          .run(id, 'book', 'Tied', '2026-01-01', '2026-01-01')
+        database
+          .prepare(
+            `INSERT INTO book_library_projection(media_item_id,connection_id,user_book_id,work_id,title,normalized_title,current_status_id,in_queue,in_archive,currently_reading,supported_read_count,source_refreshed_at,latest_read_date,normalized_primary_author,personal_rating,publication_date,queue_added_at)
+        VALUES(?,'connection-hardcover',?,?,'Tied','tied',2,1,1,1,1,'2026-01-01',?,?,?,?,?)`,
+          )
+          .run(
+            id,
+            index + 10,
+            index + 10,
+            ...(index < 3
+              ? [null, null, null, null, null]
+              : ['2026-01-01', 'Tied', 4, '2026-01-01', '2026-01-01']),
+          )
+      }
+      for (const direction of ['asc', 'desc'] as const) {
+        const input = { ...baseQuery, collection, sort, direction }
+        const expected = (await repository.listBooks(input)).data.map((row) => row.id)
+        for (const limit of [1, 2]) {
+          const seen: string[] = []
+          let cursor: string | undefined
+          do {
+            const page = await repository.listBooks({
+              ...input,
+              limit,
+              ...(cursor ? { cursor } : {}),
+            })
+            seen.push(...page.data.map((row) => row.id))
+            cursor = page.nextCursor ?? undefined
+            expect(seen.length).toBeLessThanOrEqual(expected.length)
+          } while (cursor)
+          expect(seen).toEqual(expected)
+          expect(new Set(seen).size).toBe(6)
+        }
+      }
+    },
+  )
+
+  it('keeps cursors bounded when selected genre labels are long', async () => {
+    await repository.upsertHardcoverBooks([projection()])
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00Z',
+    })
+    // Repeated selected values are semantically harmless but previously copied
+    // their entire query identity into every cursor.
+    const input = { ...baseQuery, genres: Array(30).fill('science-fiction'.repeat(20)), limit: 1 }
+    const known = await repository.listBooks({ ...input, genres: ['science-fiction'] })
+    expect(known.data).toHaveLength(1)
+    const other = {
+      ...projection(),
+      mediaItemId: 'book-2',
+      userBookId: 2,
+      workId: 4,
+      editions: [],
+      reads: [],
+    }
+    database.exec(
+      "INSERT INTO media_items(id,type,title,created_at,updated_at) VALUES('book-2','book','Second','2026-01-01','2026-01-01'); INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,admission_reason,upstream_state,created_at,updated_at) VALUES('archive-2','book-2','connection-hardcover','second','hardcover_read_status','active','2026-01-01','2026-01-01')",
+    )
+    await repository.upsertHardcoverBooks([other])
+    await repository.finalizeHardcoverSnapshot({
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      refreshedAt: '2026-09-20T10:01:00Z',
+    })
+    const page = await repository.listBooks({
+      ...input,
+      genres: [...input.genres, 'science-fiction'],
+    })
+    expect(page.nextCursor).not.toBeNull()
+    expect(page.nextCursor!.length).toBeLessThan(1000)
+    await expect(
+      repository.listBooks({
+        ...input,
+        genres: [...input.genres, 'science-fiction'],
+        cursor: page.nextCursor!,
+      }),
+    ).resolves.toMatchObject({ nextCursor: null })
   })
 })

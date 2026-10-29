@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-export function useSpotifyInspectorFocus(onClose: () => void, itemId: string) {
+export function useInspectorFocus(onClose: () => void, itemId: string) {
   const inspectorRef = useRef<HTMLElement>(null)
   const onCloseRef = useRef(onClose)
 

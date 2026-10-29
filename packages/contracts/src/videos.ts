@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { LIBRARY_PAGE_SIZE, librarySummaryQuery } from './library'
+import { CalendarDateSchema as date, QueryTextSchema } from './query-validation'
 
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-  z.string().trim().optional(),
+  QueryTextSchema.optional(),
 )
 const stringList = z.preprocess(
   (value) =>
@@ -13,9 +14,8 @@ const stringList = z.preprocess(
           .flatMap((item) => String(item).split(','))
           .map((item) => item.trim())
           .filter(Boolean),
-  z.array(z.string()).default([]),
+  z.array(z.string().max(500)).max(500).default([]),
 )
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const booleanQuery = z.preprocess(
   (value) => (value === 'true' ? true : value === 'false' ? false : value),
   z.boolean(),

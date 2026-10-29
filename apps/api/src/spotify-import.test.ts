@@ -32,6 +32,8 @@ const migrationNames = [
   '0027_compact_archive_evidence.sql',
   '0028_evidence_view_parent_guard.sql',
   '0029_evidence_insert_only_replay.sql',
+  '0030_source_sync_admission.sql',
+  '0031_catalog_fences_and_partial_cursors.sql',
 ]
 const migration = migrationNames
   .map((name) =>

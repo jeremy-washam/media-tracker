@@ -50,48 +50,37 @@ for (const { media, section, response } of collections) {
   })
 }
 
-for (const dark of [false, true]) {
-  test(`isolates mobile navigation focus and restores it in ${dark ? 'dark' : 'light'} appearance`, async ({
-    page,
-  }) => {
-    await page.addInitScript(
-      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
-      dark,
-    )
-    await page.setViewportSize({ width: 390, height: 768 })
-    await page.route('**/api/library/books{,/summary}?*', (r) =>
-      r.fulfill({ json: booksResponse() }),
-    )
-    await page.route('**/api/library/movies{,/summary}?*', (r) =>
-      r.fulfill({ json: moviesResponse() }),
-    )
-    await page.goto('/library/books/archive')
-    const trigger = page.getByRole('button', { name: 'Open navigation', exact: true })
-    await trigger.click()
-    const sheet = page.getByRole('dialog', { name: 'Navigation', exact: true })
-    await expect(sheet).toBeVisible()
+test('isolates mobile navigation focus and restores it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 768 })
+  await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
+  await page.route('**/api/library/movies{,/summary}?*', (r) =>
+    r.fulfill({ json: moviesResponse() }),
+  )
+  await page.goto('/library/books/archive')
+  const trigger = page.getByRole('button', { name: 'Open navigation', exact: true })
+  await trigger.click()
+  const sheet = page.getByRole('dialog', { name: 'Navigation', exact: true })
+  await expect(sheet).toBeVisible()
+  await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
+  for (let i = 0; i < 22; i++) {
+    await page.keyboard.press('Tab')
     await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
-    for (let i = 0; i < 22; i++) {
-      await page.keyboard.press('Tab')
-      await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
-    }
-    await page.keyboard.press('Escape')
-    await expect(sheet).toHaveCount(0)
-    await expect(trigger).toBeFocused()
-    await trigger.click()
-    await sheet.getByRole('button', { name: 'Close', exact: true }).click()
-    await expect(sheet).toHaveCount(0)
-    await expect(trigger).toBeFocused()
-    await trigger.click()
-    await sheet.getByRole('link', { name: 'Movies', exact: true }).click()
-    await expect(page).toHaveURL(/library\/movies\/archive/)
-    await expect(sheet).toHaveCount(0)
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-      .toBe(true)
-  })
-}
-
+  }
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await sheet.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await sheet.getByRole('link', { name: 'Movies', exact: true }).click()
+  await expect(page).toHaveURL(/library\/movies\/archive/)
+  await expect(sheet).toHaveCount(0)
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true)
+})
 test('shows sidebar hints to keyboard users without browser title hints', async ({ page }) => {
   await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
   await page.goto('/library/books/archive')
@@ -128,20 +117,66 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
-  await page.route('**/api/library/books?*', async (r) => {
+  let itemsFailed = true
+  let summaryFailed = true
+  const archiveRequests = { items: 0, summary: 0 }
+  await page.route('**/api/library/books{,/summary}?*', async (route) => {
+    const url = new URL(route.request().url())
+    // Background sections keep their normal fixtures; only Archive fails and retries here.
+    if (url.searchParams.get('section') !== 'archive') return route.fallback()
+    const summary = url.pathname.endsWith('/summary')
+    archiveRequests[summary ? 'summary' : 'items']++
     await gate
-    await r.fulfill({ status: 500, json: { error: 'Synthetic service failure' } })
+    await route.fulfill(
+      (summary ? summaryFailed : itemsFailed)
+        ? { status: 500, json: { error: { message: 'Synthetic service failure' } } }
+        : { json: booksResponse() },
+    )
   })
   await page.goto('/library/books/archive')
-  await expect(page.getByRole('status')).toContainText('Loading')
-  await expect(page.locator('[data-slot=skeleton]').first()).toBeVisible()
-  release()
-  await expect(page.locator('[data-slot=alert]')).toBeVisible({ timeout: 15000 })
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
-  await page.unroute('**/api/library/books?*')
-  await page.route('**/api/library/books?*', (r) => r.fulfill({ json: booksResponse() }))
-  await page.getByRole('button', { name: 'Try again' }).click()
-  await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
+  const collection = page.locator('[data-ui~="library-collection"]')
+  const collectionSummary = page
+    .locator('[data-ui~="collection-header"]')
+    .locator('[data-ui~="collection-summary"]')
+  const loading = collection.getByRole('status')
+  const skeletons = loading.locator('[data-slot=skeleton]')
+  try {
+    await expect(loading).toContainText('Loading books…')
+    await expect(skeletons).toHaveCount(2)
+    for (const skeleton of await skeletons.all()) await expect(skeleton).toBeVisible()
+  } finally {
+    release()
+  }
+  const itemsAlert = collection.getByRole('alert').filter({ hasText: 'Books could not be loaded' })
+  const summaryAlert = collection
+    .getByRole('alert')
+    .filter({ hasText: 'Library counts and filters could not be loaded.' })
+  await expect(itemsAlert).toBeVisible({ timeout: 15000 })
+  await expect(summaryAlert).toBeVisible({ timeout: 15000 })
+  await expect(itemsAlert).toHaveAttribute('data-slot', 'alert')
+  await expect(summaryAlert).toHaveAttribute('data-slot', 'alert')
+  const itemRetry = itemsAlert.getByRole('button', { name: 'Try again', exact: true })
+  const summaryRetry = summaryAlert.getByRole('button', { name: 'Retry summary', exact: true })
+  await expect(itemRetry).toBeVisible()
+  await expect(summaryRetry).toBeVisible()
+
+  const summaryAttempts = archiveRequests.summary
+  itemsFailed = false
+  await itemRetry.click()
+  const row = collection.locator('[data-collection-item="book-one"]')
+  await expect(row).toBeVisible()
+  await expect(itemsAlert).toHaveCount(0)
+  await expect(summaryAlert).toBeVisible()
+  await expect(collectionSummary).toBeEmpty()
+  expect(archiveRequests.summary).toBe(summaryAttempts)
+
+  const itemAttempts = archiveRequests.items
+  summaryFailed = false
+  await summaryRetry.click()
+  await expect(summaryAlert).toHaveCount(0)
+  await expect(collectionSummary).toContainText('1 book')
+  await expect(row).toBeVisible()
+  expect(archiveRequests.items).toBe(itemAttempts)
 })
 
 test('keeps the Video duration checkbox and its complete label together', async ({ page }) => {

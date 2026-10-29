@@ -32,3 +32,5 @@ changes, add a new ADR that supersedes the old one rather than rewriting history
 18. [Separate native iOS client](./0018-native-ios-client.md)
 
 19. [Web styling ownership](./0019-web-styling-ownership.md)
+
+20. [Fenced catalog publication and partial sync checkpoints](./0020-fenced-catalog-publication.md)

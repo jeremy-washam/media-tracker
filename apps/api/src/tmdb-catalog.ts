@@ -1,3 +1,5 @@
+import { ZodError } from 'zod'
+import { CatalogRetryError } from './catalog-retry'
 import {
   TmdbApiError,
   TmdbClient,
@@ -19,19 +21,6 @@ const matcherVersion = 'tmdb-evidence@2'
 
 function daysAfter(at: string, days: number) {
   return new Date(Date.parse(at) + days * 86_400_000).toISOString()
-}
-
-function runtimeErrorKind(error: unknown) {
-  if (!(error instanceof Error)) return 'unknown'
-  const message = error.message.toLowerCase()
-  if (message.includes('abortsignal')) return 'abort_signal'
-  if (message.includes('abortcontroller')) return 'abort_controller'
-  if (message.includes('fetch') || message.includes('network')) return 'fetch_transport'
-  if (message.includes('url')) return 'url'
-  if (message.includes('not a function')) return 'not_function'
-  if (message.includes('undefined')) return 'undefined'
-  if (message.includes('d1')) return 'd1'
-  return error.name
 }
 
 function safeRuntimeDiagnostic(error: unknown, secret: string) {
@@ -71,9 +60,11 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
   const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const current = await jobs.find(job.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
-  if ((current.cursor ?? '') !== (job.catalogCursor ?? '')) return
-  if (env.TMDB_API_READ_TOKEN === undefined) {
-    await jobs.fail(job.catalogJobId, 'not_configured', at)
+  if (current.provider !== 'tmdb') return
+  if ((current.cursor ?? '') !== (job.catalogCursor ?? '')) {
+    // A previous delivery may have committed its cursor before Queue send failed.
+    if (current.state === 'pending' || current.state === 'running')
+      await env.SYNC_QUEUE.send(jobMessage(current.id, current.cursor ?? ''))
     return
   }
   const reserved = await jobs.reserve(
@@ -82,8 +73,14 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     at,
     new Date(Date.parse(at) + 5 * 60_000).toISOString(),
   )
-  if (!reserved) return
-  const movies = createMoviesRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
+  if (reserved === null) throw new CatalogRetryError(300)
+  if (env.TMDB_API_READ_TOKEN === undefined) {
+    await jobs.fail(job.catalogJobId, reserved, 'not_configured', at)
+    return
+  }
+  const lease = { jobId: job.catalogJobId, token: reserved, kind: 'catalog' as const }
+  let advanced = false
+  const movies = createMoviesRepository(env.DB, env.DATABASE_USAGE_OBSERVER, lease)
   let stage = 'candidate_query'
   try {
     const candidates = await movies.listTmdbEnrichmentCandidates({
@@ -119,9 +116,9 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       }
       stage = 'completion'
       await movies.reconcileTmdbIdentityCollisions(at)
-      await jobs.complete(job.catalogJobId, at)
       stage = 'projection_rebuild'
       await movies.rebuild(at)
+      await jobs.complete(job.catalogJobId, reserved, at)
       return
     }
     stage = 'provider_request'
@@ -367,7 +364,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       movies: results,
     })
     stage = 'advance'
-    await jobs.advance(job.catalogJobId, {
+    advanced = await jobs.advance(job.catalogJobId, reserved, {
       cursor: candidates.at(-1)!.mediaItemId,
       requested: candidates.length,
       returned: results.filter((value) => value.matchStatus === 'matched').length,
@@ -375,6 +372,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       quotaUnits: requestCount,
       at,
     })
+    if (!advanced) throw new CatalogRetryError(300)
     stage = 'enqueue'
     await env.SYNC_QUEUE.send(jobMessage(job.catalogJobId, candidates.at(-1)!.mediaItemId))
   } catch (error) {
@@ -386,17 +384,24 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
         diagnostic: safeRuntimeDiagnostic(error, env.TMDB_API_READ_TOKEN),
       }),
     )
-    if (error instanceof TmdbApiError && error.retryable) await jobs.release(job.catalogJobId, at)
-    else
+    if (error instanceof CatalogRetryError) throw error
+    const terminal =
+      (error instanceof TmdbApiError && !error.retryable) || error instanceof ZodError
+    if (terminal && !advanced) {
       await jobs.fail(
         job.catalogJobId,
-        error instanceof TmdbApiError
-          ? `http_${error.status}`
-          : error instanceof Error
-            ? `internal_${stage}_${runtimeErrorKind(error)}`
-            : 'unknown',
+        reserved,
+        error instanceof TmdbApiError ? `http_${error.status}` : 'invalid_provider_response',
         at,
       )
-    throw error
+      throw error
+    }
+    if (!advanced) await jobs.release(job.catalogJobId, reserved, at)
+    throw new CatalogRetryError(
+      error instanceof TmdbApiError
+        ? Math.min(43_200, Math.max(60, error.retryAfterSeconds ?? 60))
+        : 60,
+      { cause: error },
+    )
   }
 }

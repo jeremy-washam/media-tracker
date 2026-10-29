@@ -1,11 +1,15 @@
 import {
   classifySavedEpisode,
-  fetchSpotifyPlayer,
-  fetchSpotifyRecentlyPlayed,
+  fetchSpotifyPlayerResponse,
+  fetchSpotifyRecentlyPlayedResponse,
   fetchSpotifySavedEpisodesResponse,
-  fetchSpotifySavedShowsPage,
-  fetchSpotifyTracks,
+  fetchSpotifySavedShowsResponse,
+  fetchSpotifyTracksResponse,
   parseSpotifySavedEpisodesPage,
+  parseSpotifySavedShowsPage,
+  parseSpotifyRecentlyPlayed,
+  parseSpotifyTracks,
+  parseSpotifyPlayer,
   type SpotifySavedEpisodeObservation,
   type SpotifyTrackObservation,
   type SpotifySavedEpisodesPage,
@@ -188,6 +192,29 @@ async function persistApiPage(input: {
   return raw
 }
 
+async function parseRetainedPage<Value>(
+  repository: CanonicalLedgerRepository,
+  raw: RawObject,
+  version: string,
+  parse: () => Value,
+): Promise<Value> {
+  try {
+    return parse()
+  } catch (error) {
+    await repository.commit({
+      rawObjects: [
+        {
+          ...raw,
+          processingStatus: 'failed',
+          lastParserVersion: version,
+          processingError: errorName(error),
+        },
+      ],
+    })
+    throw error
+  }
+}
+
 function trackIdentity(value: SpotifyTrackObservation): value is SpotifyTrackObservation & {
   id: string
   uri: string
@@ -249,11 +276,12 @@ async function syncTrackCatalog(input: {
   runId: ReturnType<typeof syncRunId>
   accessToken: string
   rawObjects: RawObject[]
+  counts: { sourceRecords: number; normalizedRecords: number }
 }): Promise<number> {
   const backlog = await input.spotifyRepository.listTracksNeedingMetadata(50)
   if (backlog.length === 0) return 0
   const acquiredAt = now()
-  const response = await fetchSpotifyTracks({
+  const responseBytes = await fetchSpotifyTracksResponse({
     accessToken: input.accessToken,
     fetch: input.bindings.SYNC_FETCH ?? fetch,
     ids: backlog.map((item) => item.trackId),
@@ -262,11 +290,12 @@ async function syncTrackCatalog(input: {
     ...input,
     operation: 'track-catalog',
     page: String(acquiredAt),
-    bytes: response.bytes,
-    contentType: response.contentType,
+    bytes: responseBytes.bytes,
+    contentType: responseBytes.contentType,
     acquiredAt,
   })
   try {
+    const response = parseSpotifyTracks(responseBytes)
     const byTrackId = new Map(backlog.map((item) => [item.trackId, item]))
     const records: SourceRecord[] = []
     const metadata: TrackMetadataProjection[] = []
@@ -299,6 +328,8 @@ async function syncTrackCatalog(input: {
         { ...raw, processingStatus: 'processed', lastParserVersion: trackCatalogParserVersion },
       ],
     })
+    input.counts.sourceRecords += records.length
+    input.counts.normalizedRecords += records.length
     for (const value of metadata)
       await input.spotifyRepository.applyTrackMetadata(value, { rebuildSearch: false })
     await input.spotifyRepository.markTrackMetadataUnavailable(
@@ -330,6 +361,7 @@ async function syncAdditionalSpotifyLibrary(input: {
   runId: ReturnType<typeof syncRunId>
   accessToken: string
   rawObjects: RawObject[]
+  counts: { sourceRecords: number; normalizedRecords: number }
 }): Promise<{
   savedShows: number
   playerObserved: boolean
@@ -349,7 +381,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     let showOffset: number | null = 0
     do {
       const acquiredAt = now()
-      const page = await fetchSpotifySavedShowsPage({
+      const response = await fetchSpotifySavedShowsResponse({
         accessToken: input.accessToken,
         fetch: input.bindings.SYNC_FETCH ?? fetch,
         offset: showOffset,
@@ -358,10 +390,13 @@ async function syncAdditionalSpotifyLibrary(input: {
         ...input,
         operation: 'saved-shows',
         page: String(showOffset),
-        bytes: page.bytes,
-        contentType: page.contentType,
+        bytes: response.bytes,
+        contentType: response.contentType,
         acquiredAt,
       })
+      const page = await parseRetainedPage(input.repository, raw, savedShowsParserVersion, () =>
+        parseSpotifySavedShowsPage(response),
+      )
       const records: SourceRecord[] = []
       const projections = []
       input.bindings.SYNC_BUDGET?.page(page.items.length)
@@ -410,6 +445,8 @@ async function syncAdditionalSpotifyLibrary(input: {
           { ...raw, processingStatus: 'processed', lastParserVersion: savedShowsParserVersion },
         ],
       })
+      input.counts.sourceRecords += records.length
+      input.counts.normalizedRecords += projections.length
       await input.spotifyRepository.upsertSavedShows(projections)
       showOffset = page.nextOffset
     } while (showOffset !== null)
@@ -436,19 +473,22 @@ async function syncAdditionalSpotifyLibrary(input: {
   let playerObserved = false
   try {
     const playerAt = now()
-    const player = await fetchSpotifyPlayer({
+    const response = await fetchSpotifyPlayerResponse({
       accessToken: input.accessToken,
       fetch: input.bindings.SYNC_FETCH ?? fetch,
     })
-    input.bindings.SYNC_BUDGET?.page(player.item === null ? 0 : 1)
     const playerRaw = await persistApiPage({
       ...input,
       operation: 'player',
       page: String(playerAt),
-      bytes: player.bytes,
-      contentType: player.contentType ?? 'application/json',
+      bytes: response.bytes,
+      contentType: response.contentType ?? 'application/json',
       acquiredAt: playerAt,
     })
+    const player = await parseRetainedPage(input.repository, playerRaw, playerParserVersion, () =>
+      parseSpotifyPlayer(response),
+    )
+    input.bindings.SYNC_BUDGET?.page(player.item === null ? 0 : 1)
     const playerRecord: SourceRecord = {
       id: sourceRecordId(ulid()),
       rawObjectId: playerRaw.id,
@@ -472,8 +512,19 @@ async function syncAdditionalSpotifyLibrary(input: {
       const episode = player.item as SpotifySavedEpisodeObservation
       if (episode.episodeId && episode.episodeUri) {
         const hash = await stableHash(`spotify-episode:${episode.episodeUri}`)
-        playerMediaItemId = mediaItemId(`spotify_media_${hash}`)
-        const identityId = externalIdentityId(`spotify_identity_${hash}`)
+        const knownIdentity = await input.repository.findExternalIdentity({
+          namespace: 'spotify',
+          externalType: 'episode_uri',
+          externalId: episode.episodeUri,
+          connectionId: null,
+        })
+        playerMediaItemId = knownIdentity?.mediaItemId ?? mediaItemId(`spotify_media_${hash}`)
+        const identityId = knownIdentity?.id ?? externalIdentityId(`spotify_identity_${hash}`)
+        const entryId =
+          (await input.repository.findArchiveEntryId(
+            input.connection.id,
+            `episode:${episode.episodeUri}`,
+          )) ?? archiveEntryId(`spotify_archive_${await stableHash(input.connection.id)}_${hash}`)
         const canonicalUrl =
           episode.canonicalUrl ?? `https://open.spotify.com/episode/${episode.episodeId}`
         const item: MediaItem = {
@@ -506,9 +557,7 @@ async function syncAdditionalSpotifyLibrary(input: {
         const archiveEntry: ArchiveEntryWrite | null = positive
           ? {
               entry: {
-                id: archiveEntryId(
-                  `spotify_archive_${await stableHash(input.connection.id)}_${hash}`,
-                ),
+                id: entryId,
                 mediaItemId: playerMediaItemId,
                 connectionId: input.connection.id,
                 consumedIdentityId: identityId,
@@ -525,9 +574,7 @@ async function syncAdditionalSpotifyLibrary(input: {
               evidence: [
                 {
                   id: archiveEntryEvidenceId(ulid()),
-                  archiveEntryId: archiveEntryId(
-                    `spotify_archive_${await stableHash(input.connection.id)}_${hash}`,
-                  ),
+                  archiveEntryId: entryId,
                   sourceRecordId: playerRecord.id,
                   role: 'admission',
                   linkedAt: playerAt,
@@ -544,6 +591,8 @@ async function syncAdditionalSpotifyLibrary(input: {
             { ...playerRaw, processingStatus: 'processed', lastParserVersion: playerParserVersion },
           ],
         })
+        input.counts.sourceRecords += 1
+        input.counts.normalizedRecords += 1
         playerEpisode = {
           episodeId: episode.episodeId,
           episodeUri: episode.episodeUri,
@@ -568,6 +617,7 @@ async function syncAdditionalSpotifyLibrary(input: {
         ],
       })
     }
+    if (playerMediaItemId === null) input.counts.sourceRecords += 1
     await input.spotifyRepository.recordPlayerObservation({
       id: ulid(),
       sourceRecordId: playerRecord.id,
@@ -612,19 +662,25 @@ async function syncAdditionalSpotifyLibrary(input: {
       input.connection.id,
       'recent-tracks',
     )
-    const recent = await fetchSpotifyRecentlyPlayed({
+    const response = await fetchSpotifyRecentlyPlayedResponse({
       accessToken: input.accessToken,
       fetch: input.bindings.SYNC_FETCH ?? fetch,
     })
-    input.bindings.SYNC_BUDGET?.page(recent.items.length)
     const recentRaw = await persistApiPage({
       ...input,
       operation: 'recent-tracks',
       page: String(recentAt),
-      bytes: recent.bytes,
-      contentType: recent.contentType,
+      bytes: response.bytes,
+      contentType: response.contentType,
       acquiredAt: recentAt,
     })
+    const recent = await parseRetainedPage(
+      input.repository,
+      recentRaw,
+      recentTracksParserVersion,
+      () => parseSpotifyRecentlyPlayed(response),
+    )
+    input.bindings.SYNC_BUDGET?.page(recent.items.length)
     const recentRecords: SourceRecord[] = []
     const recentMedia: MediaItem[] = []
     const recentIdentities: ExternalIdentity[] = []
@@ -636,11 +692,17 @@ async function syncAdditionalSpotifyLibrary(input: {
       const value = recentItem.track
       const recordId = sourceRecordId(ulid())
       const hash = await stableHash(`spotify-track:${value.uri}`)
-      const itemId = mediaItemId(`spotify_song_${hash}`)
-      const identityId = externalIdentityId(`spotify_track_identity_${hash}`)
-      const entryId = archiveEntryId(
-        `spotify_song_archive_${await stableHash(input.connection.id)}_${hash}`,
-      )
+      const knownIdentity = await input.repository.findExternalIdentity({
+        namespace: 'spotify',
+        externalType: 'track_uri',
+        externalId: value.uri,
+        connectionId: null,
+      })
+      const itemId = knownIdentity?.mediaItemId ?? mediaItemId(`spotify_song_${hash}`)
+      const identityId = knownIdentity?.id ?? externalIdentityId(`spotify_track_identity_${hash}`)
+      const entryId =
+        (await input.repository.findArchiveEntryId(input.connection.id, `track:${value.uri}`)) ??
+        archiveEntryId(`spotify_song_archive_${await stableHash(input.connection.id)}_${hash}`)
       const canonicalUrl = value.canonicalUrl ?? `https://open.spotify.com/track/${value.id}`
       recentRecords.push({
         id: recordId,
@@ -759,6 +821,8 @@ async function syncAdditionalSpotifyLibrary(input: {
         },
       ],
     })
+    input.counts.sourceRecords += recentRecords.length
+    input.counts.normalizedRecords += songProjections.length
     await input.spotifyRepository.projectHistory({ podcasts: [], songs: songProjections })
     for (const value of metadata)
       await input.spotifyRepository.applyTrackMetadata(value, { rebuildSearch: false })
@@ -865,6 +929,7 @@ export async function syncSpotifySavedEpisodes(
   let queueCandidates = 0
   let unresolvedEpisodes = 0
   const rawObjects: RawObject[] = []
+  const optionalCounts = { sourceRecords: 0, normalizedRecords: 0 }
   const observedEpisodeUris: string[] = []
 
   try {
@@ -1092,6 +1157,7 @@ export async function syncSpotifySavedEpisodes(
         runId,
         accessToken: refreshed.accessToken,
         rawObjects,
+        counts: optionalCounts,
       })
     } catch (error) {
       extended.partialFailures.push('optional_library')
@@ -1110,13 +1176,16 @@ export async function syncSpotifySavedEpisodes(
     await repository.commit({
       syncRun: {
         ...runningRun,
-        status: 'succeeded',
+        status: extended.partialFailures.length > 0 ? 'partially_succeeded' : 'succeeded',
+        errorCode: extended.partialFailures.length > 0 ? 'spotify_partial_failure' : null,
+        errorMessage:
+          extended.partialFailures.length > 0 ? extended.partialFailures.join(', ') : null,
         finishedAt,
         counts: {
           rawObjects: rawObjects.length,
-          sourceRecords: sourceRecordCount,
-          normalizedRecords: archiveEpisodes,
-          failedRecords: 0,
+          sourceRecords: sourceRecordCount + optionalCounts.sourceRecords,
+          normalizedRecords: archiveEpisodes + optionalCounts.normalizedRecords,
+          failedRecords: extended.partialFailures.length,
         },
       },
       cursor: {
@@ -1158,20 +1227,20 @@ export async function syncSpotifySavedEpisodes(
         )
       }
     }
-    if (extended.partialFailures.length > 0)
-      await repository.saveSyncRun({
-        ...runningRun,
-        status: 'partially_succeeded',
-        finishedAt,
-        counts: {
-          rawObjects: rawObjects.length,
-          sourceRecords: sourceRecordCount,
-          normalizedRecords: archiveEpisodes,
-          failedRecords: 0,
-        },
-        errorCode: 'SPOTIFY_PARTIAL_SYNC',
-        errorMessage: `Some Spotify surfaces failed: ${extended.partialFailures.join(', ')}`,
-      })
+    await repository.saveSyncRun({
+      ...runningRun,
+      status: extended.partialFailures.length > 0 ? 'partially_succeeded' : 'succeeded',
+      finishedAt,
+      counts: {
+        rawObjects: rawObjects.length,
+        sourceRecords: sourceRecordCount + optionalCounts.sourceRecords,
+        normalizedRecords: archiveEpisodes + optionalCounts.normalizedRecords,
+        failedRecords: extended.partialFailures.length,
+      },
+      errorCode: extended.partialFailures.length > 0 ? 'spotify_partial_failure' : null,
+      errorMessage:
+        extended.partialFailures.length > 0 ? extended.partialFailures.join(', ') : null,
+    })
     await repository.saveConnection({
       ...connection,
       status: extended.partialFailures.length > 0 ? 'degraded' : 'connected',
@@ -1200,8 +1269,8 @@ export async function syncSpotifySavedEpisodes(
       finishedAt,
       counts: {
         rawObjects: rawObjects.length,
-        sourceRecords: sourceRecordCount,
-        normalizedRecords: archiveEpisodes,
+        sourceRecords: sourceRecordCount + optionalCounts.sourceRecords,
+        normalizedRecords: archiveEpisodes + optionalCounts.normalizedRecords,
         failedRecords: 1,
       },
       errorCode: errorName(error),

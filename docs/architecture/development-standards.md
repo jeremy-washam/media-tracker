@@ -60,15 +60,34 @@ pnpm lint
 pnpm test
 pnpm test:e2e
 pnpm build
+pnpm test:runtime
+pnpm test:acceptance
+pnpm test:coverage
 ```
 
 Unit-test pure normalization and identifier logic. Add fixture-based contract
 tests for connectors and integration tests for repository constraints. End-to-end
 tests should cover critical user flows rather than reproduce lower-level tests.
 
-Vitest runs at most four workers to bound database-fixture load on shared
+Vitest runs at most two workers to bound database-fixture load on shared
 development and CI hosts. Keep test assertions and timeouts intact when
 diagnosing contention; adjust worker concurrency before weakening a check.
+
+`pnpm check:all` serializes all local gates, including production packaging and
+the isolated Worker and browser acceptance suites. Keep mocked browser tests for
+UI states and geometry. Use the real-stack suite for browser/API/database
+contracts, source membership, imported evidence, and recovery. Runtime fixtures
+apply the complete migration chain to disposable local D1/R2/Queues and reject
+unrecognized outbound requests. Never use owner data or credentials in tests.
+
+Repository tests share the D1-constrained SQLite adapter for parameter ceilings,
+foreign keys, atomic batches, captured queries, and failure injection. Current
+repository tests use all migrations; historical-upgrade tests name exact
+migration boundaries and seed the source facts affected by the upgrade.
+
+Coverage includes maintained source files even when no test imports them. Keep
+the coverage report separate from behavioral acceptance: a percentage does not
+replace replay, concurrency, failure-recovery, or provenance assertions.
 
 ## Error handling
 

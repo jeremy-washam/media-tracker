@@ -2,6 +2,8 @@ import type { SyncJob } from '@media-tracker/contracts'
 import type { SyncBudget } from './sync-budget'
 import {
   D1DatabaseClient,
+  fenceCatalogDatabase,
+  type CatalogLease,
   SqlArticlesRepository,
   SqlBooksRepository,
   SqlCanonicalLedgerRepository,
@@ -32,6 +34,7 @@ export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BU
   CATALOG_AUTO_REFRESH?: string
   MAINTENANCE_ENABLED?: string
   DATABASE_USAGE_OBSERVER?: DatabaseUsageObserver
+  CATALOG_LEASE?: CatalogLease
   HARDCOVER_TOKEN?: string
   LETTERBOXD_USERNAME?: string
   READWISE_TOKEN?: string
@@ -63,8 +66,10 @@ export interface AppEnv {
 export function createLedgerRepository(
   database: D1Database,
   observer?: DatabaseUsageObserver,
+  lease?: CatalogLease,
 ): CanonicalLedgerRepository {
-  return new SqlCanonicalLedgerRepository(new D1DatabaseClient(database, observer))
+  const client = new D1DatabaseClient(database, observer)
+  return new SqlCanonicalLedgerRepository(lease ? fenceCatalogDatabase(client, lease) : client)
 }
 
 export function createArticlesRepository(
@@ -84,15 +89,19 @@ export function createBooksRepository(
 export function createMoviesRepository(
   database: D1Database,
   observer?: DatabaseUsageObserver,
+  lease?: CatalogLease,
 ): SqlMoviesRepository {
-  return new SqlMoviesRepository(new D1DatabaseClient(database, observer))
+  const client = new D1DatabaseClient(database, observer)
+  return new SqlMoviesRepository(lease ? fenceCatalogDatabase(client, lease) : client)
 }
 
 export function createSpotifyLibraryRepository(
   database: D1Database,
   observer?: DatabaseUsageObserver,
+  lease?: CatalogLease,
 ): SqlSpotifyLibraryRepository {
-  return new SqlSpotifyLibraryRepository(new D1DatabaseClient(database, observer))
+  const client = new D1DatabaseClient(database, observer)
+  return new SqlSpotifyLibraryRepository(lease ? fenceCatalogDatabase(client, lease) : client)
 }
 
 export function createSpotifyCatalogJobsRepository(
@@ -105,8 +114,10 @@ export function createSpotifyCatalogJobsRepository(
 export function createVideosRepository(
   database: D1Database,
   observer?: DatabaseUsageObserver,
+  lease?: CatalogLease,
 ): SqlVideosRepository {
-  return new SqlVideosRepository(new D1DatabaseClient(database, observer))
+  const client = new D1DatabaseClient(database, observer)
+  return new SqlVideosRepository(lease ? fenceCatalogDatabase(client, lease) : client)
 }
 
 export function createCatalogJobsRepository(

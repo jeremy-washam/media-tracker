@@ -1,3 +1,5 @@
+import { ZodError } from 'zod'
+import { CatalogRetryError } from './catalog-retry'
 import {
   bestYoutubeThumbnail,
   YoutubeApiError,
@@ -22,19 +24,6 @@ function chunks<Value>(values: readonly Value[], size: number): Value[][] {
 
 function daysAfter(at: string, days: number) {
   return new Date(Date.parse(at) + days * 86_400_000).toISOString()
-}
-
-function runtimeErrorKind(error: unknown) {
-  if (!(error instanceof Error)) return 'unknown'
-  const message = error.message.toLowerCase()
-  if (message.includes('abortsignal')) return 'abort_signal'
-  if (message.includes('abortcontroller')) return 'abort_controller'
-  if (message.includes('fetch') || message.includes('network')) return 'fetch_transport'
-  if (message.includes('url')) return 'url'
-  if (message.includes('not a function')) return 'not_function'
-  if (message.includes('undefined')) return 'undefined'
-  if (message.includes('d1')) return 'd1'
-  return error.name
 }
 
 function safeRuntimeDiagnostic(error: unknown, secret: string) {
@@ -73,9 +62,11 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
   const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const current = await jobs.find(job.catalogJobId)
   if (current === null || current.state === 'succeeded' || current.state === 'failed') return
-  if ((current.cursor ?? '') !== (job.catalogCursor ?? '')) return
-  if (env.YOUTUBE_API_KEY === undefined) {
-    await jobs.fail(job.catalogJobId, 'not_configured', at)
+  if (current.provider !== 'youtube') return
+  if ((current.cursor ?? '') !== (job.catalogCursor ?? '')) {
+    // A previous delivery may have committed its cursor before Queue send failed.
+    if (current.state === 'pending' || current.state === 'running')
+      await env.SYNC_QUEUE.send(jobMessage(current.id, current.cursor ?? ''))
     return
   }
   const reserved = await jobs.reserve(
@@ -84,8 +75,14 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
     at,
     new Date(Date.parse(at) + 5 * 60_000).toISOString(),
   )
-  if (!reserved) return
-  const repository = createVideosRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
+  if (reserved === null) throw new CatalogRetryError(300)
+  if (env.YOUTUBE_API_KEY === undefined) {
+    await jobs.fail(job.catalogJobId, reserved, 'not_configured', at)
+    return
+  }
+  const lease = { jobId: job.catalogJobId, token: reserved, kind: 'catalog' as const }
+  let advanced = false
+  const repository = createVideosRepository(env.DB, env.DATABASE_USAGE_OBSERVER, lease)
   let stage = 'candidate_query'
   try {
     const candidates = await repository.listYoutubeCatalogCandidates({
@@ -97,9 +94,8 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
       stage = 'expiry_purge'
       await repository.purgeExpiredYoutubeCatalog(at)
       stage = 'completion'
-      await jobs.complete(job.catalogJobId, at)
       stage = 'projection_rebuild'
-      await repository.rebuild(at)
+      await repository.rebuild(at, { jobId: job.catalogJobId, token: reserved })
       return
     }
     stage = 'provider_request'
@@ -181,7 +177,7 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
       })),
     })
     stage = 'advance'
-    await jobs.advance(job.catalogJobId, {
+    advanced = await jobs.advance(job.catalogJobId, reserved, {
       cursor: candidates.at(-1)!.mediaItemId,
       requested: candidates.length,
       returned: videos.length,
@@ -189,6 +185,7 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
       quotaUnits: videoBatches.length + channelBatches.length + (current.cursor === null ? 1 : 0),
       at,
     })
+    if (!advanced) throw new CatalogRetryError(300)
     stage = 'enqueue'
     await env.SYNC_QUEUE.send(jobMessage(job.catalogJobId, candidates.at(-1)!.mediaItemId))
   } catch (error) {
@@ -200,18 +197,24 @@ export async function processYoutubeCatalogRefresh(env: Bindings, job: SyncJob):
         diagnostic: safeRuntimeDiagnostic(error, env.YOUTUBE_API_KEY),
       }),
     )
-    if (error instanceof YoutubeApiError && error.retryable)
-      await jobs.release(job.catalogJobId, at)
-    else
+    if (error instanceof CatalogRetryError) throw error
+    const terminal =
+      (error instanceof YoutubeApiError && !error.retryable) || error instanceof ZodError
+    if (terminal && !advanced) {
       await jobs.fail(
         job.catalogJobId,
-        error instanceof YoutubeApiError
-          ? `http_${error.status}`
-          : error instanceof Error
-            ? `internal_${stage}_${runtimeErrorKind(error)}`
-            : 'unknown',
+        reserved,
+        error instanceof YoutubeApiError ? `http_${error.status}` : 'invalid_provider_response',
         at,
       )
-    throw error
+      throw error
+    }
+    if (!advanced) await jobs.release(job.catalogJobId, reserved, at)
+    throw new CatalogRetryError(
+      error instanceof YoutubeApiError
+        ? Math.min(43_200, Math.max(60, error.retryAfterSeconds ?? 60))
+        : 60,
+      { cause: error },
+    )
   }
 }
