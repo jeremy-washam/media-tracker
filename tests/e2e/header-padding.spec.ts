@@ -82,7 +82,7 @@ for (const dark of [false, true]) {
       await page.setViewportSize({ width: 1280, height: 768 })
       await page.addStyleTag({
         content:
-          '[data-ui~="library-collection"]::-webkit-scrollbar, [data-ui~="workspace-header"]::-webkit-scrollbar { width: 16px; }',
+          '[data-ui~="library-collection"]::-webkit-scrollbar, [data-ui~="collection-header"]::-webkit-scrollbar, [data-ui~="workspace-header"]::-webkit-scrollbar { width: 16px; }',
       })
       await expect
         .poll(() =>

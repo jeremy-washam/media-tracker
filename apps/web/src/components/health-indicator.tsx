@@ -15,7 +15,12 @@ export function HealthIndicator() {
 
   if (health.isPending) {
     return (
-      <Badge variant="ghost" className={cn('px-0', shellStyles['status-pill'])} aria-live="polite">
+      <Badge
+        variant="ghost"
+        className={cn('px-0', shellStyles['status-pill'])}
+        aria-live="polite"
+        data-ui="health-indicator"
+      >
         <span className={shellStyles['status-icon']}>
           <span className={cn(shellStyles['status-dot'], shellStyles['status-dot-pending'])} />
         </span>
@@ -30,6 +35,7 @@ export function HealthIndicator() {
         variant="ghost"
         className={cn('px-0', shellStyles['status-pill'], shellStyles['status-pill-error'])}
         aria-live="polite"
+        data-ui="health-indicator"
       >
         <span className={shellStyles['status-icon']}>
           <span className={cn(shellStyles['status-dot'], shellStyles['status-dot-error'])} />
@@ -40,7 +46,12 @@ export function HealthIndicator() {
   }
 
   return (
-    <Badge variant="ghost" className={cn('px-0', shellStyles['status-pill'])} aria-live="polite">
+    <Badge
+      variant="ghost"
+      className={cn('px-0', shellStyles['status-pill'])}
+      aria-live="polite"
+      data-ui="health-indicator"
+    >
       <span className={shellStyles['status-icon']}>
         <span className={cn(shellStyles['status-dot'], shellStyles['status-dot-ready'])} />
       </span>

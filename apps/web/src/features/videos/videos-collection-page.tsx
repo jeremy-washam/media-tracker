@@ -1,3 +1,8 @@
+import {
+  LibraryCollectionHeader,
+  LibraryFiltersTrigger,
+} from '@/components/library-collection-header'
+import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import {
   videoChannelQueryOptions,
@@ -153,12 +158,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
       )}
       data-ui={cn('library-workspace videos-page', `videos-${layout}`)}
     >
-      <FlatTabsContent
-        value={view}
-        className={workspaceStyles['books-collection']}
-        ref={collectionRef}
-        data-ui="library-collection"
-      >
+      <FlatTabsContent value={view} className={workspaceStyles['collection-pane']}>
         <h1 className="sr-only">Videos</h1>
         <CollectionTabList aria-label="Video sections">
           {(['archive', 'queue', 'channels'] as const).map((target) => (
@@ -173,176 +173,192 @@ export function VideosCollectionPage({ view }: { view: View }) {
             </Link>
           ))}
         </CollectionTabList>
-        <LibraryToolbar data-ui="library-toolbar">
-          <form
-            className={controlsStyles['books-search']}
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              update({
-                q: (draft ?? search.q ?? '').trim() || undefined,
-                item: undefined,
-                channelItem: undefined,
-                sort: undefined,
-              })
-              setDraft(null)
-            }}
-          >
-            <InputGroup>
-              <InputGroupInput
-                aria-label="Search videos"
-                placeholder={view === 'channels' ? 'Search channels' : 'Search videos or channels'}
-                value={draft ?? search.q ?? ''}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <InputGroupAddon>
-                <MagnifyingGlass />
-              </InputGroupAddon>
-              {(draft ?? search.q) ? (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setDraft(null)
-                      update({
-                        q: undefined,
-                        item: undefined,
-                        channelItem: undefined,
-                        sort: undefined,
-                      })
-                    }}
-                  >
-                    <X />
-                  </InputGroupButton>
-                </InputGroupAddon>
+        <LibraryCollectionHeader
+          filtersOpen={filtersOpen}
+          onFiltersOpenChange={setFiltersOpen}
+          filters={
+            <>
+              {filtersOpen ? (
+                <VideoFilters view={view} search={search} summary={summary} update={update} />
               ) : null}
-            </InputGroup>
-          </form>
-          <Button
-            variant="outline"
-            type="button"
-            className={controlsStyles['toolbar-button']}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((value) => !value)}
-            data-ui="toolbar-button"
-          >
-            <Funnel aria-hidden="true" /> Filters
-          </Button>
-          <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <span className="sr-only">Sort videos</span>
-            <LibrarySelect
-              aria-label="Sort videos"
-              value={selectedSort}
-              onValueChange={(value) =>
+            </>
+          }
+        >
+          <LibraryToolbar data-ui="library-toolbar">
+            <form
+              className={controlsStyles['books-search']}
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault()
                 update({
-                  sort: value,
-                  direction: undefined,
+                  q: (draft ?? search.q ?? '').trim() || undefined,
+                  item: undefined,
+                  channelItem: undefined,
+                  sort: undefined,
+                })
+                setDraft(null)
+              }}
+            >
+              <InputGroup>
+                <InputGroupInput
+                  aria-label="Search videos"
+                  placeholder={
+                    view === 'channels' ? 'Search channels' : 'Search videos or channels'
+                  }
+                  value={draft ?? search.q ?? ''}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <InputGroupAddon>
+                  <MagnifyingGlass />
+                </InputGroupAddon>
+                {(draft ?? search.q) ? (
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="icon-xs"
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setDraft(null)
+                        update({
+                          q: undefined,
+                          item: undefined,
+                          channelItem: undefined,
+                          sort: undefined,
+                        })
+                      }}
+                    >
+                      <X />
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                ) : null}
+              </InputGroup>
+            </form>
+            <LibraryFiltersTrigger
+              variant="outline"
+              type="button"
+              className={controlsStyles['toolbar-button']}
+              data-ui="toolbar-button"
+            >
+              <Funnel aria-hidden="true" /> Filters
+            </LibraryFiltersTrigger>
+            <label className={controlsStyles['books-sort']} data-ui="library-sort">
+              <span className="sr-only">Sort videos</span>
+              <LibrarySelect
+                aria-label="Sort videos"
+                value={selectedSort}
+                onValueChange={(value) =>
+                  update({
+                    sort: value,
+                    direction: undefined,
+                    item: undefined,
+                    channelItem: undefined,
+                  })
+                }
+                options={[...sorts.map(([value, label]) => ({ value, label }))]}
+              />
+            </label>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className={controlsStyles['sort-direction']}
+              aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              onClick={() =>
+                update({
+                  direction: selectedDirection === 'asc' ? 'desc' : 'asc',
                   item: undefined,
                   channelItem: undefined,
                 })
               }
-              options={[...sorts.map(([value, label]) => ({ value, label }))]}
-            />
-          </label>
-          <Button
-            variant="outline"
-            size="icon"
-            type="button"
-            className={controlsStyles['sort-direction']}
-            aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
-            onClick={() =>
-              update({
-                direction: selectedDirection === 'asc' ? 'desc' : 'asc',
-                item: undefined,
-                channelItem: undefined,
-              })
-            }
-          >
-            {selectedDirection === 'asc' ? (
-              <ArrowUp aria-hidden="true" />
-            ) : (
-              <ArrowDown aria-hidden="true" />
-            )}
-          </Button>
+            >
+              {selectedDirection === 'asc' ? (
+                <ArrowUp aria-hidden="true" />
+              ) : (
+                <ArrowDown aria-hidden="true" />
+              )}
+            </Button>
 
-          {view !== 'channels' ? (
-            <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
-          ) : null}
-        </LibraryToolbar>
-        {filtersOpen ? (
-          <VideoFilters view={view} search={search} summary={summary} update={update} />
-        ) : null}
-        <div
-          className={workspaceStyles['books-result-summary']}
-          aria-live="polite"
-          data-ui="collection-summary"
-        >
-          <span>
-            {result.isPending || !summary
-              ? null
-              : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'channels' ? 'channels' : 'videos'}`}
-          </span>
-          {view === 'archive' && summary ? (
-            <small>{countLabel(summary.occurrenceCount, 'supported watch')}</small>
-          ) : null}
-        </div>
-        <CollectionSummaryStatus query={summaryQuery} />
-        {result.isPending ? (
-          <LoadingState data-ui="collection-loading">Loading videos…</LoadingState>
-        ) : null}
-        {summary && summary.coverage.watchLater !== 'complete' ? (
-          <p className={workspaceStyles['library-coverage-note']}>
-            Takeout coverage: Watch Later {summary.coverage.watchLater}.
-          </p>
-        ) : null}
-        {result.isError && !result.isFetchNextPageError ? (
-          <Notice className={workspaceStyles['books-state']}>
-            <h2>Videos could not be loaded</h2>
-            <p>{result.error.message}</p>
-          </Notice>
-        ) : null}
-        {!result.isPending && !result.isError && items.length === 0 ? (
-          <CollectionEmptyState
-            icon={YoutubeLogo}
-            title={`No ${view} yet`}
-            description="Import YouTube Takeout from Connections."
-          />
-        ) : null}
-        {items.length ? (
+            {view !== 'channels' ? (
+              <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
+            ) : null}
+          </LibraryToolbar>
           <div
-            className={
-              view === 'channels'
-                ? videosStyles['video-channel-list']
-                : videosStyles['video-result-grid']
-            }
+            className={workspaceStyles['books-result-summary']}
+            aria-live="polite"
+            data-ui="collection-summary"
           >
-            {items.map((item) => (
-              <VideoItem
-                key={`${item.kind}:${item.id}`}
-                item={item}
-                view={view}
-                selected={
-                  view === 'channels' ? search.channelItem === item.id : search.item === item.id
-                }
-                onSelect={() =>
-                  update(
-                    view === 'channels'
-                      ? { channelItem: search.channelItem === item.id ? undefined : item.id }
-                      : { item: search.item === item.id ? undefined : item.id },
-                  )
-                }
-              />
-            ))}
+            <span>
+              {result.isPending || !summary
+                ? null
+                : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'channels' ? 'channels' : 'videos'}`}
+            </span>
+            {view === 'archive' && summary ? (
+              <small>{countLabel(summary.occurrenceCount, 'supported watch')}</small>
+            ) : null}
           </div>
-        ) : null}
-        <CollectionPagination
-          query={result}
-          scrollRef={collectionRef}
-          itemCount={items.length}
-          label={view === 'channels' ? 'channels' : 'videos'}
-        />
+          <LibraryAppliedFilters media="videos" search={search} onChange={update} />
+        </LibraryCollectionHeader>
+        <div
+          className={workspaceStyles['books-collection']}
+          ref={collectionRef}
+          data-ui="library-collection"
+        >
+          <CollectionSummaryStatus query={summaryQuery} />
+          {result.isPending ? (
+            <LoadingState data-ui="collection-loading">Loading videos…</LoadingState>
+          ) : null}
+          {summary && summary.coverage.watchLater !== 'complete' ? (
+            <p className={workspaceStyles['library-coverage-note']}>
+              Takeout coverage: Watch Later {summary.coverage.watchLater}.
+            </p>
+          ) : null}
+          {result.isError && !result.isFetchNextPageError ? (
+            <Notice className={workspaceStyles['books-state']}>
+              <h2>Videos could not be loaded</h2>
+              <p>{result.error.message}</p>
+            </Notice>
+          ) : null}
+          {!result.isPending && !result.isError && items.length === 0 ? (
+            <CollectionEmptyState
+              icon={YoutubeLogo}
+              title={`No ${view} yet`}
+              description="Import YouTube Takeout from Connections."
+            />
+          ) : null}
+          {items.length ? (
+            <div
+              className={
+                view === 'channels'
+                  ? videosStyles['video-channel-list']
+                  : videosStyles['video-result-grid']
+              }
+            >
+              {items.map((item) => (
+                <VideoItem
+                  key={`${item.kind}:${item.id}`}
+                  item={item}
+                  view={view}
+                  selected={
+                    view === 'channels' ? search.channelItem === item.id : search.item === item.id
+                  }
+                  onSelect={() =>
+                    update(
+                      view === 'channels'
+                        ? { channelItem: search.channelItem === item.id ? undefined : item.id }
+                        : { item: search.item === item.id ? undefined : item.id },
+                    )
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
+          <CollectionPagination
+            query={result}
+            scrollRef={collectionRef}
+            itemCount={items.length}
+            label={view === 'channels' ? 'channels' : 'videos'}
+          />
+        </div>
       </FlatTabsContent>
       {inspectorItem ? (
         <VideoInspector id={inspectorItem} onClose={() => update({ item: undefined })} />

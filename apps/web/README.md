@@ -4,6 +4,11 @@ The desktop React/Vite client consumes the REST API and contains no provider
 credentials. The root redirects to Books Archive. Library exposes 16 sections
 across Books, Movies, Articles, Podcasts, Music, and Videos, with server-side
 search/filter/sort, complete counts, cursor pagination, and contextual inspectors.
+Collection search, filters, sort, layout, counts, and applied-filter chips remain
+visible above the results scroll viewport. Filter options open in a modal Sheet;
+removing an applied group also clears dependent bounds. Infinite pagination and
+scroll restoration continue to use the results viewport. Books omits column
+headings, and the passive API status does not change appearance on hover.
 The legacy History component is not routed. Chat and Recaps remain disabled
 navigation; Settings has no production route.
 Connections uses compact source rows with bundled official logos and labeled
@@ -64,8 +69,8 @@ mockup. The sidebar's Header preview selector compares the current scrolling
 toolbar with a proposed persistent toolbar. Search, filters, sorting, collection
 tabs, list/grid, theme, and the contextual inspector are interactive. At narrow
 widths, open Navigation to find the preview selector. All content is illustrative,
-state is temporary, and the preview makes no API requests. This is a review study,
-not an adopted production design; deployment builds exclude this entry.
+state is temporary, and the preview makes no API requests. This review study remains available alongside the production implementation;
+deployment builds exclude the study entry.
 
 Run the isolated scroll, focus, theme, and narrow-layout checks with
 `pnpm exec playwright test --config playwright.header-preview.config.ts` from the

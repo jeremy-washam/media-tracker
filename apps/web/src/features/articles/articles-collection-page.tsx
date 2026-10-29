@@ -1,3 +1,8 @@
+import {
+  LibraryCollectionHeader,
+  LibraryFiltersTrigger,
+} from '@/components/library-collection-header'
+import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
@@ -170,12 +175,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
       aria-labelledby="articles-title"
       data-ui="library-workspace articles-density-expanded"
     >
-      <FlatTabsContent
-        value={section}
-        className={workspaceStyles['books-collection']}
-        ref={collectionRef}
-        data-ui="library-collection"
-      >
+      <FlatTabsContent value={section} className={workspaceStyles['collection-pane']}>
         <h1 className="sr-only" id="articles-title">
           Articles
         </h1>
@@ -192,162 +192,183 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             </Link>
           ))}
         </CollectionTabList>
-        <LibraryToolbar data-ui="library-toolbar">
-          <form
-            className={controlsStyles['books-search']}
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const value = (draft ?? search.q ?? '').trim()
-              setDraft(null)
-              update({
-                q: value || undefined,
-                sort: undefined,
-                direction: undefined,
-                item: undefined,
-              })
-            }}
-          >
-            <InputGroup>
-              <InputGroupInput
-                aria-label="Search articles"
-                placeholder="Search title, author, publication, notes, or highlights"
-                value={draft ?? search.q ?? ''}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <InputGroupAddon>
-                <MagnifyingGlass aria-hidden="true" />
-              </InputGroupAddon>
-              {(draft ?? search.q) ? (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setDraft(null)
-                      update({
-                        q: undefined,
-                        sort: undefined,
-                        direction: undefined,
-                        item: undefined,
-                      })
-                    }}
-                  >
-                    <X aria-hidden="true" />
-                  </InputGroupButton>
-                </InputGroupAddon>
+        <LibraryCollectionHeader
+          filtersOpen={filtersOpen}
+          onFiltersOpenChange={setFiltersOpen}
+          filters={
+            <>
+              {filtersOpen ? (
+                <ArticleFilters
+                  section={section}
+                  search={search}
+                  summary={summary}
+                  onChange={update}
+                />
               ) : null}
-            </InputGroup>
-          </form>
-          <Button
-            variant={activeFilters ? 'secondary' : 'outline'}
-            type="button"
-            className={controlsStyles['toolbar-button']}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((value) => !value)}
-            data-ui="toolbar-button"
-          >
-            <Funnel aria-hidden="true" /> Filters{' '}
-            {activeFilters ? <span>{activeFilters}</span> : null}
-          </Button>
-          <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <span className="sr-only">Sort articles</span>
-            <LibrarySelect
-              aria-label="Sort articles"
-              value={sort}
-              onValueChange={(value) =>
-                update({ sort: value, direction: undefined, item: undefined })
-              }
-              options={[
-                ...sortOptions(section, Boolean(search.q)).map(([value, label]) => ({
-                  value: String(value),
-                  label,
-                })),
-              ]}
-            />
-          </label>
-          <Button
-            variant="outline"
-            size="icon"
-            type="button"
-            className={controlsStyles['sort-direction']}
-            disabled={sort === 'relevance'}
-            aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
-            onClick={() =>
-              update({ sort, direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
-            }
-          >
-            {direction === 'asc' ? (
-              <ArrowUp aria-hidden="true" />
-            ) : (
-              <ArrowDown aria-hidden="true" />
-            )}
-          </Button>
-        </LibraryToolbar>
-        {filtersOpen ? (
-          <ArticleFilters section={section} search={search} summary={summary} onChange={update} />
-        ) : null}
-        <div
-          className={workspaceStyles['books-result-summary']}
-          aria-live="polite"
-          data-ui="collection-summary"
+            </>
+          }
         >
-          <span>
-            {articles.isPending || !summary
-              ? null
-              : `${(summary?.filteredCount ?? 0).toLocaleString()} of ${(summary?.totalCount ?? 0).toLocaleString()} ${(summary?.totalCount ?? 0) === 1 ? 'article' : 'articles'}${section === 'archive' && summary?.occurrenceCount != null ? ` · ${summary.occurrenceCount.toLocaleString()} archive ${summary.occurrenceCount === 1 ? 'occurrence' : 'occurrences'}` : ''}`}
-          </span>
-          {summary?.coverage.lastSuccessfulSyncAt ? (
-            <small>Reader synced {formatDate(summary.coverage.lastSuccessfulSyncAt)}</small>
-          ) : null}
-        </div>
-        <CollectionSummaryStatus query={summaryQuery} />
-        {articles.isPending ? (
-          <LoadingState data-ui="collection-loading">Loading articles…</LoadingState>
-        ) : null}
-        {articles.isError && !articles.isFetchNextPageError ? (
-          <Notice className={workspaceStyles['books-state']}>
-            <h2>Articles could not be loaded</h2>
-            <p>{articles.error.message}</p>
-            <Button variant="outline" type="button" onClick={() => void articles.refetch()}>
-              Try again
-            </Button>
-          </Notice>
-        ) : null}
-        {!articles.isPending && !articles.isError && !items.length ? (
-          <CollectionEmptyState
-            icon={Article}
-            title={activeFilters || search.q ? 'No matching articles' : `No articles in ${section}`}
-            description={
-              activeFilters || search.q
-                ? 'Clear search or filters to broaden this view.'
-                : 'Sync Readwise from Connections to populate this section.'
-            }
-            onClear={activeFilters || search.q ? () => update(clearFilters()) : undefined}
-          />
-        ) : null}
-        {items.length ? (
-          <div className={articlesStyles['articles-list']}>
-            {items.map((item) => (
-              <ArticleRow
-                key={item.id}
-                item={item}
-                section={section}
-                expanded={true}
-                selected={search.item === item.id}
-                ref={search.item === item.id ? selectedRef : undefined}
-                onClick={() => update({ item: search.item === item.id ? undefined : item.id })}
+          <LibraryToolbar data-ui="library-toolbar">
+            <form
+              className={controlsStyles['books-search']}
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const value = (draft ?? search.q ?? '').trim()
+                setDraft(null)
+                update({
+                  q: value || undefined,
+                  sort: undefined,
+                  direction: undefined,
+                  item: undefined,
+                })
+              }}
+            >
+              <InputGroup>
+                <InputGroupInput
+                  aria-label="Search articles"
+                  placeholder="Search title, author, publication, notes, or highlights"
+                  value={draft ?? search.q ?? ''}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <InputGroupAddon>
+                  <MagnifyingGlass aria-hidden="true" />
+                </InputGroupAddon>
+                {(draft ?? search.q) ? (
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="icon-xs"
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setDraft(null)
+                        update({
+                          q: undefined,
+                          sort: undefined,
+                          direction: undefined,
+                          item: undefined,
+                        })
+                      }}
+                    >
+                      <X aria-hidden="true" />
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                ) : null}
+              </InputGroup>
+            </form>
+            <LibraryFiltersTrigger
+              variant={activeFilters ? 'secondary' : 'outline'}
+              type="button"
+              className={controlsStyles['toolbar-button']}
+              data-ui="toolbar-button"
+            >
+              <Funnel aria-hidden="true" /> Filters{' '}
+              {activeFilters ? <span>{activeFilters}</span> : null}
+            </LibraryFiltersTrigger>
+            <label className={controlsStyles['books-sort']} data-ui="library-sort">
+              <span className="sr-only">Sort articles</span>
+              <LibrarySelect
+                aria-label="Sort articles"
+                value={sort}
+                onValueChange={(value) =>
+                  update({ sort: value, direction: undefined, item: undefined })
+                }
+                options={[
+                  ...sortOptions(section, Boolean(search.q)).map(([value, label]) => ({
+                    value: String(value),
+                    label,
+                  })),
+                ]}
               />
-            ))}
+            </label>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className={controlsStyles['sort-direction']}
+              disabled={sort === 'relevance'}
+              aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              onClick={() =>
+                update({ sort, direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
+              }
+            >
+              {direction === 'asc' ? (
+                <ArrowUp aria-hidden="true" />
+              ) : (
+                <ArrowDown aria-hidden="true" />
+              )}
+            </Button>
+          </LibraryToolbar>
+          <div
+            className={workspaceStyles['books-result-summary']}
+            aria-live="polite"
+            data-ui="collection-summary"
+          >
+            <span>
+              {articles.isPending || !summary
+                ? null
+                : `${(summary?.filteredCount ?? 0).toLocaleString()} of ${(summary?.totalCount ?? 0).toLocaleString()} ${(summary?.totalCount ?? 0) === 1 ? 'article' : 'articles'}${section === 'archive' && summary?.occurrenceCount != null ? ` · ${summary.occurrenceCount.toLocaleString()} archive ${summary.occurrenceCount === 1 ? 'occurrence' : 'occurrences'}` : ''}`}
+            </span>
+            {summary?.coverage.lastSuccessfulSyncAt ? (
+              <small>Reader synced {formatDate(summary.coverage.lastSuccessfulSyncAt)}</small>
+            ) : null}
           </div>
-        ) : null}
-        <CollectionPagination
-          query={articles}
-          scrollRef={collectionRef}
-          itemCount={items.length}
-          label="articles"
-        />
+          <LibraryAppliedFilters media="articles" search={search} onChange={update} />
+        </LibraryCollectionHeader>
+        <div
+          className={workspaceStyles['books-collection']}
+          ref={collectionRef}
+          data-ui="library-collection"
+        >
+          <CollectionSummaryStatus query={summaryQuery} />
+          {articles.isPending ? (
+            <LoadingState data-ui="collection-loading">Loading articles…</LoadingState>
+          ) : null}
+          {articles.isError && !articles.isFetchNextPageError ? (
+            <Notice className={workspaceStyles['books-state']}>
+              <h2>Articles could not be loaded</h2>
+              <p>{articles.error.message}</p>
+              <Button variant="outline" type="button" onClick={() => void articles.refetch()}>
+                Try again
+              </Button>
+            </Notice>
+          ) : null}
+          {!articles.isPending && !articles.isError && !items.length ? (
+            <CollectionEmptyState
+              icon={Article}
+              title={
+                activeFilters || search.q ? 'No matching articles' : `No articles in ${section}`
+              }
+              description={
+                activeFilters || search.q
+                  ? 'Clear search or filters to broaden this view.'
+                  : 'Sync Readwise from Connections to populate this section.'
+              }
+              onClear={activeFilters || search.q ? () => update(clearFilters()) : undefined}
+            />
+          ) : null}
+          {items.length ? (
+            <div className={articlesStyles['articles-list']}>
+              {items.map((item) => (
+                <ArticleRow
+                  key={item.id}
+                  item={item}
+                  section={section}
+                  expanded={true}
+                  selected={search.item === item.id}
+                  ref={search.item === item.id ? selectedRef : undefined}
+                  onClick={() => update({ item: search.item === item.id ? undefined : item.id })}
+                />
+              ))}
+            </div>
+          ) : null}
+          <CollectionPagination
+            query={articles}
+            scrollRef={collectionRef}
+            itemCount={items.length}
+            label="articles"
+          />
+        </div>
       </FlatTabsContent>
       {inspectorItem ? (
         <>

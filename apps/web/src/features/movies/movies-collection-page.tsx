@@ -1,3 +1,8 @@
+import {
+  LibraryCollectionHeader,
+  LibraryFiltersTrigger,
+} from '@/components/library-collection-header'
+import { LibraryAppliedFilters } from '@/components/library-applied-filters'
 import { CollectionSummaryStatus } from '../../components/collection-summary-status'
 import { CollectionEmptyState } from '@/components/collection-empty-state'
 import { LibraryToolbar, LibraryFilterPanel } from '@/components/library-controls'
@@ -220,12 +225,7 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
       aria-labelledby="movies-title"
       data-ui="library-workspace"
     >
-      <FlatTabsContent
-        value={collection}
-        className={workspaceStyles['books-collection']}
-        ref={collectionRef}
-        data-ui="library-collection"
-      >
+      <FlatTabsContent value={collection} className={workspaceStyles['collection-pane']}>
         <h1 className="sr-only" id="movies-title">
           Movies
         </h1>
@@ -245,192 +245,208 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             Queue <span>{sectionCounts?.queueItems?.toLocaleString() ?? '—'}</span>
           </Link>
         </CollectionTabList>
-        <LibraryToolbar data-ui="library-toolbar">
-          <form
-            className={controlsStyles['books-search']}
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const value = (draftSearch ?? search.q ?? '').trim()
-              setDraftSearch(null)
-              updateSearch({
-                q: value || undefined,
-                sort: undefined,
-                direction: undefined,
-                item: undefined,
-              })
-            }}
-          >
-            <InputGroup>
-              <InputGroupInput
-                aria-label="Search movies"
-                placeholder="Search title, year, or review"
-                value={draftSearch ?? search.q ?? ''}
-                onChange={(event) => setDraftSearch(event.target.value)}
-              />
-              <InputGroupAddon>
-                <MagnifyingGlass aria-hidden="true" />
-              </InputGroupAddon>
-              {(draftSearch ?? search.q) ? (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setDraftSearch(null)
-                      updateSearch({
-                        q: undefined,
-                        sort: undefined,
-                        direction: undefined,
-                        item: undefined,
-                      })
-                    }}
-                  >
-                    <X aria-hidden="true" />
-                  </InputGroupButton>
-                </InputGroupAddon>
+        <LibraryCollectionHeader
+          filtersOpen={filtersOpen}
+          onFiltersOpenChange={setFiltersOpen}
+          filters={
+            <>
+              {filtersOpen ? (
+                <MovieFilters
+                  collection={collection}
+                  search={search}
+                  runtimeAvailable={summary?.facets.runtimeAvailable ?? false}
+                  onChange={updateSearch}
+                />
               ) : null}
-            </InputGroup>
-          </form>
-          <Button
-            variant={filters > 0 ? 'secondary' : 'outline'}
-            type="button"
-            className={controlsStyles['toolbar-button']}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((value) => !value)}
-            data-ui="toolbar-button"
-          >
-            <Funnel aria-hidden="true" /> Filters
-            {filters > 0 ? <span>{filters}</span> : null}
-          </Button>
-          <label className={controlsStyles['books-sort']} data-ui="library-sort">
-            <span className="sr-only">Sort movies</span>
-            <LibrarySelect
-              aria-label="Sort movies"
-              value={selectedSort}
-              onValueChange={(value) =>
-                updateSearch({ sort: value, direction: undefined, item: undefined })
-              }
-              options={[
-                ...sortOptions(
-                  collection,
-                  Boolean(search.q),
-                  summary?.facets.runtimeAvailable ?? false,
-                ).map(([value, label]) => ({ value, label })),
-              ]}
-            />
-          </label>
-          <Button
-            variant="outline"
-            size="icon"
-            type="button"
-            className={controlsStyles['sort-direction']}
-            disabled={selectedSort === 'relevance'}
-            aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
-            onClick={() =>
-              updateSearch({
-                sort: selectedSort,
-                direction: direction === 'asc' ? 'desc' : 'asc',
-                item: undefined,
-              })
-            }
-          >
-            {direction === 'asc' ? (
-              <ArrowUp aria-hidden="true" />
-            ) : (
-              <ArrowDown aria-hidden="true" />
-            )}
-          </Button>
-          <LibraryLayoutToggle
-            value={layout}
-            onValueChange={(layout) => updateSearch({ layout })}
-          />
-        </LibraryToolbar>
-        {filtersOpen ? (
-          <MovieFilters
-            collection={collection}
-            search={search}
-            runtimeAvailable={summary?.facets.runtimeAvailable ?? false}
-            onChange={updateSearch}
-          />
-        ) : null}
-        <div
-          className={workspaceStyles['books-result-summary']}
-          aria-live="polite"
-          data-ui="collection-summary"
+            </>
+          }
         >
-          {movies.isPending || !summary ? null : (
-            <span>
-              {count.toLocaleString()} {count === 1 ? 'movie' : 'movies'}
-              {collection === 'archive' && summary && summary.filteredOccurrenceCount !== null
-                ? ` · ${summary?.filteredOccurrenceCount.toLocaleString()} ${summary?.filteredOccurrenceCount === 1 ? 'watch' : 'watches'}`
-                : ''}
-            </span>
-          )}
-          {collection === 'queue' && summary?.sourceFreshness.lastCompleteExportAt ? (
-            <small>
-              Watchlist imported {formatDate(summary.sourceFreshness.lastCompleteExportAt)}
-            </small>
-          ) : null}
-        </div>
-        <CollectionSummaryStatus query={summaryQuery} />
-        {movies.isPending ? (
-          <LoadingState data-ui="collection-loading">Loading movies…</LoadingState>
-        ) : null}
-        {movies.isError && !movies.isFetchNextPageError ? (
-          <Notice className={workspaceStyles['books-state']}>
-            <h2>Movies could not be loaded</h2>
-            <p>{movies.error.message}</p>
-            <Button variant="outline" type="button" onClick={() => void movies.refetch()}>
-              Try again
-            </Button>
-          </Notice>
-        ) : null}
-        {!movies.isPending && !movies.isError && items.length === 0 ? (
-          <CollectionEmptyState
-            icon={FilmReel}
-            title={filters || search.q ? 'No matching movies' : `No movies in ${collection}`}
-            description={
-              filters || search.q
-                ? 'Clear search or filters to broaden this view.'
-                : 'Import Letterboxd from Connections to populate this collection.'
-            }
-            onClear={
-              filters || search.q
-                ? () => {
-                    setDraftSearch(null)
-                    updateSearch(clearMovieFilters())
-                  }
-                : undefined
-            }
-          />
-        ) : null}
-        {items.length > 0 ? (
-          <div
-            className={layout === 'grid' ? mediaStyles['movies-grid'] : moviesStyles['movies-list']}
-          >
-            {items.map((movie) => (
-              <MovieResult
-                key={movie.id}
-                movie={movie}
-                collection={collection}
-                layout={layout}
-                selected={search.item === movie.id}
-                buttonRef={search.item === movie.id ? selectedRef : undefined}
-                onSelect={() =>
-                  updateSearch({ item: search.item === movie.id ? undefined : movie.id })
+          <LibraryToolbar data-ui="library-toolbar">
+            <form
+              className={controlsStyles['books-search']}
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const value = (draftSearch ?? search.q ?? '').trim()
+                setDraftSearch(null)
+                updateSearch({
+                  q: value || undefined,
+                  sort: undefined,
+                  direction: undefined,
+                  item: undefined,
+                })
+              }}
+            >
+              <InputGroup>
+                <InputGroupInput
+                  aria-label="Search movies"
+                  placeholder="Search title, year, or review"
+                  value={draftSearch ?? search.q ?? ''}
+                  onChange={(event) => setDraftSearch(event.target.value)}
+                />
+                <InputGroupAddon>
+                  <MagnifyingGlass aria-hidden="true" />
+                </InputGroupAddon>
+                {(draftSearch ?? search.q) ? (
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="icon-xs"
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setDraftSearch(null)
+                        updateSearch({
+                          q: undefined,
+                          sort: undefined,
+                          direction: undefined,
+                          item: undefined,
+                        })
+                      }}
+                    >
+                      <X aria-hidden="true" />
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                ) : null}
+              </InputGroup>
+            </form>
+            <LibraryFiltersTrigger
+              variant={filters > 0 ? 'secondary' : 'outline'}
+              type="button"
+              className={controlsStyles['toolbar-button']}
+              data-ui="toolbar-button"
+            >
+              <Funnel aria-hidden="true" /> Filters
+              {filters > 0 ? <span>{filters}</span> : null}
+            </LibraryFiltersTrigger>
+            <label className={controlsStyles['books-sort']} data-ui="library-sort">
+              <span className="sr-only">Sort movies</span>
+              <LibrarySelect
+                aria-label="Sort movies"
+                value={selectedSort}
+                onValueChange={(value) =>
+                  updateSearch({ sort: value, direction: undefined, item: undefined })
                 }
+                options={[
+                  ...sortOptions(
+                    collection,
+                    Boolean(search.q),
+                    summary?.facets.runtimeAvailable ?? false,
+                  ).map(([value, label]) => ({ value, label })),
+                ]}
               />
-            ))}
+            </label>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className={controlsStyles['sort-direction']}
+              disabled={selectedSort === 'relevance'}
+              aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              onClick={() =>
+                updateSearch({
+                  sort: selectedSort,
+                  direction: direction === 'asc' ? 'desc' : 'asc',
+                  item: undefined,
+                })
+              }
+            >
+              {direction === 'asc' ? (
+                <ArrowUp aria-hidden="true" />
+              ) : (
+                <ArrowDown aria-hidden="true" />
+              )}
+            </Button>
+            <LibraryLayoutToggle
+              value={layout}
+              onValueChange={(layout) => updateSearch({ layout })}
+            />
+          </LibraryToolbar>
+          <div
+            className={workspaceStyles['books-result-summary']}
+            aria-live="polite"
+            data-ui="collection-summary"
+          >
+            {movies.isPending || !summary ? null : (
+              <span>
+                {count.toLocaleString()} {count === 1 ? 'movie' : 'movies'}
+                {collection === 'archive' && summary && summary.filteredOccurrenceCount !== null
+                  ? ` · ${summary?.filteredOccurrenceCount.toLocaleString()} ${summary?.filteredOccurrenceCount === 1 ? 'watch' : 'watches'}`
+                  : ''}
+              </span>
+            )}
+            {collection === 'queue' && summary?.sourceFreshness.lastCompleteExportAt ? (
+              <small>
+                Watchlist imported {formatDate(summary.sourceFreshness.lastCompleteExportAt)}
+              </small>
+            ) : null}
           </div>
-        ) : null}
-        <CollectionPagination
-          query={movies}
-          scrollRef={collectionRef}
-          itemCount={items.length}
-          label="movies"
-        />
+          <LibraryAppliedFilters media="movies" search={search} onChange={updateSearch} />
+        </LibraryCollectionHeader>
+        <div
+          className={workspaceStyles['books-collection']}
+          ref={collectionRef}
+          data-ui="library-collection"
+        >
+          <CollectionSummaryStatus query={summaryQuery} />
+          {movies.isPending ? (
+            <LoadingState data-ui="collection-loading">Loading movies…</LoadingState>
+          ) : null}
+          {movies.isError && !movies.isFetchNextPageError ? (
+            <Notice className={workspaceStyles['books-state']}>
+              <h2>Movies could not be loaded</h2>
+              <p>{movies.error.message}</p>
+              <Button variant="outline" type="button" onClick={() => void movies.refetch()}>
+                Try again
+              </Button>
+            </Notice>
+          ) : null}
+          {!movies.isPending && !movies.isError && items.length === 0 ? (
+            <CollectionEmptyState
+              icon={FilmReel}
+              title={filters || search.q ? 'No matching movies' : `No movies in ${collection}`}
+              description={
+                filters || search.q
+                  ? 'Clear search or filters to broaden this view.'
+                  : 'Import Letterboxd from Connections to populate this collection.'
+              }
+              onClear={
+                filters || search.q
+                  ? () => {
+                      setDraftSearch(null)
+                      updateSearch(clearMovieFilters())
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
+          {items.length > 0 ? (
+            <div
+              className={
+                layout === 'grid' ? mediaStyles['movies-grid'] : moviesStyles['movies-list']
+              }
+            >
+              {items.map((movie) => (
+                <MovieResult
+                  key={movie.id}
+                  movie={movie}
+                  collection={collection}
+                  layout={layout}
+                  selected={search.item === movie.id}
+                  buttonRef={search.item === movie.id ? selectedRef : undefined}
+                  onSelect={() =>
+                    updateSearch({ item: search.item === movie.id ? undefined : movie.id })
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
+          <CollectionPagination
+            query={movies}
+            scrollRef={collectionRef}
+            itemCount={items.length}
+            label="movies"
+          />
+        </div>
       </FlatTabsContent>
       {inspectorItem ? (
         <>
