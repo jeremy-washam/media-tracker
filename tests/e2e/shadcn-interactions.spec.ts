@@ -119,10 +119,13 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   })
   let itemsFailed = true
   let summaryFailed = true
-  const requests = { items: 0, summary: 0 }
+  const archiveRequests = { items: 0, summary: 0 }
   await page.route('**/api/library/books{,/summary}?*', async (route) => {
-    const summary = new URL(route.request().url()).pathname.endsWith('/summary')
-    requests[summary ? 'summary' : 'items']++
+    const url = new URL(route.request().url())
+    // Background sections keep their normal fixtures; only Archive fails and retries here.
+    if (url.searchParams.get('section') !== 'archive') return route.fallback()
+    const summary = url.pathname.endsWith('/summary')
+    archiveRequests[summary ? 'summary' : 'items']++
     await gate
     await route.fulfill(
       (summary ? summaryFailed : itemsFailed)
@@ -154,7 +157,7 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   await expect(itemRetry).toBeVisible()
   await expect(summaryRetry).toBeVisible()
 
-  const summaryAttempts = requests.summary
+  const summaryAttempts = archiveRequests.summary
   itemsFailed = false
   await itemRetry.click()
   const row = collection.locator('[data-collection-item="book-one"]')
@@ -162,15 +165,15 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   await expect(itemsAlert).toHaveCount(0)
   await expect(summaryAlert).toBeVisible()
   await expect(collection.locator('[data-ui~="collection-summary"]')).toBeEmpty()
-  expect(requests.summary).toBe(summaryAttempts)
+  expect(archiveRequests.summary).toBe(summaryAttempts)
 
-  const itemAttempts = requests.items
+  const itemAttempts = archiveRequests.items
   summaryFailed = false
   await summaryRetry.click()
   await expect(summaryAlert).toHaveCount(0)
   await expect(collection.locator('[data-ui~="collection-summary"]')).toContainText('1 book')
   await expect(row).toBeVisible()
-  expect(requests.items).toBe(itemAttempts)
+  expect(archiveRequests.items).toBe(itemAttempts)
 })
 
 test('keeps the Video duration checkbox and its complete label together', async ({ page }) => {
