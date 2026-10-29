@@ -57,6 +57,20 @@ These imported source assets are included in both Vite build modes.
 
 ## Design studies
 
+### Persistent Library header preview
+
+Open `/header-preview.html` on the development server for an isolated Books
+mockup. The sidebar's Header preview selector compares the current scrolling
+toolbar with a proposed persistent toolbar. Search, filters, sorting, collection
+tabs, list/grid, theme, and the contextual inspector are interactive. At narrow
+widths, open Navigation to find the preview selector. All content is illustrative,
+state is temporary, and the preview makes no API requests. This is a review study,
+not an adopted production design; deployment builds exclude this entry.
+
+Run the isolated scroll, focus, theme, and narrow-layout checks with
+`pnpm exec playwright test --config playwright.header-preview.config.ts` from the
+repository root. These checks start only Vite on port 5174 and never start the API.
+
 With `pnpm dev:web` running, open `http://127.0.0.1:5173/design.html`.
 The separate preview entry offers seven structural studies of Chat, Library,
 and Recaps: Index, Top nav, Two-pane, Journal, Gallery, Research, and Documents. All content and model responses are illustrative and state
