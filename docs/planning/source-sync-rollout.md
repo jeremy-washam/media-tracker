@@ -232,3 +232,51 @@ Pricing references: [Workers](https://developers.cloudflare.com/workers/platform
    source or catalog evidence. Review the source and movie grant together before
    their November 12, 7 p.m. Eastern expiry. Refreshing another job or extending
    the expiry requires a fresh account-wide included-allowance review.
+
+### October 29 combined release outcome
+
+The source-admission prerequisite and audit owner merged their work in PRs 3 and 5;
+the combined Movies release merged as PR 6 (`677640f`). Its exact code tree passed
+793 TypeScript tests, 70 Python tests, nine Worker-runtime tests, 255 browser tests,
+18 Chromium/WebKit production acceptance tests, production builds and the intended
+configuration dry run. Reconciliation preserved the persistent Library header
+from PR 4. A deterministic regression also caught and fixed layout-anchor capture
+for controls rendered outside the scrolling collection.
+
+A fresh D1 recovery bookmark was retained privately. Only migration `0031` was
+unapplied; it was applied before the Worker upgrade. Its guard table was empty and
+both cursor triggers permitted committed partial success after verification.
+The initial deployment left the TMDB grant empty and preserved Access, source
+selection, secrets, CPU/rate limits, resources, hourly cron and serial consumer.
+Anonymous app and health requests still redirected to Access; authenticated smoke
+checks covered all six media families, search, filters, inspectors and history.
+
+The single reviewed job `01M64DA0M5P7FBZVEWE0Y13CZ3` completed at
+2026-10-29 18:09:41 UTC on Worker version `a31de471-e05a-4391-ac7b-79d715cc366f`.
+It used 69 of 80 durable attempts, returned all 671 requested items with no
+omissions or job error, and recorded 672 estimated provider requests. There are
+667 current movie profiles and four current TV profiles. The rebuilt projection
+has current poster URLs for 670 of 675 items; four items remain unmatched and one
+matched item has no poster. Fresh live search confirmed the artwork, director
+metadata and labeled viewing rating. Existing initial-page snapshots can remain
+cached for the normal ten-minute freshness window.
+
+Both TMDB grant variables were cleared on Worker version
+`7b12573b-9b42-40d7-97fa-21e001a307c1`; the job and its counters remain durable.
+The existing three-source grant still expires November 13 at 00:00 UTC.
+Native account analytics after restoration reported about 18.51 million D1 writes,
+162 million reads, 56,500 Worker requests and 134,000 CPU milliseconds, within the
+reviewed included allowances. D1 occupied about 1.192 GB. These remain account-wide
+usage estimates, not a confirmed invoice or a hard dollar cap.
+
+Connections also exposed a Spotify run that failed at 16:07 UTC on October 29,
+before this release, following an interrupted October 28 run. The retained safe
+error is only `SpotifyApiError` / "Spotify saved-episode sync failed"; it does not
+identify an HTTP status or establish that reauthorization is needed. No source
+retry, counter reset or credential change was issued. Investigate that separately
+before recovery. Hardcover and unrelated enrichment remain outside activation.
+
+Live light-theme verification found a further Movie row containment issue when
+an inspector narrows a desktop collection. The follow-up uses collection-container
+breakpoints and checks row bounds in both themes, in Archive and Queue, with the
+inspector open and closed at 1440, 1280, 1200, 1024, 768 and 390 pixels.

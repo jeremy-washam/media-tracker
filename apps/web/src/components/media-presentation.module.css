@@ -381,7 +381,7 @@
   height: 120px;
 }
 
-@media (max-width: 1120px) {
+@container library-collection (max-width: 900px) {
   .movie-row {
     grid-template-columns:
       var(--library-row-cover-width) minmax(170px, 1.2fr) minmax(140px, 0.8fr)
@@ -393,15 +393,13 @@
   }
 }
 
-@media (max-width: 760px) {
+@container library-collection (max-width: 600px) {
   .movies-grid {
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   }
 
   .movie-row {
-    grid-template-columns:
-      var(--library-row-cover-width) minmax(130px, 1fr) minmax(120px, 0.8fr)
-      18px;
+    grid-template-columns: var(--library-row-cover-width) minmax(0, 1fr) minmax(0, 0.8fr) 18px;
   }
 
   .movie-row-director,
