@@ -74,13 +74,13 @@ describe('scheduled provider usage attribution', () => {
         .filter((entry) => entry.event === 'job.database_usage')
       expect(reports).toEqual([
         expect.objectContaining({
-          scope: 'scheduled_letterboxd',
+          scope: 'sync_letterboxd',
           rowsRead: 11,
           rowsWritten: 1,
           failedOperations: 0,
         }),
         expect.objectContaining({
-          scope: 'scheduled_readwise',
+          scope: 'sync_readwise',
           rowsRead: 23,
           rowsWritten: 1,
           failedOperations: failed ? 1 : 0,

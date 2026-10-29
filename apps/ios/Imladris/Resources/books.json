@@ -1,0 +1,26 @@
+[
+  {
+    "id": "atlas",
+    "title": "An Unwritten Atlas",
+    "author": "Mira North",
+    "collections": ["archive", "queue"],
+    "reads": [
+      { "id": "atlas-first", "date": "2024", "precision": "year" },
+      { "id": "atlas-second", "date": "2026-09-12", "precision": "day" }
+    ]
+  },
+  {
+    "id": "river",
+    "title": "The River Observatory",
+    "author": "Jon Vale",
+    "collections": ["archive"],
+    "reads": [{ "id": "river-unknown", "date": null, "precision": "unknown" }]
+  },
+  {
+    "id": "garden",
+    "title": "A Garden of Small Questions",
+    "author": "Émile Rowan",
+    "collections": ["queue"],
+    "reads": []
+  }
+]

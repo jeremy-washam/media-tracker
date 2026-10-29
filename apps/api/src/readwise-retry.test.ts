@@ -24,19 +24,21 @@ describe('Readwise rate-limit retry', () => {
     expect(request).toHaveBeenCalledTimes(3)
   })
 
-  it('caps very large numeric and date Retry-After delays', async () => {
+  it('defers long Retry-After responses without retrying prematurely', async () => {
     const wait = vi.fn<(milliseconds: number) => Promise<void>>().mockResolvedValue()
     const numeric = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new ReadwiseApiError(429, '99999'))
       .mockResolvedValue('ok')
-    await withReadwiseRetry(numeric, wait)
+    await expect(withReadwiseRetry(numeric, wait)).rejects.toMatchObject({ status: 429 })
 
     const dated = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new ReadwiseApiError(429, 'Wed, 21 Oct 2099 07:28:00 GMT'))
       .mockResolvedValue('ok')
-    await withReadwiseRetry(dated, wait)
-    expect(wait.mock.calls).toEqual([[5_000], [5_000]])
+    await expect(withReadwiseRetry(dated, wait)).rejects.toMatchObject({ status: 429 })
+    expect(wait).not.toHaveBeenCalled()
+    expect(numeric).toHaveBeenCalledOnce()
+    expect(dated).toHaveBeenCalledOnce()
   })
 })

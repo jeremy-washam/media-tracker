@@ -4,6 +4,9 @@ coverage
 dist
 dist-production
 apps/api/src/worker-bindings.d.ts
+apps/ios/.build
+apps/ios/.derived-data
+apps/ios/artifacts
 exports
 node_modules
 playwright-report

@@ -556,6 +556,96 @@ it('clearing Hardcover ratings/reviews clears canonical values', async () => {
     database.database.prepare('SELECT rating_value, review_text FROM archive_entries').get(),
   ).toEqual({ rating_value: null, review_text: null })
 })
+it('preserves the book and reads when a stable Hardcover relationship changes work ID', async () => {
+  const reads = [{ id: 901, edition_id: 801, finished_at: '2026-01-01', finished_at_precision: 3 }]
+  stubBook({ ...book, user_book_reads: reads })
+  await syncHardcover(bindings)
+  const original = database.database
+    .prepare('SELECT id, media_item_id, consumed_identity_id FROM archive_entries')
+    .get()
+  stubBook({ ...book, book_id: 702, book: { ...book.book, id: 702 }, user_book_reads: reads })
+  await syncHardcover(bindings)
+  await syncHardcover(bindings)
+  expect(
+    database.database
+      .prepare('SELECT id, media_item_id, consumed_identity_id FROM archive_entries')
+      .get(),
+  ).toEqual(original)
+  expect(count(database.database, 'media_items')).toBe(1)
+  expect(database.database.prepare('SELECT work_id FROM hardcover_book_works').all()).toEqual([
+    { work_id: 702 },
+  ])
+  expect(
+    database.database
+      .prepare(
+        "SELECT retired_at IS NOT NULL retired FROM external_identities WHERE external_type='book_id' AND external_id='701'",
+      )
+      .get(),
+  ).toEqual({ retired: 1 })
+  expect(
+    database.database
+      .prepare("SELECT count(*) n FROM source_records WHERE record_type='user_book'")
+      .get(),
+  ).toEqual({ n: 3 })
+  expect(database.database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it('preserves existing work-alias ownership without merging separate books', async () => {
+  stubBook(book)
+  await syncHardcover(bindings)
+  stubBook({
+    ...book,
+    id: 502,
+    book_id: 702,
+    book: { id: 702, title: 'Another synthetic book' },
+    edition_id: 802,
+    edition: { id: 802 },
+  })
+  await syncHardcover(bindings)
+  const alias = database.database
+    .prepare(
+      "SELECT id, media_item_id FROM external_identities WHERE external_type='book_id' AND external_id='702'",
+    )
+    .get()
+  stubBook({ ...book, book: { ...book.book, canonical_id: 702 } })
+  await syncHardcover(bindings)
+  expect(
+    database.database
+      .prepare(
+        "SELECT id, media_item_id FROM external_identities WHERE external_type='book_id' AND external_id='702'",
+      )
+      .get(),
+  ).toEqual(alias)
+  expect(count(database.database, 'media_items')).toBe(2)
+  expect(database.database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it('retains the prior snapshot when authoritative Hardcover owners disagree', async () => {
+  stubBook(book)
+  await syncHardcover(bindings)
+  stubBook({
+    ...book,
+    id: 502,
+    book_id: 702,
+    book: { id: 702, title: 'Another synthetic book' },
+    edition_id: 802,
+    edition: { id: 802 },
+  })
+  await syncHardcover(bindings)
+  const cursor = database.database
+    .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='library-books'")
+    .get()
+  stubBook({ ...book, book_id: 702, book: { id: 702, title: 'Conflicting synthetic book' } })
+  await expect(syncHardcover(bindings)).rejects.toThrow('different local books')
+  expect(
+    database.database
+      .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='library-books'")
+      .get(),
+  ).toEqual(cursor)
+  expect(database.database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  expect(count(database.database, 'media_items')).toBe(2)
+})
+
 it('preserves a malformed Hardcover page before validation', async () => {
   stubBook({ ...book, id: 'malformed' })
   await expect(syncHardcover(bindings)).rejects.toThrow()
@@ -651,9 +741,10 @@ it('keeps same-timestamp repeat watches across reordered snapshots and chunk bou
   const first = youtubeArchive(3, true)
   let result = await importYoutubeTakeout(bindings, first, { chunkSize: 1 })
   while (!result.completed) result = await importYoutubeTakeout(bindings, first, { chunkSize: 1 })
-  let next = await importYoutubeTakeout(bindings, youtubeArchive(4, true), { chunkSize: 1 })
-  while (!next.completed)
-    next = await importYoutubeTakeout(bindings, youtubeArchive(4, true), { chunkSize: 1 })
+  // Resuming an import must reuse its exact export bytes: ZIP timestamps vary.
+  const second = youtubeArchive(4, true)
+  let next = await importYoutubeTakeout(bindings, second, { chunkSize: 1 })
+  while (!next.completed) next = await importYoutubeTakeout(bindings, second, { chunkSize: 1 })
   expect(count(database.database, 'archive_entries')).toBe(4)
   expect(count(database.database, 'source_records')).toBe(15)
 })

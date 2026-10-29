@@ -10,6 +10,23 @@ const settings = {
 }
 
 describe('deployment safeguards', () => {
+  it('requires an expiring source grant and a serial bounded consumer for source activation', () => {
+    const configuration = productionConfiguration(settings)
+    configuration.vars.SYNC_ENABLED = 'true'
+    expect(() => validateProductionConfiguration(configuration)).toThrow('explicit sources')
+    configuration.vars.SYNC_SOURCES = 'readwise,letterboxd'
+    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 3600_000).toISOString()
+    configuration.queues.consumers = [
+      { queue: 'media-tracker-sync', max_batch_size: 1, max_concurrency: 1, max_retries: 1 },
+    ]
+    configuration.triggers.crons = ['0 * * * *']
+    expect(() => validateProductionConfiguration(configuration)).not.toThrow()
+    configuration.vars.CATALOG_AUTO_REFRESH = 'true'
+    expect(() => validateProductionConfiguration(configuration)).toThrow('bounded source consumer')
+    configuration.vars.CATALOG_AUTO_REFRESH = 'false'
+    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 33 * 24 * 3600_000).toISOString()
+    expect(() => validateProductionConfiguration(configuration)).toThrow('32 days')
+  })
   it('starts with private assets, disabled previews and paused background work', () => {
     const configuration = productionConfiguration(settings)
     expect(() => validateProductionConfiguration(configuration)).not.toThrow()

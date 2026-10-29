@@ -511,6 +511,14 @@ export class SqlBooksRepository {
     this.#database = database
   }
 
+  async findHardcoverRelationship(connectionId: string, userBookId: number) {
+    return statement(
+      this.#database,
+      'SELECT media_item_id, work_id FROM hardcover_user_books WHERE connection_id=? AND user_book_id=?',
+      [connectionId, userBookId],
+    ).first<{ media_item_id: string; work_id: number }>()
+  }
+
   async upsertHardcoverBooks(books: readonly HardcoverBookProjection[]): Promise<void> {
     const statements: DatabaseStatement[] = []
     for (const book of books) {
@@ -521,6 +529,30 @@ export class SqlBooksRepository {
         book.observedAt,
       ] as const
       statements.push(
+        // The stable user-book relationship can outlive an upstream work ID.
+        // This is a rebuildable projection; old source records and identities remain.
+        statement(
+          this.#database,
+          `UPDATE hardcover_book_works SET work_id=?
+           WHERE connection_id=? AND media_item_id=? AND work_id<>?
+           AND EXISTS (SELECT 1 FROM hardcover_user_books
+             WHERE connection_id=? AND user_book_id=? AND media_item_id=?)`,
+          [
+            book.workId,
+            book.connectionId,
+            book.mediaItemId,
+            book.workId,
+            book.connectionId,
+            book.userBookId,
+            book.mediaItemId,
+          ],
+        ),
+        statement(
+          this.#database,
+          `UPDATE book_library_projection SET work_id=?
+           WHERE connection_id=? AND media_item_id=? AND user_book_id=? AND work_id<>?`,
+          [book.workId, book.connectionId, book.mediaItemId, book.userBookId, book.workId],
+        ),
         statement(
           this.#database,
           `INSERT INTO hardcover_book_works (

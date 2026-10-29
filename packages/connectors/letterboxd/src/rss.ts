@@ -136,12 +136,15 @@ export async function parseLetterboxdRss(xml: string): Promise<LetterboxdRssEntr
   )
 }
 
-export async function fetchLetterboxdRss(username: string): Promise<RawLetterboxdRssResponse> {
+export async function fetchLetterboxdRss(
+  username: string,
+  fetcher: typeof fetch = fetch,
+): Promise<RawLetterboxdRssResponse> {
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
     throw new Error('Letterboxd username contains unsupported characters')
   }
 
-  const response = await fetch(`https://letterboxd.com/${username}/rss/`, {
+  const response = await fetcher(`https://letterboxd.com/${username}/rss/`, {
     headers: {
       Accept: 'application/rss+xml',
       'User-Agent': 'MediaTracker/0.0.0 (personal-use RSS sync)',

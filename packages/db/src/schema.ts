@@ -28,6 +28,40 @@ const connectionStatuses = [
 ] as const
 const coverageLevels = ['complete', 'partial', 'best_effort'] as const
 const syncRunKinds = ['backfill', 'reconcile', 'import', 'webhook', 'replay'] as const
+
+export const sourceSyncAdmission = sqliteTable(
+  'source_sync_admission',
+  {
+    source: text('source').notNull(),
+    day: text('day').notNull(),
+    attempts: integer('attempts').notNull(),
+    startedAt: integer('started_at').notNull(),
+    finishedAt: integer('finished_at'),
+    outcome: text('outcome', { enum: ['running', 'succeeded', 'failed'] }).notNull(),
+    reservationJson: text('reservation_json').notNull(),
+    usageJson: text('usage_json'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.source, table.day] }),
+    index('source_sync_admission_latest').on(table.source, sql`${table.startedAt} DESC`),
+    check('source_sync_attempts_positive', sql`${table.attempts} > 0`),
+    check('source_sync_reservation_valid', sql`json_valid(${table.reservationJson})`),
+    check(
+      'source_sync_usage_valid',
+      sql`${table.usageJson} IS NULL OR json_valid(${table.usageJson})`,
+    ),
+  ],
+)
+
+export const sourceSyncLease = sqliteTable(
+  'source_sync_lease',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (table) => [check('source_sync_lease_singleton', sql`${table.id} = 'sources'`)],
+)
 const syncRunStatuses = [
   'pending',
   'running',

@@ -84,3 +84,4 @@ export { SqlCatalogJobsRepository } from './catalog-jobs-repository'
 export * from './schema'
 
 export { SqlCredentialStore } from './credentials'
+export { SqlSourceSyncAdmission } from './source-sync-admission'
