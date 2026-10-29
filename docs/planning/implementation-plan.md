@@ -26,11 +26,12 @@ layer, model-access options, and delivery sequence; it is not shipped behavior.
 
 ## Current checkout and production status (2026-10-29)
 
-The October 17 audit hardening, migration 0031, ratings presentation and movie row
-layout fixes are merged and deployed. Existing local unit/Python, production
-build, runtime, browser and real-stack acceptance gates passed for that release.
-CI/CD is being implemented as part of the current closeout; it is not yet an
-accepted live delivery path.
+The normal production configuration is deployed from main revision `9a6a877` with
+migrations through 0034; foreign-key checks passed and a fresh protected local
+database/R2 copy passed independent restore verification. CI validation and
+guarded automatic production delivery are enabled; the first ordinary release
+still needs verification. See the closeout checklist for exact release evidence and later
+updates; deployment does not imply every provider has passed acceptance.
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -45,10 +46,12 @@ The [Music implementation](music-implementation.md) supersedes earlier
 
 Owner Access/MFA, private storage transfer and independent restore verification
 are complete. The owner verified all six media families, search, filters,
-inspectors/history and article excerpts. Letterboxd/Readwise/Spotify polling has
-run. Hardcover completion and Spotify's latest failure need the reliability
-work in the closeout; recurring catalog/content and release automation require
-live acceptance. See the[deployment closeout](deployment-closeout.md) for the
+inspectors/history and article excerpts. Hourly source dispatch now checks daily
+eligibility; new hosted allocations are limited to one per source per UTC day
+and at least 23 hours apart. Hardcover's controlled hosted snapshot completed
+23 pages and 1,112 books without failed records. Spotify's HTTP 403, recurring
+catalog/content, and release automation require live acceptance. See the
+[deployment closeout](deployment-closeout.md) for the
 current checklist and[deployment runbook](deployment.md) for transfer evidence.
 
 The owner has requested a separate native iOS experience, with Library first and
@@ -388,7 +391,8 @@ Readwise is the architecture-validation connector.
 - Include an overlap window to protect against timestamp boundary issues.
 - Upsert changed documents.
 - Advance the watermark only after successful processing.
-- Run hourly through deployed Cron Triggers; local cron execution is manual.
+- Check hosted eligibility hourly, with one new allocation per source per UTC
+  day and at least 23 hours between allocations; local cron execution is manual.
 
 ### Webhooks (deferred)
 
@@ -450,12 +454,16 @@ multiple connectors against an unproven raw-object and Archive schema.
 
 ## 7. Phase 4: Hardcover
 
-Implementation status: initial Read-shelf polling is implemented and validated locally; broader deletion and recovery behavior remains deferred.
-The full Read-shelf connector, raw-page retention, canonical projection, manual
-sync, hourly scheduled sync, and media-type browsing filter are implemented. An
-initial import and repeated reconciliation each returned 127 Read books and 127
-supported occurrences without canonical duplicates; the combined scheduled
-handler also completed successfully.
+Implementation status: Want to Read, Currently Reading, and Read reconciliation,
+raw-page retention, canonical projection, manual sync, and hosted daily admission
+are implemented. Hosted snapshots continue one durable 50-book page per
+invocation under the same run; only a completed scan advances the completed
+cursor and retires absent source relationships. Controlled hosted completion
+passed on October 29 across 23 pages and 1,112 books with no failed records. The
+earlier Read-shelf-only local validation returned
+127 Read books and 127 supported occurrences on repeated reconciliation without
+canonical duplicates; those counts describe the historical test, not the current
+hosted library.
 
 - Authenticate with the Hardcover API token.
 - Import Read books, editions, ratings, reviews, and read dates. Preserve source
@@ -466,8 +474,9 @@ handler also completed successfully.
 - Map finished rereads to separate Archive entries only when Hardcover exposes
   distinct child read rows. Preserve `read_count`, but do not invent dated or
   separate reread events when the import did not retain them.
-- Perform a full Read-shelf reconciliation each hour because `user_book_reads`
-  has no update timestamp. Incremental optimization remains future work.
+- Perform a full status-library snapshot for each admitted daily sync because
+  `user_book_reads` has no update timestamp. Hourly eligibility checks and
+  checkpoint continuations do not start additional daily snapshots.
 
 Do not collapse:
 
@@ -708,8 +717,9 @@ with warning near $10 and emergency pause near $25 estimated total; prior dated
 $0-overage/grant-renewal requirements are superseded. No new paid service is
 authorized. The[storage efficiency plan](storage-efficiency-plan.md) and
 [deployment runbook](deployment.md) retain the compaction, transfer and restore
-history. Migrations through 0031 and owner-only Access/MFA are live. See the
-closeout checklist before treating any later prepared feature as deployed.
+history. Migrations through 0034, normal configuration, and owner-only Access/MFA
+are live. The fresh local recovery copy is verified. Provider-specific and
+automatic-delivery acceptance remain recorded separately in the closeout.
 
 ### Production resources
 
@@ -788,9 +798,10 @@ The ingestion milestone is complete when:
 
 The workspace, React/Hono scaffold, canonical ledger, and all five initial
 source connectors are implemented and validated locally against the owner data.
-On deployment, Readwise and Hardcover poll hourly; Letterboxd combines its full export
-with hourly RSS; Spotify combines its full podcast history export with hourly
-saved-episode reconciliation; and YouTube accepts resumable Takeout imports for
+In hosted operation, hourly cron checks eligibility for shared daily Readwise,
+Hardcover, Letterboxd RSS, and Spotify polling allocations, with a 23-hour minimum
+interval and durable Hardcover continuations. Letterboxd and Spotify exports
+remain necessary for older history; YouTube accepts resumable Takeout imports for
 separate account lineages. Large Spotify and YouTube imports are processed in
 bounded, durable chunks rather than one oversized Worker invocation.
 

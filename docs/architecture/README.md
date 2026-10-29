@@ -42,9 +42,12 @@ description. Its Swift networking/models are separate from TypeScript packages.
 Native-compatible authentication still needs a documented and tested decision
 under ADR 0005; Managed OAuth is a research candidate, not an implemented flow.
 
-The [private deployment runbook](../planning/deployment.md) records paused
-cutover configuration and a local D1/R2 snapshot/restore rehearsal. Contentless
-FTS token positions are preserved. The snapshot utility stays local. A separate guarded transfer utility supports
+The [private deployment runbook](../planning/deployment.md) retains the original
+paused cutover and records the current deployed normal configuration. Migrations
+through 0034 and foreign-key verification are complete, and a fresh protected
+local D1/R2 recovery copy has passed independent restore verification. Contentless
+FTS token positions are preserved. Snapshot and capture utilities run locally
+with Python 3.12+ and SQLite FTS5. A separate guarded transfer utility supports
 ordered native D1 imports, metadata-preserving private R2 uploads, and independent
 remote-derived restore verification; generalized replay remains deferred.
 
@@ -53,7 +56,8 @@ paid D1 initially and evaluates compact references/evidence on private copies.
 The local implementation makes YouTube publication clock-safe and separates
 bounded maintenance from provider sync, including paused deployment. See
 [ADR 0015](../decisions/0015-clock-safe-youtube-publication.md). Production
-migration, remote usage measurement and controlled activation remain launch gates.
+migrations are deployed. Remaining provider and delivery acceptance is tracked
+in the closeout checklist rather than inferred from configured schedules.
 
 ## Library requests
 
@@ -132,8 +136,11 @@ after payload reconnaissance.
 Source imports and resumable chunks run through HTTP. Hosted source polling now
 uses explicit source enablement, durable daily admission and a cross-entry
 lease. The operating monitor gates API/database work and background scheduling
-from a private R2 state object; it pauses native queue delivery on a sticky stop. Hourly cron dispatches eligible source jobs to a serial queue consumer;
-local cron retains direct execution. Manual source-sync actions share the same
+from a private R2 state object; it pauses native queue delivery on a sticky stop.
+Hourly cron dispatches eligible source jobs to a serial queue consumer. New
+hosted syncs share one allocation per source per UTC day and a 23-hour minimum
+interval; Hardcover continuations retain one snapshot and durable page progress.
+Local cron retains direct execution. Manual source-sync actions share the same
 admission and resource ceilings. See the [source sync rollout](../planning/source-sync-rollout.md).
 The queue consumer also handles bounded Reader article-
 content acquisition/indexing, TMDB and YouTube catalog refresh, and resumable

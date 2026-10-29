@@ -14,15 +14,16 @@ merged into main at `651a2be`, and
 [hosted main validation 40949037008](https://github.com/jeremy-washam/media-tracker/actions/runs/40949037008)
 passed. Protected environments and strict main `validate` protection are
 configured. Both environment release tokens and restricted smoke credentials are
-installed; the monitor secret is active in the October 29 21:53:50 UTC maintenance
-deployment. Its gate is closed, native queue paused and consumer detached; only
-the 10-minute monitor cron is active. Production CD remains disabled. Zero active
-source/catalog leases were confirmed at 21:59 UTC; fresh read-only capture is
-running under the held pause. SQL migrations await the full 20-minute hold and
-verified recovery bundle. The original baseline's separate Mac-copy verification
-passed at 21:59:41 UTC; the fresh capture is not yet complete.
+installed. The October 29 maintenance bootstrap began at 21:53:50 UTC with the
+gate closed, queue paused, consumer detached and only the monitor cron active;
+zero active source/catalog leases were confirmed at 21:59 UTC. Fresh capture,
+independent restore, protected Mac-copy verification and a separate migration
+rehearsal subsequently passed. The normal production configuration from main
+`9a6a877` is now deployed. Guarded ordinary production CD is enabled with normal configuration installed in both protected environments; its first ordinary release still needs verification. Spotify's HTTP 403
+failure remains unfinished. The original baseline's separate Mac-copy verification
+passed at 21:59:41 UTC; fresh-backup evidence is recorded below.
 The [deployment closeout](deployment-closeout.md) records remaining live
-acceptance and fresh local recovery rehearsal. No workflow creates another cloud resource,
+acceptance. No workflow creates another cloud resource,
 changes provider secrets, starts paid services, purges a queue, or automatically
 resumes background work.
 
@@ -265,8 +266,32 @@ or contentless-FTS recovery.
 The original cutover bundle has been copied to
 `/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; its Mac-copy
 verification passed at 21:59:41 UTC: 94 tables, 1,798,348 rows, 18,126 objects and
-the independently restored FTS vocabulary. Fresh read-only production capture has also started;
-its completion and independent restore remain unverified.
+the independently restored FTS vocabulary. This historical baseline remains
+retained alongside the fresh pre-migration recovery point.
+
+Fresh capture completed under the held writer pause at
+**2026-10-29 22:26:12.349386 UTC**. Its verified Mac copy is
+`/Users/jeremywasham/Backups/Imladris/fresh-2026-10-29`, totaling 3,623,960,683 bytes:
+97 logical tables, 1,818,662 logical rows and 18,283 R2 objects. Source and Mac copy
+both passed independent-restore verification, including exact FTS vocabulary and
+source-object references. Their manifest SHA-256 matches:
+`a8d320cf62dac5a50d05823e1d182042c60323fca7853a4fd7089f683f1b3dca`.
+The protected copy receipt is
+`.private/deployment/closeout-2026-10-29/fresh-local-copy.json` (verified at
+22:30:05 UTC). Capture omits the live operating-state key as documented below;
+the backup does not claim offsite coverage.
+
+Before release, migrations 0032–0034 were applied to a separate temporary copy of
+the fresh restored SQLite database. The 22:30:39 UTC rehearsal verified ordered
+migration history 31→34, full `PRAGMA integrity_check`, enabled foreign keys with
+zero violations, both Hardcover ownership triggers, article retry/recovery
+columns and the historical retry-count backfill. Retained backup hashes were
+unchanged. The protected receipt is
+`.private/deployment/closeout-2026-10-29/fresh-migration-rehearsal.json`; the
+temporary database is retained separately in the adjacent
+`migration-rehearsal-fresh-2026-10-29/` directory. The fresh recovery bundle itself
+contains migration history through 0031; apply reviewed later migrations to a
+separate restored target before using code that requires them.
 
 Verify a trusted version-2 local bundle without copying records or changing
 SQLite files:
@@ -312,15 +337,16 @@ pnpm deployment:snapshot --database <approved-local.sqlite> \
 A fresh production backup needs a consistent approved capture of native D1 plus
 all referenced R2 evidence and FTS positions, followed by independent restore
 verification. Existing snapshot/transfer tooling preserves those special
-indexes but does not itself capture fresh production data. The new read-only
-capture tool is running; no fresh production bundle is verified yet. A naive
+indexes, while `capture.py` reads fresh production data into the version-2
+bundle without remote mutations. The October 29 recovery point above passed
+these checks. A naive
 `wrangler d1 export` replacement is insufficient. Offsite copying is optional;
 record it only when actually performed. No new paid backup provider is assumed.
 
 ## Fresh read-only production capture
 
 Use Python 3.12 with a SQLite build that permits local FTS shadow reconstruction.
-The bundled Python runtime passed all 125 deployment tests without skips; some
+The bundled Python runtime passed all 129 deployment tests without skips; some
 macOS system Python builds enforce defensive SQLite mode, and capture refuses
 those builds before account reads. Run the deployment tests with the same
 Python interpreter selected for capture:
@@ -358,15 +384,28 @@ monitor can continue; all source artifacts remain subject to strict checks.
 32 MiB; oversized pages halve automatically without committing a failed page or
 advancing its cursor. Native request/read ceilings are persisted across resumes.
 The final-page inventory fix passed against 19 native pages and 18,284 objects.
-The current database copy is complete. Object capture stopped on a weak HTTP
-ETag representation; read-only diagnostics confirmed matching inventory hashes
-and byte counts. A focused transport fix and independent restore remain pending. Copy and verify the finished bundle in the accepted protected
-Mac backup folder before claiming that new recovery point retained.
+The October 29 capture initially stopped on a weak HTTP ETag representation;
+read-only diagnostics proved that its opaque 32-hex value, exact byte count and
+full object MD5 still matched the held inventory. The transport fix accepts a
+weak HTTP ETag only when its opaque value equals the inventory's single-part MD5
+and streamed bytes independently match both the full MD5 and expected size.
+Missing/mismatched validators, weak multipart ETags and incorrect bytes remain
+rejected; conditional `If-Match` and strict before/after source inventories are
+preserved. The same checkpoint resumed successfully: all 18,283 source objects
+were retained, including 18,126 verified local-object reuses. Independent restore
+and Mac-copy verification then passed as recorded above. Verify any future
+finished bundle in the accepted protected Mac folder before recording that new
+recovery point as retained.
 
 The owner explicitly approved a separate encryption-key copy; it is saved and
 verified in `/Users/jeremywasham/Backups/Imladris/credentials`, with owner-only
-permissions. Possession of the key and database permits credential decryption.
-Keep both protected, and never place provider credentials or this key in CI.
+permissions. A separate proof at 22:30:20 UTC successfully decrypted one stored
+credential locally using that backup, without retaining plaintext or making
+external requests. Its protected receipt is
+`.private/deployment/closeout-2026-10-29/encryption-key-recovery-proof.json`.
+Possession of the key and database permits credential decryption. Keep both
+protected, and never place provider credentials or this key in CI. This verifies
+the local key copy; it does not claim offsite custody.
 
 ## Recovery sequence
 
@@ -403,3 +442,27 @@ free CI, backup permission/checksum failures, and altered contentless FTS tokens
 The integrated `pnpm check`, builds, runtime/browser/acceptance/coverage gates
 and intended-config dry run remain required before merging. Workflow syntax
 validation alone is not a successful hosted CI run or recovery drill.
+
+## Legacy interrupted source-run repair
+
+`scripts/deployment/reconcile_source_runs.py` is an operator-only repair for
+explicitly reviewed old Hardcover/Spotify source runs. It never starts a provider
+request or changes raw objects, source records, cursor/accounting or credentials.
+Use it only after inspecting the exact interrupted run; an old start date alone
+is insufficient. There is no public repair endpoint or automatic age-based sweep.
+
+The read-only `plan` operation accepts one to five exact `--run-id` values,
+`--account`, `--database`, a mode-0600 `--token-file` and an ignored protected
+`--receipt` path. It refuses recent/finished runs, active source leases, any
+Hardcover progress, snapshot admission, Spotify catalog role or committed cursor.
+It records every run field and emits only a plan SHA-256 and count. Review that
+protected receipt; `apply` takes the same target/receipt/token arguments and
+`--reviewed-sha256`, without new run IDs. The plan expires after one hour.
+
+Apply rechecks fingerprints and recovery guards in one conditional all-or-none
+SQL statement. Only status, observed closure time and a fixed interruption
+diagnostic change. The closure time is when abandonment was established, not an
+invented historical stop time. A protected attempt receipt precedes the write;
+a lost response requires exact readback and never a blind retry. Retain plan,
+attempt and completion receipts. This does not claim interruption automatically
+repairs a provider outage or completes a snapshot.

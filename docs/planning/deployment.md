@@ -3,7 +3,16 @@
 Current status and remaining acceptance gates are maintained in the
 [deployment closeout](deployment-closeout.md). The private Library is live,
 owner Access/MFA and remote transfer/restore are verified, and daily source sync
-has been activated for three providers. The sections below retain the original
+is configured for Letterboxd, Hardcover, Readwise, and Spotify under the normal
+configuration deployed from main revision `9a6a877`. Migrations through 0034 and
+foreign-key checks are complete, and a fresh protected local database/R2 recovery
+copy passed independent restore verification. Hourly cron checks eligibility;
+new allocations are limited to one per source per UTC day and at least 23 hours
+apart. Hardcover's controlled snapshot completed 23 pages and 1,112 books with no
+failed records. Spotify HTTP 403, recurring catalog/content, and
+automatic production delivery still need live acceptance. CI validation is
+enabled together with guarded automatic production delivery; the first ordinary
+release still needs verification. The sections below retain the original
 cutover procedures and dated transfer receipts. They do not establish current
 activation or override the operating policy below.
 
@@ -248,7 +257,7 @@ copied encrypted Spotify credentials.
 ## Ordered hosted transfer
 
 `pnpm deployment:transfer` uploads a previously rehearsed version 2 private
-bundle. It requires Python 3.9+ with SQLite FTS5 and the existing Wrangler OAuth
+bundle. It requires Python 3.12+ with SQLite FTS5 and the existing Wrangler OAuth
 file; credentials never appear in arguments or diagnostics. Run `pnpm check`
 and the isolated native D1/R2 rehearsal before transferring personal data.
 
@@ -334,7 +343,7 @@ step; read-only browsing can be validated while they remain local.
 ## Local transfer bundle and rehearsal
 
 This is a local transfer utility, not generalized replay or remote backup. It
-requires Python 3.9+ with SQLite FTS5 and never calls a provider or uploads data.
+requires Python 3.12+ with SQLite FTS5 and never calls a provider or uploads data.
 Confirm the database/bucket against the local bindings; do not choose
 Miniflare's internal `metadata.sqlite`.
 
@@ -717,3 +726,9 @@ planned durable per-day request/record/byte reservations. Keep all background
 classes disabled while measuring representative operations and defining and
 testing their budgets. Configure maintenance separately, then enable provider
 classes individually only within verified included account allowances.
+
+This smoke/usage assessment records the original October 14 cutover state.
+The current deployment uses durable daily source admission, bounded catalog and
+content processing, and the independent operating monitor under ADR 0021. The
+current status at the top of this document and the closeout checklist supersede
+the historical instruction to leave every background class disabled.

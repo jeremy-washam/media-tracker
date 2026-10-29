@@ -8,10 +8,12 @@
 ## Implemented MVP behavior
 
 The production path is implemented in the Hardcover connector and API Worker.
-Manual and hourly scheduled syncs fetch Want to Read, Currently Reading, and
-Read relationships in stable user-book ID order. A full reconciliation is used
-for every poll because nested read-through rows do not expose a reliable update
-cursor. Requests retry bounded `429` and `5xx` responses and honor
+Manual and scheduled syncs fetch Want to Read, Currently Reading, and Read
+relationships in stable user-book ID order. Hosted hourly scheduling checks
+eligibility for one new daily allocation, at least 23 hours after the previous
+allocation. A full snapshot spans checkpointed 50-book continuations because
+nested read-through rows do not expose a reliable update cursor. Requests retry
+bounded `429` and `5xx` responses and honor
 `Retry-After`.
 
 Each exact library and edition-enrichment response is stored content-addressed
@@ -505,6 +507,12 @@ The new Worker path checkpoints each durable page under one run in a dedicated
 completed-snapshot cursor. Hosted orchestration uses one page per invocation,
 reuses the snapshot identity on retry, and finalizes absence only at scan end.
 See the [connector runbook](../../packages/connectors/hardcover/README.md#resumable-hosted-reconciliation-2026-10-29)
-for queue recovery, safe diagnostics, source limitations, and the outstanding
-live-completion acceptance gate. No current provider capability or private
+for queue recovery, safe diagnostics, source limitations, and hosted completion
+evidence. No current provider capability or private
 account measurement is inferred from synthetic tests.
+
+Migrations through 0034 and the resumable normal Worker configuration are now
+deployed. The controlled hosted snapshot subsequently completed 23 pages and
+1,112 books without failed records, with the completed cursor recorded at
+`2026-10-29T23:04:25.695Z`. This confirms the hosted continuation chain, while the
+deployment closeout separately tracks continued operation and other providers.

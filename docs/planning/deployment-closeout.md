@@ -2,174 +2,167 @@
 
 Updated 2026-10-29. Owner authorization: implement remaining hosted operations,
 research/test each, use isolated worktrees and parallel agents, and maintain docs.
-This checklist distinguishes prepared implementation from live acceptance.
+This checklist distinguishes implementation, live acceptance and account input.
 
 ## Production baseline
 
-The six-media Library is deployed behind owner-only Access/MFA. Migrations
-through 0031 and the October 29 ratings/poster fixes are live. Letterboxd,
-Readwise and Spotify polling have run; Spotify's latest attempt failed with
-insufficient diagnostics. Hardcover's first complete scan was interrupted.
-TMDB's controlled refresh completed; recurring catalogs/content remain disabled.
+The six-media Library runs behind owner-only Access/MFA on the existing Worker.
+[PR 8](https://github.com/jeremy-washam/media-tracker/pull/8) introduced guarded
+operations and [PR 9](https://github.com/jeremy-washam/media-tracker/pull/9) completed
+recovery capture and corrected a monitor transport incompatibility. Main
+`9a6a877` includes the independently merged Balanced typography changes.
 
-On October 29 at 21:53:50 UTC the new maintenance runtime was deployed with the
-operating gate closed and monitor secret active. Native queue delivery was
-paused, its consumer detached and source crons disabled before deployment. Only
-the independent 10-minute monitor cron is active. Migrations 0032–0034 and source
-activation remain pending. Zero active source/catalog leases were confirmed at
-21:59 UTC. Fresh read-only capture has started under the held pause; the
-20-minute minimum pause is enforced before SQL migrations.
+The protected [migration release](https://github.com/jeremy-washam/media-tracker/actions/runs/40968424590)
+passed on that exact main revision. Migrations 0032–0034 are applied, all 34
+migration names match, `PRAGMA quick_check` is `ok`, and production has zero
+foreign-key violations. Hardcover ownership triggers and article/source retry
+columns were verified against the populated database.
 
-Native account metrics checked October 29 remain within the existing plan's
-included usage. The dashboard showed $0 usage overages; native alerts are saved
-at $5 usage warning and $20 usage emergency, approximately $10/$25 total with
-the base $5 subscription. The first two real monitor cycles exposed an unsupported Worker redirect option.
-The fix and native runtime regression tests passed, and corrected maintenance
-code was deployed at 22:20:18 UTC. The next scheduled successful collection and
-automatic native queue pause remain to be verified. Billing APIs do not establish an actual invoice. No new paid
-service or subscription is authorized by this closeout.
+Normal operation resumed at approximately 22:59 UTC: native queue delivery open,
+serial consumer attached, four-source allowlist enabled, hourly eligibility and
+catalog scheduling, five-minute maintenance and independent ten-minute operating
+monitor. Native configuration, schedules, bindings, CPU/rate limits and consumer
+settings were checked against the prepared normal configuration. Both protected
+GitHub environments now contain that configuration; guarded ordinary main-branch
+CD is enabled. Its successful exact-revision release and smoke receipts belong to
+[main Actions runs](https://github.com/jeremy-washam/media-tracker/actions?query=branch%3Amain).
+Enabling the workflow alone does not establish that its first ordinary release
+has passed.
+
+The dashboard showed $0 usage overages; native monitoring estimates $5 total,
+including the existing Workers subscription. Saved native alerts warn at $5
+usage and escalate at $20 usage, approximately $10/$25 total. Analytics are
+estimates, not an invoice or guaranteed charge cap. No new paid service or
+subscription was added.
 
 ## Acceptance checklist
 
-| Area                      | Required implementation and verification                                                                                            | Current gate                                                                                                    |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Cost safeguards           | Permanent bounded operation; native monitor; sticky pause; queue stop; stale-monitor failure drill                                  | Token/secret active; $5 estimate; absent/stale/future gates return 503; manual pause restored                   |
-| Source reliability        | Spotify safe endpoint/status diagnostics; resumable Hardcover pages; successful complete scans and retry evidence                   | Implemented; migration/crash/cooldown regressions passed; live recovery pending                                 |
-| Catalog/content           | Recurring finite TMDB/YouTube/Spotify work; refresh before expiry; bounded article acquisition/indexing; provider Retry-After       | Implemented; scheduler/freshness/backoff tests passed; live activation pending                                  |
-| Hosted imports            | Owner-authenticated existing export imports and continuation; streamed size bounds; replay/idempotence                              | Implemented with explicit hosted ZIP limits; native import/resume/bomb tests passed                             |
-| Observability/performance | Private operations state, safe source failures, native metrics; representative hosted list/summary/detail timing                    | Private status and safe diagnostics implemented; hosted timing/activation checks pending                        |
-| Recovery/security         | TimeTravel receipt; private R2 evidence/release manifests; synthetic restore drill; local backup; restricted smoke identity         | Smoke restrictions and Mac baseline-copy restore verified; fresh read-only capture running                      |
-| CI/CD                     | Public standard-runner CI; exact-main successful revision; serialized protected production release; migration review; private smoke | Main CI passed; strict validate protection configured; release token installed; bootstrap/CD activation pending |
-| Final acceptance/docs     | Full local gates, controlled deploy, owner-access/no-auth checks, real scheduler cycle, reconciled owning docs                      | Local gates passed; production migration/deploy/scheduler acceptance pending                                    |
+| Area                      | Live evidence                                                                                                                                                          | Remaining acceptance                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Cost safeguards           | Successful native monitor; controlled automatic queue-pause drill; absent/stale/future states return 503; manual resume preserves measurement                          | Continue normal monitoring; alerts and pause remain approximate                                                             |
+| Source reliability        | Hardcover complete: 23 pages, 1,112 source records, 128 normalized records, zero failures, final cursor committed; Letterboxd/Readwise succeeded today                 | Spotify current HTTP 403 needs account eligibility/access check; subsequent eligible daily cycles remain soak evidence      |
+| Catalog/content           | Recurring bounded scheduling enabled; Movies artwork/current metadata and viewing ratings verified; YouTube backlog progressing                                        | Complete YouTube/Spotify jobs, newly acquired article excerpt/FTS and duplicate delivery, subsequent real hourly scheduling |
+| Hosted imports            | Streamed bounds, existing owner export imports and continuation; native import/resume/ZIP-bomb acceptance passed                                                       | Hosted ZIP limits remain explicit; complete historical coverage still needs manual source exports                           |
+| Observability/performance | Owner-only operations; safe Spotify endpoint/status diagnostic; 20 representative live list/detail/history checks all 200                                              | Single-pass latency is recorded below, not a percentile or performance SLO                                                  |
+| Recovery/security         | Fresh independent Mac data backup and restore verified; migration rehearsal passed; separate approved key backup decrypt proof passed; restricted CI identity verified | Optional offsite copy protects against Mac loss; service identity expires October 29, 2027                                  |
+| CI/CD                     | Strict main validation; scoped secrets in both main-only environments; reviewed migration workflow passed; normal guarded CD enabled                                   | Verify the first ordinary main release in Actions; never bypass configuration/schema checks                                 |
+| Documentation             | Owning setup, recovery, source, architecture and plan documents reconciled with actual deployment                                                                      | Keep incomplete provider/scheduler gates explicit; do not infer full acceptance from synthetic tests                        |
 
-The final handoff must replace these pending states with concrete evidence or
-an explicit remaining user dependency. A local test is not a live activation;
-a simulated scheduler run is not an observed scheduled production run.
+A local test is not a live activation. A bounded first batch is not a completed
+backfill, and a simulated clock is not an observed production scheduled cycle.
+Spotify's account dependency does not prevent browsing or other sources.
 
-## Operating policy
+## Operating policy and verified stop/resume
 
 [ADR 0021](../decisions/0021-bounded-production-operations.md) owns the approved
-simple controls. The existing $5/month subscription is accepted. Warn near $10
-and pause near $25 total estimated monthly cost. Small routine overages are
-accepted; new subscriptions/services require approval. Expiring grants and
-lifetime source allocations are retired. Native metrics and the pause target
-cannot guarantee an exact invoice limit.
+controls. The existing $5/month subscription and small routine overages are
+accepted. Warn near $10 and pause near $25 total estimated monthly cost. New
+subscriptions/services require approval. Expiring grants and lifetime source
+allocations are retired. Existing storage/subscription charges continue while
+paused and native usage data can arrive late.
 
-`GET /api/operations` is owner-only and reports monitor state without reading
-D1. The private object `operations/operating-state.json` stores a versioned
-successful-check time, conservative estimate, reason, sticky pause and native
-queue-pause result. A 30-second cache bounds gate propagation; absent/stale
-monitoring closes API/database and background work. The monitor runs separately
-from source enablement every 10 minutes, including while paused. Its scoped
-secret is `OPERATING_API_TOKEN`; only Analytics Read, D1 Read and Queues Edit for
-the target account are required.
+`GET /api/operations` is owner-only and does not read D1. The private object
+`operations/operating-state.json` holds the successful-check time, conservative
+estimate, reason, sticky pause and native queue result. A 30-second cache bounds
+gate propagation. Missing/stale/future monitoring closes API/database and
+background work. The monitor runs every ten minutes even while paused.
+`OPERATING_API_TOKEN` has only target-account Analytics Read, D1 Read and Queues
+Edit.
 
-After an emergency stop, inspect usage and durable jobs, preserve the incident
-state and correct the cause. With the consumer detached, resume native delivery
-using `wrangler queues resume-delivery media-tracker-sync`, then explicitly clear
-the R2 pause. Verify both states agree before reattaching the serial consumer;
-otherwise the monitor treats native queue pause as a new sticky manual pause.
-Never purge the queue. Reconcile dead-letter/expired work from durable checkpoints.
-A later deployment or renewal must not clear the gate automatically.
+The initial real cycles exposed unsupported Worker `fetch` redirect mode
+`error`. The corrected runtime uses `manual` and rejects non-success responses;
+a real scheduled collection succeeded at **22:20:58.762 UTC** and automatically
+paused native delivery during the controlled drill. The original sticky manual
+pause timestamp survived. Later successful collection at **22:50:57.717 UTC**
+provided the measurement used for deliberate resume. No fake fresh timestamp was
+written.
 
-## Validation and account setup evidence
+For an emergency resume: inspect usage and durable jobs, preserve incident state,
+resolve the cause, detach the consumer and resume native delivery first. Then
+explicitly clear the private R2 pause and verify both states agree before
+reattaching the consumer. Never purge the queue or clear a pause as a deployment
+side effect. The October 29 manual R2 update was coordinated away from cron and
+verified by readback; it was not an atomic compare-and-swap.
 
-The integration branch is `codex/deployment-closeout`, isolated from the primary
-checkout and concurrent UI work. [PR 8](https://github.com/jeremy-washam/media-tracker/pull/8)
-merged into main at `651a2be`;
-[hosted main validation 40949037008](https://github.com/jeremy-washam/media-tracker/actions/runs/40949037008)
-passed. [PR 9](https://github.com/jeremy-washam/media-tracker/pull/9) contains the
-follow-up recovery tooling and transport fix, initially at `f1e131a`; subsequent
-live evidence remains in this working documentation. Main requires the strict `validate` check. Local validation passed: `pnpm check`, production
-build/dry runs,11 native Worker tests,257 browser regressions,18 real-stack
-Chromium/WebKit acceptance tests and the separate coverage run. Connections'
-new continuation copy also passed 8 isolated branch-server browser cases in both
-themes, including narrow widths. The latest full `pnpm check` passed 891
-TypeScript and 125 Python tests without skips using bundled Python; all 13 native
-Worker tests and all 18 real-stack acceptance tests also passed after the monitor fix;
-coverage is 72.44% statements across maintained sources, not a claim that all
-behavior is covered.
+## Validation and live browsing
 
-The exact native accountwide analytics query passed against Cloudflare. The
-read-only production configuration/queue/schedule preflight also passed against
-real API responses; this is validation against the existing deployed settings,
-not activation of the new prepared settings. Normal and maintenance configs
-are prepared and pass the CLI validator in protected ignored files. Both newly
-supplied account tokens are active; D1/queue reads and the monitor's exact
-analytics query passed, producing a $5 usage estimate. The release token is
-installed in both protected GitHub environments; the monitor secret is active
-in the new maintenance runtime. The latest deployment Python suite passed all
-125 tests with Python 3.12, including 26 capture, four external local-recovery
-and two deployment transport User-Agent/credential-privacy cases. Native R2
-pagination was verified across 19 pages containing 18,284 objects. Capture
-currently has about 370,000 database rows; it is not yet complete.
+The combined branch including typography passed
+[hosted validation 40967053999](https://github.com/jeremy-washam/media-tracker/actions/runs/40967053999):
+`pnpm check` (891 TypeScript and 129 Python tests), production builds/dry runs,
+13 native Worker tests, 261 browser tests and 18 real-stack Chromium/WebKit
+acceptance tests. Separate coverage reported 72.44% statements across maintained
+sources. These counts describe that revision, not every future release. The
+Connections cadence wording also passed eight isolated light/dark/narrow browser
+cases and the frontend production build.
 
-Live failure drills returned 503 for absent, stale and future operating state;
-the manual pause was restored afterward. The CI identity receives 200 for its
-fixed queryless health GET and 503 for summaries while paused. Private items,
-operations status, query-bearing requests and POSTs return 403 for that identity;
-unauthenticated health redirects with 302. No active source/catalog leases were
-present at the 21:59 UTC drain check.
+The restricted CI identity passed health and all six queryless summary GETs in
+normal operation. It is denied private item/operations paths, query-bearing
+health and POSTs with 403. Unauthenticated health redirects to Access with 302.
+During maintenance, owner health/operations remained 200 while summaries and
+catalog POSTs returned 503. Owner MFA was preserved.
 
-On 2026-10-29 the existing cutover bundle and independently restored database
-passed verification again: 94 tables, 1,798,348 rows, 18,126 objects and the search
-vocabularies. This is the original cutover recovery point. It does not establish
-a fresh backup of subsequent production syncs, an offsite copy, or encryption-key
-escrow. The owner accepted a protected local Mac folder outside the repository
-and Cloudflare. It protects against provider/account loss, not loss of the Mac;
-offsite storage is optional and is not a deployment blocker. Live database and
-objects total about 1.5 GB; reserve 5–6 GB for the full bundle including transfer
-and restore-test copies. The original baseline was copied to
-`/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; verification
-passed at 21:59:41 UTC with 94 tables, 1,798,348 rows, 18,126 objects and the
-independently restored FTS vocabulary. Fresh production capture is also running under the
-held writer pause; no fresh restore verification is claimed yet. The existing
-protected encryption key is retained. Automatic approval review blocked an
-additional Mac key-escrow copy; explicit owner input is pending for that extra
-copy, which is not a deployment blocker.
+At 22:59:33 UTC, owner-authenticated live checks passed list, representative
+inspector and history requests for each media family, plus queued article list
+and detail: **20/20 HTTP 200**. Observed list/detail/history milliseconds were:
 
-The `production` and `production-migrations` GitHub environments now exist,
-restricted to `main`; migrations require owner review with self-approval allowed.
-CD remains disabled. Existing SSH Git authentication works; no additional GitHub
-OAuth scope is required. The owner approved dashboard creation of the restricted
-smoke identity after API creation returned 403. Its Service Auth policy is
-attached; both GitHub environments have its credentials. Owner MFA is unchanged.
-See the [account setup steps](deployment-account-setup.md). Maintenance code is
-deployed; no migration, provider activation or new paid service is complete.
+| Media    |  List | Detail | History |
+| -------- | ----: | -----: | ------: |
+| Books    |   546 |  1,177 |     375 |
+| Movies   |   604 |    550 |     587 |
+| Articles |   990 |    342 |     616 |
+| Podcasts |   215 |    224 |   2,395 |
+| Music    | 3,354 |    369 |     301 |
+| Videos   |   519 |    376 |     386 |
 
-## Live cutover sequence after credentials
+Queued article list/detail took 485/302 ms. These are single-pass network plus
+server timings; they are not p95 measurements. Browser verification confirmed
+current Movie posters/directors, labeled viewing ratings, inspector/history,
+search and filter controls. Browser tests and private live checks never publish
+owner data or credentials to Actions artifacts.
 
-The first release needs a controlled bootstrap: the old runtime does not yet
-support the dedicated smoke identity and operating-state gate required by the
-ordinary release guard. Preserve equivalent recovery receipts during bootstrap;
-enable ordinary guarded CD only after the new baseline passes acceptance.
+## Independent recovery point
 
-1. Verify the two scoped tokens and configure the restricted Access smoke
-   identity. Install protected environment secrets without exposing provider
-   credentials. Verify native budget-alert thresholds in the dashboard.
-2. Preserve the old Worker identity/configuration and a fresh Time Travel
-   bookmark. Disable old source crons, pause native delivery without purging and
-   detach the consumer. Deploy the validated revision in maintenance with writes
-   disabled, the R2 gate closed and only the independent monitor cron active.
-   This closes HTTP writes before any schema change.
-3. Verify source/catalog leases have drained, then capture the fresh protected
-   local backup under the uninterrupted manual pause. Read-only capture can
-   overlap the 20-minute hold once all writers have drained. Require both the
-   full hold and verified independent restore before SQL migrations. Source artifacts remain stable;
-   only the explicitly recorded live operating-state object is excluded.
-4. Apply migrations 0032, 0033 and 0034; verify migration history and populated
-   integrity/foreign-key/progress constraints. Exercise absent/stale/paused
-   state, authenticated health and summary denial, native queue pause and recovery.
-5. Resolve the pause cause and confirm a successful paused monitor cycle. While
-   the consumer remains detached, resume native delivery, then explicitly clear
-   the R2 gate. Verify native queue and private state agree before enabling the
-   normal serial-consumer configuration. A deployment never resumes delivery.
-6. Finish Hardcover's snapshot under one run, diagnose Spotify's real current
-   response, and verify Letterboxd/Readwise snapshots. Activate due catalog,
-   article acquisition/indexing and bounded maintenance; inspect native usage.
-7. Observe real scheduled work, source/cursor integrity, media artwork/content,
-   authenticated browser behavior and hosted list/summary/detail timings. Record
-   actual daily-cycle results; synthetic clocks are not production soak evidence.
-8. Retain the verified pre-migration local recovery copy, then enable protected
-   exact-revision CD after all environment secrets and live smoke are accepted.
-   Replace remaining gates above only with observed evidence.
+The retained pre-migration bundle at
+`/Users/jeremywasham/Backups/Imladris/fresh-2026-10-29` contains
+**3,623,960,683 bytes, 97 logical tables, 1,818,662 logical rows and 18,283 R2
+objects**. Its stable inventory/schema cutoff is **2026-10-29 22:26:12.349386
+UTC**, before schema migrations, under the uninterrupted writer pause. The only
+excluded live R2 key is the declared operating-state object. Logical row counts
+include source/evidence/search data, not unique media items.
+
+Source and separate Mac-copy manifest SHA-256:
+`a8d320cf62dac5a50d05823e1d182042c60323fca7853a4fd7089f683f1b3dca`.
+Checksums, source references, search vocabulary and independent restored SQLite
+were verified. A separate populated rehearsal advanced history 31→34 with full
+integrity, zero foreign-key violations, ownership triggers and retry backfill
+checks. Retained backups were not changed by rehearsal. The original October 13
+cutover backup remains alongside it.
+
+The explicitly approved separate owner-only encryption-key backup is in
+`/Users/jeremywasham/Backups/Imladris/credentials`. A local proof decrypted one
+stored credential using the copied key, without retaining plaintext or making
+provider requests. Anyone holding both key and database could decrypt that
+credential; keep both protected. The Mac copies protect against Cloudflare
+account/provider loss, not loss of the Mac. Offsite storage is optional.
+
+## Source and catalog follow-through
+
+Hardcover completed at **23:04:25.695 UTC**, including scan finalization and cursor
+commit under one durable snapshot. Today's Letterboxd and Readwise admissions
+already succeeded; duplicate acceptance messages correctly did not allocate a
+second daily run. Preserve that accounting rather than forcing another fetch.
+
+Spotify's bounded source retry refreshed the hosted token successfully, then
+received **HTTP 403 from saved episodes**. Existing credentials do not retain the
+actual grant scopes/account eligibility, so reauthorization is not established
+as the remedy. Check the matching existing Spotify developer app's status,
+owner Premium eligibility and Users Management account. No app creation, paid
+upgrade, token replacement or allowance reset is part of this diagnostic.
+Catalog Spotify work also stopped with a recorded safe error; earlier catalog
+progress must not be presented as newly completed work.
+
+The [source rollout](source-sync-rollout.md) and
+[catalog/content policy](catalog-operations.md) define the remaining full-job,
+idempotence, newly acquired excerpt/FTS and real scheduled-cycle gates. Record
+observed outcomes there. Daily eligibility and continuation recovery are
+separate from hourly scheduler execution.

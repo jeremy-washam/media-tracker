@@ -17,8 +17,10 @@ Archive/Queue/Feed, Podcasts Archive/Queue/Following, Music Tracks/Albums/Artist
 and Videos Archive/Queue/Channels. The root opens Books Archive; the legacy
 History page is unmounted, while its generic media API remains available.
 Connections shows each account, source coverage, incomplete imports,
-resume controls, and recent sync attempts. This is a locally validated MVP, not a
-production deployment or a completed recovery toolset.
+resume controls, and recent sync attempts. The private application is deployed
+with owner Access/MFA, migrations through 0034, and a verified local recovery
+copy. Source and catalog acceptance remain incomplete; see the
+[deployment closeout](docs/planning/deployment-closeout.md) for current evidence.
 
 ## Architecture
 
@@ -51,7 +53,8 @@ docs/                  product, architecture, decisions, and planning
 
 ## Local setup
 
-Requirements: Node.js 24 or newer and pnpm 11 or newer.
+Requirements: Node.js 24 or newer and pnpm 11 or newer. Checks and recovery
+utilities also require Python 3.12 or newer with SQLite FTS5 support.
 
 ```sh
 pnpm install
@@ -74,7 +77,10 @@ Useful local endpoints:
 No Cloudflare account or provider credentials are required for local
 development. Wrangler simulates D1, R2, Queues, Cron, and static asset bindings.
 Provider credentials are required only for their respective sync actions.
-Deployed Cron Triggers poll Readwise, Hardcover, Letterboxd, and Spotify hourly;
+Deployed hourly Cron Triggers check Readwise, Hardcover, Letterboxd, and Spotify
+eligibility. Hosted new syncs share one allocation per source per UTC day and
+require at least 23 hours between allocations; resumable Hardcover pages continue
+the same checkpointed snapshot rather than starting another daily sync.
 `wrangler dev --test-scheduled` exposes a manual test endpoint and does not run
 an unattended hourly schedule. YouTube has no automatic history sync. The
 IDs in `apps/api/wrangler.jsonc` are local placeholders. Hosted deployment uses
@@ -99,12 +105,15 @@ lineage. No real source data needs to be deleted to retry an import.
 
 ## Remaining limitations
 
-Audiobooks, generalized replay, app-wide remote export/recovery commands,
-webhooks, and production Access provisioning remain deferred. Music is
-implemented. Imports use HTTP requests, polling uses scheduled handlers, and
-queues handle selective Reader content and catalog jobs. Deployment helpers and
-a local snapshot/restore rehearsal are available; they do not provide the full
-operational recovery toolset.
+Audiobooks, generalized replay, app-wide CLI export/recovery commands, and
+webhooks remain deferred. Music and owner Access/MFA are implemented. Imports
+use HTTP requests; scheduled handlers dispatch eligible source and catalog jobs
+to queues alongside selective Reader content work. Protected local database/R2
+capture and independent restore verification are available. Hardcover's controlled
+hosted snapshot completed across 23 pages and 1,112 books without failed records.
+Spotify's reported HTTP 403 and recurring catalog acceptance still need live
+verification. CI validation and guarded automatic production delivery are enabled. The
+closeout tracks first ordinary release verification and remaining provider acceptance.
 
 ## Checks
 

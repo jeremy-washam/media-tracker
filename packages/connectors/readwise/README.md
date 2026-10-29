@@ -11,11 +11,19 @@ current capability assessment, field inventory, unknowns, and probe plan.
 
 The first run fetches every current Reader document at 100 records per page.
 Later runs request documents updated since the last durable watermark, with a
-five-minute overlap; a complete snapshot is repeated at least every 24 hours.
+five-minute overlap; a complete snapshot is due when the previous full scan is
+at least 24 hours old.
 Only approved media categories become Library items. Exact response pages are
 retained before normalization, and the API Worker advances the watermark only
 after every page and projection has committed. Manual and scheduled entry
 points share this behavior.
+
+Hosted hourly scheduling checks eligibility for one new allocation per source
+per UTC day and at least 23 hours between allocations. Manual hosted syncs share
+that allocation; local explicit syncs do not use hosted admission. Thus the cron
+frequency does not promise hourly Reader freshness. The deployed normal
+configuration enables bounded content work, while provider/content live
+acceptance is tracked separately in the deployment closeout.
 
 The same reconciliation imports deletion-aware v2 highlight containers. The
 API package separately acquires parsed HTML for eligible Archive/Queue documents

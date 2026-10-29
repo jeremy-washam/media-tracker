@@ -356,11 +356,17 @@ generated tags.
 ## Production connector behavior
 
 The implemented connector uses `GET /api/v3/list/` without a location filter.
-The first run, and a reconciliation run at least every 24 hours, enumerates the
-complete current document set at 100 records per page. Intervening runs use an
+The first run, and an admitted reconciliation whose previous full scan is at
+least 24 hours old, enumerates the complete current document set at 100 records
+per page. Intervening runs use an
 `updatedAfter` watermark with a five-minute overlap. Every exact response page
 is stored in private R2 before parsing, and the durable cursor advances only
 after the source records and rebuilt projection commit successfully.
+
+Hosted scheduling checks eligibility hourly, but new syncs share one allocation
+per source per UTC day and a minimum 23-hour interval. Manual hosted requests
+share that admission; an hourly cron is not hourly Reader polling. Delays or
+failed attempts can postpone the next completed full reconciliation.
 
 Reader documents are authoritative for current Inbox, Later, Shortlist, Feed,
 and other Reader state. Generic `queue_entries` are a read-only, provenance-
