@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
-import { fileURLToPath } from 'node:url'
+import { URL } from 'node:url'
 
 import { strToU8, zipSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -8,37 +8,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Bindings } from './env'
 import { continueYoutubeTakeoutImport, importYoutubeTakeout } from './youtube-import'
 
-const migration = [
-  '0001_canonical_ledger.sql',
-  '0002_rotating_credentials.sql',
-  '0003_books_library.sql',
-  '0004_books_review_facts.sql',
-  '0005_books_format_projection.sql',
-  '0006_movies_library.sql',
-  '0007_movies_nullable_source_link.sql',
-  '0008_articles_library.sql',
-  '0009_article_content_search_map.sql',
-  '0010_article_content_jobs.sql',
-  '0011_article_current_availability.sql',
-  '0012_article_content_reliability.sql',
-  '0013_article_content_attempts.sql',
-  '0014_podcasts_library.sql',
-  '0015_songs_library.sql',
-  '0016_videos_takeout_library.sql',
-  '0017_videos_snapshot_safety.sql',
-  '0018_videos_snapshot_head_backfill.sql',
-  '0019_provider_catalog_caches.sql',
-  '0020_tmdb_match_evidence.sql',
-  '0026_youtube_clock_safe_publication.sql',
-  '0027_compact_archive_evidence.sql',
-  '0028_evidence_view_parent_guard.sql',
-  '0029_evidence_insert_only_replay.sql',
-]
+const migration = readdirSync(new URL('../../../packages/db/migrations/', import.meta.url))
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
   .map((name) =>
-    readFileSync(
-      fileURLToPath(new URL(`../../../packages/db/migrations/${name}`, import.meta.url).href),
-      'utf8',
-    ),
+    readFileSync(new URL(`../../../packages/db/migrations/${name}`, import.meta.url), 'utf8'),
   )
   .join('\n')
 

@@ -52,9 +52,11 @@ class SqliteStatement implements DatabaseStatement {
 class SqliteClient implements DatabaseClient {
   batchCalls = 0
   failOnBatchCall: number | null = null
+  readonly queries: string[] = []
 
   constructor(private readonly database: DatabaseSync) {}
   prepare(query: string) {
+    this.queries.push(query)
     return new SqliteStatement(this.database.prepare(query))
   }
   async batch(statements: readonly DatabaseStatement[]) {
@@ -1672,4 +1674,190 @@ describe('SqlVideosRepository', () => {
     expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Atomically published' })
     expect(database.prepare('SELECT COUNT(*) value FROM catalog_write_guards').get()?.value).toBe(0)
   })
+
+  it('publishes remapped provider channels without rewriting owner facts, and rolls back late failures', async () => {
+    await seedPublishedCatalog()
+    const ownerVideos = database
+      .prepare('SELECT * FROM video_library_projection ORDER BY media_item_id')
+      .all()
+    const ownerChannels = database
+      .prepare('SELECT * FROM video_channel_projection ORDER BY channel_id')
+      .all()
+    const evidence = database
+      .prepare('SELECT * FROM youtube_watch_observations ORDER BY source_record_id')
+      .all()
+    const publication = database.prepare('SELECT * FROM youtube_publication_state').get()
+    const previousCursor = (await repository.listVideos(input({ limit: 1 }))).nextCursor
+    if (!previousCursor) throw new Error('Expected a second archive page')
+    database.exec(`
+      INSERT INTO catalog_refresh_jobs(id,provider,state,attempt_count,created_at,updated_at)
+        VALUES('catalog-2','youtube','running',1,'${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET channel_id='provider-only',channel_title='New provider channel',current_title='New searchable title' WHERE media_item_id='video-1';
+      UPDATE youtube_channel_catalog_profiles SET channel_id='provider-only',current_title='New provider channel';
+      CREATE TRIGGER no_owner_video_delete BEFORE DELETE ON video_library_projection BEGIN SELECT RAISE(ABORT,'owner video rebuild'); END;
+      CREATE TRIGGER no_owner_channel_delete BEFORE DELETE ON video_channel_projection BEGIN SELECT RAISE(ABORT,'owner channel rebuild'); END;
+      CREATE TRIGGER fail_expiry_publish BEFORE INSERT ON youtube_search_expiry BEGIN SELECT RAISE(ABORT,'late expiry failure'); END;
+    `)
+    const leased = new SqlVideosRepository(
+      fenceCatalogDatabase(client, { jobId: 'catalog-2', token: 1, kind: 'catalog' }),
+      () => clockNow,
+    )
+    await expect(leased.rebuild(later, { jobId: 'catalog-2', token: 1 })).rejects.toThrow(
+      'late expiry failure',
+    )
+    expect(database.prepare('SELECT * FROM youtube_publication_state').get()).toEqual(publication)
+    expect(
+      database.prepare("SELECT state FROM catalog_refresh_jobs WHERE id='catalog-2'").get()?.state,
+    ).toBe('running')
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Current Video Title' })
+    database.exec('DROP TRIGGER fail_expiry_publish')
+    await leased.rebuild(later, { jobId: 'catalog-2', token: 1 })
+    expect(
+      database.prepare('SELECT * FROM video_library_projection ORDER BY media_item_id').all(),
+    ).toEqual(ownerVideos)
+    expect(
+      database.prepare('SELECT * FROM video_channel_projection ORDER BY channel_id').all(),
+    ).toEqual(ownerChannels)
+    expect(
+      database.prepare('SELECT * FROM youtube_watch_observations ORDER BY source_record_id').all(),
+    ).toEqual(evidence)
+    expect(await repository.findChannel('provider-only')).toMatchObject({
+      title: 'New provider channel',
+      archiveVideoCount: 1,
+      watchCount: 2,
+    })
+    expect(
+      (await repository.listVideos(input({ q: 'searchable' }))).data.map((item) => item.id),
+    ).toEqual(['video-1'])
+    expect(
+      (await repository.listVideos(input({ q: 'Earlier first title' }))).data.map(
+        (item) => item.id,
+      ),
+    ).toContain('video-1')
+    await expect(
+      repository.listVideos(input({ cursor: previousCursor, limit: 1 })),
+    ).rejects.toThrow()
+    expect(database.prepare('SELECT COUNT(*) value FROM catalog_write_guards').get()?.value).toBe(0)
+    clockNow = '2026-11-01T00:00:00.000Z'
+    expect(await repository.findChannel('provider-only')).toBeNull()
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Latest first title' })
+  })
+
+  it('rejects a superseded completion lease before changing publication or search', async () => {
+    await seedPublishedCatalog()
+    const publication = database.prepare('SELECT * FROM youtube_publication_state').get()
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,attempt_count,created_at,updated_at)
+      VALUES('catalog-2','youtube','running',2,'${later}','${later}');
+      UPDATE youtube_video_catalog_profiles SET current_title='Must stay private';`)
+    const stale = new SqlVideosRepository(
+      fenceCatalogDatabase(client, { jobId: 'catalog-2', token: 1, kind: 'catalog' }),
+      () => clockNow,
+    )
+    await expect(stale.rebuild(later, { jobId: 'catalog-2', token: 1 })).rejects.toThrow()
+    expect(database.prepare('SELECT * FROM youtube_publication_state').get()).toEqual(publication)
+    expect(
+      database
+        .prepare("SELECT state,attempt_count FROM catalog_refresh_jobs WHERE id='catalog-2'")
+        .get(),
+    ).toEqual({ state: 'running', attempt_count: 2 })
+    expect(await repository.findVideo('video-1')).toMatchObject({ title: 'Current Video Title' })
+    expect((await repository.listVideos(input({ q: 'private' }))).data).toEqual([])
+  })
+
+  it('keeps owner product lookup bounded to one video with the existing media-first index', async () => {
+    await repository.rebuild(now)
+    const query = client.queries.findLast((sql) =>
+      sql.startsWith('INSERT INTO video_library_projection('),
+    )
+    expect(query).toBeDefined()
+    const plan = database
+      .prepare(`EXPLAIN QUERY PLAN ${query!}`)
+      .all(Date.parse(now), now, now, now, now)
+    expect(
+      plan.some((row) =>
+        String(row.detail).includes(
+          'SEARCH w USING COVERING INDEX youtube_watch_rollup_idx (media_item_id=?)',
+        ),
+      ),
+    ).toBe(true)
+    expect(plan.some((row) => String(row.detail).includes('youtube_watch_product_idx'))).toBe(false)
+  })
+
+  it('atomically publishes a 20,000-video catalog without touching source projections', async () => {
+    await seedPublishedCatalog()
+    database.exec(`CREATE TEMP TABLE synthetic_numbers(n INTEGER PRIMARY KEY);
+      INSERT INTO synthetic_numbers WITH RECURSIVE numbers(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM numbers WHERE n<20000) SELECT n FROM numbers;`)
+    // Copy synthetic shapes, changing identities and channels rather than building
+    // provider/source fixtures through a network or bypassing publication fences.
+    const copy = (table: string, changes: Record<string, string>, where: string) => {
+      const columns = database
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .map((row) => String(row.name))
+      database.exec(
+        `INSERT INTO ${table}(${columns.join(',')}) SELECT ${columns.map((name) => changes[name] ?? `base.${name}`).join(',')} FROM ${table} base CROSS JOIN synthetic_numbers numbers WHERE ${where}`,
+      )
+    }
+    copy('media_items', { id: "'synthetic-'||n" }, "base.id='video-1'")
+    copy(
+      'video_library_projection',
+      { media_item_id: "'synthetic-'||n", video_id: "'synthetic-'||n" },
+      "base.media_item_id='video-1'",
+    )
+    copy(
+      'youtube_video_catalog_profiles',
+      {
+        media_item_id: "'synthetic-'||n",
+        video_id: "'synthetic-'||n",
+        channel_id: "'catalog-channel-'||(n%4000)",
+        current_title: "'Synthetic searchable '||n",
+        description: `'${'Synthetic provider description with bounded catalog metadata. '.repeat(20)}'`,
+      },
+      "base.media_item_id='video-1'",
+    )
+    copy(
+      'youtube_channel_catalog_profiles',
+      { channel_id: "'catalog-channel-'||(n-1)" },
+      "base.channel_id='channel-1' AND n<=4000",
+    )
+    copy('youtube_video_thumbnails', { video_id: "'synthetic-'||n" }, "base.video_id='video-1'")
+    database.exec(`INSERT INTO catalog_refresh_jobs(id,provider,state,attempt_count,created_at,updated_at) VALUES('catalog-large','youtube','running',1,'${later}','${later}');
+      CREATE TRIGGER no_owner_rebuild BEFORE DELETE ON video_library_projection BEGIN SELECT RAISE(ABORT,'unbounded owner rebuild'); END;`)
+    const leased = new SqlVideosRepository(
+      fenceCatalogDatabase(client, { jobId: 'catalog-large', token: 1, kind: 'catalog' }),
+      () => clockNow,
+    )
+    await leased.rebuild(later, { jobId: 'catalog-large', token: 1 })
+    expect(
+      database.prepare("SELECT state FROM catalog_refresh_jobs WHERE id='catalog-large'").get()
+        ?.state,
+    ).toBe('succeeded')
+    expect(
+      database.prepare('SELECT COUNT(*) value FROM youtube_published_video_profiles').get()?.value,
+    ).toBe(20003)
+    expect(
+      database.prepare('SELECT COUNT(*) value FROM youtube_published_thumbnails').get()?.value,
+    ).toBe(60003)
+    expect(
+      database.prepare('SELECT COUNT(*) value FROM youtube_published_channel_aggregates').get()
+        ?.value,
+    ).toBe(4002)
+    expect(
+      database
+        .prepare("SELECT COUNT(*) value FROM video_search WHERE video_search MATCH 'searchable'")
+        .get()?.value,
+    ).toBe(20000)
+    expect(
+      database
+        .prepare("SELECT COUNT(*) value FROM youtube_search_expiry WHERE document_kind='video'")
+        .get()?.value,
+    ).toBeGreaterThan(40000)
+    expect(
+      database
+        .prepare(
+          'SELECT association_revision=channel_aggregate_revision value FROM youtube_publication_state',
+        )
+        .get()?.value,
+    ).toBe(1)
+  }, 20000)
 })

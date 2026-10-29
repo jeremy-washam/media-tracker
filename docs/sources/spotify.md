@@ -1,7 +1,7 @@
 # Spotify Source Reconnaissance
 
 - Status: Feasible as a hybrid import, with important podcast sync gaps
-- Last verified: 2026-09-21 for exact-ID catalog endpoints and retention terms
+- Last verified: 2026-10-29 for app access/quota diagnostics; 2026-09-21 for private exact-ID probes and retention terms
 - Priority: Podcasts first; songs are secondary
 - Sources: Official Spotify documentation and private aggregate probes
 
@@ -17,7 +17,7 @@ alternates track and episode work, normally waits 60 seconds before the next
 batch, and respects a longer 429
 backoff. The job reuses saved raw responses on retry and never treats a catalog
 response as evidence of a listen. A 404 records current catalog unavailability,
-not removal of a historical listen. The hourly Spotify scan retains its older
+not removal of a historical listen. The admitted daily Spotify sync retains its older
 opportunistic track-only batch enrichment only when no durable job is active.
 
 The owner elected indefinite catalog-response retention for this private app
@@ -56,7 +56,8 @@ Recommended integration shape:
 
 This is still a good fit for a private, single-user app. Development mode is
 specifically intended for apps accessing one Spotify account, and the owner
-already has Premium.
+previously confirmed Premium. Current eligibility still needs an account-side
+check when investigating the October 29 HTTP 403.
 
 ## Source surfaces
 
@@ -86,10 +87,13 @@ Official references:
 
 ### Development-mode fit
 
-New apps begin in development mode. As of the February/March 2026 changes:
+New apps begin in development mode. Rechecked against current official docs on
+October 29, 2026:
 
 - The app owner must have an active Spotify Premium subscription.
-- A new developer can have one client ID.
+- The July 2026 update increased the developer limit from one to 25 client IDs;
+  development-mode quota is shared per developer account, so another app is not
+  a quota workaround.
 - A development-mode app supports up to five authenticated users.
 - Users must be placed on the app's allowlist; an unlisted user may complete
   login but API calls return `403`.
@@ -98,7 +102,18 @@ New apps begin in development mode. As of the February/March 2026 changes:
   organizations, not individuals.
 
 See [Quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
-and the [February 2026 migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide).
+the [February 2026 migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide),
+and the [July 2026 changelog](https://developer.spotify.com/documentation/web-api/references/changes/july-2026).
+
+### October 29 hosted access failure
+
+The current hosted retry refreshed its token, then `GET /me/episodes` returned 403. That GET remains available; removed episode-write/contains endpoints do
+not explain it. Check the existing matching app's status, owner Premium and
+Users Management account before replacing the grant. The encrypted hosted store
+retains neither actual grant scopes nor account eligibility. A separate local
+probe's validated scopes do not prove the hosted grant's scope. No current cause
+has been established; no new app, purchase or reauthorization was performed.
+See the [source rollout evidence](../planning/source-sync-rollout.md#live-closeout-evidence--october-29-2026).
 
 ### OAuth flow
 

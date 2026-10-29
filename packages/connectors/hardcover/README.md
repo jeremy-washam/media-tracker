@@ -1,9 +1,9 @@
 # Hardcover connector
 
 Status: full-library ingestion has been verified with the real API. The October
-hosted reconciliation was interrupted; the resumable Worker implementation below
-requires a new controlled hosted completion before recurring activation is called
-verified.
+hosted reconciliation was interrupted. The resumable Worker implementation below
+is deployed with migrations through 0034, and its October 29 controlled hosted
+snapshot completed 23 pages and 1,112 books without failed records.
 
 This package owns book-history backfill, scheduled full reconciliation, edition
 and reread identity, and source-specific parsing. See the
@@ -62,6 +62,11 @@ pages remain. Its default retains the full scan for explicit local calls. The
 queue/scheduler must continue hosted snapshots and apply its shared lease and
 finite retry policy; reading a Library never resumes a provider job.
 
+The hosted scheduler checks eligibility hourly. A new snapshot shares one
+allocation per source per UTC day and at least 23 hours between allocations;
+manual hosted actions use the same admission. Checkpoint continuations retain
+that allocation and snapshot rather than starting a new full daily scan.
+
 Migration **0032** adds `hardcover_sync_progress`, separate from completed sync
 cursors. It stores the same snapshot/run ID, parser version, next keyset ID,
 committed-page totals, observed edition IDs, and scan/completion markers. Only
@@ -89,7 +94,9 @@ provider snapshot or a complete historical change feed.
 The October run stopped after 900 books; retained evidence does not establish the
 platform cause. The protected failed response was inspected only for aggregate
 shape. No private database copy, production write, source activation, or token
-change was made during implementation. Deployment verification must apply 0032,
-run through all continuation pages, verify the completed cursor and absence
-retirement, and then observe a subsequent scheduled run before declaring this
-source operationally complete.
+change was made during implementation. Migrations through 0034 are now deployed;
+the October 29 controlled hosted run subsequently completed all 23 pages and
+1,112 books without failed records. Its completed cursor was recorded at
+`2026-10-29T23:04:25.695Z`. This verifies a complete hosted continuation chain;
+continued scheduled operation remains subject to the shared daily admission and
+operating monitor.

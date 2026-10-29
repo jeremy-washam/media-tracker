@@ -51,9 +51,9 @@ const sourceNames = {
 
 const coverageNotes = {
   readwise:
-    'Reader documents across all locations and highlights are reconciled hourly when deployed. Removed documents retain their evidence.',
+    'Reader documents across all locations and highlights are reconciled daily when deployed. Removed documents retain their evidence.',
   hardcover:
-    'Want to Read, Currently Reading, and Read relationships are reconciled hourly when deployed.',
+    'Want to Read, Currently Reading, and Read relationships are reconciled daily when deployed.',
   letterboxd:
     'RSS covers recent public activity. Import exports periodically for older and private history.',
   spotify:

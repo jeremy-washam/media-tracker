@@ -103,6 +103,48 @@ subsequent scheduled run for each enabled source. Record actual production
 outcomes after integrated deployment; synthetic regressions alone do not close
 these live gates.
 
+## Live closeout evidence — October 29, 2026
+
+Main `9a6a877` is deployed in normal operation after the protected migration
+release applied 0032–0034. All 34 migration names, ownership/retry columns and
+zero foreign-key violations were verified. Native queue delivery is open and
+the serial consumer is attached. These are live configuration checks, not a
+claim that every provider has passed its next eligible daily cycle.
+
+Hardcover's one controlled snapshot completed **23 pages / 1,112 source records /
+128 normalized records / zero failed records**. Scan and finalization markers
+are complete; the `library-books` cursor committed at **23:04:25.695 UTC**.
+Letterboxd and Readwise already succeeded in today's admissions. Additional
+acceptance messages correctly did not allocate a second daily fetch.
+
+Spotify's explicitly bounded retry refreshed its hosted token successfully and
+then failed `saved_episodes` with **HTTP 403**. Do not replace the grant or reset
+its allowance blindly. Existing encrypted credential metadata does not retain
+actual scopes or Spotify account eligibility. Check the matching existing app's
+status, owner Premium eligibility and exact authorized account in Users
+Management. Spotify documents that an unallowlisted account may authenticate
+successfully but receive API 403; eligibility is a possibility, not a confirmed
+cause. `user-library-read` authorizes saved-library access;
+`user-read-playback-position` supplies resume data and its absence alone does not
+establish the 403 cause. See [quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes),
+[saved episodes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes)
+and the [February changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026).
+The developer dashboard is signed out; owner account input is pending. No new
+app, subscription, reauthorization or credential change was made.
+
+The reviewed legacy October 17 Hardcover and October 28 Spotify source runs had
+no active lease, progress, snapshot admission, catalog role or committed cursor.
+The guarded operator repair closed exactly those two abandoned rows with an
+interruption diagnostic and observed closure time. A repeat was a verified
+zero-write no-op. Counts, evidence and admission accounting were retained; the
+completed October 29 Hardcover snapshot was untouched. Connections now shows
+that snapshot as succeeded and the abandoned Spotify run as interrupted rather
+than polling it indefinitely as running.
+
+Full source closeout remains subject to the acceptance requirements above,
+including actual subsequent eligible scheduled runs. Local clocks and same-day
+duplicate jobs do not establish that daily soak.
+
 ## Historical rollout evidence
 
 The following dated sections describe prior deployments and the retired grant

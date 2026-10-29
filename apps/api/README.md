@@ -12,7 +12,7 @@ verification; only explicit local loopback requests can bypass authentication.
 The initial transfer and owner Access/MFA checks are complete. Normal hosted
 operation uses bounded source admission, recurring catalog/content work and a
 persistent emergency pause. The[deployment closeout](../../docs/planning/deployment-closeout.md)
-separates prepared code from live activation and acceptance; the
+records live activation separately from incomplete provider acceptance; the
 [deployment runbook](../../docs/planning/deployment.md) retains cutover evidence.
 The dedicated CI service identity can only GET health and six queryless summary
 endpoints. All other routes require the owner. See[hosted import limits](../../docs/planning/hosted-imports.md)
@@ -30,8 +30,9 @@ pnpm dev
 ```
 
 Use **Connections → Readwise Reader → Sync now**. The initial backfill retrieves
-all current Reader locations; later polls use an overlapped update watermark and
-a daily complete reconciliation. Each exact v3 page and v2 highlight-export
+all current Reader locations; later polls use an overlapped update watermark,
+with a complete reconciliation due when the prior full scan is 24 hours old.
+Each exact v3 page and v2 highlight-export
 page is stored in private R2 before projection. Eligible articles, PDFs, RSS
 items, and newsletters project into Articles Archive, Queue, or Feed according
 to current and retained source state. Eligible videos and podcasts continue to
@@ -57,9 +58,10 @@ viewings into Archive. Reimporting a successfully processed ZIP under the same p
 failed imports retry from preserved raw evidence.
 
 Set `LETTERBOXD_USERNAME` in `.dev.vars` to enable the public RSS connection.
-Use **Sync now** on the Letterboxd connection for a manual poll. The Worker also
-polls once per hour through its Cron Trigger, preserves every exact RSS response,
-and reconciles recent entries to the export using provider identities or exact
+Use **Sync now** on the Letterboxd connection for a manual poll. The hourly Cron
+Trigger checks eligibility for the shared hosted daily allocation. Admitted
+polls preserve every exact RSS response,
+and reconcile recent entries to the export using provider identities or exact
 title/year and viewing-date matches. Feed entries that cannot be reconciled are
 retained as unresolved; disappearance from the finite feed never deletes local
 history.
@@ -67,14 +69,24 @@ history.
 ## Hardcover sync
 
 Set `HARDCOVER_TOKEN` in `.dev.vars`, then use **Connections → Hardcover → Sync
-now** for the initial import. The same sync runs hourly through the Worker Cron
-Trigger. It reconciles Want to Read, Currently Reading, and Read relationships,
+now** for the initial import. The hourly Cron Trigger checks eligibility for a
+hosted daily snapshot. Each hosted invocation commits at most one 50-book page;
+continuations retain the snapshot identity and committed checkpoint. It
+reconciles Want to Read, Currently Reading, and Read relationships,
 stores each exact library and edition GraphQL response in private R2, and
 projects work-level Books with distinct edition identities. Finished child read
 rows create Archive occurrences; Read-status books without one receive an
 undated fallback. Active statuses 1 and 2 independently determine Books Queue.
 Aggregate read counts never manufacture rereads. Missing source relationships
 retire only after a complete snapshot; retained Archive history stays available.
+
+Manual and scheduled hosted source syncs share one new allocation per source per
+UTC day and a 23-hour minimum interval. Hardcover continuations and finite
+recovery attempts retain that allocation; local explicit syncs do not use the
+hosted admission policy. Migrations through 0034 are deployed. Hardcover's
+controlled hosted snapshot completed across 23 pages and 1,112 books without
+failed records. Spotify HTTP 403 still requires provider-specific live acceptance;
+configured recurring work alone does not establish success.
 
 ## Spotify and YouTube
 

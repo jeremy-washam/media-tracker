@@ -107,3 +107,62 @@ empty refresh and that maintenance can run without a provider request. Reader
 acceptance must inspect a newly acquired authorized excerpt and full-text search,
 then repeat delivery to verify no duplicate acquisition. Never use owner payloads
 or credentials in fixtures, logs, or CI.
+
+## October 29 live activation and publication failure
+
+Normal scheduling was enabled after schema migrations 0032–0034 and the verified
+recovery point. Movies retained their completed earlier refresh: browser checks
+showed current posters, directors and labeled viewing ratings. A manual current
+TMDB check returned an empty completed job; this does not establish that the
+hourly scheduler creates no empty job.
+
+The YouTube job fetched **20,292 requested IDs: 18,695 returned, 1,597 omitted**,
+with its durable cursor retained. Its final projection rebuild then hit
+`D1 DB exceeded its CPU time limit and was reset` in real Worker logs at
+23:09/23:10 UTC. Publication did not complete and no full-job acceptance was
+claimed. At 23:17 UTC `CATALOG_AUTO_REFRESH=false` was deployed and verified in
+the existing Worker and both protected GitHub environment configurations to stop
+repeated attempts while fixing the expensive query. Browsing, source admission,
+article work and the independent operating monitor remain enabled. No queue was
+purged, no attempt count reset, and no provider response was fetched again for
+this diagnostic. Native monitoring at 23:10:26 UTC remained open with a $5
+estimate.
+
+Cloudflare's [D1 debugging guidance](https://developers.cloudflare.com/d1/observability/debug-d1/)
+and [limits](https://developers.cloudflare.com/d1/platform/limits/) confirm that
+expensive queries/batches require less work rather than repeated retries or a
+larger Worker CPU allowance. Catalog completion must retain atomic fenced
+publication, current channel association/search and expiry behavior. A small
+synthetic fixture alone does not establish production-scale completion.
+
+Spotify source and catalog work both recorded HTTP 403; its account-side
+eligibility/access check is tracked in the source rollout. Newly acquired
+article excerpt/FTS, duplicate delivery and subsequent real hourly work remain
+live gates until observed. The next configured hourly pass is 00:00 UTC; the
+23:00 transition did not produce an article reservation, so no successful
+article acquisition is inferred from flags alone.
+
+### Publication repair and controlled retry
+
+Catalog completion now retains the unchanged owner video/channel projections.
+The same fenced atomic transaction still marks success, publishes staged
+provider overlays, rebuilds current channel aggregates and search/expiry maps,
+and advances publication revisions. Normal source ingestion still rebuilds its
+owner projections. Its per-video product lookup uses the existing media-first
+watch index rather than rescanning all music observations for every video.
+No schema migration, higher CPU limit or larger provider allowance is required.
+
+Regressions cover 20,000 synthetic videos, 4,000 provider-remapped channels,
+24 MB of descriptions and 60,000 thumbnails, plus
+owner history/search preservation, cursor invalidation, expiry fallback and
+rollback after a late search-expiry failure. This validates the publication
+shape, not a production CPU guarantee: real descriptions/search volume still
+need a controlled live completion. Resume the existing durable job only after
+the validated fix is deployed, retaining its exact cursor/counts/attempts; do
+not create another job or refetch the completed video pages to work around it.
+
+The final combined local gate passed `pnpm check` with **895 TypeScript / 147
+Python tests**, production builds and **13 native Worker-runtime tests**. The
+YouTube import fixture now loads the complete migration chain, matching the
+current repository rather than omitting the existing media-first index. The
+controlled live completion remains pending until the validated release lands.

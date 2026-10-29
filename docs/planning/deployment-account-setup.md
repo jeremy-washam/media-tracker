@@ -5,7 +5,8 @@ D1 and queue reads and the monitor's exact analytics query passed. The current
 usage estimate is $5. The dashboard showed $0 usage overages; native alerts are
 saved at $5 usage warning and $20 usage emergency, approximately $10/$25 total
 including the existing $5 subscription. The release token is installed in both protected GitHub
-environments; the monitor secret is active in the maintenance deployment. Existing
+environments; the monitor secret is active in the normal production deployment
+from main `9a6a877`. Existing
 Wrangler OAuth remains separate from persistent runtime and CI credentials.
 
 ## Create two scoped Cloudflare API tokens
@@ -48,20 +49,40 @@ or account loss; it does not protect against losing the Mac. An additional
 offsite copy is optional and is not a deployment blocker. No new service is
 required.
 
-Current live database and object data total about 1.5 GB. Reserve 5–6 GB for the
+Current live database and object data total about 1.5 GB. Reserve 5–6 GB for a
 full recovery bundle, which also contains transfer data and restore-test copies.
 The retained original bundle passed verification and has been copied to
 `/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; that separate
 Mac copy passed verification at 21:59:41 UTC: 94 tables, 1,798,348 rows, 18,126
-objects and the independently restored search vocabulary. Fresh read-only production capture has started
-under the held writer pause; its restore verification remains pending. A Time Travel bookmark or
-another object in the same Cloudflare account does not replace the local copy.
+objects and the independently restored search vocabulary.
+
+The fresh pre-migration production bundle is also retained at
+`/Users/jeremywasham/Backups/Imladris/fresh-2026-10-29`. Capture completed under the
+held writer pause at **2026-10-29 22:26:12.349386 UTC**; Mac-copy verification passed
+at 22:30:05 UTC. Its 3,623,960,683 bytes include 97 logical tables, 1,818,662 logical
+rows, 18,283 R2 objects and an independently verified restore with exact search
+vocabulary. The source and Mac-copy manifest SHA-256 both equal
+`a8d320cf62dac5a50d05823e1d182042c60323fca7853a4fd7089f683f1b3dca`.
+The protected receipt is
+`.private/deployment/closeout-2026-10-29/fresh-local-copy.json`.
+
+Migrations 0032–0034 passed a separate rehearsal on a temporary copy of the fresh
+restore: ordered history 31→34, full integrity check, zero foreign-key violations,
+ownership triggers and historical retry backfill verified. Retained backups were
+unchanged. The receipt is
+`.private/deployment/closeout-2026-10-29/fresh-migration-rehearsal.json`.
+A Time Travel bookmark or another object in the same Cloudflare account does not
+replace the local copy.
 
 The owner explicitly approved a separate encryption-key backup. It is saved and
 verified in the owner-only `/Users/jeremywasham/Backups/Imladris/credentials`
-folder. Possession of this key and the database permits decryption of the stored
-Spotify credential; keep both protected. Provider credentials are never copied
-into CI.
+folder. A separate recovery proof at 22:30:20 UTC successfully decrypted one stored
+credential with the backed-up key, without retaining plaintext or making external
+requests. Its protected receipt is
+`.private/deployment/closeout-2026-10-29/encryption-key-recovery-proof.json`.
+Possession of this key and the database permits credential decryption; keep both
+protected. Provider credentials are never copied into CI. These are verified Mac
+copies; no offsite copy is claimed.
 
 ## Current GitHub setup
 
@@ -69,10 +90,11 @@ The `production` and `production-migrations` environments are provisioned for
 `main` only; migrations require an owner review with self-approval allowed.
 [PR 8](https://github.com/jeremy-washam/media-tracker/pull/8) is merged. Hosted
 [main validation 40949037008](https://github.com/jeremy-washam/media-tracker/actions/runs/40949037008)
-passed at `651a2be`; main requires the strict `validate` check. Production delivery
-remains disabled during the controlled migration bootstrap and live acceptance.
-Maintenance code was deployed at 21:53:50 UTC on October 29 with the operating
-gate closed. Zero active source/catalog leases were confirmed at 21:59 UTC;
-read-only backup capture is running during the held pause. SQL migrations wait
-for both the 20-minute pause and verified fresh recovery bundle. See the
+passed at `651a2be`; main requires the strict `validate` check. Guarded production delivery is enabled with the verified normal configuration in both protected environments. The first ordinary main release still needs verification; Spotify HTTP 403 recovery remains an independent account-side dependency. The maintenance bootstrap began at 21:53:50 UTC
+on October 29 with the operating gate closed; zero active source/catalog leases
+were confirmed at 21:59 UTC. Fresh recovery verification and the separate local
+migration rehearsal subsequently passed, and the normal configuration from main
+`9a6a877` is now deployed. These facts do not establish a successful ordinary CD release or successful
+Spotify sync. See the [closeout checklist](deployment-closeout.md) for current
+activation status and the
 [release runbook](release-and-recovery.md) for exact protected secrets.
