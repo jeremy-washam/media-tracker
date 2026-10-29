@@ -117,20 +117,60 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
-  await page.route('**/api/library/books{,/summary}?*', async (r) => {
+  let itemsFailed = true
+  let summaryFailed = true
+  const requests = { items: 0, summary: 0 }
+  await page.route('**/api/library/books{,/summary}?*', async (route) => {
+    const summary = new URL(route.request().url()).pathname.endsWith('/summary')
+    requests[summary ? 'summary' : 'items']++
     await gate
-    await r.fulfill({ status: 500, json: { error: 'Synthetic service failure' } })
+    await route.fulfill(
+      (summary ? summaryFailed : itemsFailed)
+        ? { status: 500, json: { error: { message: 'Synthetic service failure' } } }
+        : { json: booksResponse() },
+    )
   })
   await page.goto('/library/books/archive')
-  await expect(page.getByRole('status')).toContainText('Loading')
-  await expect(page.locator('[data-slot=skeleton]').first()).toBeVisible()
-  release()
-  await expect(page.locator('[data-slot=alert]')).toBeVisible({ timeout: 15000 })
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
-  await page.unroute('**/api/library/books{,/summary}?*')
-  await page.route('**/api/library/books{,/summary}?*', (r) => r.fulfill({ json: booksResponse() }))
-  await page.getByRole('button', { name: 'Try again' }).click()
-  await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
+  const collection = page.locator('[data-ui~="library-collection"]')
+  const loading = collection.getByRole('status')
+  const skeletons = loading.locator('[data-slot=skeleton]')
+  try {
+    await expect(loading).toContainText('Loading books…')
+    await expect(skeletons).toHaveCount(2)
+    for (const skeleton of await skeletons.all()) await expect(skeleton).toBeVisible()
+  } finally {
+    release()
+  }
+  const itemsAlert = collection.getByRole('alert').filter({ hasText: 'Books could not be loaded' })
+  const summaryAlert = collection
+    .getByRole('alert')
+    .filter({ hasText: 'Library counts and filters could not be loaded.' })
+  await expect(itemsAlert).toBeVisible({ timeout: 15000 })
+  await expect(summaryAlert).toBeVisible({ timeout: 15000 })
+  await expect(itemsAlert).toHaveAttribute('data-slot', 'alert')
+  await expect(summaryAlert).toHaveAttribute('data-slot', 'alert')
+  const itemRetry = itemsAlert.getByRole('button', { name: 'Try again', exact: true })
+  const summaryRetry = summaryAlert.getByRole('button', { name: 'Retry summary', exact: true })
+  await expect(itemRetry).toBeVisible()
+  await expect(summaryRetry).toBeVisible()
+
+  const summaryAttempts = requests.summary
+  itemsFailed = false
+  await itemRetry.click()
+  const row = collection.locator('[data-collection-item="book-one"]')
+  await expect(row).toBeVisible()
+  await expect(itemsAlert).toHaveCount(0)
+  await expect(summaryAlert).toBeVisible()
+  await expect(collection.locator('[data-ui~="collection-summary"]')).toBeEmpty()
+  expect(requests.summary).toBe(summaryAttempts)
+
+  const itemAttempts = requests.items
+  summaryFailed = false
+  await summaryRetry.click()
+  await expect(summaryAlert).toHaveCount(0)
+  await expect(collection.locator('[data-ui~="collection-summary"]')).toContainText('1 book')
+  await expect(row).toBeVisible()
+  expect(requests.items).toBe(itemAttempts)
 })
 
 test('keeps the Video duration checkbox and its complete label together', async ({ page }) => {
