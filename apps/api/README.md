@@ -9,9 +9,14 @@ hosted resource IDs belong in the separate production configuration.
 Production uses a separate ignored `wrangler.production.jsonc` and the app-only
 `apps/web/dist-production` bundle. All requests pass through Access JWT/owner
 verification; only explicit local loopback requests can bypass authentication.
-The first deployment has sync, imports, cron, and queue processing paused until
-data transfer is verified. Follow the [deployment runbook](../../docs/planning/deployment.md)
-for target generation, account activation, backups, secrets, and cutover.
+The initial transfer and owner Access/MFA checks are complete. Normal hosted
+operation uses bounded source admission, recurring catalog/content work and a
+persistent emergency pause. The[deployment closeout](../../docs/planning/deployment-closeout.md)
+separates prepared code from live activation and acceptance; the
+[deployment runbook](../../docs/planning/deployment.md) retains cutover evidence.
+The dedicated CI service identity can only GET health and six queryless summary
+endpoints. All other routes require the owner. See[hosted import limits](../../docs/planning/hosted-imports.md)
+before uploading archives.
 
 ## Readwise MVP sync
 
@@ -108,15 +113,24 @@ Set `TMDB_API_READ_TOKEN` and `YOUTUBE_API_KEY` in ignored repository-root
 the refreshable movie and video catalog caches. Manual refreshes are available
 at `POST /api/catalogs/tmdb/sync` and
 `POST /api/catalogs/youtube/sync`. Browse requests never call either provider.
-Set `CATALOG_AUTO_REFRESH=true` only after approving full-Library provider
-disclosure and automatic refresh; it defaults off. This legacy switch applies
-only to local automatic catalog work. Hosted source rollout keeps it false.
-A hosted Movies restoration instead requires `TMDB_CATALOG_JOB_ID` naming one
-reviewed durable job and `TMDB_CATALOG_UNTIL` expiring inside the source grant.
-The hourly schedule resumes only that job, with at most 80 reserved attempts;
-other catalogs remain paused. Native D1, provider requests, bytes and time are
-bounded independently of source sync. See the [source rollout](../../docs/planning/source-sync-rollout.md)
-for the account-wide review, ceilings and release sequence.
+Set `CATALOG_AUTO_REFRESH=true` for recurring bounded TMDB/YouTube work and
+`SPOTIFY_CATALOG_ENABLED=true` for exact-ID Spotify metadata refresh. The hourly
+scheduler resumes durable cursors and creates at most one terminal catalog job
+per provider/day when candidates are due. Provider cooldowns persist across
+queue retries. `ARTICLE_CONTENT_ENABLED=true` enables bounded article acquisition
+and indexing; maintenance has a separate explicitly enabled 5-minute schedule.
+All hosted background work requires the operating monitor and shares its pause
+gate. Exact-job TMDB grants and expiring source grants are retired. See
+[catalog operations](../../docs/planning/catalog-operations.md) and
+[source sync](../../docs/planning/source-sync-rollout.md) for finite limits.
+
+`OPERATING_MONITOR_ENABLED=true` runs the independent 10-minute native-usage
+monitor. Its account-scoped `OPERATING_API_TOKEN` needs Analytics Read, D1 Read,
+and Queues Edit; `CLOUDFLARE_ACCOUNT_ID` and `SYNC_QUEUE_ID` must match the target.
+Owner-only `GET /api/operations` exposes safe monitor state without D1. A sticky
+pause or stale/missing state stops database/API work and scheduling; authenticated
+health remains available for diagnosis. The native queue is paused without
+purging. See[ADR 0021](../../docs/decisions/0021-bounded-production-operations.md).
 
 ## Browsing and operations
 

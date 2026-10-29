@@ -537,7 +537,10 @@ const hardcoverSyncRoute = createRoute({
   path: '/api/connections/hardcover/sync',
   tags: ['Connections'],
   responses: {
-    200: jsonContent(HardcoverSyncResponseSchema, 'Completed Hardcover Read-books sync'),
+    200: jsonContent(
+      HardcoverSyncResponseSchema,
+      'Hardcover reconciliation progress or completed snapshot',
+    ),
     503: jsonContent(ApiErrorSchema, 'Hardcover is not configured or unavailable'),
   },
 })
@@ -1531,19 +1534,21 @@ app.openapi(readwiseSyncRoute, async (context) => {
 
 app.openapi(hardcoverSyncRoute, async (context) => {
   try {
-    return context.json(
-      HardcoverSyncResponseSchema.parse(
-        await runSourceSync(
-          {
-            ...context.env,
-            DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
-          },
-          'hardcover',
-          syncHardcover,
-        ),
-      ),
-      200,
+    const result = await runSourceSync(
+      {
+        ...context.env,
+        DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver'),
+      },
+      'hardcover',
+      (env) => syncHardcover(env, env.AUTH_MODE === 'access' ? { maxPages: 1 } : {}),
     )
+    if (result.continuation)
+      await context.env.SYNC_QUEUE.send({
+        operation: 'sync_source',
+        source: 'hardcover',
+        idempotencyKey: `source-sync:hardcover:continuation:${result.syncRunId}`,
+      })
+    return context.json(HardcoverSyncResponseSchema.parse(result), 200)
   } catch (error) {
     if (!(error instanceof HardcoverTokenMissingError)) throw error
     return context.json(

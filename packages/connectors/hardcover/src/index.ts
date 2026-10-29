@@ -1,4 +1,5 @@
 export {
+  HardcoverApiError,
   fetchHardcoverEditionsResponse,
   fetchHardcoverReadBooksPage,
   fetchHardcoverReadBooksResponse,

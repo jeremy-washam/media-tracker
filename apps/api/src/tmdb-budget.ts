@@ -1,28 +1,9 @@
 import type { Bindings } from './env'
 import { SyncBudget, SyncDeferredError } from './sync-budget'
 
-// One reviewed refresh, including all retry/lease-recovery attempts. Changing
-// the job ID requires another account-wide allowance review.
-export const tmdbGrantAttempts = 80
-
-export function tmdbGrantAllowed(env: Bindings, jobId: string | undefined, now = Date.now()) {
-  const until = Date.parse(env.TMDB_CATALOG_UNTIL ?? '')
-  const sourceUntil = Date.parse(env.SYNC_BUDGET_UNTIL ?? '')
-  return (
-    env.AUTH_MODE === 'access' &&
-    env.SYNC_ENABLED === 'true' &&
-    Boolean(jobId) &&
-    jobId === env.TMDB_CATALOG_JOB_ID &&
-    Number.isFinite(until) &&
-    until > now &&
-    until <= sourceUntil &&
-    until <= now + 32 * 86_400_000
-  )
-}
-
 /** Native D1 boundary: check between operations and count first() through all()
  * so write claims retain their real metadata. A single operation may cross the
- * stop threshold; the reviewed allocation reserves headroom for that operation.
+ * stop threshold; the per-delivery ceiling reserves headroom for that operation.
  */
 export function boundedTmdbEnvironment(env: Bindings) {
   let rowsRead = 0
@@ -31,13 +12,11 @@ export function boundedTmdbEnvironment(env: Bindings) {
   let uncertain = false
   const budget = new SyncBudget(
     { requests: 128, bytes: 16 * 1024 * 1024, pages: 1, records: 10 },
-    fetch,
+    env.SYNC_FETCH ?? fetch,
     Date.now,
     () => {
       if (uncertain || rowsRead >= 50_000_000 || rowsWritten >= 50_000)
         throw new SyncDeferredError('TMDB database allowance needs review')
-      if (!tmdbGrantAllowed(env, env.TMDB_CATALOG_JOB_ID))
-        throw new SyncDeferredError('TMDB refresh grant has expired')
       return { rowsRead, rowsWritten, databaseBytes }
     },
   )

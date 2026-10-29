@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+export class SpotifyTokenRefreshError extends Error {
+  readonly operation = 'token_refresh'
+  constructor(
+    readonly status: number,
+    readonly retryAfterSeconds: number | null = null,
+  ) {
+    super(`Spotify token refresh returned ${status}`)
+    this.name = 'SpotifyTokenRefreshError'
+  }
+}
+
 const tokenSchema = z.object({
   access_token: z.string().min(1),
   expires_in: z.number().int().positive(),
@@ -43,7 +54,13 @@ export async function refreshSpotifyAccessToken(input: {
     headers,
     body,
   })
-  if (!response.ok) throw new Error(`Spotify token refresh returned ${response.status}`)
+  if (!response.ok) {
+    const retryAfter = Number(response.headers.get('retry-after'))
+    throw new SpotifyTokenRefreshError(
+      response.status,
+      Number.isSafeInteger(retryAfter) && retryAfter > 0 ? retryAfter : null,
+    )
+  }
   const token = tokenSchema.parse(await response.json())
   return {
     accessToken: token.access_token,

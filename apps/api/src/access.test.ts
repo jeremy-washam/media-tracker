@@ -52,6 +52,42 @@ describe('private Worker access', () => {
   it('allows a signed, current token for the configured owner', async () => {
     expect(await authorizeRequest(request(await token()), config)).toBeNull()
   })
+  it('restricts the configured CI service identity to queryless read-only smoke endpoints', async () => {
+    const jwt = await new SignJWT({ common_name: 'synthetic.access', type: 'app' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
+      .setIssuer(issuer)
+      .setAudience(config.ACCESS_AUD)
+      .setSubject('')
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(keys.privateKey)
+    const env = { ...config, SMOKE_SERVICE_TOKEN_ID: 'synthetic.access' }
+    for (const path of ['/api/health', '/api/library/books/summary', '/api/library/videos/summary'])
+      expect(await authorizeRequest(request(jwt, path), env)).toBeNull()
+    for (const path of [
+      '/',
+      '/api/connections',
+      '/api/library/books',
+      '/api/library/books/summary?search=x',
+      '/api/operations',
+    ])
+      expect((await authorizeRequest(request(jwt, path), env))?.status).toBe(403)
+    expect(
+      (
+        await authorizeRequest(
+          new Request('https://synthetic.workers.dev/api/health', {
+            method: 'POST',
+            headers: { 'cf-access-jwt-assertion': jwt },
+          }),
+          env,
+        )
+      )?.status,
+    ).toBe(403)
+    expect(
+      (await authorizeRequest(request(jwt), { ...env, SMOKE_SERVICE_TOKEN_ID: 'other.access' }))
+        ?.status,
+    ).toBe(403)
+  })
   it('rejects missing tokens and spoofed identity headers', async () => {
     expect(
       (
@@ -140,6 +176,40 @@ describe('private Worker access', () => {
       {} as ExecutionContext,
     )
     expect(response.status).toBe(503)
+  })
+  it('keeps private health available during a sticky pause while summary reads stop before D1', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const prepare = vi.fn(() => {
+      throw new Error('D1 forbidden during pause')
+    })
+    const env = {
+      ...config,
+      OPERATING_MONITOR_ENABLED: 'true',
+      DB: { prepare },
+      RAW_BUCKET: {
+        get: async () => ({
+          size: 500,
+          json: async () => ({
+            version: 1,
+            checkedAt: new Date().toISOString(),
+            windowStart: new Date().toISOString(),
+            paused: true,
+            reason: 'manual',
+            estimatedTotalUsd: 5,
+            queuePaused: true,
+          }),
+        }),
+      },
+      API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+      WRITE_RATE_LIMITER: { limit: async () => ({ success: true }) },
+    } as unknown as Bindings
+    const jwt = await token()
+    expect((await worker.fetch(request(jwt), env, {} as ExecutionContext)).status).toBe(200)
+    expect(
+      (await worker.fetch(request(jwt, '/api/library/books/summary'), env, {} as ExecutionContext))
+        .status,
+    ).toBe(503)
+    expect(prepare).not.toHaveBeenCalled()
   })
   it('does not start scheduled or queue work while sync is disabled', async () => {
     const context = { waitUntil: vi.fn() } as unknown as ExecutionContext

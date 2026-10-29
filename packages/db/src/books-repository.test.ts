@@ -169,6 +169,31 @@ describe('Books projection and repository', () => {
 
   afterEach(() => database.close())
 
+  it('stores running execution progress separately from complete cursors and enforces ownership', async () => {
+    database.exec("UPDATE sync_runs SET status='running',finished_at=NULL WHERE id='run-1'")
+    const progress = {
+      connectionId: 'connection-hardcover',
+      syncRunId: 'run-1',
+      checkpoint: { afterId: 50 },
+      updatedAt: '2026-01-01T00:00:00Z',
+    }
+    await repository.saveHardcoverSyncProgress(progress)
+    expect(await repository.findHardcoverSyncProgress(progress.connectionId)).toEqual(progress)
+    await repository.saveHardcoverSyncProgress({ ...progress, checkpoint: { afterId: 100 } })
+    expect((await repository.findHardcoverSyncProgress(progress.connectionId))?.checkpoint).toEqual(
+      { afterId: 100 },
+    )
+    expect(await repository.findHardcoverSyncProgress('absent')).toBeNull()
+    await expect(
+      repository.saveHardcoverSyncProgress({ ...progress, connectionId: 'other' }),
+    ).rejects.toThrow('same Hardcover connection')
+    expect(() =>
+      database.exec(
+        "INSERT INTO sync_cursors(id,connection_id,name,checkpoint_json,committed_at,sync_run_id) VALUES('cursor','connection-hardcover','library-books','{}','2026-01-01','run-1')",
+      ),
+    ).toThrow('completed sync run')
+  })
+
   it('upgrades populated Books facts and backfills formats without changing provenance', async () => {
     const upgrade = new DatabaseSync(':memory:')
     try {

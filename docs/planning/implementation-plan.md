@@ -1,11 +1,12 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-10-14
+Last updated: 2026-10-29
 
-October 17 follow-up: the owner prioritized hosted source sync before additional
-browsing measurements. The [source sync rollout](source-sync-rollout.md) owns
-activation controls, initial finite limits, credential ownership and first-run
-validation. Optional content acquisition and catalog backfills remain paused.
+Deployment closeout is the active priority. The[closeout checklist](deployment-closeout.md)
+tracks permanent cost safeguards, source recovery, recurring catalog/content,
+hosted imports, observability, recovery and controlled CI/CD. The owner approved
+modest ordinary overages with warning/pause targets, replacing temporary grants.
+Code preparation and live acceptance are recorded separately there.
 
 Sections 3–15 include the longer-term roadmap, not a checklist of shipped
 features. Section 18 records the ingestion MVP and its September 14 follow-ups.
@@ -23,15 +24,13 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
-## Current checkout status (2026-10-14)
+## Current checkout and production status (2026-10-29)
 
-The October 17 test audit follow-up hardens Spotify evidence/identity and partial
-failure reporting, catalog lease/publication fencing, timestamp/query validation,
-Reader content publication, and Library recovery/accessibility states. It adds
-real local Worker and browser acceptance suites and shared D1-constrained
-repository fixtures. ADR 0020 and migration 0031 describe the storage change;
-hosted migration and deployment remain separate work. CI and automatic deployment
-are deferred until the local fixes and test portfolio are accepted.
+The October 17 audit hardening, migration 0031, ratings presentation and movie row
+layout fixes are merged and deployed. Existing local unit/Python, production
+build, runtime, browser and real-stack acceptance gates passed for that release.
+CI/CD is being implemented as part of the current closeout; it is not yet an
+accepted live delivery path.
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -44,21 +43,13 @@ list defaults, expanded Article rows, shadcn controls, branding, and motion.
 The [Music implementation](music-implementation.md) supersedes earlier
 30-second/excluded-observation proposals with immediate song counting.
 
-Private Access checks, usage limiters, production packaging, deployment helpers,
-and local snapshot/restore rehearsal are in the checkout. Hosted storage,
-queues, and an owner-only Access application are provisioned. The paused Worker
-is published and private data transfer is complete. Full database/restore
-verification passed: 94 tables, 1,798,348 rows, one compatibility view, and all
-eight search vocabularies matched. The private recovery artifact is retained.
-Owner sign-in and MFA are confirmed, and the owner passed all six section-load
-checks plus search, filters, item details/history, and an article excerpt.
-Hosted performance and provider-job budgets remain pending under the launch
-gates in the
-[deployment runbook](deployment.md) and
-[storage efficiency plan](storage-efficiency-plan.md). The
-[documentation audit](documentation-audit.md) records the code/live-app comparison.
-Historical milestone sections below retain their original delivery context;
-their deferrals do not override this current status.
+Owner Access/MFA, private storage transfer and independent restore verification
+are complete. The owner verified all six media families, search, filters,
+inspectors/history and article excerpts. Letterboxd/Readwise/Spotify polling has
+run. Hardcover completion and Spotify's latest failure need the reliability
+work in the closeout; recurring catalog/content and release automation require
+live acceptance. See the[deployment closeout](deployment-closeout.md) for the
+current checklist and[deployment runbook](deployment.md) for transfer evidence.
 
 The owner has requested a separate native iOS experience, with Library first and
 genuine native Apple controls. The [iOS plan and workflow](ios-app.md) captures
@@ -709,39 +700,16 @@ Importing the same source data twice produces the same final database state.
 
 ## 15. Deployment and operations
 
-The [storage efficiency plan](storage-efficiency-plan.md) adds the owner's
-October 12 priority: reduce amplification and measure usage rather than force
-Free. The October 13 instruction prohibits spending; remote work is paused
-until the runbook's spending gate is satisfied. On October 14, the owner
-confirmed the existing $5/month plan with $0 additional charges. The isolated local implementation adds scoped D1
-usage reporting, independent bounded maintenance, clock-safe YouTube publication
-and compact evidence references. Owner Library smoke checks and full remote
-storage verification passed. Hosted performance measurement and provider-job
-budgets/activation remain pending.
-It recommends one paid D1 initially, copy-rehearsed
-compact references/evidence layouts, cache maintenance while ingestion is paused,
-and bounded job budgets. Further database splits and historical interpretation
-archival require demonstrated benefits and explicit recovery boundaries. This
-contains merged code and forward migrations. The local ledger was backed up and
-migrated through 0029 on October 13. The hosted copy includes those migrations
-and passed independent schema/data/restore verification; retention policy is
-unchanged.
-
-The [private deployment runbook](deployment.md) records the October 12
-preparation: Worker-side owner authentication, an app-only production bundle,
-guarded production configuration, paused cutover, and a local D1/R2 transfer and
-restore rehearsal. The paused Worker and owner-only Access are deployed; owner
-sign-in, MFA, health, and the web interface are confirmed. The database copy is
-237 of 237 files complete, including indexes/triggers. All 18,126 private R2
-objects are checksum/metadata verified. Full hosted database/restore verification
-passed, including every table, the compatibility view, integrity and sequence
-checks, and all eight search vocabularies. Temporary verification tables were
-removed, the recovery artifact was retained, and a fresh Time Travel bookmark
-was saved. Production sync remains off. Usage stayed within included allowances;
-further remote work remains subject to the spending gate. The database requires
-Workers Paid at its current size. Owner Library smoke checks passed; hosted
-performance measurement and provider-job budgets remain open. Automatic
-ingestion is not activated.
+The[deployment closeout](deployment-closeout.md) owns current remaining work and
+acceptance evidence. The existing paid D1/R2 architecture and private recovery
+artifact remain. The owner now accepts small routine overages under the
+simple[operating policy](../decisions/0021-bounded-production-operations.md),
+with warning near $10 and emergency pause near $25 estimated total; prior dated
+$0-overage/grant-renewal requirements are superseded. No new paid service is
+authorized. The[storage efficiency plan](storage-efficiency-plan.md) and
+[deployment runbook](deployment.md) retain the compaction, transfer and restore
+history. Migrations through 0031 and owner-only Access/MFA are live. See the
+closeout checklist before treating any later prepared feature as deployed.
 
 ### Production resources
 

@@ -425,6 +425,21 @@ describe('Spotify library repository', () => {
       isrc: null,
       observedAt: '2026-02-01T00:00:00Z',
     })
+    expect(await repository.listTracksNeedingMetadata(25, '2026-02-01T00:00:00Z')).toEqual([
+      expect.objectContaining({ mediaItemId: 'song' }),
+    ])
+    expect(await repository.listTracksNeedingMetadata(25, '2026-01-31T00:00:00Z')).toEqual([])
+    expect(await repository.catalogBacklogCounts('2026-02-01T00:00:00Z')).toMatchObject({
+      tracks: 1,
+    })
+    await repository.markTrackMetadataUnavailable(['song'], '2026-02-02T00:00:00Z')
+    expect(await repository.listTracksNeedingMetadata(25, '2026-02-01T00:00:00Z')).toEqual([])
+    expect(await repository.listTracksNeedingMetadata(25, '2026-02-23T00:00:00Z')).toEqual([
+      expect.objectContaining({ mediaItemId: 'song' }),
+    ])
+    database.exec(
+      "UPDATE spotify_song_tracks SET metadata_state='current' WHERE media_item_id='song'",
+    )
     database.exec(`
       INSERT INTO spotify_song_albums(id,spotify_album_uri,spotify_album_id,updated_at)
         VALUES('orphan-album','spotify:album:orphan','orphan','2026-01-01T00:00:00Z');

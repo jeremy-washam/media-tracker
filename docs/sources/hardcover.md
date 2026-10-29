@@ -496,3 +496,15 @@ reconciliation and recovery policies in [ADR 0010](../decisions/0010-reconciliat
 This implementation update does not represent a new private payload probe or a
 new verification of upstream API capabilities. See the connector README for
 current behavior; earlier reconnaissance questions remain historical evidence.
+
+## Deployment reliability update — 2026-10-29
+
+The interrupted hosted reconciliation is not evidence of a complete snapshot.
+The new Worker path checkpoints each durable page under one run in a dedicated
+`hardcover_sync_progress` table (migration 0032), leaving `library-books` as a
+completed-snapshot cursor. Hosted orchestration uses one page per invocation,
+reuses the snapshot identity on retry, and finalizes absence only at scan end.
+See the [connector runbook](../../packages/connectors/hardcover/README.md#resumable-hosted-reconciliation-2026-10-29)
+for queue recovery, safe diagnostics, source limitations, and the outstanding
+live-completion acceptance gate. No current provider capability or private
+account measurement is inferred from synthetic tests.

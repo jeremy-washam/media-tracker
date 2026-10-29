@@ -939,6 +939,7 @@ export class SqlMoviesRepository {
     retryBefore: string
     matcherVersion: string
     at: string
+    refreshBefore?: string
     limit: number
   }): Promise<TmdbEnrichmentCandidate[]> {
     const rows = await statement(
@@ -977,8 +978,8 @@ export class SqlMoviesRepository {
         input.afterMediaItemId ?? '',
         input.retryBefore,
         input.matcherVersion,
-        input.at,
-        input.at,
+        input.refreshBefore ?? input.at,
+        input.refreshBefore ?? input.at,
         input.limit,
       ],
     ).all<{

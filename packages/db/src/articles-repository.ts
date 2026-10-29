@@ -1200,24 +1200,36 @@ export class SqlArticlesRepository {
     ).run()
   }
 
+  /** Reserve a small current-source batch; failed deliveries have a finite
+   * acquisition allowance per source version. Existing manifests/evidence stay
+   * retained when a new source version makes another job eligible. */
   async reserveContentTargets(
     connectionId: string,
     reservationId: string,
     createdAt: string,
+    limit = 20,
   ): Promise<ArticleContentTarget[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+      throw new RangeError('Article content reservation limit must be between 1 and 100')
     const staleBefore = new Date(Date.parse(createdAt) - 30 * 60 * 1_000).toISOString()
     const rows = await statement(
       this.database,
       `SELECT d.connection_id,d.document_id,d.id readwise_document_id,d.media_item_id,d.updated_at_source
        FROM readwise_documents d JOIN article_library_projection p ON p.media_item_id=d.media_item_id
+       LEFT JOIN article_content_jobs j ON j.idempotency_key=
+         'readwise-content:'||d.connection_id||':'||d.document_id||':'||COALESCE(d.updated_at_source,'unknown')||':a1:e1'
        WHERE d.connection_id=? AND d.upstream_state='active' AND (p.in_archive=1 OR p.in_queue=1)
          AND (NOT EXISTS (SELECT 1 FROM article_content_manifests m
            WHERE m.readwise_document_id=d.id AND m.state='ready'
              AND COALESCE(m.source_updated_at,'')=COALESCE(d.updated_at_source,''))
            OR NOT EXISTS (SELECT 1 FROM article_content_raw_acquisitions ra
              WHERE ra.readwise_document_id=d.id AND ra.processing_status='processed'))
-       ORDER BY d.document_id`,
-      [connectionId],
+         AND (j.idempotency_key IS NULL OR (j.status<>'completed' AND j.attempt_count<3 AND (j.next_attempt_at IS NULL OR j.next_attempt_at<=?)
+           AND COALESCE(j.failure_class,'') NOT IN ('content_unavailable','no_indexable_text','content_too_large')
+           AND (j.status='failed' OR j.updated_at IS NULL OR j.updated_at<? OR EXISTS (
+             SELECT 1 FROM sync_runs r WHERE r.id=j.reservation_id AND r.status='failed'))))
+       ORDER BY d.document_id LIMIT ?`,
+      [connectionId, createdAt, staleBefore, limit],
     ).all<{
       connection_id: string
       document_id: string
@@ -1225,11 +1237,22 @@ export class SqlArticlesRepository {
       media_item_id: string
       updated_at_source: string | null
     }>()
+    const targets: ArticleContentTarget[] = []
     for (const row of rows.results) {
       const idempotencyKey = `readwise-content:${row.connection_id}:${row.document_id}:${row.updated_at_source ?? 'unknown'}:a1:e1`
-      await statement(
+      const reserved = await statement(
         this.database,
-        `INSERT OR IGNORE INTO article_content_jobs(idempotency_key,connection_id,readwise_document_id,document_id,source_updated_at,reservation_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)`,
+        `INSERT INTO article_content_jobs(idempotency_key,connection_id,readwise_document_id,document_id,source_updated_at,reservation_id,status,created_at,updated_at)
+         VALUES(?,?,?,?,?,?,'pending',?,?)
+         ON CONFLICT(idempotency_key) DO UPDATE SET reservation_id=excluded.reservation_id,
+           status='pending',updated_at=excluded.updated_at,failure_class=NULL,next_attempt_at=NULL
+         WHERE article_content_jobs.status<>'completed' AND article_content_jobs.attempt_count<3
+           AND (article_content_jobs.next_attempt_at IS NULL OR article_content_jobs.next_attempt_at<=?)
+           AND COALESCE(article_content_jobs.failure_class,'') NOT IN ('content_unavailable','no_indexable_text','content_too_large')
+           AND (article_content_jobs.status='failed' OR article_content_jobs.updated_at IS NULL
+             OR article_content_jobs.updated_at<? OR EXISTS (SELECT 1 FROM sync_runs r
+               WHERE r.id=article_content_jobs.reservation_id AND r.status='failed'))
+         RETURNING idempotency_key`,
         [
           idempotencyKey,
           row.connection_id,
@@ -1239,41 +1262,20 @@ export class SqlArticlesRepository {
           reservationId,
           createdAt,
           createdAt,
+          createdAt,
+          staleBefore,
         ],
-      ).run()
+      ).first<{ idempotency_key: string }>()
+      if (reserved !== null)
+        targets.push({
+          connectionId: row.connection_id,
+          documentId: row.document_id,
+          readwiseDocumentId: row.readwise_document_id,
+          mediaItemId: row.media_item_id,
+          sourceUpdatedAt: row.updated_at_source,
+        })
     }
-    await statement(
-      this.database,
-      `UPDATE article_content_jobs SET reservation_id=?,status='pending',updated_at=?,failure_class=NULL
-       WHERE connection_id=? AND status<>'completed' AND
-         COALESCE(failure_class,'') NOT IN ('content_unavailable','no_indexable_text') AND
-         (status='failed' OR updated_at IS NULL OR updated_at<? OR EXISTS (
-           SELECT 1 FROM sync_runs failed_reservation
-           WHERE failed_reservation.id=article_content_jobs.reservation_id
-             AND failed_reservation.status='failed')) AND
-         EXISTS (SELECT 1 FROM readwise_documents d JOIN article_library_projection p
-           ON p.media_item_id=d.media_item_id WHERE d.id=article_content_jobs.readwise_document_id
-             AND d.upstream_state='active' AND (p.in_archive=1 OR p.in_queue=1))`,
-      [reservationId, createdAt, connectionId, staleBefore],
-    ).run()
-    const reserved = await statement(
-      this.database,
-      `SELECT j.connection_id,j.document_id,j.readwise_document_id,d.media_item_id,j.source_updated_at FROM article_content_jobs j JOIN readwise_documents d ON d.id=j.readwise_document_id WHERE j.reservation_id=? AND j.status='pending' ORDER BY j.document_id`,
-      [reservationId],
-    ).all<{
-      connection_id: string
-      document_id: string
-      readwise_document_id: string
-      media_item_id: string
-      source_updated_at: string | null
-    }>()
-    return reserved.results.map((row) => ({
-      connectionId: row.connection_id,
-      documentId: row.document_id,
-      readwiseDocumentId: row.readwise_document_id,
-      mediaItemId: row.media_item_id,
-      sourceUpdatedAt: row.source_updated_at,
-    }))
+    return targets
   }
 
   async findContentTarget(
@@ -1538,21 +1540,33 @@ export class SqlArticlesRepository {
       ),
       statement(
         this.database,
-        `UPDATE article_content_jobs SET status='failed',updated_at=?,failure_class=? WHERE idempotency_key=?`,
+        `UPDATE article_content_jobs SET status='failed',updated_at=?,failure_class=? WHERE idempotency_key=? AND status<>'completed'`,
         [failedAt, failureClass, idempotencyKey],
       ),
     ])
   }
 
-  async startContentJob(idempotencyKey: string, attemptedAt: string): Promise<number> {
+  async deferContentJob(
+    idempotencyKey: string,
+    failedAt: string,
+    nextAttemptAt: string,
+  ): Promise<void> {
+    await statement(
+      this.database,
+      `UPDATE article_content_jobs SET status='failed',updated_at=?,next_attempt_at=?,failure_class='rate_limited'
+       WHERE idempotency_key=? AND status<>'completed'`,
+      [failedAt, nextAttemptAt, idempotencyKey],
+    ).run()
+  }
+
+  async startContentJob(idempotencyKey: string, attemptedAt: string): Promise<number | null> {
     const row = await statement(
       this.database,
-      `UPDATE article_content_jobs SET status='pending',last_attempt_at=?,updated_at=?,
-        attempt_count=attempt_count+1 WHERE idempotency_key=? RETURNING attempt_count`,
-      [attemptedAt, attemptedAt, idempotencyKey],
+      `UPDATE article_content_jobs SET status='pending',last_attempt_at=?,updated_at=?,next_attempt_at=NULL,
+        attempt_count=attempt_count+1 WHERE idempotency_key=? AND status<>'completed' AND attempt_count<3 AND (next_attempt_at IS NULL OR next_attempt_at<=?) RETURNING attempt_count`,
+      [attemptedAt, attemptedAt, idempotencyKey, attemptedAt],
     ).first<{ attempt_count: number }>()
-    if (row === null) throw new Error('Article content job is missing')
-    return row.attempt_count
+    return row?.attempt_count ?? null
   }
 
   async completeContentJob(idempotencyKey: string, completedAt: string): Promise<void> {

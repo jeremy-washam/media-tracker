@@ -25,23 +25,17 @@ External services and exports
   -> React web client
 ```
 
-Production deployment must put the web application and normal API traffic
-behind Cloudflare Access. Worker-side token/owner checks and production asset
-exclusion are implemented. A paused Worker and owner-only Access application are
-provisioned; owner sign-in and MFA are confirmed. The database transfer is
-complete; all private R2 objects are checksum/metadata verified within included
-usage. Full hosted database and independent restore verification passed:
-94 tables, 1,798,348 rows, the compatibility view, schema/integrity/sequence
-checks, and all eight search vocabularies matched. The private recovery artifact
-is retained, and temporary verification tables were removed.
-The owner approves the existing $5/month subscription with $0 additional
-charges. The owner confirmed all six media sections, search, filters, item
-details/history, and article excerpts work. Hosted performance and provider-job
-budgets remain pending; background processing stays off. Missing Access
-configuration denies hosted requests. Local development bypasses
-authentication only for explicit loopback requests.
-Hosted webhook/OAuth callback routes are deferred and will require their own
-authentication when introduced.
+Production web and API traffic are protected by Cloudflare Access, with
+Worker-side signature/audience/owner checks. Owner sign-in/MFA, private data
+transfer and independent schema/data/search restore verification are complete.
+The existing $5/month plan is approved with modest ordinary overages; bounded
+operation and a sticky emergency pause replace temporary activation grants.
+See[ADR 0021](../decisions/0021-bounded-production-operations.md) and the
+[deployment closeout](../planning/deployment-closeout.md) for implementation,
+account setup and live acceptance. Missing Access configuration denies hosted
+requests; local bypass is restricted to explicit loopback requests. A separate
+machine identity is restricted to health and six queryless summary GETs for
+release verification. Hosted provider OAuth/webhook callbacks remain deferred.
 
 The planned iOS client will consume the same HTTP API, including its OpenAPI 3.1
 description. Its Swift networking/models are separate from TypeScript packages.
@@ -136,8 +130,9 @@ after payload reconnaissance.
 ## Current operational implementation
 
 Source imports and resumable chunks run through HTTP. Hosted source polling now
-uses explicit, expiring usage grants, durable daily admission and a cross-entry
-lease. Hourly cron dispatches eligible source jobs to a serial queue consumer;
+uses explicit source enablement, durable daily admission and a cross-entry
+lease. The operating monitor gates API/database work and background scheduling
+from a private R2 state object; it pauses native queue delivery on a sticky stop. Hourly cron dispatches eligible source jobs to a serial queue consumer;
 local cron retains direct execution. Manual source-sync actions share the same
 admission and resource ceilings. See the [source sync rollout](../planning/source-sync-rollout.md).
 The queue consumer also handles bounded Reader article-

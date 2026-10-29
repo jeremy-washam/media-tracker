@@ -495,3 +495,19 @@ The live probes read ignored local credentials and sent only provider-native
 movie search facts or exact video identities to their respective APIs. Probe
 output retained aggregate field/count observations only; credentials, titles,
 provider identifiers, descriptions, and raw responses were not committed.
+
+## Recurring operation reviewed October 29, 2026
+
+The deployment closeout replaces one-off TMDB grants with ordinary hourly due
+checks and durable bounded catalog jobs. TMDB and YouTube refresh seven days
+before their 30-day cache expiry; Spotify exact-ID observations become eligible
+after 21 days. Fresh catalogs do not create empty jobs or trigger full projection
+rebuilds. Failed/completed automatic jobs are reused for their UTC day, and
+repeated reservations without progress have a finite retry bound. See the
+[catalog operations policy](../planning/catalog-operations.md) for batch sizes,
+provider documentation, failure recovery, and live acceptance.
+
+Spotify's accepted indefinite historical catalog retention in ADR 0014 is
+unchanged; current metadata refresh is not a claim that retained raw catalog
+responses meet the provider's temporary-cache requirement. Source history and
+catalog observations remain distinct.

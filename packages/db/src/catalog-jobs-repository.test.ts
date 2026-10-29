@@ -35,6 +35,22 @@ describe('catalog job ownership', () => {
     expect((await restarted.find('bounded'))?.attemptCount).toBe(2)
   })
 
+  it('preserves long provider backoff across repository restarts and fences stale deferrals', async () => {
+    await jobs.create('job', 'tmdb', at)
+    const token = (await jobs.reserve('job', null, at, expired))!
+    expect(await jobs.defer('job', token, '2026-01-03T00:00:00.000Z', at)).toBe(true)
+    const restarted = new SqlCatalogJobsRepository(new SqliteTestClient(database))
+    expect(await restarted.reserve('job', null, '2026-01-02T00:00:00.000Z', expired)).toBeNull()
+    const replacement = (await restarted.reserve(
+      'job',
+      null,
+      '2026-01-03T00:00:00.000Z',
+      '2026-01-03T00:05:00.000Z',
+    ))!
+    expect(replacement).toBe(token + 1)
+    expect(await jobs.defer('job', token, '2026-01-10T00:00:00.000Z', at)).toBe(false)
+  })
+
   it('reserves once and issues a new generation after release or actual expiry', async () => {
     await jobs.create('job', 'youtube', at)
     expect(await jobs.reserve('job', null, at, '2026-01-01T00:05:00.000Z')).toBe(1)

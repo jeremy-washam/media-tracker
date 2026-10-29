@@ -19,6 +19,11 @@ import {
 export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BUCKET'> {
   API_RATE_LIMITER?: WorkerBindings['API_RATE_LIMITER']
   WRITE_RATE_LIMITER?: WorkerBindings['WRITE_RATE_LIMITER']
+  OPERATING_MONITOR_ENABLED?: string
+  OPERATING_API_TOKEN?: string
+  CLOUDFLARE_ACCOUNT_ID?: string
+  SYNC_QUEUE_ID?: string
+  SMOKE_SERVICE_TOKEN_ID?: string
   AUTH_MODE?: string
   ACCESS_TEAM_DOMAIN?: string
   ACCESS_AUD?: string

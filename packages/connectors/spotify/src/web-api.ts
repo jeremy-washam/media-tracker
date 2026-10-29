@@ -221,16 +221,95 @@ export interface SpotifyPlayerObservation {
   readonly sourceTimestamp: string | null
 }
 
+export type SpotifyOperation =
+  | 'saved_episodes'
+  | 'saved_shows'
+  | 'player'
+  | 'recent_tracks'
+  | 'track_catalog'
+  | 'episode_catalog'
+  | 'token_refresh'
+  | 'unknown'
+
+function retryAfter(response: Response): number | null {
+  const value = Number(response.headers.get('retry-after'))
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+function operationFor(url: URL): SpotifyOperation {
+  if (url.pathname === '/v1/me/episodes') return 'saved_episodes'
+  if (url.pathname === '/v1/me/shows') return 'saved_shows'
+  if (url.pathname === '/v1/me/player/recently-played') return 'recent_tracks'
+  if (url.pathname.startsWith('/v1/me/player')) return 'player'
+  if (url.pathname.startsWith('/v1/episodes/')) return 'episode_catalog'
+  if (url.pathname.startsWith('/v1/tracks')) return 'track_catalog'
+  return 'unknown'
+}
+
 export class SpotifyApiError extends Error {
   readonly status: number
   readonly retryAfterSeconds: number | null
 
-  constructor(message: string, status: number, retryAfterSeconds: number | null = null) {
+  constructor(
+    message: string,
+    status: number,
+    retryAfterSeconds: number | null = null,
+    readonly operation: SpotifyOperation = 'unknown',
+    readonly reason: 'QUOTA_EXCEEDED' | null = null,
+  ) {
     super(message)
     this.name = 'SpotifyApiError'
     this.status = status
     this.retryAfterSeconds = retryAfterSeconds
   }
+}
+
+async function apiFailure(
+  response: Response,
+  operation: SpotifyOperation,
+): Promise<SpotifyApiError> {
+  let reason: 'QUOTA_EXCEEDED' | null = null
+  // Retain only the documented quota enum. Never propagate provider messages,
+  // and never read an unbounded error payload merely to classify a failure.
+  const reader = response.status === 429 ? response.body?.getReader() : null
+  if (reader) {
+    const chunks: Uint8Array[] = []
+    let size = 0
+    try {
+      while (size <= 4096) {
+        const chunk = await reader.read()
+        if (chunk.done) break
+        size += chunk.value.byteLength
+        if (size > 4096) break
+        chunks.push(chunk.value)
+      }
+      if (size <= 4096) {
+        const bytes = new Uint8Array(size)
+        let offset = 0
+        for (const chunk of chunks) {
+          bytes.set(chunk, offset)
+          offset += chunk.byteLength
+        }
+        const body: unknown = JSON.parse(new TextDecoder().decode(bytes))
+        const parsed = z
+          .object({ error: z.object({ reason: z.literal('QUOTA_EXCEEDED') }) })
+          .safeParse(body)
+        if (parsed.success) reason = parsed.data.error.reason
+      }
+    } catch {
+      /* Status and retry timing remain usable without a valid error body. */
+    } finally {
+      await reader.cancel().catch(() => undefined)
+      reader.releaseLock()
+    }
+  } else await response.body?.cancel()
+  return new SpotifyApiError(
+    `Spotify ${operation} returned ${response.status}`,
+    response.status,
+    retryAfter(response),
+    operation,
+    reason,
+  )
 }
 
 export async function fetchSpotifySavedEpisodesResponse(input: {
@@ -244,7 +323,7 @@ export async function fetchSpotifySavedEpisodesResponse(input: {
   url.searchParams.set('offset', String(input.offset ?? 0))
   const response = await fetcher(url, { headers: { Authorization: `Bearer ${input.accessToken}` } })
   if (!response.ok) {
-    throw new SpotifyApiError(`Spotify saved episodes returned ${response.status}`, response.status)
+    throw await apiFailure(response, 'saved_episodes')
   }
   const bytes = new Uint8Array(await response.arrayBuffer())
   return { bytes, contentType: response.headers.get('content-type') ?? 'application/json' }
@@ -256,6 +335,8 @@ export function parseSpotifySavedEpisodesPage(response: {
   const { bytes, contentType } = response
   const page = pageSchema.parse(JSON.parse(new TextDecoder().decode(bytes)))
   const consumed = page.offset + page.items.length
+  if (page.next === null && consumed < page.total)
+    throw new Error('Spotify ended the saved episode scan before its reported total')
   if (page.items.length === 0 && consumed < page.total) {
     throw new Error('Spotify returned an empty page before the saved episode scan completed')
   }
@@ -335,12 +416,7 @@ async function spotifyResponse(input: {
     headers: { Authorization: `Bearer ${input.accessToken}` },
   })
   if (!response.ok && !(input.allowEmpty && response.status === 204)) {
-    const retryAfter = Number(response.headers.get('retry-after'))
-    throw new SpotifyApiError(
-      `Spotify API returned ${response.status}`,
-      response.status,
-      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
-    )
+    throw await apiFailure(response, operationFor(input.url))
   }
   return {
     bytes: new Uint8Array(await response.arrayBuffer()),
@@ -423,8 +499,8 @@ export function parseSpotifySavedShowsPage(response: {
 }): SpotifySavedShowsPage {
   const page = savedShowsPageSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes)))
   const consumed = page.offset + page.items.length
-  if (page.items.length === 0 && consumed < page.total)
-    throw new Error('Spotify returned an empty page before the saved show scan completed')
+  if ((page.items.length === 0 || page.next === null) && consumed < page.total)
+    throw new Error('Spotify ended the saved show scan before its reported total')
   return {
     bytes: response.bytes,
     contentType: response.contentType ?? 'application/json',

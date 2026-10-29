@@ -1,4 +1,5 @@
 import {
+  HardcoverApiError,
   fetchHardcoverEditionsResponse,
   fetchHardcoverReadBooksResponse,
   parseHardcoverEditionsPage,
@@ -43,6 +44,7 @@ import {
   type SyncRun,
 } from '@media-tracker/domain'
 import { ulid } from 'ulid'
+import { z } from 'zod'
 
 import type { Bindings } from './env'
 import { createBooksRepository, createLedgerRepository } from './env'
@@ -68,7 +70,19 @@ function safeErrorName(error: unknown): string {
 }
 
 function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : 'Unknown Hardcover sync failure'
+  if (error instanceof HardcoverApiError) {
+    const status = error.status === null ? 'GraphQL query failure' : `HTTP ${error.status}`
+    const retry =
+      error.retryAfterSeconds === null ? '' : ` Retry after ${error.retryAfterSeconds}s.`
+    const action =
+      error.status === 401
+        ? ' Check or renew the Hardcover token.'
+        : error.status === 403
+          ? ' Check Hardcover query permissions.'
+          : ''
+    return `Hardcover ${status}.${retry}${action} The previous complete snapshot is retained.`
+  }
+  return `Hardcover sync failed (${safeErrorName(error)}); the previous complete snapshot is retained.`
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {
@@ -608,17 +622,58 @@ function bookProjection(input: {
   }
 }
 
-export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncResponse> {
+const progressSchema = z.object({
+  version: z.literal(1),
+  parserVersion: z.literal(parserVersion),
+  runId: z.string().min(1),
+  startedAt: z.string().datetime(),
+  mode: z.enum(['backfill', 'reconcile']),
+  afterId: z.number().int().nonnegative(),
+  pages: z.number().int().nonnegative(),
+  books: z.number().int().nonnegative(),
+  archiveEntries: z.number().int().nonnegative(),
+  queueBooks: z.number().int().nonnegative(),
+  editionIds: z.array(z.number().int().positive()),
+  scanComplete: z.boolean(),
+  complete: z.boolean(),
+})
+
+export interface HardcoverSyncOptions {
+  readonly maxPages?: number
+}
+export type HardcoverSyncResult = HardcoverSyncResponse & { readonly continuation?: boolean }
+
+export async function syncHardcover(
+  bindings: Bindings,
+  options: HardcoverSyncOptions = {},
+): Promise<HardcoverSyncResult> {
+  if (
+    options.maxPages !== undefined &&
+    (!Number.isSafeInteger(options.maxPages) || options.maxPages < 1)
+  )
+    throw new RangeError('Hardcover maxPages must be a positive integer')
   const token = bindings.HARDCOVER_TOKEN?.trim()
   if (token === undefined || token.length === 0) throw new HardcoverTokenMissingError()
 
   const repository = createLedgerRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const booksRepository = createBooksRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
-  const startedAt = instantNow()
-  const connection = await connectionForSync(repository, startedAt)
+  const invocationAt = instantNow()
+  const connection = await connectionForSync(repository, invocationAt)
   const previousCursor = await repository.findSyncCursor(connection.id, 'library-books')
-  const runId = syncRunId(ulid())
-  const mode = previousCursor === null ? ('backfill' as const) : ('reconcile' as const)
+  const progressCursor = await booksRepository.findHardcoverSyncProgress(connection.id)
+  // A malformed checkpoint must not silently start another snapshot or retire evidence.
+  const progress =
+    progressCursor === null ||
+    progressCursor.checkpoint.complete === true ||
+    previousCursor?.syncRunId === progressCursor.syncRunId
+      ? null
+      : progressSchema.parse(progressCursor.checkpoint)
+  if (progress !== null && progress.runId !== progressCursor!.syncRunId)
+    throw new Error('Hardcover progress refers to a different sync run')
+  const startedAt = progress === null ? invocationAt : utcInstant(progress.startedAt)
+  const runId = syncRunId(progress?.runId ?? ulid())
+  const mode = progress?.mode ?? (previousCursor === null ? 'backfill' : 'reconcile')
+  const retained = await repository.syncRunEvidenceCounts(runId)
   const runningRun: SyncRun = {
     id: runId,
     connectionId: connection.id,
@@ -626,31 +681,68 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
     status: 'running',
     startedAt,
     finishedAt: null,
-    counts: { rawObjects: 0, sourceRecords: 0, normalizedRecords: 0, failedRecords: 0 },
+    counts: { ...retained, normalizedRecords: progress?.archiveEntries ?? 0, failedRecords: 0 },
     errorCode: null,
     errorMessage: null,
   }
   const pendingIdentities = new Map<string, PendingIdentity>()
-  const rawObjects: RawObject[] = []
-  let pages = 0
-  let sourceRecords = 0
-  let books = 0
-  let archiveEntries = 0
-  let queueBooks = 0
-  let works = 0
-  const projectedEditionIds = new Set<number>()
+  let pages = progress?.pages ?? 0
+  let sourceRecords = retained.sourceRecords
+  let books = progress?.books ?? 0
+  let archiveEntries = progress?.archiveEntries ?? 0
+  let queueBooks = progress?.queueBooks ?? 0
+  let works = books
+  let afterId = progress?.afterId ?? 0
+  let scanComplete = progress?.scanComplete ?? false
+  let invocationPages = 0
+  const attemptId = ulid()
+  const projectedEditionIds = new Set<number>(progress?.editionIds ?? [])
+  const checkpoint = (complete: boolean) => ({
+    connectionId: connection.id,
+    checkpoint: {
+      version: 1,
+      parserVersion,
+      runId,
+      startedAt,
+      mode,
+      afterId,
+      pages,
+      books,
+      archiveEntries,
+      queueBooks,
+      editionIds: [...projectedEditionIds],
+      scanComplete,
+      complete,
+    },
+    updatedAt: instantNow(),
+    syncRunId: runId,
+  })
+  const result = (continuation = false): HardcoverSyncResult => ({
+    syncRunId: runId,
+    mode,
+    pages,
+    sourceRecords,
+    books,
+    archiveEntries,
+    queueBooks,
+    works,
+    editions: projectedEditionIds.size,
+    ...(continuation ? { continuation: true } : {}),
+  })
 
   await repository.saveConnection(connection)
   await repository.saveSyncRun(runningRun)
 
   try {
-    const userId = await fetchHardcoverUserId(token, bindings.SYNC_FETCH)
-    let afterId = 0
-    while (true) {
+    // Persist the snapshot identity before fetching. Scheduler redelivery can
+    // resume even if a worker dies before sending its next queue message.
+    await booksRepository.saveHardcoverSyncProgress(checkpoint(false))
+    const userId = scanComplete ? null : await fetchHardcoverUserId(token, bindings.SYNC_FETCH)
+    while (!scanComplete) {
       const response = await fetchHardcoverReadBooksResponse({
         token,
         fetcher: bindings.SYNC_FETCH ?? fetch,
-        userId,
+        userId: userId!,
         afterId,
         limit: pageSize,
       })
@@ -666,7 +758,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         connectionId: connection.id,
         syncRunId: runId,
         kind: 'api_page',
-        acquisitionKey: `hardcover:${runId}:page:${pages + 1}`,
+        acquisitionKey: `hardcover:${runId}:attempt:${attemptId}:page:${pages + 1}`,
         storageKey,
         sha256: checksum,
         contentType: response.contentType,
@@ -676,12 +768,19 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         lastParserVersion: null,
         processingError: null,
       }
-      rawObjects.push(rawObject)
       await repository.commit({ rawObjects: [rawObject] })
 
       let page: ReturnType<typeof parseHardcoverReadBooksPage>
       try {
         page = parseHardcoverReadBooksPage(response)
+        if (
+          page.books.length > pageSize ||
+          page.books.some(
+            (book, index) =>
+              book.userBookId <= (index === 0 ? afterId : page.books[index - 1]!.userBookId),
+          )
+        )
+          throw new Error('Hardcover returned a non-advancing library page')
         bindings.SYNC_BUDGET?.page(
           page.books.reduce((count, book) => count + 1 + book.reads.length, 0),
         )
@@ -726,7 +825,7 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
             connectionId: connection.id,
             syncRunId: runId,
             kind: 'api_page',
-            acquisitionKey: `hardcover:${runId}:page:${pages + 1}:editions:${start / editionBatchSize + 1}`,
+            acquisitionKey: `hardcover:${runId}:attempt:${attemptId}:page:${pages + 1}:editions:${start / editionBatchSize + 1}`,
             storageKey: editionStorageKey,
             sha256: editionChecksum,
             contentType: editionResponse.contentType,
@@ -736,7 +835,6 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
             lastParserVersion: null,
             processingError: null,
           }
-          rawObjects.push(editionRawObject)
           await repository.commit({ rawObjects: [editionRawObject] })
           try {
             const editionPage = parseHardcoverEditionsPage(editionResponse)
@@ -846,8 +944,17 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       }
 
       pages += 1
-      if (page.books.length < pageSize) break
-      afterId = page.books.at(-1)!.userBookId
+      invocationPages += 1
+      scanComplete = page.books.length < pageSize
+      afterId = page.books.at(-1)?.userBookId ?? afterId
+      const counts = await repository.syncRunEvidenceCounts(runId)
+      sourceRecords = counts.sourceRecords
+      await repository.saveSyncRun({
+        ...runningRun,
+        counts: { ...counts, normalizedRecords: archiveEntries, failedRecords: 0 },
+      })
+      await booksRepository.saveHardcoverSyncProgress(checkpoint(false))
+      if (!scanComplete && invocationPages >= (options.maxPages ?? Infinity)) return result(true)
     }
 
     const finishedAt = instantNow()
@@ -857,17 +964,19 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
       syncRunId: runId,
       refreshedAt: finishedAt,
     })
+    const evidenceCounts = await repository.syncRunEvidenceCounts(runId)
+    sourceRecords = evidenceCounts.sourceRecords
     const succeededRun: SyncRun = {
       ...runningRun,
       status: 'succeeded',
       finishedAt,
       counts: {
-        rawObjects: rawObjects.length,
-        sourceRecords,
+        ...evidenceCounts,
         normalizedRecords: archiveEntries,
         failedRecords: 0,
       },
     }
+    await repository.saveConnection({ ...connection, updatedAt: finishedAt })
     await repository.commit({
       syncRun: succeededRun,
       cursor: {
@@ -886,18 +995,20 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         syncRunId: runId,
       },
     })
-    await repository.saveConnection({ ...connection, updatedAt: finishedAt })
-    return {
-      syncRunId: runId,
-      mode,
-      pages,
-      sourceRecords,
-      books,
-      archiveEntries,
-      queueBooks,
-      works,
-      editions: projectedEditionIds.size,
+    try {
+      await booksRepository.saveHardcoverSyncProgress(checkpoint(true))
+    } catch {
+      // The complete cursor is authoritative even if this convenience marker
+      // fails. Never downgrade a committed snapshot to failed after success.
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          event: 'hardcover.progress_completion_marker_failed',
+          syncRunId: runId,
+        }),
+      )
     }
+    return result()
   } catch (error) {
     const finishedAt = instantNow()
     console.error(
@@ -909,13 +1020,13 @@ export async function syncHardcover(bindings: Bindings): Promise<HardcoverSyncRe
         errorMessage: safeErrorMessage(error),
       }),
     )
+    const evidenceCounts = await repository.syncRunEvidenceCounts(runId)
     await repository.saveSyncRun({
       ...runningRun,
       status: 'failed',
       finishedAt,
       counts: {
-        rawObjects: rawObjects.length,
-        sourceRecords,
+        ...evidenceCounts,
         normalizedRecords: archiveEntries,
         failedRecords: 1,
       },

@@ -181,6 +181,21 @@ describe('canonical ledger migration and repository', () => {
     vi.useRealTimers()
   })
 
+  it('counts retained run evidence independently of stale progress counters', async () => {
+    const data = fixtures()
+    await repository.saveConnection(data.connection)
+    await repository.saveSyncRun(data.runningSyncRun)
+    await repository.commit({ rawObjects: [data.rawObject], sourceRecords: [data.sourceRecord] })
+    expect(await repository.syncRunEvidenceCounts(data.runningSyncRun.id)).toEqual({
+      rawObjects: 1,
+      sourceRecords: 1,
+    })
+    expect(await repository.syncRunEvidenceCounts(syncRunId('absent'))).toEqual({
+      rawObjects: 0,
+      sourceRecords: 0,
+    })
+  })
+
   it('reports durable catalog progress and expired worker leases without rewriting the run', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-13T12:00:00Z'))

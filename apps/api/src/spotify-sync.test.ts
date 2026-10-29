@@ -240,3 +240,66 @@ it.each([2, 3])(
     ).toEqual({ status: 'failed', source_record_count: pages === 2 ? 1 : 2 })
   },
 )
+
+it.each([401, 403, 429, 503])(
+  'persists safe saved-episode HTTP %s diagnostics without losing the prior snapshot',
+  async (status) => {
+    provider()
+    await syncSpotifySavedEpisodes(bindings)
+    const previous = database.sqlite
+      .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='saved-episodes'")
+      .get()
+    const requests = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).includes('/api/token'))
+        return Response.json({ access_token: 'synthetic', expires_in: 3600, token_type: 'Bearer' })
+      return new Response('private-provider-body and private-token', {
+        status,
+        headers: { 'retry-after': '91' },
+      })
+    })
+    vi.stubGlobal('fetch', requests)
+    await expect(syncSpotifySavedEpisodes(bindings)).rejects.toMatchObject({ status })
+    const failed = database.sqlite
+      .prepare("SELECT error_code,error_message FROM sync_runs WHERE status='failed'")
+      .get() as { error_code: string; error_message: string }
+    expect(failed.error_code).toBe(`spotify_http_${status}`)
+    expect(failed.error_message).toContain(`saved_episodes returned HTTP ${status}`)
+    expect(failed.error_message).toContain('Retry after 91s')
+    expect(JSON.stringify(failed)).not.toMatch(/private-provider-body|private-token/)
+    expect(
+      database.sqlite
+        .prepare("SELECT checkpoint_json FROM sync_cursors WHERE name='saved-episodes'")
+        .get(),
+    ).toEqual(previous)
+    expect(
+      database.sqlite.prepare('SELECT COUNT(*) n FROM spotify_saved_episodes WHERE active=1').get(),
+    ).toEqual({ n: 1 })
+    expect(requests).toHaveBeenCalledTimes(2)
+  },
+)
+
+it('stops optional Spotify reads immediately on429 so the coordinator can persist cooldown', async () => {
+  provider()
+  const original = fetch,
+    paths: string[] = []
+  vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    paths.push(new URL(url).pathname)
+    if (url.includes('/me/shows'))
+      return new Response('private-provider-body', {
+        status: 429,
+        headers: { 'retry-after': '172800' },
+      })
+    return original(input, init)
+  })
+  await expect(syncSpotifySavedEpisodes(bindings)).rejects.toMatchObject({
+    status: 429,
+    retryAfterSeconds: 172800,
+    operation: 'saved_shows',
+  })
+  expect(paths).toEqual(['/api/token', '/v1/me/episodes', '/v1/me/shows'])
+  expect(
+    database.sqlite.prepare("SELECT error_message FROM sync_runs WHERE status='failed'").get()
+      ?.error_message,
+  ).toContain('172800s')
+})

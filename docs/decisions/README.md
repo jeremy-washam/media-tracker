@@ -34,3 +34,5 @@ changes, add a new ADR that supersedes the old one rather than rewriting history
 19. [Web styling ownership](./0019-web-styling-ownership.md)
 
 20. [Fenced catalog publication and partial sync checkpoints](./0020-fenced-catalog-publication.md)
+
+21. [Bounded production operation and emergency pause](./0021-bounded-production-operations.md)

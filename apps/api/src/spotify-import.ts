@@ -1,3 +1,4 @@
+import { readHostedZip, readHostedImportManifest, HostedZipError } from './hosted-zip'
 import {
   isSpotifyHistoryMember,
   parseSpotifyHistoryMember,
@@ -762,7 +763,13 @@ export async function importSpotifyExtendedHistory(
   if (prepared.rawExists) {
     const manifestObject = await bindings.RAW_BUCKET.get(manifestKey(sum.hex))
     if (manifestObject !== null) {
-      const manifestBytes = new Uint8Array(await manifestObject.arrayBuffer())
+      const manifestBytes =
+        bindings.AUTH_MODE === 'access'
+          ? await readHostedImportManifest(manifestObject).catch((error: unknown) => {
+              if (error instanceof HostedZipError) throw new SpotifyImportError(error.message)
+              throw error
+            })
+          : new Uint8Array(await manifestObject.arrayBuffer())
       const manifest = parseManifest(JSON.parse(new TextDecoder().decode(manifestBytes)), sum.hex)
       return processPrepared(prepared, manifest.records, size)
     }
@@ -800,7 +807,13 @@ export async function continueSpotifyExtendedHistoryImport(
     throw new SpotifyImportError('The Spotify import continuation is invalid')
   const manifestObject = await bindings.RAW_BUCKET.get(manifestKey(importId))
   if (manifestObject !== null) {
-    const manifestBytes = new Uint8Array(await manifestObject.arrayBuffer())
+    const manifestBytes =
+      bindings.AUTH_MODE === 'access'
+        ? await readHostedImportManifest(manifestObject).catch((error: unknown) => {
+            if (error instanceof HostedZipError) throw new SpotifyImportError(error.message)
+            throw error
+          })
+        : new Uint8Array(await manifestObject.arrayBuffer())
     const manifest = parseManifest(JSON.parse(new TextDecoder().decode(manifestBytes)), importId)
     const prepared = await prepare(bindings, importId, manifest.archiveByteLength)
     return processPrepared(prepared, manifest.records, chunkSize(options.chunkSize))
@@ -809,7 +822,13 @@ export async function continueSpotifyExtendedHistoryImport(
     `raw/spotify/sha256/${importId.slice(0, 2)}/${importId}.zip`,
   )
   if (stored === null) throw new SpotifyImportError('The Spotify import source is unavailable')
-  const archive = new Uint8Array(await stored.arrayBuffer())
+  const archive =
+    bindings.AUTH_MODE === 'access'
+      ? await readHostedZip(stored).catch((error: unknown) => {
+          if (error instanceof HostedZipError) throw new SpotifyImportError(error.message)
+          throw error
+        })
+      : new Uint8Array(await stored.arrayBuffer())
   if ((await checksum(archive)).hex !== importId)
     throw new SpotifyImportError('The Spotify import source failed verification')
   return importSpotifyExtendedHistory(bindings, archive, options)
