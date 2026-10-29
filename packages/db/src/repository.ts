@@ -136,6 +136,9 @@ export interface CanonicalLedgerRepository {
     title: string,
     year: string,
   ): Promise<readonly MediaItemId[]>
+  syncRunEvidenceCounts(
+    runId: SyncRun['id'],
+  ): Promise<{ rawObjects: number; sourceRecords: number }>
   findSyncCursor(connectionId: ConnectionId, name: string): Promise<SyncCursor | null>
   listMedia(limit?: number): Promise<readonly MediaSummaryRecord[]>
   findMedia(id: MediaItemId): Promise<MediaSummaryRecord | null>
@@ -972,6 +975,19 @@ export class SqlCanonicalLedgerRepository implements CanonicalLedgerRepository {
       [type, title, year],
     ).all<{ id: string }>()
     return result.results.map((row) => mediaItemId(row.id))
+  }
+
+  async syncRunEvidenceCounts(
+    runId: SyncRun['id'],
+  ): Promise<{ rawObjects: number; sourceRecords: number }> {
+    const row = await statement(
+      this.#database,
+      `SELECT
+      (SELECT COUNT(*) FROM raw_objects WHERE sync_run_id=?) rawObjects,
+      (SELECT COUNT(*) FROM raw_objects r JOIN source_records s ON s.raw_object_id=r.id WHERE r.sync_run_id=?) sourceRecords`,
+      [runId, runId],
+    ).first<{ rawObjects: number; sourceRecords: number }>()
+    return row ?? { rawObjects: 0, sourceRecords: 0 }
   }
 
   async findSyncCursor(connectionId: ConnectionId, name: string): Promise<SyncCursor | null> {

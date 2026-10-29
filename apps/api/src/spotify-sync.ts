@@ -1,5 +1,7 @@
 import {
   classifySavedEpisode,
+  SpotifyApiError,
+  SpotifyTokenRefreshError,
   fetchSpotifyPlayerResponse,
   fetchSpotifyRecentlyPlayedResponse,
   fetchSpotifySavedEpisodesResponse,
@@ -91,6 +93,32 @@ export class SpotifyCredentialsMissingError extends Error {
 
 function now() {
   return utcInstant(new Date().toISOString())
+}
+
+function failureDetails(error: unknown): { code: string; message: string } {
+  if (error instanceof SpotifyApiError || error instanceof SpotifyTokenRefreshError) {
+    const action =
+      error.status === 401 || (error.operation === 'token_refresh' && error.status === 400)
+        ? 'Check or renew Spotify authorization.'
+        : error.status === 403
+          ? 'Check Spotify scopes, developer access, and account eligibility.'
+          : error.status === 429
+            ? 'Spotify rate limit; retry after the indicated delay.'
+            : error.status >= 500
+              ? 'Spotify service failure; retry later.'
+              : 'Spotify rejected the request; inspect connection configuration.'
+    const retry =
+      error.retryAfterSeconds === null ? '' : ` Retry after ${error.retryAfterSeconds}s.`
+    const quota =
+      error instanceof SpotifyApiError && error.reason === 'QUOTA_EXCEEDED'
+        ? ' Shared developer quota exhausted.'
+        : ''
+    return {
+      code: `spotify_http_${error.status}`,
+      message: `Spotify ${error.operation} returned HTTP ${error.status}.${retry}${quota} ${action}`,
+    }
+  }
+  return { code: errorName(error), message: 'Spotify sync failed; retained data can be retried.' }
 }
 
 function errorName(error: unknown): string {
@@ -368,9 +396,11 @@ async function syncAdditionalSpotifyLibrary(input: {
   recentTracks: number
   catalogTracks: number
   partialFailures: string[]
+  diagnostics: string[]
   checkpoints: { name: string; value: JsonObject; at: ReturnType<typeof now> }[]
 }> {
   const partialFailures: string[] = []
+  const diagnostics: string[] = []
   const checkpoints: { name: string; value: JsonObject; at: ReturnType<typeof now> }[] = []
   const checkpoint = (name: string, value: JsonObject, at: ReturnType<typeof now>) => {
     checkpoints.push({ name, value, at })
@@ -397,6 +427,8 @@ async function syncAdditionalSpotifyLibrary(input: {
       const page = await parseRetainedPage(input.repository, raw, savedShowsParserVersion, () =>
         parseSpotifySavedShowsPage(response),
       )
+      if (page.offset !== showOffset)
+        throw new Error('Spotify returned an unexpected saved-show page offset')
       const records: SourceRecord[] = []
       const projections = []
       input.bindings.SYNC_BUDGET?.page(page.items.length)
@@ -461,11 +493,13 @@ async function syncAdditionalSpotifyLibrary(input: {
     savedShows = 0
     if (error instanceof SyncDeferredError) throw error
     partialFailures.push('saved_shows')
+    diagnostics.push(failureDetails(error).message)
     console.warn(
       JSON.stringify({
         level: 'warn',
         event: 'spotify.saved_shows_sync_failed',
         errorName: errorName(error),
+        ...failureDetails(error),
       }),
     )
   }
@@ -645,12 +679,14 @@ async function syncAdditionalSpotifyLibrary(input: {
     )
   } catch (error) {
     partialFailures.push('player')
+    diagnostics.push(failureDetails(error).message)
     if (error instanceof SyncDeferredError) throw error
     console.warn(
       JSON.stringify({
         level: 'warn',
         event: 'spotify.player_sync_failed',
         errorName: errorName(error),
+        ...failureDetails(error),
       }),
     )
   }
@@ -849,12 +885,14 @@ async function syncAdditionalSpotifyLibrary(input: {
     )
   } catch (error) {
     partialFailures.push('recent_tracks')
+    diagnostics.push(failureDetails(error).message)
     if (error instanceof SyncDeferredError) throw error
     console.warn(
       JSON.stringify({
         level: 'warn',
         event: 'spotify.recent_tracks_sync_failed',
         errorName: errorName(error),
+        ...failureDetails(error),
       }),
     )
   }
@@ -872,12 +910,14 @@ async function syncAdditionalSpotifyLibrary(input: {
       catalogTracks = await syncTrackCatalog(input)
   } catch (error) {
     partialFailures.push('track_catalog')
+    diagnostics.push(failureDetails(error).message)
     if (error instanceof SyncDeferredError) throw error
     console.warn(
       JSON.stringify({
         level: 'warn',
         event: 'spotify.track_catalog_sync_failed',
         errorName: errorName(error),
+        ...failureDetails(error),
       }),
     )
   }
@@ -887,6 +927,7 @@ async function syncAdditionalSpotifyLibrary(input: {
     recentTracks,
     catalogTracks,
     partialFailures,
+    diagnostics,
     checkpoints,
   }
 }
@@ -970,6 +1011,7 @@ export async function syncSpotifySavedEpisodes(
       let page: SpotifySavedEpisodesPage
       try {
         page = parseSpotifySavedEpisodesPage(response)
+        if (page.offset !== offset) throw new Error('Spotify returned an unexpected page offset')
         bindings.SYNC_BUDGET?.page(page.items.length)
         for (const [index, episode] of page.items.entries()) {
           bindings.SYNC_BUDGET?.check()
@@ -1146,6 +1188,7 @@ export async function syncSpotifySavedEpisodes(
       recentTracks: 0,
       catalogTracks: 0,
       partialFailures: [] as string[],
+      diagnostics: [] as string[],
       checkpoints: [] as { name: string; value: JsonObject; at: ReturnType<typeof now> }[],
     }
     try {
@@ -1161,12 +1204,14 @@ export async function syncSpotifySavedEpisodes(
       })
     } catch (error) {
       extended.partialFailures.push('optional_library')
+      extended.diagnostics.push(failureDetails(error).message)
       if (error instanceof SyncDeferredError) throw error
       console.warn(
         JSON.stringify({
           level: 'warn',
           event: 'spotify.optional_library_sync_failed',
           errorName: errorName(error),
+          ...failureDetails(error),
         }),
       )
     }
@@ -1179,7 +1224,11 @@ export async function syncSpotifySavedEpisodes(
         status: extended.partialFailures.length > 0 ? 'partially_succeeded' : 'succeeded',
         errorCode: extended.partialFailures.length > 0 ? 'spotify_partial_failure' : null,
         errorMessage:
-          extended.partialFailures.length > 0 ? extended.partialFailures.join(', ') : null,
+          extended.partialFailures.length > 0
+            ? [extended.partialFailures.join(', '), ...extended.diagnostics]
+                .join('; ')
+                .slice(0, 500)
+            : null,
         finishedAt,
         counts: {
           rawObjects: rawObjects.length,
@@ -1223,6 +1272,7 @@ export async function syncSpotifySavedEpisodes(
             event: 'spotify.optional_checkpoint_failed',
             name: pending.name,
             errorName: errorName(error),
+            ...failureDetails(error),
           }),
         )
       }
@@ -1239,7 +1289,9 @@ export async function syncSpotifySavedEpisodes(
       },
       errorCode: extended.partialFailures.length > 0 ? 'spotify_partial_failure' : null,
       errorMessage:
-        extended.partialFailures.length > 0 ? extended.partialFailures.join(', ') : null,
+        extended.partialFailures.length > 0
+          ? [extended.partialFailures.join(', '), ...extended.diagnostics].join('; ').slice(0, 500)
+          : null,
     })
     await repository.saveConnection({
       ...connection,
@@ -1273,8 +1325,8 @@ export async function syncSpotifySavedEpisodes(
         normalizedRecords: archiveEpisodes + optionalCounts.normalizedRecords,
         failedRecords: 1,
       },
-      errorCode: errorName(error),
-      errorMessage: 'Spotify saved-episode sync failed',
+      errorCode: failureDetails(error).code,
+      errorMessage: failureDetails(error).message,
     })
     await repository.saveConnection({ ...connection, status: 'degraded', updatedAt: finishedAt })
     throw error

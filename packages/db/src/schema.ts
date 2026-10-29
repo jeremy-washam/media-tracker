@@ -161,6 +161,26 @@ export const syncCursors = sqliteTable(
   ],
 )
 
+export const hardcoverSyncProgress = sqliteTable(
+  'hardcover_sync_progress',
+  {
+    connectionId: text('connection_id')
+      .primaryKey()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    syncRunId: text('sync_run_id')
+      .notNull()
+      .references(() => syncRuns.id, { onDelete: 'restrict' }),
+    checkpoint: text('checkpoint_json', { mode: 'json' }).$type<JsonObject>().notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    check(
+      'hardcover_sync_progress_json_valid',
+      sql`json_valid(${table.checkpoint}) AND json_type(${table.checkpoint})='object'`,
+    ),
+  ],
+)
+
 export const rawObjects = sqliteTable(
   'raw_objects',
   {
@@ -1777,6 +1797,7 @@ export const videoChannelProjection = sqliteTable('video_channel_projection', {
 })
 
 export const schema = {
+  hardcoverSyncProgress,
   archiveEntries,
   archiveEntryEvidence,
   articleLibraryProjection,

@@ -29,6 +29,7 @@ export type {
   HardcoverEditionProjection,
   HardcoverReadProjection,
   HardcoverSeriesProjection,
+  HardcoverSyncProgress,
   HardcoverTaxonomyProjection,
 } from './books-repository'
 export { SqlBooksRepository } from './books-repository'

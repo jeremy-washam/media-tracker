@@ -134,6 +134,7 @@ class D1SqliteDatabase {
       '0029_evidence_insert_only_replay.sql',
       '0030_source_sync_admission.sql',
       '0031_catalog_fences_and_partial_cursors.sql',
+      '0032_hardcover_sync_progress.sql',
     ]) {
       this.database.exec(
         readFileSync(

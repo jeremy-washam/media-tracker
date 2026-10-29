@@ -1,3 +1,4 @@
+import type { JsonObject } from '@media-tracker/domain'
 import {
   matchesQueryFingerprint,
   queryFingerprint as hashQueryFingerprint,
@@ -515,11 +516,49 @@ function readJsonArray<T>(value: string | null): T[] {
   }
 }
 
+export interface HardcoverSyncProgress {
+  readonly connectionId: string
+  readonly syncRunId: string
+  readonly checkpoint: JsonObject
+  readonly updatedAt: string
+}
+
 export class SqlBooksRepository {
   readonly #database: DatabaseClient
 
   constructor(database: DatabaseClient) {
     this.#database = database
+  }
+
+  async findHardcoverSyncProgress(connectionId: string): Promise<HardcoverSyncProgress | null> {
+    const row = await statement(
+      this.#database,
+      'SELECT sync_run_id,checkpoint_json,updated_at FROM hardcover_sync_progress WHERE connection_id=?',
+      [connectionId],
+    ).first<{ sync_run_id: string; checkpoint_json: string; updated_at: string }>()
+    return row === null
+      ? null
+      : {
+          connectionId,
+          syncRunId: row.sync_run_id,
+          checkpoint: JSON.parse(row.checkpoint_json) as JsonObject,
+          updatedAt: row.updated_at,
+        }
+  }
+
+  async saveHardcoverSyncProgress(progress: HardcoverSyncProgress): Promise<void> {
+    await statement(
+      this.#database,
+      `INSERT INTO hardcover_sync_progress(connection_id,sync_run_id,checkpoint_json,updated_at)
+      VALUES(?,?,?,?) ON CONFLICT(connection_id) DO UPDATE SET
+        sync_run_id=excluded.sync_run_id,checkpoint_json=excluded.checkpoint_json,updated_at=excluded.updated_at`,
+      [
+        progress.connectionId,
+        progress.syncRunId,
+        JSON.stringify(progress.checkpoint),
+        progress.updatedAt,
+      ],
+    ).run()
   }
 
   async findHardcoverRelationship(connectionId: string, userBookId: number) {

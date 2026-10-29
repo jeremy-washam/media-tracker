@@ -11,6 +11,7 @@ export {
   fetchSpotifySavedEpisodesResponse,
   parseSpotifySavedEpisodesPage,
   SpotifyApiError,
+  type SpotifyOperation,
   fetchSpotifyPlayer,
   fetchSpotifyRecentlyPlayed,
   fetchSpotifyTracks,
@@ -39,5 +40,9 @@ export {
   type SpotifyTrackObservation,
   type SpotifyTracksResponse,
 } from './web-api'
-export { refreshSpotifyAccessToken, type SpotifyRefreshedToken } from './token'
+export {
+  refreshSpotifyAccessToken,
+  SpotifyTokenRefreshError,
+  type SpotifyRefreshedToken,
+} from './token'
 export { classifySavedEpisode, type SavedEpisodeDisposition } from './saved-episodes'

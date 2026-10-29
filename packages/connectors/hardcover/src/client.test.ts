@@ -162,3 +162,13 @@ describe('Hardcover request failures', () => {
     await expect(fetchHardcoverUserId('synthetic')).rejects.toThrow()
   })
 })
+
+it('does not propagate private GraphQL error text', async () => {
+  const promise = fetchHardcoverUserId('private-token', async () =>
+    Response.json({
+      errors: [{ message: 'private-book-title private-token private-query-variable' }],
+    }),
+  )
+  await expect(promise).rejects.toMatchObject({ name: 'HardcoverApiError', status: null })
+  await expect(promise).rejects.not.toThrow('private-')
+})
