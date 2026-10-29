@@ -28,7 +28,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def fetch(url, headers=None, body=None):
-    request = urllib.request.Request(url, headers=headers or {}, data=body)
+    request = urllib.request.Request(url, headers={
+        'User-Agent': 'ImladrisDeployment/1.0', **(headers or {}),
+    }, data=body)
     try:
         with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
             payload = response.read(2 * 1024 * 1024 + 1)

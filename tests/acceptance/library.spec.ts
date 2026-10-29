@@ -101,13 +101,37 @@ test('resumes an interrupted real import from Connections and refreshes Library 
       '/api/connections/youtube/import?connectionKey=resume-ui&connectionLabel=ResumeUI',
       { method: 'POST', body: youtubeArchive(105) },
     )
-  ).json()) as { completed: boolean }
+  ).json()) as { completed: boolean; importId: string }
   expect(first.completed).toBe(false)
   await page.goto(new URL('/connections', runtime.url).href)
   const account = page.locator('[data-source="youtube"]').filter({ hasText: 'ResumeUI' })
   const resume = account.getByRole('button', { name: 'Resume import' })
   await expect(resume).toBeVisible()
-  await resume.click()
+  const continuationUrl = new URL(
+    `/api/connections/youtube/import/${first.importId}/continue`,
+    runtime.url,
+  )
+  // Verify the real import response before asserting its refreshed UI state.
+  // Backend/network failures should report their own acceptance stage rather
+  // than appearing as a missing Connections refresh after the locator timeout.
+  const [continued] = await Promise.all([
+    page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return (
+        response.request().method() === 'POST' &&
+        url.origin === continuationUrl.origin &&
+        url.pathname === continuationUrl.pathname
+      )
+    }),
+    resume.click(),
+  ])
+  expect(continued.status()).toBe(200)
+  expect(await continued.json()).toMatchObject({
+    completed: true,
+    nextOffset: null,
+    activityCards: 105,
+    totalRecords: 106,
+  })
   await expect(resume).toHaveCount(0)
   await page.goto(new URL('/library/videos/archive?q=Runtime%20Video%20104', runtime.url).href)
   await expect(page.getByRole('button', { name: /Runtime Video 104\b/ })).toBeVisible()

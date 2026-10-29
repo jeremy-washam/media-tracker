@@ -134,7 +134,9 @@ async function api(env: Bindings, path: string, init?: RequestInit) {
       'content-type': 'application/json',
       ...init?.headers,
     },
-    redirect: 'error',
+    // Workers rejects redirect:"error" before sending. Manual mode keeps the
+    // account credential on this origin; the status check rejects all redirects.
+    redirect: 'manual',
     signal: AbortSignal.timeout(20_000),
   })
   if (!response.ok) throw new Error('OperatingMonitorHttp' + response.status)

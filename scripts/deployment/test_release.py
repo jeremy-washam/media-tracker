@@ -5,7 +5,8 @@ import sqlite3
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import urllib.error
 
 import release
 
@@ -144,6 +145,34 @@ class ReleaseTests(unittest.TestCase):
 
     def test_redirect_handler_never_forwards_credentials(self):
         self.assertIsNone(release.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://elsewhere.invalid'))
+
+    def test_fetch_uses_descriptive_user_agent_and_preserves_access_headers(self):
+        response = MagicMock()
+        response.status = 200
+        response.read.return_value = b'{"status":"ok"}'
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = response
+        with patch.object(release.urllib.request, 'build_opener', return_value=opener) as build:
+            self.assertEqual(release.fetch('https://synthetic.invalid/api/health', {
+                'CF-Access-Client-Id': 'synthetic-id',
+                'CF-Access-Client-Secret': 'synthetic-secret',
+            }), (200, b'{"status":"ok"}'))
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_header('User-agent'), 'ImladrisDeployment/1.0')
+        self.assertEqual(request.get_header('Cf-access-client-id'), 'synthetic-id')
+        self.assertEqual(request.get_header('Cf-access-client-secret'), 'synthetic-secret')
+        self.assertIs(build.call_args.args[0], release.NoRedirect)
+
+    def test_fetch_keeps_redirect_and_error_responses_private(self):
+        for status in (302, 403):
+            with self.subTest(status=status):
+                opener = MagicMock()
+                opener.open.side_effect = urllib.error.HTTPError(
+                    'https://synthetic.invalid/private', status, 'synthetic-secret', {}, None)
+                with patch.object(release.urllib.request, 'build_opener', return_value=opener):
+                    self.assertEqual(release.fetch('https://synthetic.invalid/api/health', {
+                        'CF-Access-Client-Secret': 'synthetic-secret',
+                    }), (status, b''))
 
     def exercise_deploy(self, applied, digest=None, sync='true', smoke_failure=False):
         temporary = tempfile.TemporaryDirectory()
