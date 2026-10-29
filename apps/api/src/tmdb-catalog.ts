@@ -138,22 +138,13 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     for (const candidate of candidates) {
       bounded?.budget.check()
       let movieId: number | null = null
-      let tvId: number | null = candidate.matchedTmdbTvId
+      let tvId: number | null = null
       let method: TmdbMovieProfileProjection['matchMethod'] = null
       let candidateCount = 0
       let selectedDetail: Awaited<ReturnType<TmdbClient['movieDetails']>> | null = null
-      if (tvId !== null) {
-        method = 'exact_tv_title_year'
-        candidateCount = 1
-      } else if (candidate.exactTmdbMovieId !== null) {
+      if (candidate.exactTmdbMovieId !== null) {
         movieId = candidate.exactTmdbMovieId
         method = 'exact_tmdb_id'
-        candidateCount = 1
-      } else if (candidate.matchedTmdbMovieId !== null && candidate.matchedMethod !== null) {
-        // Refresh an established identity directly, preserving its matching
-        // evidence rather than repeating title search or relabeling it exact.
-        movieId = candidate.matchedTmdbMovieId
-        method = candidate.matchedMethod
         candidateCount = 1
       } else if (candidate.exactImdbId !== null) {
         const found = await client.findMovieByImdb(candidate.exactImdbId)
@@ -163,6 +154,15 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
           movieId = found[0]!.id
           method = 'exact_imdb_id'
         }
+      } else if (candidate.matchedTmdbTvId !== null) {
+        tvId = candidate.matchedTmdbTvId
+        method = candidate.matchedMethod ?? 'exact_tv_title_year'
+        candidateCount = 1
+      } else if (candidate.matchedTmdbMovieId !== null && candidate.matchedMethod !== null) {
+        // Reuse established matches only when no authoritative source ID wins.
+        movieId = candidate.matchedTmdbMovieId
+        method = candidate.matchedMethod
+        candidateCount = 1
       } else if (candidate.releaseYear !== null) {
         const found = await client.searchMovie(candidate.importedTitle, candidate.releaseYear)
         requestCount += 1
