@@ -1,3 +1,4 @@
+import { LibrarySortDirection } from '@/components/library-controls'
 import {
   LibraryCollectionHeader,
   LibraryFiltersTrigger,
@@ -47,15 +48,7 @@ import {
 import { useRef, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  ArrowSquareOut,
-  ArrowUp,
-  ArrowDown,
-  Microphone,
-  MagnifyingGlass,
-  Funnel,
-  X,
-} from '@/components/icons'
+import { ArrowSquareOut, Microphone, MagnifyingGlass, Funnel, X } from '@/components/icons'
 import type { PodcastCollectionItem } from '@media-tracker/contracts'
 import { fetchPodcast, fetchPodcastFilterOptions, fetchPodcastHistory } from './podcasts-api'
 import { useInspectorFocus } from '../inspector-focus'
@@ -463,25 +456,15 @@ export function PodcastsCollectionPage({ view }: { view: 'archive' | 'queue' | '
                 options={[...sorts.map(([value, label]) => ({ value, label }))]}
               />
             </label>
-            <Button
-              variant="outline"
-              size="icon"
-              type="button"
-              className={controlsStyles['sort-direction']}
-              aria-label="Reverse podcast sort"
+            <LibrarySortDirection
+              direction={selectedDirection}
               onClick={() =>
                 update({
                   direction: selectedDirection === 'asc' ? 'desc' : 'asc',
                   item: undefined,
                 })
               }
-            >
-              {selectedDirection === 'asc' ? (
-                <ArrowUp aria-hidden="true" />
-              ) : (
-                <ArrowDown aria-hidden="true" />
-              )}
-            </Button>
+            />
             {view === 'following' ? (
               <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
             ) : null}

@@ -1,3 +1,4 @@
+import { LibrarySortDirection } from '@/components/library-controls'
 import {
   LibraryCollectionHeader,
   LibraryFiltersTrigger,
@@ -17,7 +18,7 @@ import { useCollectionScroll } from '@/components/collection-scroll'
 import { booksQueryOptions, booksSummaryQueryOptions } from '../../library-queries'
 import { InspectorBackdrop, MediaRowButton } from '@/components/library-controls'
 import { CollectionTabList, FlatTabs, FlatTabsContent } from '@/components/flat-tabs'
-import { Notice, LoadingState, Hint } from '@/components/ui-patterns'
+import { Notice, LoadingState } from '@/components/ui-patterns'
 import {
   FlatTabs as Tabs,
   FlatTabsList as TabsList,
@@ -50,8 +51,6 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type R
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  ArrowDown,
-  ArrowUp,
   BookOpen,
   Check,
   CaretRight,
@@ -345,24 +344,12 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
                 ]}
               />
             </label>
-            <Hint content={direction === 'asc' ? 'Ascending' : 'Descending'}>
-              <Button
-                variant="outline"
-                size="icon"
-                type="button"
-                className={controlsStyles['sort-direction']}
-                aria-label={direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
-                onClick={() =>
-                  updateSearch({ direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
-                }
-              >
-                {direction === 'asc' ? (
-                  <ArrowUp aria-hidden="true" />
-                ) : (
-                  <ArrowDown aria-hidden="true" />
-                )}
-              </Button>
-            </Hint>
+            <LibrarySortDirection
+              direction={direction}
+              onClick={() =>
+                updateSearch({ direction: direction === 'asc' ? 'desc' : 'asc', item: undefined })
+              }
+            />
             <LibraryLayoutToggle
               value={layout}
               onValueChange={(layout) => updateSearch({ layout })}

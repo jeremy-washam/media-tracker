@@ -1,8 +1,9 @@
 import mediaStyles from '@/components/media-presentation.module.css'
 import controlsStyles from '@/components/library-controls.module.css'
 import { type ComponentProps } from 'react'
-import { SquaresFour, List, Star } from '@/components/icons'
+import { SquaresFour, List, Star, ArrowUp, ArrowDown } from '@/components/icons'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { AppButton, Hint } from '@/components/ui-patterns'
 import { cn } from '@/lib/utils'
 import {
   Select,
@@ -103,6 +104,31 @@ export function MediaCard({ className = '', ...props }: ComponentProps<'button'>
   return <button type="button" {...props} className={cn(mediaStyles['media-card'], className)} />
 }
 
+/** One direction action, icon, and tooltip across every Library media type. */
+export function LibrarySortDirection({
+  direction,
+  className,
+  ...props
+}: Omit<ComponentProps<typeof AppButton>, 'children' | 'aria-label' | 'size' | 'variant'> & {
+  direction: 'asc' | 'desc'
+}) {
+  const action = direction === 'asc' ? 'Sort descending' : 'Sort ascending'
+  return (
+    <Hint content={action}>
+      <AppButton
+        {...props}
+        variant="outline"
+        size="icon"
+        type="button"
+        className={cn(controlsStyles['sort-direction'], className)}
+        aria-label={action}
+      >
+        {direction === 'asc' ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
+      </AppButton>
+    </Hint>
+  )
+}
+
 export function LibraryLayoutToggle({
   value,
   onValueChange,
@@ -115,6 +141,7 @@ export function LibraryLayoutToggle({
       className={controlsStyles['layout-toggle']}
       aria-label="Result layout"
       variant="outline"
+      size="icon"
       spacing={0}
       multiple={false}
       value={[value]}
@@ -124,18 +151,10 @@ export function LibraryLayoutToggle({
       }}
       data-ui="layout-toggle"
     >
-      <ToggleGroupItem
-        value="list"
-        aria-label="List view"
-        className="text-[length:inherit] font-normal"
-      >
+      <ToggleGroupItem value="list" aria-label="List view">
         <List aria-hidden="true" />
       </ToggleGroupItem>
-      <ToggleGroupItem
-        value="grid"
-        aria-label="Grid view"
-        className="text-[length:inherit] font-normal"
-      >
+      <ToggleGroupItem value="grid" aria-label="Grid view">
         <SquaresFour aria-hidden="true" />
       </ToggleGroupItem>
     </ToggleGroup>

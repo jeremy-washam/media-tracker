@@ -122,6 +122,31 @@ installed primitive's 16px size, returning to 14px on desktop. Typography change
 preserve the existing controls, artwork dimensions, 101px row baseline, contained
 scrolling, source semantics, and inspector behavior.
 
+## Control consistency audit (October 29, 2026)
+
+The owner approved fixing control inconsistencies without another mock round.
+The audit covered all 16 Library sections and Connections, including filter
+Sheets, sort popups, applied filters, inspector actions, and navigation. Standard
+Library controls share a 32px height and the installed rounded-lg outer corners
+(currently 5.6px); compact Connections actions retain the installed 28px size and
+smaller radius. Inline clear actions, checkboxes, tabs, artwork, and media rows
+retain their purposeful shapes rather than inheriting action-button geometry.
+
+The joined List/Grid control had square outer corners and a double middle border
+because its generated selectors expected data-horizontal/data-vertical while
+Base UI exposes data-orientation. Use explicit orientation selectors, forward
+orientation to the actual primitive, retain square internal corners, and draw
+one shared divider. Its icon items are 32px square. The same selector correction
+restores the 48px-wide, 1px completion separators that previously had zero size.
+
+Neutral buttons, Select triggers, and toggles share surface-hover and selection
+tokens. Dark-mode resting backgrounds must not override hover rules. Hover must not replace a selected segment's background; an open Select
+uses the selection background. All six media types use LibrarySortDirection for
+the same arrow, action label, and keyboard-accessible tooltip. Its description
+names the next action (Sort ascending/Sort descending), and relevance sorting
+retains its disabled direction action. Coverage notes start 12px below the
+collection header; an obsolete negative margin must not clip their first line.
+
 ## October 2026 iterative polish
 
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface

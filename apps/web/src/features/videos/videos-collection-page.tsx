@@ -1,3 +1,4 @@
+import { LibrarySortDirection } from '@/components/library-controls'
 import {
   LibraryCollectionHeader,
   LibraryFiltersTrigger,
@@ -53,16 +54,7 @@ import { useRef, useState } from 'react'
 import { useInspectorFocus } from '../inspector-focus'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  ArrowUp,
-  ArrowDown,
-  ArrowSquareOut,
-  YoutubeLogo,
-  MagnifyingGlass,
-  Funnel,
-  User,
-  X,
-} from '@/components/icons'
+import { ArrowSquareOut, YoutubeLogo, MagnifyingGlass, Funnel, User, X } from '@/components/icons'
 import type { VideoCollectionItem, VideosSummary } from '@media-tracker/contracts'
 import { fetchVideo, fetchVideoHistory } from './videos-api'
 import { normalizeVideoSearch, type VideosRouteSearch } from './videos-route-search'
@@ -271,12 +263,8 @@ export function VideosCollectionPage({ view }: { view: View }) {
                 options={[...sorts.map(([value, label]) => ({ value, label }))]}
               />
             </label>
-            <Button
-              variant="outline"
-              size="icon"
-              type="button"
-              className={controlsStyles['sort-direction']}
-              aria-label={selectedDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
+            <LibrarySortDirection
+              direction={selectedDirection}
               onClick={() =>
                 update({
                   direction: selectedDirection === 'asc' ? 'desc' : 'asc',
@@ -284,13 +272,7 @@ export function VideosCollectionPage({ view }: { view: View }) {
                   channelItem: undefined,
                 })
               }
-            >
-              {selectedDirection === 'asc' ? (
-                <ArrowUp aria-hidden="true" />
-              ) : (
-                <ArrowDown aria-hidden="true" />
-              )}
-            </Button>
+            />
 
             {view !== 'channels' ? (
               <LibraryLayoutToggle value={layout} onValueChange={(layout) => update({ layout })} />
