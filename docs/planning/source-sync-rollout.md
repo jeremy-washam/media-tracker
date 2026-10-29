@@ -149,6 +149,9 @@ Movies uses a separate, finite grant; `CATALOG_AUTO_REFRESH=false` stays in plac
 `TMDB_CATALOG_UNTIL` must expire inside the reviewed source window, within 32 days.
 The hourly schedule resumes that job only; it never creates another catalog job.
 No other TMDB job or YouTube, Spotify, or article-content backlog is activated.
+Established matches refresh directly while retaining their original match method.
+Exact source TMDB and IMDb identities take precedence over those cached matches,
+including older TV matches, as required by ADR 0013.
 Known movie matches refresh by their stored TMDB identity without repeating title
 search; their original match method remains unchanged. New exact source identities
 still take precedence over a cached movie match.
@@ -191,9 +194,10 @@ Pricing references: [Workers](https://developers.cloudflare.com/workers/platform
    deployment settings file identifies the same account/database. Do not run the
    old source-activation helper: it changes source windows and schedules.
 2. Merge the source admission history, audit hardening (`0031`), ratings, and
-   this bounded-grant change. Apply only unapplied migrations, run the combined
-   checks and intended production dry run, and deploy with the two TMDB grant
-   variables initially empty. Check that the existing source flags and Access
+   this bounded-grant change. Run the combined checks and intended production
+   dry run on the exact release revision before any hosted change. Save a fresh
+   D1 recovery bookmark, apply only unapplied migrations, and deploy with the two
+   TMDB grant variables initially empty. Check that the existing source flags and Access
    denial still work before activating anything.
 3. Generate one ULID. Query `catalog_refresh_jobs` for an active TMDB job first;
    stop for review if there is one. Create the reviewed job with `provider=tmdb`,
