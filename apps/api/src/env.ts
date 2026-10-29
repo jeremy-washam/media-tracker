@@ -32,6 +32,8 @@ export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BU
   ARTICLE_CONTENT_ENABLED?: string
   SPOTIFY_CATALOG_ENABLED?: string
   CATALOG_AUTO_REFRESH?: string
+  TMDB_CATALOG_JOB_ID?: string
+  TMDB_CATALOG_UNTIL?: string
   MAINTENANCE_ENABLED?: string
   DATABASE_USAGE_OBSERVER?: DatabaseUsageObserver
   CATALOG_LEASE?: CatalogLease

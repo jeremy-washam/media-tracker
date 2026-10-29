@@ -15,6 +15,8 @@ import { ulid } from 'ulid'
 
 import { createCatalogJobsRepository, createMoviesRepository } from './env'
 import type { Bindings } from './env'
+import { boundedTmdbEnvironment, tmdbGrantAllowed, tmdbGrantAttempts } from './tmdb-grant'
+import { SyncDeferredError } from './sync-budget'
 
 const batchSize = 10
 const matcherVersion = 'tmdb-evidence@2'
@@ -56,6 +58,11 @@ export async function startTmdbCatalogRefresh(env: Bindings, at = new Date().toI
 
 export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Promise<void> {
   if (job.operation !== 'refresh_tmdb_catalog' || job.catalogJobId === undefined) return
+  const hosted = env.AUTH_MODE === 'access'
+  if (hosted && !tmdbGrantAllowed(env, job.catalogJobId)) return
+  const controlDatabase = env.DB
+  const bounded = hosted ? boundedTmdbEnvironment(env) : null
+  if (bounded) env = bounded.env
   const at = new Date().toISOString()
   const jobs = createCatalogJobsRepository(env.DB, env.DATABASE_USAGE_OBSERVER)
   const current = await jobs.find(job.catalogJobId)
@@ -72,6 +79,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
     current.cursor,
     at,
     new Date(Date.parse(at) + 5 * 60_000).toISOString(),
+    hosted ? tmdbGrantAttempts : undefined,
   )
   if (reserved === null) throw new CatalogRetryError(300)
   if (env.TMDB_API_READ_TOKEN === undefined) {
@@ -90,13 +98,14 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       at,
       limit: batchSize,
     })
+    bounded?.budget.page(candidates.length)
     stage = 'configuration_state'
     const configurationNeeded =
       current.cursor === null && (await movies.needsTmdbConfigurationRefresh(at))
     if (candidates.length === 0) {
       if (configurationNeeded) {
         stage = 'provider_request'
-        const client = new TmdbClient(env.TMDB_API_READ_TOKEN)
+        const client = new TmdbClient(env.TMDB_API_READ_TOKEN, bounded?.budget.fetch)
         const configuration = await client.configuration()
         stage = 'persistence'
         await movies.applyTmdbCatalogBatch({
@@ -122,20 +131,18 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       return
     }
     stage = 'provider_request'
-    const client = new TmdbClient(env.TMDB_API_READ_TOKEN)
+    const client = new TmdbClient(env.TMDB_API_READ_TOKEN, bounded?.budget.fetch)
     const configuration = configurationNeeded ? await client.configuration() : null
     const results: TmdbMovieProfileProjection[] = []
     let requestCount = configuration === null ? 0 : 1
     for (const candidate of candidates) {
+      bounded?.budget.check()
       let movieId: number | null = null
-      let tvId: number | null = candidate.matchedTmdbTvId
+      let tvId: number | null = null
       let method: TmdbMovieProfileProjection['matchMethod'] = null
       let candidateCount = 0
       let selectedDetail: Awaited<ReturnType<TmdbClient['movieDetails']>> | null = null
-      if (tvId !== null) {
-        method = 'exact_tv_title_year'
-        candidateCount = 1
-      } else if (candidate.exactTmdbMovieId !== null) {
+      if (candidate.exactTmdbMovieId !== null) {
         movieId = candidate.exactTmdbMovieId
         method = 'exact_tmdb_id'
         candidateCount = 1
@@ -147,6 +154,15 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
           movieId = found[0]!.id
           method = 'exact_imdb_id'
         }
+      } else if (candidate.matchedTmdbTvId !== null) {
+        tvId = candidate.matchedTmdbTvId
+        method = candidate.matchedMethod ?? 'exact_tv_title_year'
+        candidateCount = 1
+      } else if (candidate.matchedTmdbMovieId !== null && candidate.matchedMethod !== null) {
+        // Reuse established matches only when no authoritative source ID wins.
+        movieId = candidate.matchedTmdbMovieId
+        method = candidate.matchedMethod
+        candidateCount = 1
       } else if (candidate.releaseYear !== null) {
         const found = await client.searchMovie(candidate.importedTitle, candidate.releaseYear)
         requestCount += 1
@@ -385,10 +401,17 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       }),
     )
     if (error instanceof CatalogRetryError) throw error
+    // A closed data budget must still record its terminal state. This bounded
+    // control-row mutation retains the same lease generation as publication.
+    const stoppingJobs = createCatalogJobsRepository(controlDatabase, env.DATABASE_USAGE_OBSERVER)
+    if (error instanceof SyncDeferredError) {
+      if (!advanced) await stoppingJobs.fail(job.catalogJobId, reserved, 'budget_review', at)
+      throw error
+    }
     const terminal =
       (error instanceof TmdbApiError && !error.retryable) || error instanceof ZodError
     if (terminal && !advanced) {
-      await jobs.fail(
+      await stoppingJobs.fail(
         job.catalogJobId,
         reserved,
         error instanceof TmdbApiError ? `http_${error.status}` : 'invalid_provider_response',
@@ -396,7 +419,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       )
       throw error
     }
-    if (!advanced) await jobs.release(job.catalogJobId, reserved, at)
+    if (!advanced) await stoppingJobs.release(job.catalogJobId, reserved, at)
     throw new CatalogRetryError(
       error instanceof TmdbApiError
         ? Math.min(43_200, Math.max(60, error.retryAfterSeconds ?? 60))

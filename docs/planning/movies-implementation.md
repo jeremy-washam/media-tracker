@@ -103,6 +103,17 @@ reopened during implementation unless real source behavior contradicts them.
 - Per-Diary rating and review remain attached to that occurrence.
 - Current film rating and liked state are film-level relationships and remain
   separate from occurrence facts.
+- Archive's displayed personal rating uses the imported current film rating when
+  present, otherwise the reference viewing's rating, visibly labeled **Viewing**
+  (**Viewing rating** in grid). The reference viewing is the latest supported
+  viewing, or latest matching viewing under watched-date filters, with dated
+  viewings before undated viewings and Archive ID as the stable tie-breaker.
+  An unrated reference viewing never borrows an older viewing's rating. Rating
+  filters, sorting, and unrated counts use this same displayed value. Queue keeps
+  current film ratings only. This read-time fallback never changes source state,
+  including an explicitly cleared current film rating. The inspector separately
+  identifies the current film rating and latest viewing rating; History retains
+  every occurrence and its original rating.
 - Collection occurrence filters may match any supported viewing. When several
   viewings match, row/card context and occurrence-dependent sorting use the
   latest matching viewing. Without an occurrence filter, they use the latest
@@ -144,7 +155,8 @@ Archive supports:
 
 - watched date: any, inclusive range, or date unavailable;
 - release year: inclusive range or unavailable;
-- current personal rating: rated, unrated, or an inclusive minimum/maximum
+- displayed personal rating (current film rating, otherwise labeled reference
+  viewing rating): rated, unrated, or an inclusive minimum/maximum
   range;
 - reviewed: reviewed or not reviewed; and
 - runtime: approved buckets or unavailable.

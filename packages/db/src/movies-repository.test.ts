@@ -72,6 +72,8 @@ describe('SqlMoviesRepository', () => {
   let client: SqliteClient
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
     database = new DatabaseSync(':memory:')
     applyTestMigrations(database)
     database.exec(`
@@ -223,6 +225,90 @@ describe('SqlMoviesRepository', () => {
         .prepare("SELECT count(*) count FROM queue_entry_evidence WHERE role='removal'")
         .get(),
     ).toEqual({ count: 2 })
+  })
+
+  it('exposes a viewing fallback without restoring a cleared current film rating', async () => {
+    await applyFullSnapshot()
+    database.exec('UPDATE letterboxd_movie_state SET current_rating_value=NULL')
+    await repository.rebuild(now)
+    const page = await repository.listMovies(listInput({ ratingMode: 'rated' }))
+    expect(page.data[0]?.personal).toMatchObject({
+      currentRating: null,
+      viewingRating: { value: 4, archiveEntryId: 'archive-2', watchedOn: '2025-01-01' },
+    })
+    expect(page.facets.unrated).toBe(0)
+    expect((await repository.findMovie('movie-1'))?.personal.currentRating).toBeNull()
+    expect(
+      (await repository.listMovieHistory('movie-1', { limit: 50, watchedMode: 'all' })).data,
+    ).toHaveLength(2)
+    const queue = await repository.listMovies(
+      listInput({ collection: 'queue', ratingMode: 'rated' }),
+    )
+    expect(queue.data).toEqual([])
+    expect(queue.facets.unrated).toBe(2)
+  })
+
+  it('uses the matching viewing for rating filters and never borrows an older rated viewing', async () => {
+    await applyFullSnapshot()
+    database.exec('UPDATE letterboxd_movie_state SET current_rating_value=NULL')
+    await repository.rebuild(now)
+    const range = {
+      watchedMode: 'range' as const,
+      watchedFrom: '2024-01-01',
+      watchedTo: '2024-12-31',
+    }
+    const older = await repository.listMovies(
+      listInput({ ...range, ratingMode: 'range', ratingMin: 3, ratingMax: 3.5 }),
+    )
+    expect(older.data[0]?.personal.viewingRating).toEqual({
+      value: 3.5,
+      archiveEntryId: 'archive-1',
+      watchedOn: '2024-01-01',
+    })
+    expect(
+      (await repository.listMovies(listInput({ ratingMode: 'range', ratingMax: 3.5 }))).data,
+    ).toEqual([])
+    database.exec(
+      "UPDATE archive_entries SET rating_value=NULL,rating_scale_minimum=NULL,rating_scale_maximum=NULL WHERE id='archive-2'",
+    )
+    const unrated = await repository.listMovies(listInput({ ratingMode: 'unrated' }))
+    expect(unrated.data[0]?.personal.viewingRating).toBeNull()
+    expect(unrated.facets.unrated).toBe(1)
+    expect(
+      (await repository.listMovies(listInput({ ...range, ratingMode: 'rated' }))).data,
+    ).toHaveLength(1)
+  })
+
+  it('sorts and paginates by the displayed rating, prioritizing an imported current rating', async () => {
+    await applyFullSnapshot()
+    const known = await repository.listMovies(listInput({ ratingMode: 'range', ratingMin: 4.5 }))
+    expect(known.data[0]?.personal).toMatchObject({
+      currentRating: 4.5,
+      viewingRating: { value: 4 },
+    })
+    database.exec(`
+      UPDATE letterboxd_movie_state SET current_rating_value=NULL;
+      INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,
+        admission_reason,rating_value,rating_scale_minimum,rating_scale_maximum,upstream_state,created_at,updated_at)
+      VALUES ('archive-3','movie-2','letterboxd-1','diary:3','letterboxd_diary_entry',5,0.5,5,'active','${now}','${now}');
+    `)
+    await repository.rebuild(now)
+    const first = await repository.listMovies(
+      listInput({ sort: 'personalRating', direction: 'desc', limit: 1 }),
+    )
+    expect(first.data[0]?.id).toBe('movie-2')
+    expect(first.data[0]?.personal.viewingRating?.watchedOn).toBeNull()
+    const second = await repository.listMovies(
+      listInput({ sort: 'personalRating', direction: 'desc', limit: 1, cursor: first.nextCursor! }),
+    )
+    expect(second.data[0]?.id).toBe('movie-1')
+    expect(second.nextCursor).toBeNull()
+    database.exec("UPDATE archive_entries SET upstream_state='removed' WHERE id='archive-2'")
+    expect(
+      (await repository.listMovies(listInput({ ratingMode: 'rated' }))).data.find(
+        (movie) => movie.id === 'movie-1',
+      )?.personal.viewingRating?.archiveEntryId,
+    ).toBe('archive-1')
   })
 
   it('uses the latest matching occurrence while retaining complete History', async () => {
@@ -802,6 +888,20 @@ describe('SqlMoviesRepository', () => {
     })
     expect(await repository.needsTmdbConfigurationRefresh(now)).toBe(false)
     expect(await repository.needsTmdbConfigurationRefresh('2026-11-01T00:00:00.000Z')).toBe(true)
+
+    const refreshCandidates = await repository.listTmdbEnrichmentCandidates({
+      at: '2026-11-01T00:00:00.000Z',
+      retryBefore: '2026-08-01T00:00:00.000Z',
+      matcherVersion: 'tmdb-evidence@2',
+      limit: 10,
+    })
+    expect(
+      refreshCandidates.find((candidate) => candidate.mediaItemId === 'movie-1'),
+    ).toMatchObject({
+      exactTmdbMovieId: null,
+      matchedTmdbMovieId: 101,
+      matchedMethod: matchedMovie.matchMethod,
+    })
 
     await repository.applyTmdbCatalogBatch({
       at: now,

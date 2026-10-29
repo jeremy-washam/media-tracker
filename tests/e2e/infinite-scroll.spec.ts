@@ -309,10 +309,24 @@ test('anchors the same item when switching layouts and resets a new search', asy
   })
   await page.goto('/library/books/archive')
   await expect(page.locator('[data-collection-item]')).toHaveCount(60)
-  await page.locator('[data-collection-item="books-30"]').scrollIntoViewIfNeeded()
-  const before = await position(page)
-  // Dispatch avoids Playwright scrolling the toolbar into view before activation.
-  await page.getByRole('button', { name: 'Grid view' }).dispatchEvent('click')
+  // Scroll and activate in one task: a pending scroll event must not leave the
+  // layout change using an old anchor, including controls in the persistent header.
+  const before = await page.locator('[data-collection-item="books-30"]').evaluate((target) => {
+    const root = target.closest<HTMLElement>('[data-ui~="library-collection"]')!
+    root.scrollTop += target.getBoundingClientRect().top - root.getBoundingClientRect().top
+    const top = root.getBoundingClientRect().top
+    const item = Array.from(root.querySelectorAll<HTMLElement>('[data-collection-item]')).find(
+      (item) => item.getBoundingClientRect().bottom > top,
+    )!
+    const before = {
+      item: item.dataset.collectionItem,
+      offset: item.getBoundingClientRect().top - top,
+    }
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Result layout"] [aria-label="Grid view"]')!
+      .click()
+    return before
+  })
   await expect(page).toHaveURL(/layout=grid/)
   await expect(page.locator('[data-ui~="library-workspace"]')).toHaveAttribute(
     'data-layout',

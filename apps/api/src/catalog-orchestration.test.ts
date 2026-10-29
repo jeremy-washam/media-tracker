@@ -66,6 +66,8 @@ const movie = {
   exactTmdbMovieId: 1,
   exactImdbId: null,
   matchedTmdbTvId: null,
+  matchedTmdbMovieId: null,
+  matchedMethod: null,
   releaseYear: '2020',
   importedTitle: 'Synthetic',
 }
@@ -233,6 +235,84 @@ describe('catalog matching decisions', () => {
   beforeEach(() => {
     mocks.job.provider = 'tmdb'
   })
+  it('prefers an authoritative TMDB identity over an older TV match', async () => {
+    mocks.candidates.mockResolvedValue([{ ...movie, matchedTmdbTvId: 42 }])
+    const tvDetails = vi
+      .spyOn(TmdbClient.prototype, 'tvDetails')
+      .mockRejectedValue(new Error('Unexpected TV lookup'))
+    await processTmdbCatalogRefresh(env, message('tmdb'))
+    expect(TmdbClient.prototype.movieDetails).toHaveBeenCalledWith(1)
+    expect(tvDetails).not.toHaveBeenCalled()
+    expect(mocks.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        movies: [expect.objectContaining({ tmdbMovieId: 1, matchMethod: 'exact_tmdb_id' })],
+      }),
+    )
+  })
+
+  it('prefers a newly supplied IMDb identity over a cached title match', async () => {
+    mocks.candidates.mockResolvedValue([
+      {
+        ...movie,
+        exactTmdbMovieId: null,
+        exactImdbId: 'tt0000022',
+        matchedTmdbMovieId: 13,
+        matchedTmdbTvId: 42,
+        matchedMethod: 'exact_title_year',
+      },
+    ])
+    const lookup = vi.spyOn(TmdbClient.prototype, 'findMovieByImdb').mockResolvedValue([
+      {
+        id: 22,
+        title: 'Synthetic',
+        original_title: 'Synthetic',
+        release_date: '2020-01-01',
+        poster_path: null,
+        vote_count: 20,
+      },
+    ])
+    const search = vi
+      .spyOn(TmdbClient.prototype, 'searchMovie')
+      .mockRejectedValue(new Error('Unexpected title search'))
+    await processTmdbCatalogRefresh(env, message('tmdb'))
+    expect(lookup).toHaveBeenCalledWith('tt0000022')
+    expect(TmdbClient.prototype.movieDetails).toHaveBeenCalledWith(22)
+    expect(search).not.toHaveBeenCalled()
+    expect(mocks.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        movies: [expect.objectContaining({ tmdbMovieId: 22, matchMethod: 'exact_imdb_id' })],
+      }),
+    )
+  })
+
+  it('refreshes a title-only established match directly without relabeling its evidence', async () => {
+    mocks.candidates.mockResolvedValue([
+      {
+        ...movie,
+        exactTmdbMovieId: null,
+        matchedTmdbMovieId: 13,
+        matchedMethod: 'verified_release_year',
+      },
+    ])
+    const lookup = vi
+      .spyOn(TmdbClient.prototype, 'findMovieByImdb')
+      .mockRejectedValue(new Error('Unexpected IMDb lookup'))
+    const search = vi
+      .spyOn(TmdbClient.prototype, 'searchMovie')
+      .mockRejectedValue(new Error('Unexpected title search'))
+    await processTmdbCatalogRefresh(env, message('tmdb'))
+    expect(TmdbClient.prototype.movieDetails).toHaveBeenCalledWith(13)
+    expect(lookup).not.toHaveBeenCalled()
+    expect(search).not.toHaveBeenCalled()
+    expect(mocks.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        movies: [
+          expect.objectContaining({ tmdbMovieId: 13, matchMethod: 'verified_release_year' }),
+        ],
+      }),
+    )
+  })
+
   it.each([
     { ids: [1], expected: 'matched' },
     { ids: [1, 2], expected: 'ambiguous' },

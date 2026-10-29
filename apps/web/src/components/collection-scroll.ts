@@ -92,6 +92,8 @@ export function useCollectionScroll(queryKey: QueryKey, layout: string, itemCoun
       restoredTop.current = undefined
       snapshot.current = capture(element)
     }
+    // The persistent header renders layout controls outside this scroll pane.
+    // Capture activation before React changes layout, even if scroll is pending.
     const onLayoutActivation = (event: Event) => {
       if ((event.target as HTMLElement).closest('[aria-label="Result layout"]')) onScroll()
     }
@@ -107,11 +109,11 @@ export function useCollectionScroll(queryKey: QueryKey, layout: string, itemCoun
       }
     })
     resize.observe(element)
-    element.addEventListener('click', onLayoutActivation, true)
+    element.ownerDocument.addEventListener('click', onLayoutActivation, true)
     element.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       resize.disconnect()
-      element.removeEventListener('click', onLayoutActivation, true)
+      element.ownerDocument.removeEventListener('click', onLayoutActivation, true)
       element.removeEventListener('scroll', onScroll)
       if (snapshot.current) {
         cache.delete(key)

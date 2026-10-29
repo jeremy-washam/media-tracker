@@ -484,6 +484,9 @@ function MovieResult({
     : movie.enrichment.mediaType === 'tv'
       ? 'Creator unavailable'
       : 'Director unavailable'
+  const viewingRating = collection === 'archive' ? movie.personal.viewingRating : null
+  const rating = movie.personal.currentRating ?? viewingRating?.value ?? null
+  const isViewingRating = movie.personal.currentRating === null && viewingRating !== null
   if (layout === 'grid') {
     return (
       <MediaCard
@@ -500,7 +503,8 @@ function MovieResult({
         onClick={onSelect}
       >
         <MoviePoster movie={movie} />
-        <RatingStars rating={movie.personal.currentRating} />
+        <RatingStars rating={rating} />
+        {isViewingRating ? <small>Viewing rating</small> : null}
         <strong>{movie.displayTitle}</strong>
         <span>{[movie.releaseYear, director].filter(Boolean).join(' · ')}</span>
       </MediaCard>
@@ -534,7 +538,8 @@ function MovieResult({
       <span className={mediaStyles['movie-row-director']}>{director}</span>
       <span className={mediaStyles['movie-row-context']}>{context}</span>
       <span className={mediaStyles['movie-row-rating']}>
-        {movie.personal.currentRating === null ? '—' : `${movie.personal.currentRating}/5`}
+        {rating === null ? '—' : `${rating}/5`}
+        {isViewingRating ? <small>Viewing</small> : null}
       </span>
       <CaretRight aria-hidden="true" />
     </MediaRowButton>
@@ -692,6 +697,9 @@ function MovieFilters({
         </fieldset>
         <fieldset className={controlsStyles['date-filter']} data-ui="date-filter">
           <legend>Your rating</legend>
+          {collection === 'archive' ? (
+            <p>Current film rating, or the viewing rating shown in the results.</p>
+          ) : null}
           <LibrarySelect
             aria-label="Your rating"
             value={search.rating ?? 'any'}
@@ -948,6 +956,10 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
             <strong className={moviesStyles['movie-personal-rating']}>
               Your rating {movie.personal.currentRating}/5
             </strong>
+          ) : movie.personal.viewingRating ? (
+            <strong className={moviesStyles['movie-personal-rating']}>
+              Latest viewing rating {movie.personal.viewingRating.value}/5
+            </strong>
           ) : null}
           {movie.personal.liked ? (
             <strong className={moviesStyles['movie-liked']}>
@@ -987,10 +999,21 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
       <section className={inspectorStyles['inspector-section']} data-ui="inspector-section">
         <h3>Your relationship</h3>
         <dl className={inspectorStyles['detail-list']}>
-          {movie.personal.currentRating !== null ? (
+          <dt>Current film rating</dt>
+          <dd>
+            {movie.personal.currentRating === null
+              ? 'No current rating imported'
+              : `${movie.personal.currentRating}/5`}
+          </dd>
+          {movie.personal.viewingRating ? (
             <>
-              <dt>Current rating</dt>
-              <dd>{movie.personal.currentRating}/5</dd>
+              <dt>Latest viewing rating</dt>
+              <dd>
+                {movie.personal.viewingRating.value}/5
+                {movie.personal.viewingRating.watchedOn
+                  ? ` · ${formatDate(movie.personal.viewingRating.watchedOn)}`
+                  : ' · watched date unknown'}
+              </dd>
             </>
           ) : null}
           {movie.personal.liked ? (

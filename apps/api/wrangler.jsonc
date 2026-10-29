@@ -15,6 +15,8 @@
     "ARTICLE_CONTENT_ENABLED": "true",
     "SPOTIFY_CATALOG_ENABLED": "true",
     "MAINTENANCE_ENABLED": "false",
+    "TMDB_CATALOG_JOB_ID": "",
+    "TMDB_CATALOG_UNTIL": "",
   },
   "assets": {
     "directory": "../web/dist",
