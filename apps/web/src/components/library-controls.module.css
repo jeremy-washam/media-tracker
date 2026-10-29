@@ -4,16 +4,18 @@
   border: 1px dashed #cbc4b7;
   border-radius: 14px;
   text-align: center;
-  font-size: 0.82rem;
+  font-size: var(--app-text-caption);
 }
 
 .books-tabs span {
-  font-weight: 400;
+  font-size: var(--app-text-caption);
+  font-weight: var(--app-weight-normal);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .books-toolbar {
+  font-size: var(--app-text-body);
   display: grid;
   grid-template-columns: minmax(200px, 1fr) auto auto auto auto;
   gap: 8px;
@@ -28,7 +30,7 @@
   border-radius: 50%;
   color: var(--primary-foreground);
   background: var(--primary);
-  font-size: 9px;
+  font-size: var(--app-text-caption);
 }
 
 .books-sort {
@@ -47,10 +49,16 @@
 }
 
 .filter-panel-heading {
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+
+.filter-panel-heading strong {
+  font-weight: var(--app-weight-medium);
 }
 
 .filter-panel-grid {
@@ -71,10 +79,10 @@
 .date-filter legend {
   margin-bottom: 8px;
   color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .filter-group > div {
@@ -98,9 +106,10 @@
 }
 
 .filter-group label small {
+  font-weight: var(--app-weight-normal);
   margin-left: auto;
   color: var(--muted-foreground);
-  font-size: 9px;
+  font-size: var(--app-text-caption);
 }
 
 .date-filter > span {
@@ -181,7 +190,7 @@
   display: flex;
   gap: 8px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 
 .library-facet-picker {
@@ -194,10 +203,10 @@
 .library-facet-picker legend {
   margin-bottom: 8px;
   color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .library-facet-options {
@@ -207,7 +216,7 @@
   overflow-y: auto;
   gap: 4px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 
 .library-facet-options label {
@@ -224,6 +233,8 @@
 }
 
 .library-facet-options small {
+  font-size: var(--app-text-caption);
+  font-weight: var(--app-weight-normal);
   color: var(--muted-foreground);
 }
 
@@ -347,8 +358,8 @@
 }
 .filter-panel .library-inline-filter > span {
   color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }

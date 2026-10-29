@@ -28,7 +28,7 @@ async function checkInspectorTabs(page: Page, label: string) {
   })
   expect(association.panel).toBe('tabpanel')
   expect(association.labelledBy).toBe(association.triggerId)
-  expect(association.font).toBe('12px')
+  expect(association.font).toBe('14px')
   await tabs.nth(1).press('Home')
   await first.press('Enter')
   await expect(first).toBeFocused()
@@ -649,7 +649,7 @@ for (const scenario of [
       await page
         .locator('[data-ui~="workspace-breadcrumb"] strong')
         .evaluate((e) => getComputedStyle(e).fontSize),
-    ).toBe('12px')
+    ).toBe('14px')
     await expect(nav.locator('span').first()).not.toHaveText('—')
     await expect
       .poll(() =>

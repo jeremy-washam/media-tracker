@@ -101,7 +101,7 @@ for (const dark of [false, true]) {
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(844)
       for (const control of geometry.controls) {
         expect(control.height).toBe(28)
-        expect(control.font).toBe('12.8px')
+        expect(control.font).toBe('14px')
         expect(control.weight).toBe('500')
         expect(control.cursor).toBe('default')
         expect(control.left).toBeGreaterThanOrEqual(0)

@@ -24,9 +24,18 @@
   --library-row-cover-width: 60px;
   --library-row-cover-height: 90px;
   --library-row-art-size: 80px;
-  --library-row-title-size: 16px;
-  --library-row-subtitle-size: 13px;
-  --library-row-metadata-size: 13px;
+  /* Balanced: one shared role scale for production desktop UI. */
+  --app-text-caption: 12px;
+  --app-text-body: 14px;
+  --app-text-title: 16px;
+  --app-text-display: 22px;
+  --app-weight-normal: 400;
+  --app-weight-medium: 500;
+  --app-weight-semibold: 600;
+  --app-leading-body: 1.45;
+  --library-row-title-size: var(--app-text-title);
+  --library-row-subtitle-size: var(--app-text-body);
+  --library-row-metadata-size: var(--app-text-caption);
   --background: oklch(0.9551 0 0);
   --foreground: oklch(0.3211 0 0);
   --card: oklch(0.9702 0 0);
@@ -77,6 +86,12 @@
 }
 
 @theme inline {
+  --text-xs: var(--app-text-caption);
+  --text-xs--line-height: var(--app-leading-body);
+  --text-sm: var(--app-text-body);
+  --text-sm--line-height: var(--app-leading-body);
+  --text-base: var(--app-text-title);
+  --text-base--line-height: var(--app-leading-body);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

@@ -9,5 +9,5 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }

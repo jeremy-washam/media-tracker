@@ -9,7 +9,7 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 12px 24px 40px;
-  font-size: 13px;
+  font-size: var(--app-text-body);
   line-height: 1.5;
 }
 :global(.dark) .page {
@@ -45,15 +45,15 @@
 }
 .sourceHeading h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
   line-height: 1.5;
 }
 .status {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .status svg,
 .activityIcon svg {
@@ -73,7 +73,7 @@
 .accountName {
   margin: 2px 0 0;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .facts {
   display: flex;
@@ -81,7 +81,7 @@
   gap: 2px 16px;
   margin-top: 4px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .details {
   margin-top: 7px;
@@ -89,7 +89,7 @@
 .detailsContent {
   max-width: 680px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 .detailsContent p {
   margin: 8px 0 0;
@@ -102,8 +102,8 @@
 .savedConnection h3 {
   margin: 0;
   color: var(--foreground);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
 }
 .actions,
 .actionGroup {
@@ -124,7 +124,7 @@
 }
 .pendingImport p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .skeletonRow {
   display: flex;
@@ -147,13 +147,13 @@
 .newAccount h2,
 .activity h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
 }
 .newAccount p {
   margin: 4px 0 0;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .accountForm {
   display: flex;
@@ -189,12 +189,12 @@
   overflow-wrap: anywhere;
 }
 .activityCopy strong {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
 }
 .activityCopy p {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: var(--app-text-caption);
   color: var(--muted-foreground);
 }
 .activityHeading {
@@ -206,11 +206,11 @@
 }
 .activityHeading time {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .muted {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 @media (max-width: 700px) {
   .page {

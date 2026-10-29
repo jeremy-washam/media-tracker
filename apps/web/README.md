@@ -56,10 +56,28 @@ are removed from browser storage immediately. Storage failures leave browsing
 available. Persisted metadata stays private to the owner’s browser; opening the
 Library never starts provider syncs or catalog jobs.
 
+## Typography
+
+Production uses the owner-approved original Balanced study: 12px supporting
+metadata/counts, 14px interface and inspector body/facts, 16px list titles, and
+22px inspector titles/wordmark. Weights are 400 for body/counts, 500 for controls
+and section headings, and 600 for media titles. Overview and inspector label/value
+rows both use 14px / 400; the later 12px inspector experiment was rejected.
+
+`components.css` owns `--app-text-*`, `--app-weight-*`, the shared body leading,
+and their Tailwind text mappings. Modules apply roles to custom content; shared
+compositions/variants own control typography. Narrow editable inputs keep the
+primitive's 16px accommodation. Counts and `small` elements have an explicit
+12px role instead of shrinking relative to an already small parent. Retain the
+actual shadcn/Base UI controls and their interaction behavior.
+
+See the [UI foundation](../../docs/design/ui-foundation.md#approved-typography-balanced-october-29-2026)
+and [saved mocks](../../docs/design/typography-study/README.md).
+
 ## Branding
 
 The expanded sidebar pairs the 30px compact J2 house-and-waterfall symbol with a
-20px, weight-500 system-font Imladris wordmark. The collapsed sidebar hides the
+22px, weight-500 system-font Imladris wordmark. The collapsed sidebar hides the
 wordmark.
 Interface text keeps system typography; no brand font is loaded.
 The symbol follows the active light/dark text color; the SVG favicon follows
@@ -166,8 +184,8 @@ and the [cleanup implementation record](../../docs/planning/web-styling-cleanup.
   tokens, shared application metrics, and Tailwind theme mappings.
 - Shared compositions own control density and appearance: FlatTabs,
   LibraryToolbar, LibraryFilterPanel, LibrarySelect, and navigation variants.
-  AppButton/AppInput compose installed primitives and preserve the application's
-  inherited typography without resetting all primitives from global CSS.
+  AppButton/AppInput compose installed primitives with the shared 14px control
+  role and 16px narrow editable-input size.
 - CSS Modules beside components/features own substantial custom layouts and
   media presentation. Shared Library workspace, inspector, and media modules
   keep geometry, motion, and list presentation consistent across six media types.

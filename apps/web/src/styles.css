@@ -33,8 +33,21 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
+    font-size: var(--app-text-body);
+    font-weight: var(--app-weight-normal);
+    line-height: var(--app-leading-body);
     color: var(--foreground);
     background: var(--background);
+  }
+
+  /* Explicit document defaults prevent nested small/strong elements adding roles. */
+  small {
+    font-size: var(--app-text-caption);
+  }
+
+  strong,
+  b {
+    font-weight: var(--app-weight-semibold);
   }
 
   button,

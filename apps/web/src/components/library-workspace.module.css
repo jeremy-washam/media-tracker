@@ -20,12 +20,12 @@
   justify-content: space-between;
   gap: 12px;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: var(--app-text-caption);
 }
 
 .books-result-summary strong {
   color: var(--destructive);
-  font-weight: 600;
+  font-weight: var(--app-weight-medium);
 }
 
 .books-state {
@@ -48,17 +48,18 @@
 }
 
 .books-state h2 {
+  font-size: var(--app-text-title);
   margin: 0;
   color: var(--foreground);
   font-family: inherit;
-  font-weight: 500;
+  font-weight: var(--app-weight-medium);
 }
 
 .books-state p {
   max-width: 450px;
   color: var(--muted-foreground);
   margin: 8px 0 16px;
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 
 .load-more {
@@ -98,7 +99,7 @@
   align-items: center;
   gap: 7px;
   margin-top: 9px;
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 
 [data-ui~='video-result-copy'] span,
@@ -110,7 +111,7 @@
 
 .library-coverage-note {
   margin: -4px 0 14px;
-  font-size: 11px;
+  font-size: var(--app-text-caption);
 }
 
 @media (max-width: 1280px) {
@@ -233,7 +234,7 @@
   flex-wrap: wrap;
   gap: 6px;
   padding-bottom: 10px;
-  font-size: 10px;
+  font-size: var(--app-text-body);
 }
 
 .collection-filter-sheet {
