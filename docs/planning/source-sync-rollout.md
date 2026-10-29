@@ -149,6 +149,9 @@ Movies uses a separate, finite grant; `CATALOG_AUTO_REFRESH=false` stays in plac
 `TMDB_CATALOG_UNTIL` must expire inside the reviewed source window, within 32 days.
 The hourly schedule resumes that job only; it never creates another catalog job.
 No other TMDB job or YouTube, Spotify, or article-content backlog is activated.
+Known movie matches refresh by their stored TMDB identity without repeating title
+search; their original match method remains unchanged. New exact source identities
+still take precedence over a cached movie match.
 
 Each ten-item batch reserves one of at most 80 durable attempts, including failed
 requests, crashes, and lease recovery. Each attempt permits 128 provider requests,

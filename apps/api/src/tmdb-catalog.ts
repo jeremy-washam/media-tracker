@@ -16,6 +16,7 @@ import { ulid } from 'ulid'
 import { createCatalogJobsRepository, createMoviesRepository } from './env'
 import type { Bindings } from './env'
 import { boundedTmdbEnvironment, tmdbGrantAllowed, tmdbGrantAttempts } from './tmdb-grant'
+import { SyncDeferredError } from './sync-budget'
 
 const batchSize = 10
 const matcherVersion = 'tmdb-evidence@2'
@@ -59,6 +60,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
   if (job.operation !== 'refresh_tmdb_catalog' || job.catalogJobId === undefined) return
   const hosted = env.AUTH_MODE === 'access'
   if (hosted && !tmdbGrantAllowed(env, job.catalogJobId)) return
+  const controlDatabase = env.DB
   const bounded = hosted ? boundedTmdbEnvironment(env) : null
   if (bounded) env = bounded.env
   const at = new Date().toISOString()
@@ -146,6 +148,12 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       } else if (candidate.exactTmdbMovieId !== null) {
         movieId = candidate.exactTmdbMovieId
         method = 'exact_tmdb_id'
+        candidateCount = 1
+      } else if (candidate.matchedTmdbMovieId !== null && candidate.matchedMethod !== null) {
+        // Refresh an established identity directly, preserving its matching
+        // evidence rather than repeating title search or relabeling it exact.
+        movieId = candidate.matchedTmdbMovieId
+        method = candidate.matchedMethod
         candidateCount = 1
       } else if (candidate.exactImdbId !== null) {
         const found = await client.findMovieByImdb(candidate.exactImdbId)
@@ -393,10 +401,17 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       }),
     )
     if (error instanceof CatalogRetryError) throw error
+    // A closed data budget must still record its terminal state. This bounded
+    // control-row mutation retains the same lease generation as publication.
+    const stoppingJobs = createCatalogJobsRepository(controlDatabase, env.DATABASE_USAGE_OBSERVER)
+    if (error instanceof SyncDeferredError) {
+      if (!advanced) await stoppingJobs.fail(job.catalogJobId, reserved, 'budget_review', at)
+      throw error
+    }
     const terminal =
       (error instanceof TmdbApiError && !error.retryable) || error instanceof ZodError
     if (terminal && !advanced) {
-      await jobs.fail(
+      await stoppingJobs.fail(
         job.catalogJobId,
         reserved,
         error instanceof TmdbApiError ? `http_${error.status}` : 'invalid_provider_response',
@@ -404,7 +419,7 @@ export async function processTmdbCatalogRefresh(env: Bindings, job: SyncJob): Pr
       )
       throw error
     }
-    if (!advanced) await jobs.release(job.catalogJobId, reserved, at)
+    if (!advanced) await stoppingJobs.release(job.catalogJobId, reserved, at)
     throw new CatalogRetryError(
       error instanceof TmdbApiError
         ? Math.min(43_200, Math.max(60, error.retryAfterSeconds ?? 60))

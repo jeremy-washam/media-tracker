@@ -889,6 +889,20 @@ describe('SqlMoviesRepository', () => {
     expect(await repository.needsTmdbConfigurationRefresh(now)).toBe(false)
     expect(await repository.needsTmdbConfigurationRefresh('2026-11-01T00:00:00.000Z')).toBe(true)
 
+    const refreshCandidates = await repository.listTmdbEnrichmentCandidates({
+      at: '2026-11-01T00:00:00.000Z',
+      retryBefore: '2026-08-01T00:00:00.000Z',
+      matcherVersion: 'tmdb-evidence@2',
+      limit: 10,
+    })
+    expect(
+      refreshCandidates.find((candidate) => candidate.mediaItemId === 'movie-1'),
+    ).toMatchObject({
+      exactTmdbMovieId: null,
+      matchedTmdbMovieId: 101,
+      matchedMethod: matchedMovie.matchMethod,
+    })
+
     await repository.applyTmdbCatalogBatch({
       at: now,
       movies: [{ ...matchedMovie, mediaItemId: 'movie-2' }],

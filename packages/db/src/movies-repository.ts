@@ -149,6 +149,8 @@ export interface TmdbEnrichmentCandidate {
   releaseYear: string | null
   exactTmdbMovieId: number | null
   matchedTmdbTvId: number | null
+  matchedTmdbMovieId: number | null
+  matchedMethod: TmdbMovieProfileProjection['matchMethod']
   exactImdbId: string | null
 }
 
@@ -949,7 +951,9 @@ export class SqlMoviesRepository {
          (SELECT e.external_id FROM external_identities e
           WHERE e.media_item_id=p.media_item_id AND e.namespace='imdb'
             AND e.scope='global' AND e.retired_at IS NULL ORDER BY e.id LIMIT 1) exact_imdb_id,
-         match.tmdb_tv_id matched_tmdb_tv_id
+         match.tmdb_tv_id matched_tmdb_tv_id,
+         CASE WHEN match.match_status='matched' THEN match.tmdb_movie_id END matched_tmdb_movie_id,
+         match.match_method matched_method
        FROM movie_library_projection p
        LEFT JOIN tmdb_movie_matches match ON match.media_item_id=p.media_item_id
        LEFT JOIN tmdb_movie_profiles profile ON profile.tmdb_movie_id=match.tmdb_movie_id
@@ -984,6 +988,8 @@ export class SqlMoviesRepository {
       exact_tmdb_movie_id: number | null
       exact_imdb_id: string | null
       matched_tmdb_tv_id: number | null
+      matched_tmdb_movie_id: number | null
+      matched_method: TmdbMovieProfileProjection['matchMethod']
     }>()
     return rows.results.map((row) => ({
       mediaItemId: row.media_item_id,
@@ -992,6 +998,8 @@ export class SqlMoviesRepository {
       exactTmdbMovieId: row.exact_tmdb_movie_id,
       exactImdbId: row.exact_imdb_id,
       matchedTmdbTvId: row.matched_tmdb_tv_id,
+      matchedTmdbMovieId: row.matched_tmdb_movie_id,
+      matchedMethod: row.matched_method,
     }))
   }
 
