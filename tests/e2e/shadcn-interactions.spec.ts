@@ -135,6 +135,9 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   })
   await page.goto('/library/books/archive')
   const collection = page.locator('[data-ui~="library-collection"]')
+  const collectionSummary = page
+    .locator('[data-ui~="collection-header"]')
+    .locator('[data-ui~="collection-summary"]')
   const loading = collection.getByRole('status')
   const skeletons = loading.locator('[data-slot=skeleton]')
   try {
@@ -164,14 +167,14 @@ test('uses Skeleton and Alert while retaining loading announcements and retry be
   await expect(row).toBeVisible()
   await expect(itemsAlert).toHaveCount(0)
   await expect(summaryAlert).toBeVisible()
-  await expect(collection.locator('[data-ui~="collection-summary"]')).toBeEmpty()
+  await expect(collectionSummary).toBeEmpty()
   expect(archiveRequests.summary).toBe(summaryAttempts)
 
   const itemAttempts = archiveRequests.items
   summaryFailed = false
   await summaryRetry.click()
   await expect(summaryAlert).toHaveCount(0)
-  await expect(collection.locator('[data-ui~="collection-summary"]')).toContainText('1 book')
+  await expect(collectionSummary).toContainText('1 book')
   await expect(row).toBeVisible()
   expect(archiveRequests.items).toBe(itemAttempts)
 })
