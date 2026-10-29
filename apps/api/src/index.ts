@@ -15,10 +15,17 @@ import { syncLetterboxdRss } from './letterboxd-rss-sync'
 import { syncReadwiseArchive } from './readwise-sync'
 import { acquireReadwiseArticleContent, indexReadwiseArticleContent } from './readwise-content'
 import { syncSpotifySavedEpisodes } from './spotify-sync'
-import { createArticlesRepository, createCatalogJobsRepository } from './env'
+import { createArticlesRepository } from './env'
 import { processTmdbCatalogRefresh, startTmdbCatalogRefresh } from './tmdb-catalog'
 import { processYoutubeCatalogRefresh, startYoutubeCatalogRefresh } from './youtube-catalog'
-import { tmdbGrantAllowed, tmdbGrantAttempts } from './tmdb-grant'
+import { scheduleCatalogWork } from './catalog-scheduler'
+import {
+  monitorOperatingBudget,
+  operatingWorkAllowed,
+  readOperatingState,
+  OPERATING_MONITOR_CRON,
+} from './operating-budget'
+import { boundImportRequest } from './import-request'
 import { TmdbApiError } from '@media-tracker/connector-tmdb'
 import { YoutubeApiError } from '@media-tracker/connector-youtube'
 import { processSpotifyCatalogBackfill, resumeSpotifyCatalogBackfill } from './spotify-catalog'
@@ -29,18 +36,22 @@ import type { Bindings } from './env'
 
 const sourceOperations = {
   letterboxd: syncLetterboxdRss,
-  hardcover: syncHardcover,
+  hardcover: (env: Bindings) =>
+    syncHardcover(env, env.AUTH_MODE === 'access' ? { maxPages: 1 } : {}),
   readwise: syncReadwiseArchive,
   spotify: syncSpotifySavedEpisodes,
 }
 
 async function enqueueSources(env: Bindings) {
   const admission = new SqlSourceSyncAdmission(new D1DatabaseClient(env.DB))
-  if (!(await admission.withinAllowance())) return
+  if (!(await admission.withinAllowance()) || !(await operatingWorkAllowed(env))) return
   const now = Date.now()
   const messages: MessageSendRequest<SyncJob>[] = []
   for (const source of Object.keys(sourceOperations) as SyncSource[]) {
-    if (sourceSyncAllowed(env, source) && (await admission.available(source, now)))
+    if (
+      sourceSyncAllowed(env, source) &&
+      ((await admission.resumable(source)) || (await admission.available(source, now)))
+    )
       messages.push({
         body: {
           source,
@@ -50,24 +61,6 @@ async function enqueueSources(env: Bindings) {
       })
   }
   if (messages.length) await env.SYNC_QUEUE.sendBatch(messages)
-}
-
-async function resumeGrantedTmdbRefresh(env: Bindings) {
-  const job = await createCatalogJobsRepository(env.DB).find(env.TMDB_CATALOG_JOB_ID!)
-  if (
-    !job ||
-    job.provider !== 'tmdb' ||
-    job.attemptCount >= tmdbGrantAttempts ||
-    !['pending', 'running'].includes(job.state)
-  )
-    return
-  await env.SYNC_QUEUE.send({
-    operation: 'refresh_tmdb_catalog',
-    source: 'tmdb',
-    catalogJobId: job.id,
-    catalogCursor: job.cursor ?? '',
-    idempotencyKey: `catalog:tmdb:${job.id}`,
-  })
 }
 
 async function scheduledJob<Result>(
@@ -90,32 +83,47 @@ const worker = {
     if (env.SYNC_ENABLED === 'false' && !['GET', 'HEAD', 'OPTIONS'].includes(request.method))
       return privateAccessError(503, 'Sync is paused during deployment.')
     const pathname = new URL(request.url).pathname
-    if (
-      env.AUTH_MODE === 'access' &&
-      env.SYNC_ENABLED === 'true' &&
-      !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
-      !/^\/api\/connections\/(readwise|hardcover|letterboxd|spotify)\/sync$/.test(pathname)
-    )
-      return privateAccessError(503, 'Imports and enrichment are paused during source-sync setup.')
     if (pathname === '/__scheduled' && env.AUTH_MODE !== 'local')
       return new Response('Not found', { status: 404 })
     if (pathname !== '/api' && !pathname.startsWith('/api/')) return env.ASSETS.fetch(request)
     const limited = await limitApiUsage(request, env)
     if (limited) return limited
-    return app.fetch(request, env, context)
+    if (pathname === '/api/operations' && request.method === 'GET')
+      return Response.json(
+        { enabled: env.OPERATING_MONITOR_ENABLED === 'true', state: await readOperatingState(env) },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    if (
+      !(request.method === 'GET' && pathname === '/api/health' && !new URL(request.url).search) &&
+      !(await operatingWorkAllowed(env))
+    )
+      return privateAccessError(
+        503,
+        'Imladris is paused. Review the operations status before resuming.',
+      )
+    const bounded = await boundImportRequest(request, env.AUTH_MODE === 'access')
+    if (bounded instanceof Response) return bounded
+    return app.fetch(bounded, env, context)
   },
   scheduled(controller, env, context) {
+    if (controller.cron === OPERATING_MONITOR_CRON && env.OPERATING_MONITOR_ENABLED === 'true') {
+      context.waitUntil(monitorOperatingBudget(env))
+      return
+    }
     if (controller.cron === MAINTENANCE_CRON && env.MAINTENANCE_ENABLED === 'true')
-      context.waitUntil(maintainCatalog(env))
+      context.waitUntil(
+        operatingWorkAllowed(env).then((allowed) => (allowed ? maintainCatalog(env) : undefined)),
+      )
     // The frequent cleanup schedule must never increase provider polling cadence.
     if (controller.cron === MAINTENANCE_CRON || env.SYNC_ENABLED === 'false') return
     if (env.AUTH_MODE === 'access') {
-      // Each source gets its own bounded queue invocation, rather than sharing
-      // the scheduled handler's wall-clock lifetime with every other provider.
-      context.waitUntil(enqueueSources(env))
-      // Resume only the explicitly reviewed job, never create catalog backlogs.
-      if (tmdbGrantAllowed(env, env.TMDB_CATALOG_JOB_ID))
-        context.waitUntil(resumeGrantedTmdbRefresh(env))
+      context.waitUntil(
+        (async () => {
+          if (!(await operatingWorkAllowed(env))) return
+          await enqueueSources(env)
+          await scheduleCatalogWork(env)
+        })(),
+      )
       return
     }
     console.info(
@@ -304,6 +312,10 @@ const worker = {
       batch.retryAll({ delaySeconds: 300 })
       return
     }
+    if (!(await operatingWorkAllowed(env))) {
+      batch.retryAll({ delaySeconds: 43200 })
+      return
+    }
     for (const message of batch.messages) {
       const result = SyncJobSchema.safeParse(message.body)
 
@@ -327,7 +339,17 @@ const worker = {
         }
         try {
           const operation = sourceOperations[source as SyncSource]
-          await runSourceSync<unknown>(env, source as SyncSource, operation)
+          const response = await runSourceSync<unknown>(env, source as SyncSource, operation)
+          if (
+            typeof response === 'object' &&
+            response !== null &&
+            'continuation' in response &&
+            response.continuation === true
+          )
+            await env.SYNC_QUEUE.send({
+              ...result.data,
+              idempotencyKey: `source-sync:${source}:continuation:${crypto.randomUUID()}`,
+            })
           message.ack()
         } catch (error) {
           if (error instanceof SyncDeferredError && error.retryAfterSeconds !== undefined)
@@ -356,18 +378,21 @@ const worker = {
         (result.data.operation === 'refresh_spotify_catalog' &&
           env.SPOTIFY_CATALOG_ENABLED === 'false') ||
         (result.data.operation === 'refresh_tmdb_catalog' &&
-          (env.AUTH_MODE === 'access'
-            ? !tmdbGrantAllowed(env, result.data.catalogJobId)
-            : env.CATALOG_AUTO_REFRESH === 'false')) ||
+          env.CATALOG_AUTO_REFRESH === 'false') ||
         (result.data.operation === 'refresh_youtube_catalog' &&
-          (env.AUTH_MODE === 'access' || env.CATALOG_AUTO_REFRESH === 'false'))
+          env.CATALOG_AUTO_REFRESH === 'false')
       ) {
         // Keep queued work recoverable; rollout config leaves consumers detached.
         message.retry({ delaySeconds: 43200 })
         continue
       }
 
-      const usage = jobUsage(env, result.data.operation)
+      const checkedFetch: typeof fetch = async (input, init) => {
+        if (!(await operatingWorkAllowed(env)))
+          throw new SyncDeferredError('Background work is paused')
+        return fetch(input, init)
+      }
+      const usage = jobUsage({ ...env, SYNC_FETCH: checkedFetch }, result.data.operation)
       try {
         if (
           result.data.operation === 'acquire_article_content' ||
@@ -399,7 +424,9 @@ const worker = {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
               }),
             )
-            message.retry()
+            message.retry({
+              delaySeconds: error instanceof CatalogRetryError ? error.delaySeconds : 60,
+            })
           }
           continue
         }

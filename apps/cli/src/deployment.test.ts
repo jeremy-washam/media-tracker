@@ -10,32 +10,34 @@ const settings = {
 }
 
 describe('deployment safeguards', () => {
-  it('requires an expiring source grant and a serial bounded consumer for source activation', () => {
+  it('requires permanent explicit sources, serial work and an independently scheduled monitor', () => {
     const configuration = productionConfiguration(settings)
     configuration.vars.SYNC_ENABLED = 'true'
     expect(() => validateProductionConfiguration(configuration)).toThrow('explicit sources')
     configuration.vars.SYNC_SOURCES = 'readwise,letterboxd'
-    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 3600_000).toISOString()
+    expect(() => validateProductionConfiguration(configuration)).toThrow('operating monitor')
+    configuration.vars.OPERATING_MONITOR_ENABLED = 'true'
+    configuration.vars.CLOUDFLARE_ACCOUNT_ID = settings.accountId
+    configuration.vars.SYNC_QUEUE_ID = '2'.repeat(32)
     configuration.queues.consumers = [
-      { queue: 'media-tracker-sync', max_batch_size: 1, max_concurrency: 1, max_retries: 1 },
+      {
+        queue: 'media-tracker-sync',
+        max_batch_size: 1,
+        max_concurrency: 1,
+        max_retries: 1,
+        dead_letter_queue: 'media-tracker-sync-dead-letter',
+      },
     ]
-    configuration.triggers.crons = ['0 * * * *']
-    expect(() => validateProductionConfiguration(configuration)).not.toThrow()
-    configuration.vars.TMDB_CATALOG_JOB_ID = '01K8QYJ6Q7G6J0Z3VTXYP5CXDD'
-    configuration.vars.TMDB_CATALOG_UNTIL = configuration.vars.SYNC_BUDGET_UNTIL
-    expect(() => validateProductionConfiguration(configuration)).not.toThrow()
-    configuration.vars.TMDB_CATALOG_UNTIL = new Date(Date.now() + 7200_000).toISOString()
-    expect(() => validateProductionConfiguration(configuration)).toThrow('one reviewed job')
-    configuration.vars.TMDB_CATALOG_UNTIL = configuration.vars.SYNC_BUDGET_UNTIL
-    configuration.vars.TMDB_CATALOG_JOB_ID = '*'
-    expect(() => validateProductionConfiguration(configuration)).toThrow('one reviewed job')
-    delete configuration.vars.TMDB_CATALOG_JOB_ID
-    delete configuration.vars.TMDB_CATALOG_UNTIL
+    configuration.triggers.crons = ['0 * * * *', '*/10 * * * *']
     configuration.vars.CATALOG_AUTO_REFRESH = 'true'
-    expect(() => validateProductionConfiguration(configuration)).toThrow('bounded source consumer')
-    configuration.vars.CATALOG_AUTO_REFRESH = 'false'
-    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 33 * 24 * 3600_000).toISOString()
-    expect(() => validateProductionConfiguration(configuration)).toThrow('32 days')
+    configuration.vars.ARTICLE_CONTENT_ENABLED = 'true'
+    configuration.vars.SPOTIFY_CATALOG_ENABLED = 'true'
+    expect(() => validateProductionConfiguration(configuration)).not.toThrow()
+    configuration.vars.SYNC_BUDGET_UNTIL = new Date(Date.now() + 3600000).toISOString()
+    expect(() => validateProductionConfiguration(configuration)).toThrow('retired')
+    configuration.vars.SYNC_BUDGET_UNTIL = ''
+    configuration.queues.consumers[0].max_concurrency = 2
+    expect(() => validateProductionConfiguration(configuration)).toThrow('serial bounded')
   })
   it('starts with private assets, disabled previews and paused background work', () => {
     const configuration = productionConfiguration(settings)
@@ -82,6 +84,11 @@ describe('deployment safeguards', () => {
     configuration.triggers.crons = ['*/5 * * * *']
     expect(() => validateProductionConfiguration(configuration)).toThrow()
     configuration.vars.MAINTENANCE_ENABLED = 'true'
+    expect(() => validateProductionConfiguration(configuration)).toThrow('operating monitor')
+    configuration.vars.OPERATING_MONITOR_ENABLED = 'true'
+    configuration.vars.CLOUDFLARE_ACCOUNT_ID = settings.accountId
+    configuration.vars.SYNC_QUEUE_ID = '2'.repeat(32)
+    configuration.triggers.crons = ['*/5 * * * *', '*/10 * * * *']
     expect(() => validateProductionConfiguration(configuration)).not.toThrow()
     configuration.triggers.crons = ['0 * * * *']
     expect(() => validateProductionConfiguration(configuration)).toThrow()

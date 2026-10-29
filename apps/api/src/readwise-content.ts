@@ -1,8 +1,15 @@
-import { fetchReaderDocumentPage, parseReaderPage } from '@media-tracker/connector-readwise'
+import {
+  fetchReaderDocumentPage,
+  parseReaderPage,
+  ReadwiseApiError,
+} from '@media-tracker/connector-readwise'
 import type { SyncJob } from '@media-tracker/contracts'
 import { createArticlesRepository } from './env'
 import type { Bindings } from './env'
 import { withReadwiseRetry } from './readwise-retry'
+import { SyncBudget } from './sync-budget'
+import { CatalogRetryError } from './catalog-retry'
+import { retryAfterSeconds } from './catalog-policy'
 
 const encoder = new TextEncoder()
 
@@ -116,20 +123,39 @@ export async function acquireReadwiseArticleContent(
   const repository = createArticlesRepository(bindings.DB, bindings.DATABASE_USAGE_OBSERVER)
   const attemptedAt = new Date().toISOString()
   const attemptNumber = await repository.startContentJob(job.idempotencyKey, attemptedAt)
+  if (attemptNumber === null) return
   const acquisitionId = `${job.idempotencyKey}:attempt:${attemptNumber}`
   const target = await repository.findContentTarget(job.connectionId, job.documentId)
-  if (target === null) {
+  if (
+    target === null ||
+    job.idempotencyKey !==
+      `readwise-content:${target.connectionId}:${target.documentId}:${target.sourceUpdatedAt ?? 'unknown'}:a1:e1`
+  ) {
     await repository.completeContentJob(job.idempotencyKey, attemptedAt)
     return
   }
+  const budget = new SyncBudget(
+    { requests: 3, bytes: 8 * 1024 * 1024, pages: 1, records: 1 },
+    bindings.SYNC_FETCH ?? fetch,
+  )
   const response = await withReadwiseRetry(() =>
     fetchReaderDocumentPage({
       token,
       documentId,
       withHtmlContent: true,
       limit: 1,
+      fetcher: budget.fetch,
     }),
-  )
+  ).catch(async (error: unknown) => {
+    if (!(error instanceof ReadwiseApiError) || error.status !== 429) throw error
+    const seconds = retryAfterSeconds(error.retryAfter)
+    await repository.deferContentJob(
+      job.idempotencyKey,
+      attemptedAt,
+      new Date(Date.now() + seconds * 1000).toISOString(),
+    )
+    throw new CatalogRetryError(Math.min(43_200, seconds), { cause: error })
+  })
   const responseSha256 = await digest(response.bytes)
   const responseObjectKey = `raw/readwise/content-api/${responseSha256.slice(0, 2)}/${responseSha256}.json`
   await bindings.RAW_BUCKET.put(responseObjectKey, response.bytes, {
@@ -186,6 +212,10 @@ export async function acquireReadwiseArticleContent(
       status: 'processed',
     })
     await repository.failContentJob(job.idempotencyKey, attemptedAt, 'content_unavailable')
+    return
+  }
+  if (encoder.encode(html).byteLength > 4 * 1024 * 1024) {
+    await repository.failContentJob(job.idempotencyKey, attemptedAt, 'content_too_large')
     return
   }
   const text = extractArticleText(html)
@@ -279,6 +309,8 @@ export async function indexReadwiseArticleContent(
   }
   const object = await bindings.RAW_BUCKET.get(manifest.extractedObjectKey)
   if (object === null) throw new Error('Extracted Article text is missing')
+  if (object.size > 4 * 1024 * 1024)
+    throw new RangeError('Extracted Article text exceeds the indexing limit')
   const contentChunks = await chunkArticleText(await object.text())
   if (
     !Number.isInteger(job.nextOrdinal) ||

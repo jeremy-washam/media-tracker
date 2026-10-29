@@ -493,3 +493,23 @@ documents. Later syncs enqueue only new, changed, failed-recoverable, or
 provenance-incomplete eligible content. Webhook delivery and temporary
 raw-source downloads remain deferred until their authentication, delivery, and
 retention behavior is needed and can be probed directly.
+
+## Hosted article-content processing, October 29, 2026
+
+The ordinary hourly scheduler can reserve at most 20 eligible current Archive
+or Queue article targets per call, paced at ten acquisitions per minute. The
+repository enforces three acquisition attempts per source version and excludes
+completed, permanently unavailable, non-text, or oversized content. New source
+versions remain eligible without discarding older source evidence. Duplicate
+completed/exhausted queue deliveries do not fetch again; queued old-version
+acquisitions cannot fetch the current document under an old version's key.
+Responses are capped at 8 MiB per delivery, HTML/extracted index objects at
+4 MiB, and indexing continues in 12-chunk batches with current-version publication
+checks. Full Reader Feed acquisition remains excluded.
+
+The [Reader API](https://readwise.io/reader_api), rechecked October 29, documents
+20 list requests/minute per token, exact `id` filtering, `withHtmlContent=true`,
+and 429 `Retry-After`. Existing short in-process retries remain bounded; longer
+backoff returns to queue recovery. See the
+[catalog/content operations policy](../planning/catalog-operations.md) for
+activation, emergency-stop integration and acceptance checks.

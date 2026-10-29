@@ -40,10 +40,18 @@ export const sourceSyncAdmission = sqliteTable(
     outcome: text('outcome', { enum: ['running', 'succeeded', 'failed'] }).notNull(),
     reservationJson: text('reservation_json').notNull(),
     usageJson: text('usage_json'),
+    snapshotRunId: text('snapshot_run_id').references(() => syncRuns.id, { onDelete: 'restrict' }),
+    retryNotBefore: integer('retry_not_before').notNull().default(0),
+    retryCount: integer('retry_count').notNull().default(0),
+    stopReason: text('stop_reason'),
   },
   (table) => [
     primaryKey({ columns: [table.source, table.day] }),
     index('source_sync_admission_latest').on(table.source, sql`${table.startedAt} DESC`),
+    check(
+      'source_sync_retry_nonnegative',
+      sql`${table.retryCount}>=0 AND ${table.retryNotBefore}>=0`,
+    ),
     check('source_sync_attempts_positive', sql`${table.attempts} > 0`),
     check('source_sync_reservation_valid', sql`json_valid(${table.reservationJson})`),
     check(
@@ -157,6 +165,26 @@ export const syncCursors = sqliteTable(
     check(
       'sync_cursors_checkpoint_json_valid',
       sql`json_valid(${table.checkpoint}) AND json_type(${table.checkpoint}) = 'object'`,
+    ),
+  ],
+)
+
+export const hardcoverSyncProgress = sqliteTable(
+  'hardcover_sync_progress',
+  {
+    connectionId: text('connection_id')
+      .primaryKey()
+      .references(() => connections.id, { onDelete: 'restrict' }),
+    syncRunId: text('sync_run_id')
+      .notNull()
+      .references(() => syncRuns.id, { onDelete: 'restrict' }),
+    checkpoint: text('checkpoint_json', { mode: 'json' }).$type<JsonObject>().notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    check(
+      'hardcover_sync_progress_json_valid',
+      sql`json_valid(${table.checkpoint}) AND json_type(${table.checkpoint})='object'`,
     ),
   ],
 )
@@ -1242,6 +1270,7 @@ export const articleContentJobs = sqliteTable('article_content_jobs', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at'),
   lastAttemptAt: text('last_attempt_at'),
+  nextAttemptAt: text('next_attempt_at'),
   attemptCount: integer('attempt_count').notNull().default(0),
   completedAt: text('completed_at'),
   failureClass: text('failure_class'),
@@ -1777,6 +1806,7 @@ export const videoChannelProjection = sqliteTable('video_channel_projection', {
 })
 
 export const schema = {
+  hardcoverSyncProgress,
   archiveEntries,
   archiveEntryEvidence,
   articleLibraryProjection,

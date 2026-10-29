@@ -1,112 +1,113 @@
 # Hosted source sync
 
-The owner prioritized sync before further browsing/performance measurements on
-October 17, 2026. Existing provider credentials are installed. The existing
-$5/month Workers plan is approved; additional charges are not.
+## Current closeout policy — October 29, 2026
 
-## Initial activation
+This section supersedes the initial expiring-grant rollout instructions. The
+owner approved normal scheduled operation with protection against runaway bills:
+warn near **$10 total/month**, pause near **$25 total/month**, including the existing
+$5 Workers subscription. These are operational targets, not a guaranteed invoice
+cap; native analytics arrive with delay and existing storage/subscription charges
+continue while paused. The shared operating monitor and emergency switch own the
+spending backstop. Each provider still has ordinary finite work limits.
 
-Apply migration 0030 before enabling source work. `SYNC_ENABLED=true` alone is
-insufficient in production: `SYNC_SOURCES` explicitly lists enabled polling
-sources and `SYNC_BUDGET_UNTIL` contains a future UTC instant. The deployment
-validator limits a usage grant to 32 days; initial controlled grants last two
-hours. Expiry stops new admissions;
-it does not renew automatically. Check current account-wide included allowances
-before issuing a grant, including rehearsal and deleted-resource usage.
+`SYNC_ENABLED` and the explicit `SYNC_SOURCES` allowlist determine enabled sources.
+Routine sync no longer depends on `SYNC_BUDGET_UNTIL`, grant renewal, or a lifetime
+allocation. Legacy grant fields are compatibility settings, not active permission.
+A new daily allocation requires a new UTC day and at least 23 hours since its
+previous admission. Historical admissions and uncertain usage remain retained.
+A rolling 24-hour source guard stops abnormal aggregate work at 100 admissions,
+10 million observed/reserved writes, or 1 billion observed/reserved reads. This
+operational guard is separate from account-wide billing measurement.
 
-Start one source at a time, inspect its durable attempt and native account usage,
-then add the next source. Initial order: Letterboxd RSS, Hardcover, Readwise,
-Spotify. This moves from the smallest finite feed to full reconciliation and
-rotating credentials. Request new credentials only if a provider rejects those
-already installed.
+The global 20-minute lease serializes HTTP and queue source invocations. Every
+provider request checks the shared pause switch; jobs retain the 10-minute
+invocation deadline, 30-second request timeout, redirect rejection, and 8 MiB
+individual-response ceiling. Record/page checks stop at 1 million observed writes,
+100 million observed reads, or the 3 GB database review threshold. One operation
+may cross a threshold before the next check. Finite source limits are:
 
-Both HTTP sync actions and queued source jobs share these controls:
+| Source     | Requests | Parsed pages | Records, including children | Response bytes |
+| ---------- | -------: | -----------: | --------------------------: | -------------: |
+| Letterboxd |        2 |            1 |                         500 |          4 MiB |
+| Hardcover  |      128 |           64 |                       7,000 |         32 MiB |
+| Readwise   |       64 |           32 |                      10,000 |         16 MiB |
+| Spotify    |       32 |           24 |                       1,000 |          8 MiB |
 
-The durable allocation is 10 million observed D1 writes, 1 billion observed D1
-reads, 2 GB acquired response bytes, 20,000 provider requests and 365 daily
-reservations. It covers all rows in the admission ledger and does not reset on
-deployment, grant renewal or a new day. Each admission requires room for a
-2-million-write/200-million-read/64-MiB/128-request reservation. Unknown or failed
-database work keeps the full D1 reservation; measured successful work reconciles
-to its observed totals. Unmeasured non-`first()` statements cannot refund D1
-reservations. Native account analytics remains the billing authority.
+These are per-allocation engineering ceilings, not spending targets. Known
+continuations and failed retries subtract cumulative provider/database usage;
+restarting does not replenish an allocation. Failed database operations,
+unmeasured statements, and unknown in-flight work retain conservative accounting.
+Routine daily allocations do not erase previous evidence or unknown work.
 
-Jobs check observed database usage between records/pages at 1 million writes
-or 100 million reads. A SQL operation can cross that threshold before the next
-check; the admission reservation provides headroom. Native database size is
-checked before hosted work and during measured statements; jobs stop at the
-3 GB review threshold, below the account's included 5 GB. Included capacity
-must still be checked account-wide before extending a grant; these controls
-are engineering allocations, not a Cloudflare dollar cap.
+## Hardcover continuation and crash recovery
 
-- One reservation per source per UTC day, with at least 23 hours between new reservations.
-  `SYNC_RETRY_SOURCE` can explicitly permit up to two recovery attempts for a failed
-  reservation. It subtracts previously consumed requests/bytes/pages/records,
-  retains cumulative provider/database usage and the original admission timestamp, and refuses
-  exhausted or unmeasured reservations. Restarting never resets a budget.
-- A global 20-minute lease serializes source jobs across HTTP and queue consumers.
-- Provider work checks a 10-minute deadline; individual requests time out after
-  30 seconds, reject redirects, and buffer at most 8 MiB each.
-- Failed attempts consume their daily reservation. Crashes retain the reservation
-  and lease until expiry. Provider retries consume the same request cap.
-- Failed or interrupted snapshots do not finalize missing records or advance
-  complete-snapshot watermarks. Previously committed evidence remains durable;
-  the next admitted attempt replays idempotently from the committed watermark.
-  This is a safe restart, not a mid-page continuation.
+Apply migrations **0032** (Hardcover progress) and **0034** (snapshot-bound recovery
+and cooldowns) before deploying dependent code. Hosted HTTP and queue processing
+commit one 50-book library page per invocation under the same durable snapshot
+run. Only the final complete scan retires absence and advances `library-books`.
+Execution progress lives in `hardcover_sync_progress`; completed sync cursors
+still reject running runs.
 
-| Source     | Requests | Parsed pages | Records, including read/highlight children | Response bytes |
-| ---------- | -------: | -----------: | -----------------------------------------: | -------------: |
-| Letterboxd |        2 |            1 |                                        500 |          4 MiB |
-| Hardcover  |      128 |           64 |                                      7,000 |         32 MiB |
-| Readwise   |       64 |           32 |                                     10,000 |         16 MiB |
-| Spotify    |       32 |           24 |                                      1,000 |          8 MiB |
+The admission records the exact snapshot run ID, and can continue only that
+pending progress. A committed `library-books` cursor takes precedence over a
+missing convenience completion marker. Known pending progress cannot receive a
+fresh daily budget just because midnight passed. The worker sends its next page
+before acknowledging the current message; hourly scheduling recovers a lost
+continuation enqueue. The lease is released between pages so other sources can
+run.
 
-These are initial reconciliation ceilings, not targets or a dollar cap. Hardcover's
-previous observed library was 1,114 relationships across 23 pages; its ceiling
-leaves room for edition/read rows. The verified restore contains 917 Reader
-documents, 16 highlight containers with 26 highlights, 72 saved Spotify episodes
-and 40 saved shows. Those baselines inform the other finite caps; validate their
-current size against controlled first runs. Oversized responses stop before parsing or R2 storage; accepted
-responses are retained before record/page-limit checks. No partial result is
-presented as a complete snapshot. Long Readwise/Hardcover `Retry-After` values
-end an attempt instead of causing an early retry.
+Every retry/continuation claim durably marks usage in flight. A crash before
+usage persistence makes that attempt uncertain: no immediate resume refunds its
+budget. The prior reservation remains retained, and the next eligible daily
+allocation may resume the durable page checkpoint. Repeated failures are bounded
+to two retries per allocation independently of successful page continuations;
+Hardcover has a maximum of 96 claimed invocations. Exhausted provider limits or
+attempt ceilings explicitly fail that day's admission and visible run instead
+of creating hourly no-op messages. The checkpoint survives for the next daily
+allocation. Checkpoint-only finalization can complete without more provider
+allowance when the scan itself was already durable.
 
-An hourly cron enqueues eligible `sync_source` jobs. The source consumer uses
-batch size 1, concurrency 1, and at most one transport retry. Provider failures
-are recorded in sync activity and acknowledged; the next eligible daily attempt
-retries. A transient lease conflict requests delayed redelivery. Admission rows
-record reserved ceilings and actual aggregate counts, including known D1
-reads/writes and the count of statements without metadata. Native account
-analytics remains authoritative for billing; `first()` metadata is unavailable.
+## Provider cooldown and diagnostics
 
-Keep `ARTICLE_CONTENT_ENABLED=false`, `SPOTIFY_CATALOG_ENABLED=false`,
-`CATALOG_AUTO_REFRESH=false`, and `MAINTENANCE_ENABLED=false` during this stage.
-Existing content and enrichment jobs remain durable and paused; source sync
-does not enqueue new HTML acquisitions or resume Spotify's catalog backlog.
-The hosted write entry point permits only the four source-sync actions during
-this rollout. Manual imports and enrichment need separately budgeted activation.
-Read-only browsing remains available.
+Migration 0034 retains `retry_not_before` across retries and UTC days. Request
+eligibility and claims honor the provider's numeric or HTTP-date `Retry-After`,
+even when it extends beyond tomorrow. Spotify optional reads stop immediately on
+429 so another surface cannot bypass the cooldown. Safe operation/status/delay
+classification is persisted; free-form provider error messages and tokens are
+not logged. No old generic `SpotifyApiError` record proves its historical cause.
 
-## Spotify credential ownership
+Source failures remain visible in Connections. Provider failures acknowledge the
+current queue message; the next eligible daily run or explicitly requested
+bounded retry observes the cooldown. Lease contention alone requests delayed
+redelivery. One queue consumer uses batch size 1, concurrency 1, and finite
+transport retries; browsing never starts provider work.
 
-Before enabling hosted Spotify, disable Spotify sync in local runtime
-configuration. A copied credential store cannot coordinate token rotation
-across two independent databases. Local cron is manually invoked, but local UI
-sync actions must also respect source selection.
+## Credential ownership and remaining acceptance
 
-## Coverage and follow-up
+Hosted Spotify owns the encrypted rotating credential store. Local source sync
+and its local refresh secret remain paused to avoid races between independent
+databases. Request reauthorization only when a real safe diagnostic establishes
+that it is needed; do not replace a working token to investigate a generic error.
 
-Readwise covers Reader document state and highlights; Hardcover reconciles book
-relationships and reads. Letterboxd RSS covers recent public activity, with manual
-exports still required for complete edits/removals/private activity. Spotify
-polling covers discoverable episodes/library state and recent tracks; periodic
-Extended Streaming History exports remain necessary. YouTube watch history still
-requires manual Takeout imports.
+Readwise covers Reader documents/highlights, Hardcover covers book relationships
+and reads, and Letterboxd RSS covers recent public activity. Full Letterboxd
+exports, Spotify Extended Streaming History, and YouTube Takeout remain supported
+manual-history workflows because provider polling does not supply complete
+history. Article processing and catalog scheduling have their own bounded
+activation policy under the same shared operating monitor.
 
-After representative native usage is recorded, activate the daily cadence through
-an explicit grant no later than the reviewed billing-cycle end. Grants never
-renew automatically or reset the allocation. Content, enrichment, maintenance,
-and manual history imports need their own budgets before enabling.
+Before declaring deployment closeout complete: run Hardcover through every page
+and finalization, diagnose/recover Spotify using the hosted credential owner,
+verify retained cursors/evidence and canonical idempotency, then observe a
+subsequent scheduled run for each enabled source. Record actual production
+outcomes after integrated deployment; synthetic regressions alone do not close
+these live gates.
+
+## Historical rollout evidence
+
+The following dated sections describe prior deployments and the retired grant
+model. Their old activation flags, expirations, and paused-source instructions
+are historical evidence, not the current operating policy above.
 
 ## Controlled validation on October 17, 2026
 

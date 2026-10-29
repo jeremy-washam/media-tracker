@@ -8,16 +8,32 @@ import {
   type SyncLimits,
 } from './sync-budget'
 import { jobUsage } from './usage-metrics'
+import { operatingWorkAllowed } from './operating-budget'
 
-export function sourceSyncAllowed(env: Bindings, source: SyncSource, now = Date.now()) {
+export function sourceSyncAllowed(env: Bindings, source: SyncSource) {
   if (env.SYNC_ENABLED === 'false') return false
   if (env.AUTH_MODE !== 'access')
     return env.SYNC_SOURCES === undefined || env.SYNC_SOURCES.split(',').includes(source)
-  return (
-    (env.SYNC_SOURCES ?? '').split(',').includes(source) &&
-    Number.isFinite(Date.parse(env.SYNC_BUDGET_UNTIL ?? '')) &&
-    Date.parse(env.SYNC_BUDGET_UNTIL!) > now
+  return (env.SYNC_SOURCES ?? '').split(',').includes(source)
+}
+
+function providerRetryAt(error: unknown, now: number): number {
+  if (typeof error !== 'object' || error === null) return 0
+  if (
+    'retryAfterSeconds' in error &&
+    typeof error.retryAfterSeconds === 'number' &&
+    Number.isFinite(error.retryAfterSeconds) &&
+    error.retryAfterSeconds > 0
   )
+    return Math.min(Number.MAX_SAFE_INTEGER, now + Math.ceil(error.retryAfterSeconds * 1000))
+  if ('retryAfter' in error && typeof error.retryAfter === 'string') {
+    const seconds = Number(error.retryAfter)
+    const at = Number.isFinite(seconds)
+      ? now + Math.max(0, seconds) * 1000
+      : Date.parse(error.retryAfter)
+    return Number.isFinite(at) && at > now ? Math.min(Number.MAX_SAFE_INTEGER, Math.ceil(at)) : 0
+  }
+  return 0
 }
 
 export async function runSourceSync<Result>(
@@ -25,8 +41,8 @@ export async function runSourceSync<Result>(
   source: SyncSource,
   operation: (bindings: Bindings) => Promise<Result>,
 ): Promise<Result> {
-  if (!sourceSyncAllowed(env, source))
-    throw new SyncDeferredError('Source sync is paused or its usage grant has expired')
+  if (!sourceSyncAllowed(env, source) || !(await operatingWorkAllowed(env)))
+    throw new SyncDeferredError('Source sync is paused')
   const started = Date.now()
   const usage = jobUsage(env, `sync_${source}`)
   let previousUsage: Record<string, number> = {}
@@ -52,17 +68,26 @@ export async function runSourceSync<Result>(
   if (admission && !(await admission.acquire(owner, started)))
     throw new SyncDeferredError('Another source sync is running', 300)
   let reserved = false
-  let outcome: 'succeeded' | 'failed' = 'failed'
+  let outcome: 'succeeded' | 'failed' | 'running' = 'failed'
+  let retryNotBefore = 0
+  let snapshotRunId: string | undefined
   try {
     if (admission) {
       if (!(await admission.withinAllowance()))
-        throw new SyncDeferredError(
-          'Allocated source-sync usage is exhausted; review included account headroom before continuing',
-        )
-      reserved = await admission.reserve(source, started, JSON.stringify(budget.limits))
-      if (!reserved && env.SYNC_RETRY_SOURCE === source) {
-        const previous = await admission.retryable(source, started)
+        throw new SyncDeferredError('Source sync daily safety ceiling reached')
+      const pending = await admission.resumable(source, started)
+      reserved =
+        !pending && (await admission.reserve(source, started, JSON.stringify(budget.limits)))
+      if (!reserved) {
+        const continuation = pending
+        const previous = continuation ?? (await admission.retryable(source, started))
         if (previous) {
+          const exhausted = async (reason: string): Promise<never> => {
+            await admission.exhaust(source, previous.started_at, started, reason)
+            throw new SyncDeferredError(reason)
+          }
+          if (previous.attempts >= 96)
+            await exhausted('Source continuation attempt ceiling reached')
           const initial: SyncLimits = JSON.parse(previous.reservation_json)
           const used: Record<string, number> = JSON.parse(previous.usage_json)
           const remaining = { ...sourceSyncLimits[source] }
@@ -72,16 +97,21 @@ export async function runSourceSync<Result>(
               !Number.isSafeInteger(used[key]) ||
               used[key]! < 0
             )
-              throw new SyncDeferredError('Prior sync usage cannot be reconciled')
+              await exhausted('Prior sync usage cannot be reconciled')
             remaining[key] = Math.min(remaining[key], initial[key]) - used[key]!
-            if (remaining[key] <= 0)
-              throw new SyncDeferredError('No reserved sync allowance remains')
+            if (remaining[key] < 0 || (remaining[key] === 0 && previous.scan_complete !== 1))
+              await exhausted('No reserved sync allowance remains')
           }
-          reserved = await admission.claimRetry(source, previous.started_at)
+          if ((used.failedOperations ?? 0) > 0 || (used.unmeasuredNonFirstStatements ?? 0) > 0)
+            await exhausted('Prior database usage is uncertain; checkpoint retained')
+          reserved = continuation
+            ? await admission.claimContinuation(source, previous.started_at, started)
+            : await admission.claimRetry(source, previous.started_at, started)
           if (reserved) {
             budget = new SyncBudget(remaining, fetch, Date.now, cumulativeDatabaseUsage)
             admissionStarted = previous.started_at
             previousUsage = used
+            snapshotRunId = previous.snapshot_run_id ?? undefined
           }
         }
       }
@@ -89,16 +119,36 @@ export async function runSourceSync<Result>(
         throw new SyncDeferredError('Source daily sync allowance exhausted; retry tomorrow')
     }
     budget.check()
-    const result = await operation({ ...usage.env, SYNC_BUDGET: budget, SYNC_FETCH: budget.fetch })
+    const checkedFetch: typeof fetch = async (input, init) => {
+      if (!(await operatingWorkAllowed(env))) throw new SyncDeferredError('Source sync is paused')
+      return budget.fetch(input, init)
+    }
+    const result = await operation({ ...usage.env, SYNC_BUDGET: budget, SYNC_FETCH: checkedFetch })
+    if (
+      source === 'hardcover' &&
+      typeof result === 'object' &&
+      result !== null &&
+      'syncRunId' in result &&
+      typeof result.syncRunId === 'string'
+    )
+      snapshotRunId = result.syncRunId
     outcome =
       typeof result === 'object' &&
       result !== null &&
-      'partialFailures' in result &&
-      Array.isArray(result.partialFailures) &&
-      result.partialFailures.length > 0
-        ? 'failed'
-        : 'succeeded'
+      'continuation' in result &&
+      result.continuation === true
+        ? 'running'
+        : typeof result === 'object' &&
+            result !== null &&
+            'partialFailures' in result &&
+            Array.isArray(result.partialFailures) &&
+            result.partialFailures.length > 0
+          ? 'failed'
+          : 'succeeded'
     return result
+  } catch (error) {
+    retryNotBefore = providerRetryAt(error, Date.now())
+    throw error
   } finally {
     usage.report()
     try {
@@ -118,6 +168,7 @@ export async function runSourceSync<Result>(
               ]),
             ),
           ),
+          { ...(snapshotRunId === undefined ? {} : { snapshotRunId }), retryNotBefore },
         )
     } finally {
       if (admission) await admission.release(owner)

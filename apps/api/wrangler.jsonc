@@ -8,6 +8,7 @@
   "preview_urls": false,
   "vars": {
     "AUTH_MODE": "local",
+    "OPERATING_MONITOR_ENABLED": "false",
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
     "OWNER_EMAIL": "",

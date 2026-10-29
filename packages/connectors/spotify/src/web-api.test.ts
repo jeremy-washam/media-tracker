@@ -270,3 +270,54 @@ describe('Spotify Podcasts and Music APIs', () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toContain('ids=track1%2Cmissing')
   })
 })
+
+describe('Spotify safe diagnostics and snapshot completeness', () => {
+  it('retains saved-episode rate-limit timing and a safe operation name', async () => {
+    await expect(
+      fetchSpotifySavedEpisodesPage({
+        accessToken: 'private-token',
+        fetch: async () =>
+          new Response('private-provider-body', {
+            status: 429,
+            headers: { 'retry-after': '91' },
+          }),
+      }),
+    ).rejects.toMatchObject({
+      name: 'SpotifyApiError',
+      status: 429,
+      retryAfterSeconds: 91,
+      operation: 'saved_episodes',
+    })
+  })
+  it('rejects an early terminal page rather than allowing missing rows to be retired', async () => {
+    await expect(
+      fetchSpotifySavedEpisodesPage({
+        accessToken: 'private-token',
+        fetch: async () => Response.json({ items: [], limit: 50, offset: 0, total: 5, next: null }),
+      }),
+    ).rejects.toThrow('before its reported total')
+  })
+})
+
+it('retains only the documented Spotify quota reason from private error responses', async () => {
+  const request = fetchSpotifySavedEpisodesPage({
+    accessToken: 'private-token',
+    fetch: async () =>
+      Response.json(
+        { error: { status: 429, reason: 'QUOTA_EXCEEDED', message: 'private-provider-message' } },
+        { status: 429 },
+      ),
+  })
+  await expect(request).rejects.toMatchObject({ status: 429, reason: 'QUOTA_EXCEEDED' })
+  await expect(request).rejects.not.toThrow('private-')
+})
+it('bounds quota classification and discards unknown private reason values', async () => {
+  for (const body of [JSON.stringify({ error: { reason: 'private-value' } }), 'x'.repeat(5000)]) {
+    await expect(
+      fetchSpotifySavedEpisodesPage({
+        accessToken: 'private-token',
+        fetch: async () => new Response(body, { status: 429 }),
+      }),
+    ).rejects.toMatchObject({ status: 429, reason: null })
+  }
+})

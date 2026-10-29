@@ -21,6 +21,7 @@
 
 - [Documentation audit](planning/documentation-audit.md): October 12 comparison
   against the working checkout, all 16 Library views, Connections, and local API
+- [Deployment closeout](planning/deployment-closeout.md): current operational work, acceptance evidence and remaining account setup
 - [Private deployment](planning/deployment.md): authentication, production
   packaging, account prerequisites, snapshot/restore rehearsal, and cutover
 - [Storage efficiency plan](planning/storage-efficiency-plan.md): measured

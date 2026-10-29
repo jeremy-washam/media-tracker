@@ -652,3 +652,16 @@ listening duration. Their missing `milliseconds_played` remains null, while real
 export durations contribute to totals. Catalog track length must never replace
 missing observed listening time; partial totals retain their unknown-observation
 count.
+
+## Deployment reliability update — 2026-10-29
+
+Hosted Spotify activity previously retained only `SpotifyApiError` for the latest
+failure, so its exact HTTP cause cannot be recovered retrospectively. The Worker
+now persists safe operation/status/retry diagnostics; the connector recognizes
+only the documented quota enum from a bounded error body. It rejects incomplete
+saved-item pages before snapshot retirement. See the
+[connector runbook](../../packages/connectors/spotify/README.md#hosted-reliability-closeout-2026-10-29)
+for official documentation, authorization/quota triage, and credential ownership.
+A controlled hosted retry and subsequent scheduled success remain acceptance
+steps; no reauthorization or provider quota conclusion is assumed from the old
+generic failure.

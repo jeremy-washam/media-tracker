@@ -114,6 +114,17 @@ export interface HardcoverEditionsPage {
   contentType: string
 }
 
+export class HardcoverApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+    readonly retryAfterSeconds: number | null = null,
+  ) {
+    super(message)
+    this.name = 'HardcoverApiError'
+  }
+}
+
 interface GraphqlEnvelope {
   data?: unknown
   errors?: { message?: string }[]
@@ -490,9 +501,6 @@ async function fetchGraphql(
       return { bytes, contentType: response.headers.get('content-type') ?? 'application/json' }
     }
     const retryable = response.status === 429 || response.status >= 500
-    if (!retryable || attempt === 3) {
-      throw new Error(`Hardcover GraphQL returned ${response.status}`)
-    }
     const retryAfter = response.headers.get('retry-after')
     const numericSeconds = retryAfter === null ? Number.NaN : Number(retryAfter)
     const serverDelay = Number.isFinite(numericSeconds)
@@ -500,10 +508,19 @@ async function fetchGraphql(
       : retryAfter === null
         ? Number.NaN
         : Date.parse(retryAfter) - Date.now()
+    if (!retryable || attempt === 3) {
+      throw new HardcoverApiError(
+        `Hardcover GraphQL returned ${response.status}`,
+        response.status,
+        Number.isFinite(serverDelay) && serverDelay > 0 ? Math.ceil(serverDelay / 1000) : null,
+      )
+    }
     const fallbackDelay = 500 * 2 ** attempt
     if (Number.isFinite(serverDelay) && serverDelay > 30_000)
-      throw new Error(
+      throw new HardcoverApiError(
         `Hardcover GraphQL deferred after ${response.status}; Retry-After exceeds this attempt's wait allowance`,
+        response.status,
+        Math.ceil(serverDelay / 1000),
       )
     const delay = Math.max(
       0,
@@ -517,11 +534,9 @@ async function fetchGraphql(
 function parseEnvelope(bytes: Uint8Array): GraphqlEnvelope {
   const envelope = JSON.parse(new TextDecoder().decode(bytes)) as GraphqlEnvelope
   if (envelope.errors !== undefined && envelope.errors.length > 0) {
-    const message = envelope.errors
-      .map((error) => error.message)
-      .filter(Boolean)
-      .join('; ')
-    throw new Error(`Hardcover GraphQL returned errors${message ? `: ${message}` : ''}`)
+    // GraphQL errors can contain private query variables or source content.
+    // Retain the response as raw evidence, never propagate its free-form text.
+    throw new HardcoverApiError('Hardcover GraphQL returned errors', null)
   }
   if (envelope.data === undefined) throw new Error('Hardcover GraphQL returned no data')
   return envelope

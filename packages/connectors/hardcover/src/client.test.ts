@@ -162,3 +162,28 @@ describe('Hardcover request failures', () => {
     await expect(fetchHardcoverUserId('synthetic')).rejects.toThrow()
   })
 })
+
+it('does not propagate private GraphQL error text', async () => {
+  const promise = fetchHardcoverUserId('private-token', async () =>
+    Response.json({
+      errors: [{ message: 'private-book-title private-token private-query-variable' }],
+    }),
+  )
+  await expect(promise).rejects.toMatchObject({ name: 'HardcoverApiError', status: null })
+  await expect(promise).rejects.not.toThrow('private-')
+})
+
+it('retains Retry-After after the final bounded Hardcover request fails', async () => {
+  vi.useFakeTimers()
+  try {
+    const promise = fetchHardcoverUserId(
+      'synthetic',
+      async () => new Response(null, { status: 429, headers: { 'retry-after': '1' } }),
+    )
+    const assertion = expect(promise).rejects.toMatchObject({ status: 429, retryAfterSeconds: 1 })
+    await vi.runAllTimersAsync()
+    await assertion
+  } finally {
+    vi.useRealTimers()
+  }
+})

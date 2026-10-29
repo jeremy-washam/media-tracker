@@ -305,3 +305,52 @@ for (const dark of [false, true]) {
     await expect(details).toBeFocused()
   })
 }
+
+for (const dark of [false, true]) {
+  test(`Hardcover reports pending page progress before completion in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    let requests = 0
+    await page.route('**/api/connections/hardcover/sync', (route) => {
+      requests++
+      return route.fulfill({
+        json: {
+          syncRunId: 'synthetic-page-run',
+          mode: 'reconcile',
+          pages: requests,
+          sourceRecords: 50 * requests,
+          books: 50 * requests,
+          archiveEntries: requests,
+          continuation: requests === 1,
+        },
+      })
+    })
+    await page.goto('/connections')
+    const sync = page
+      .locator('[data-source=hardcover]')
+      .getByRole('button', { name: 'Sync now', exact: true })
+    await sync.click()
+    const progress = page.getByText(
+      'Processed 50 books from Hardcover. Sync continues in the background.',
+      { exact: true },
+    )
+    await expect(progress).toBeVisible()
+    await expect(page.getByText(/Reconciled 50 books/)).toHaveCount(0)
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      await progress.scrollIntoViewIfNeeded()
+      expect(await progress.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
+    await sync.click()
+    await expect(
+      page.getByText('Reconciled 100 books and 2 supported reading occurrences from Hardcover.', {
+        exact: true,
+      }),
+    ).toBeVisible()
+    await expect(progress).toHaveCount(0)
+  })
+}

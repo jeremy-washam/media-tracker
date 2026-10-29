@@ -1,7 +1,8 @@
+import { generateKeyPairSync, createSign } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Readable } from 'node:stream'
-import { Miniflare, Response as RuntimeResponse } from 'miniflare'
+import { Miniflare, Headers as RuntimeHeaders, Response as RuntimeResponse } from 'miniflare'
 import { strToU8, zipSync } from 'fflate'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
@@ -19,6 +20,7 @@ export interface WorkerRuntime {
   api(path: string, init?: Parameters<Miniflare['dispatchFetch']>[1]): Promise<RuntimeResponse>
   logs: string[]
   outboundRequests: string[]
+  authHeaders: Record<string, string>
   dispose(): Promise<void>
 }
 
@@ -85,7 +87,7 @@ export function letterboxdArchive() {
 
 /** A disposable production Worker with synthetic upstreams. It never reads .env or .wrangler state. */
 export async function createWorkerRuntime(
-  options: { seed?: boolean; paused?: boolean } = {},
+  options: { seed?: boolean; paused?: boolean; hosted?: boolean } = {},
 ): Promise<WorkerRuntime> {
   const readerPage = JSON.parse(
     await readFile(
@@ -97,6 +99,33 @@ export async function createWorkerRuntime(
   }
   const logs: string[] = []
   const outboundRequests: string[] = []
+  const issuer = 'https://runtime-fixture.cloudflareaccess.com'
+  const audience = 'synthetic-runtime-audience'
+  const owner = 'runtime-owner@example.com'
+  const pair = options.hosted ? generateKeyPairSync('rsa', { modulusLength: 2048 }) : null
+  const publicKey = pair
+    ? { ...pair.publicKey.export({ format: 'jwk' }), kid: 'runtime-synthetic', alg: 'RS256' }
+    : null
+  const authHeaders: Record<string, string> = {}
+  if (pair) {
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'runtime-synthetic' })).toString(
+      'base64url',
+    )
+    const payload = Buffer.from(
+      JSON.stringify({
+        iss: issuer,
+        aud: audience,
+        sub: 'synthetic-owner',
+        type: 'app',
+        email: owner,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    ).toString('base64url')
+    const body = `${header}.${payload}`
+    authHeaders['cf-access-jwt-assertion'] =
+      `${body}.${createSign('RSA-SHA256').update(body).sign(pair.privateKey, 'base64url')}`
+  }
   const mf = new Miniflare({
     name: 'imladris-synthetic-runtime',
     host: '127.0.0.1',
@@ -107,12 +136,19 @@ export async function createWorkerRuntime(
     compatibilityDate: '2026-07-18',
     compatibilityFlags: ['nodejs_compat'],
     bindings: {
-      AUTH_MODE: 'local',
+      AUTH_MODE: options.hosted ? 'access' : 'local',
+      ...(options.hosted
+        ? { ACCESS_TEAM_DOMAIN: issuer, ACCESS_AUD: audience, OWNER_EMAIL: owner }
+        : {}),
       SYNC_ENABLED: options.paused ? 'false' : 'true',
       MAINTENANCE_ENABLED: 'false',
       CATALOG_AUTO_REFRESH: 'false',
       READWISE_TOKEN: 'synthetic-runtime-token',
       HARDCOVER_TOKEN: 'synthetic-runtime-token',
+    },
+    ratelimits: {
+      API_RATE_LIMITER: { namespace_id: '1001', simple: { limit: 120, period: 60 } },
+      WRITE_RATE_LIMITER: { namespace_id: '1002', simple: { limit: 10, period: 60 } },
     },
     d1Databases: ['DB'],
     d1Persist: false,
@@ -135,6 +171,8 @@ export async function createWorkerRuntime(
     async outboundService(request: { url: string; json(): Promise<unknown> }) {
       const url = new URL(request.url)
       outboundRequests.push(url.href)
+      if (options.hosted && url.href === issuer + '/cdn-cgi/access/certs')
+        return RuntimeResponse.json({ keys: [publicKey] })
       if (url.hostname === 'readwise.io') {
         if (url.pathname === '/api/v2/export/')
           return RuntimeResponse.json({ count: 0, nextPageCursor: null, results: [] })
@@ -242,7 +280,10 @@ export async function createWorkerRuntime(
       parser.close()
     }
     const api = async (path: string, init?: Parameters<typeof mf.dispatchFetch>[1]) => {
-      const response = await mf.dispatchFetch(new URL(path, url), init)
+      const response = await mf.dispatchFetch(new URL(path, url), {
+        ...init,
+        headers: { ...authHeaders, ...Object.fromEntries(new RuntimeHeaders(init?.headers)) },
+      })
       if (!response.ok)
         throw new Error(
           `${path}: ${response.status} ${await response.text()}\n${logs.slice(-8).join('')}`,
@@ -263,7 +304,16 @@ export async function createWorkerRuntime(
       ] as const)
         await api(path, { method: 'POST', body: archive })
     }
-    return { mf, url, database, api, logs, outboundRequests, dispose: () => mf.dispose() }
+    return {
+      mf,
+      url,
+      database,
+      api,
+      logs,
+      outboundRequests,
+      authHeaders,
+      dispose: () => mf.dispose(),
+    }
   } catch (error) {
     await mf.dispose()
     throw error

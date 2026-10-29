@@ -1,6 +1,9 @@
 # Hardcover connector
 
-Status: production full-library sync implemented and verified with the real API.
+Status: full-library ingestion has been verified with the real API. The October
+hosted reconciliation was interrupted; the resumable Worker implementation below
+requires a new controlled hosted completion before recurring activation is called
+verified.
 
 This package owns book-history backfill, scheduled full reconciliation, edition
 and reread identity, and source-specific parsing. See the
@@ -44,3 +47,49 @@ retires the undated fallback from the active projection while retaining its
 original admission and linking the superseding observation. Full snapshots can
 clear ratings and reviews explicitly. Raw response bytes are stored before
 JSON/schema validation, including malformed pages.
+
+## Resumable hosted reconciliation (2026-10-29)
+
+Research: Hardcover's [API guide](https://docs.hardcover.app/api/getting-started/)
+documents backend-only tokens, HTTP 401/403/429 behavior, 60 requests/minute, and
+30-second query timeouts. Cloudflare's [Worker limits](https://developers.cloudflare.com/workers/platform/limits/)
+apply per invocation. An entire personal library should not depend on one Worker
+surviving thousands of individual normalization writes.
+
+`syncHardcover(bindings, {maxPages: 1})` commits at most one 50-book library page
+per invocation and returns the normal totals plus `continuation: true` when more
+pages remain. Its default retains the full scan for explicit local calls. The
+queue/scheduler must continue hosted snapshots and apply its shared lease and
+finite retry policy; reading a Library never resumes a provider job.
+
+Migration **0032** adds `hardcover_sync_progress`, separate from completed sync
+cursors. It stores the same snapshot/run ID, parser version, next keyset ID,
+committed-page totals, observed edition IDs, and scan/completion markers. Only
+same-connection Hardcover runs may own this progress. Page progress advances
+after canonical records and typed projections are durable. Raw acquisition keys
+include an attempt ID so crash recovery retains both responses; canonical books,
+editions, and Archive identities remain idempotent. Durable run-evidence counts
+are recounted after retry rather than trusting pre-crash in-memory totals.
+
+Missing rows are retired and Books browse models rebuilt only after the final
+page. The ordinary `library-books` cursor remains a completed-snapshot watermark;
+its database trigger still rejects running jobs. A failure after the last page
+can retry finalization without fetching all pages again. If the convenience
+progress completion marker fails after the completed cursor commits, the cursor
+wins and the next daily snapshot starts a new run. A scheduler detects resumable
+work by comparing progress run ID with that completed cursor, not by the marker
+alone. A lost continuation enqueue is recoverable from this durable progress.
+
+Malformed/non-advancing pages stop the scan. HTTP failures retain safe status and
+retry timing; arbitrary GraphQL messages remain private raw evidence, never log
+or activity text. A fresh complete snapshot can observe changes missed by an
+interrupted keyset scan. This API is mutable current state, not a transactional
+provider snapshot or a complete historical change feed.
+
+The October run stopped after 900 books; retained evidence does not establish the
+platform cause. The protected failed response was inspected only for aggregate
+shape. No private database copy, production write, source activation, or token
+change was made during implementation. Deployment verification must apply 0032,
+run through all continuation pages, verify the completed cursor and absence
+retirement, and then observe a subsequent scheduled run before declaring this
+source operationally complete.

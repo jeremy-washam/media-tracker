@@ -136,3 +136,41 @@ The convenience `fetchSpotifySavedShowsPage`, `fetchSpotifyRecentlyPlayed`,
 non-ingesting consumers. Worker sync uses the raw-response boundary; malformed
 optional responses remain replayable evidence, and partial failures are persisted
 in the sync run and connection state.
+
+## Hosted reliability closeout (2026-10-29)
+
+Research: [saved episodes and scopes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes),
+[rate limits](https://developer.spotify.com/documentation/web-api/concepts/rate-limits),
+[development quota](https://developer.spotify.com/documentation/web-api/concepts/quota-modes),
+and [refresh-token lifetime](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens).
+
+API failures now carry a fixed operation name, HTTP status, and positive numeric
+`Retry-After` seconds. Token exchange failures have the distinct
+`SpotifyTokenRefreshError` type. The Worker retains these safe diagnostics in
+sync activity, including optional-surface partial failures. It does not persist
+or log provider error messages, tokens, request URLs, or response bodies. A
+bounded error reader accepts only the documented `QUOTA_EXCEEDED` reason; unknown
+reasons and bodies larger than 4 KiB are discarded. This distinguishes shared
+developer quota exhaustion from a short burst limit without exposing account
+content. No immediate retry loop is added; retry timing belongs to the scheduler.
+
+Saved episodes and shows reject early terminal pages before their reported total
+and reject unexpected offsets during ingestion. A failed or incomplete snapshot
+cannot retire missing saved items or replace its previous complete checkpoint.
+Successful pages remain private replayable evidence. A replay can add source
+observations while reusing canonical episode and Archive identities.
+
+The October 29 hosted failure occurred before any saved-episode records were
+processed; the older code retained only `SpotifyApiError`. That historical record
+cannot establish whether its cause was authorization, scope/access, quota, or a
+provider outage. Deploy these diagnostics and perform one controlled run before
+requesting reauthorization. HTTP 401, or token-exchange HTTP 400, calls for an
+authorization check; HTTP 403 calls for scopes, developer allowlist, and account
+eligibility checks; HTTP 429 requires respecting retry timing and quota state.
+Development-mode apps require the owner's existing Premium membership. Renewing
+an access token does not extend the six-month refresh-token authorization period.
+
+Local source sync stays paused while hosted credentials own refresh-token
+rotation. Recovery must use the hosted encrypted credential store rather than
+copying or rotating an older local token. No live retry or credential mutation
+was performed as part of the source-code regression work.
