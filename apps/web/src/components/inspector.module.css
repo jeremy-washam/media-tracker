@@ -10,7 +10,7 @@
 .article-inspector blockquote footer {
   margin-top: 8px;
   color: var(--muted-foreground, #6d6b64);
-  font-size: 0.84rem;
+  font-size: var(--app-text-body);
 }
 
 .movie-history-list a {
@@ -19,7 +19,7 @@
   gap: 4px;
   margin-top: 7px;
   color: var(--foreground);
-  font-size: 10px;
+  font-size: var(--app-text-body);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -32,7 +32,7 @@
   display: block;
   margin-top: 5px;
   color: var(--muted-foreground);
-  font-size: 9px;
+  font-size: var(--app-text-caption);
 }
 
 .book-inspector {
@@ -66,7 +66,7 @@
   place-items: center;
   padding: 24px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: var(--app-text-body);
 }
 
 .inspector-book-heading {
@@ -95,25 +95,25 @@
 .inspector-book-heading h2 {
   margin: 4px 0 5px;
   font-family: inherit;
-  font-size: 22px;
-  font-weight: 500;
+  font-size: var(--app-text-display);
+  font-weight: var(--app-weight-medium);
   letter-spacing: -0.025em;
-  line-height: 1.08;
+  line-height: 1.25;
 }
 
 .inspector-book-heading p {
   margin: 0 0 10px;
   color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 
 .inspector-book-heading span {
   color: var(--muted-foreground);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--app-text-caption);
+  font-weight: var(--app-weight-normal);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .inspector-section {
@@ -123,18 +123,18 @@
 
 .inspector-section h3 {
   margin: 0 0 12px;
-  color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: var(--foreground);
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .inspector-section p {
   margin: 0;
   color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.65;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 
 .inspector-section a {
@@ -171,7 +171,7 @@
   grid-template-columns: minmax(80px, auto) 1fr;
   gap: 8px 14px;
   margin: 14px 0 0;
-  font-size: 10px;
+  font-size: var(--app-text-body);
 }
 
 .detail-list > div {
@@ -200,7 +200,7 @@
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 10px;
+  font-size: var(--app-text-body);
 }
 
 .series-list span {
@@ -254,14 +254,15 @@
 }
 
 .history-list strong {
-  font-size: 11px;
+  font-weight: var(--app-weight-medium);
+  font-size: var(--app-text-body);
 }
 
 .history-list time,
 .history-list small {
   margin-top: 3px;
   color: var(--muted-foreground);
-  font-size: 9px;
+  font-size: var(--app-text-caption);
 }
 
 .history-list p {
@@ -270,8 +271,8 @@
   border-left: 2px solid var(--border);
   color: var(--muted-foreground);
   background: var(--background);
-  font-size: 10px;
-  line-height: 1.55;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
   white-space: pre-wrap;
 }
 
@@ -399,6 +400,7 @@
 }
 
 .inspector-related-list a small {
+  font-size: var(--app-text-caption);
   flex: 0 0 auto;
   color: var(--muted-foreground);
 }
@@ -417,11 +419,11 @@
 }
 .media-inspector .history-list .channel-library-video strong {
   white-space: normal;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 .media-inspector .history-list .channel-library-video > span:last-child {
-  font-size: 10px;
+  font-size: var(--app-text-body);
 }
 .media-inspector .music-entity-history li {
   display: grid;
@@ -434,7 +436,7 @@
 }
 .media-inspector .music-entity-history li span {
   text-align: left;
-  font-size: 10px;
+  font-size: var(--app-text-body);
 }
 .inspector-tab-root {
   display: contents;
@@ -455,8 +457,8 @@
 }
 .inspector-scroll {
   overscroll-behavior: contain;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
   overflow-wrap: anywhere;
 }
 .inspector-hero {
@@ -466,17 +468,17 @@
 .inspector-hero h2,
 .inspector-book-heading h2 {
   margin: 4px 0 5px;
-  font-size: 22px;
-  line-height: 1.2;
-  font-weight: 500;
+  font-size: var(--app-text-display);
+  line-height: 1.25;
+  font-weight: var(--app-weight-medium);
   letter-spacing: -0.025em;
 }
 .inspector-hero p,
 .inspector-book-heading p,
 .inspector-section p {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 .inspector-hero p,
 .inspector-book-heading p {
@@ -486,22 +488,22 @@
 .inspector-hero [data-ui~='eyebrow'],
 .inspector-book-heading > div > span {
   color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--app-text-caption);
+  font-weight: var(--app-weight-normal);
 }
 .inspector-section h3,
 .media-inspector h3 {
   margin: 0 0 12px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--foreground);
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }
 .detail-list dt,
 .detail-list dd {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 .media-inspector dl > div {
   display: grid;
@@ -514,16 +516,16 @@
   text-align: left;
 }
 .media-inspector .inspector-tab-panel {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 .media-inspector .history-list li strong,
 .media-inspector .history-list li span {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--app-text-body);
+  line-height: var(--app-leading-body);
 }
 .media-inspector .inspector-scroll > [role='status'] {
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 .inspector-section a {
   display: inline-flex;
@@ -538,8 +540,11 @@
 }
 
 .inspector-scroll .history-list strong,
-.inspector-scroll .history-list time,
-.inspector-scroll .history-list small,
 .inspector-scroll .history-list p {
-  font-size: 12px;
+  font-size: var(--app-text-body);
+}
+
+.inspector-scroll .history-list time,
+.inspector-scroll .history-list small {
+  font-size: var(--app-text-caption);
 }

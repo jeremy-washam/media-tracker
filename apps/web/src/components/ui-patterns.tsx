@@ -16,18 +16,13 @@ import { cn } from '@/lib/utils'
 export function AppButton({ className, ...props }: ComponentProps<typeof PrimitiveButton>) {
   return (
     <PrimitiveButton
-      className={cn('text-[length:inherit] text-[color:inherit] font-normal', className)}
+      className={cn('text-sm text-[color:inherit] font-medium', className)}
       {...props}
     />
   )
 }
 export function AppInput({ className, ...props }: ComponentProps<typeof PrimitiveInput>) {
-  return (
-    <PrimitiveInput
-      className={cn('text-[length:inherit] md:text-[length:inherit]', className)}
-      {...props}
-    />
-  )
+  return <PrimitiveInput className={cn('text-base md:text-sm', className)} {...props} />
 }
 export function Notice({ children, className, ...props }: ComponentProps<typeof Alert>) {
   return (

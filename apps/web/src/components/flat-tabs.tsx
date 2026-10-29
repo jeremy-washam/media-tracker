@@ -53,7 +53,7 @@ export function FlatTabsTrigger({
   return (
     <TabsTrigger
       className={cn(
-        'cursor-default h-full flex-none rounded-none px-0.5 text-[12px] leading-(--text-sm--line-height) font-semibold text-muted-foreground data-active:text-foreground group-data-[orientation=horizontal]/tabs:after:bottom-0 group-data-[context=collection]/tabs:px-2',
+        'cursor-default h-full flex-none rounded-none px-0.5 text-sm leading-(--text-sm--line-height) font-medium text-muted-foreground data-active:text-foreground group-data-[orientation=horizontal]/tabs:after:bottom-0 group-data-[context=collection]/tabs:px-2',
         className,
       )}
       {...props}

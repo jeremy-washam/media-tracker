@@ -318,9 +318,13 @@ for (const dark of [false, true]) {
                 Math.abs(c.top + c.height / 2 - (r.top + r.height / 2)) <= 1 &&
                 Math.abs(t.bottom - r.bottom) <= 1 &&
                 getComputedStyle(title).fontSize === '22px' &&
-                getComputedStyle(section).fontSize === '11px' &&
+                getComputedStyle(title).fontWeight === '500' &&
+                getComputedStyle(section).fontSize === '14px' &&
+                getComputedStyle(section).fontWeight === '500' &&
                 (!el.querySelector('dt') ||
-                  getComputedStyle(el.querySelector('dt')!).fontSize === '12px') &&
+                  (getComputedStyle(el.querySelector('dt')!).fontSize === '14px' &&
+                    getComputedStyle(el.querySelector('dd')!).fontSize === '14px' &&
+                    getComputedStyle(el.querySelector('dd')!).fontWeight === '400')) &&
                 el.scrollWidth <= el.clientWidth + 1
               )
             }),
@@ -460,7 +464,7 @@ test('common toolbar order and filter field scales agree across media', async ({
         .evaluateAll((els) =>
           els
             .filter(
-              (e) => e.getBoundingClientRect().width > 1 && getComputedStyle(e).fontSize !== '12px',
+              (e) => e.getBoundingClientRect().width > 1 && getComputedStyle(e).fontSize !== '14px',
             )
             .map((e) => ({
               tag: e.tagName,
@@ -539,7 +543,7 @@ for (const [media, id] of [
 }
 
 for (const dark of [false, true]) {
-  test(`retains compact control type and selected navigation hover in ${dark ? 'dark' : 'light'}`, async ({
+  test(`retains Balanced control type and selected navigation hover in ${dark ? 'dark' : 'light'}`, async ({
     page,
   }) => {
     await page.addInitScript(
@@ -556,10 +560,10 @@ for (const dark of [false, true]) {
     for (const control of await toolbar
       .locator('[data-ui~="toolbar-button"], [data-slot="select-trigger"]')
       .all()) {
-      expect(await control.evaluate((e) => getComputedStyle(e).fontSize)).toBe('11px')
+      expect(await control.evaluate((e) => getComputedStyle(e).fontSize)).toBe('14px')
     }
     expect(await toolbar.getByRole('textbox').evaluate((e) => getComputedStyle(e).fontSize)).toBe(
-      '12px',
+      '14px',
     )
     for (const action of ['Chat — not available yet', 'Recaps — not available yet']) {
       expect(
@@ -666,5 +670,68 @@ for (const [media, response, label] of [
     await expect(state).toHaveCount(0)
     expect(new URL(page.url()).searchParams.has('q')).toBe(false)
     expect(new URL(page.url()).searchParams.get('sort')).toBe('title')
+  })
+}
+
+for (const dark of [false, true]) {
+  test(`Balanced scale survives nested text and collection layouts in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    for (const [media, section, layout] of [
+      ['books', 'archive', 'list'],
+      ['books', 'archive', 'grid'],
+      ['movies', 'queue', 'list'],
+      ['movies', 'archive', 'grid'],
+      ['articles', 'archive', 'list'],
+      ['podcasts', 'archive', 'list'],
+      ['podcasts', 'following', 'grid'],
+      ['music', 'tracks', 'list'],
+      ['music', 'albums', 'grid'],
+      ['music', 'artists', 'grid'],
+      ['videos', 'archive', 'list'],
+      ['videos', 'archive', 'grid'],
+      ['videos', 'channels', 'list'],
+    ]) {
+      await page.goto(`/library/${media}/${section}?layout=${layout}`)
+      const first = page.locator('[data-collection-item]').first()
+      await expect(first).toBeVisible()
+      await expect(first.locator('strong').last()).toHaveCSS(
+        'font-size',
+        layout === 'grid' ? '14px' : '16px',
+      )
+      await expect(first.locator('strong').last()).toHaveCSS('font-weight', '600')
+      // Catch relative small/bold inheritance adding off-scale text, including
+      // summary details and fallback artwork that a title-only assertion misses.
+      const violations = await page.locator('body').evaluate((root) => {
+        const sizes = new Set(['12px', '14px', '16px', '22px'])
+        const weights = new Set(['400', '500', '600'])
+        return [...root.querySelectorAll<HTMLElement>('*')].flatMap((el) => {
+          if (el.closest('svg, script, style, .sr-only')) return []
+          const text = [...el.childNodes]
+            .filter((node) => node.nodeType === Node.TEXT_NODE)
+            .map((node) => node.textContent)
+            .join(' ')
+            .trim()
+          const rect = el.getBoundingClientRect()
+          const style = getComputedStyle(el)
+          if (
+            !text ||
+            rect.width <= 1 ||
+            rect.height <= 1 ||
+            style.fontSize === '0px' ||
+            style.visibility === 'hidden'
+          )
+            return []
+          return sizes.has(style.fontSize) && weights.has(style.fontWeight)
+            ? []
+            : [{ text, size: style.fontSize, weight: style.fontWeight }]
+        })
+      })
+      expect(violations, `${media}/${section}/${layout}`).toEqual([])
+    }
   })
 }

@@ -16,7 +16,7 @@
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: var(--app-text-body);
 }
 
 .movie-liked svg {

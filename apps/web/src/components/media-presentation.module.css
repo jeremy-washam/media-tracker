@@ -73,10 +73,16 @@
 }
 
 .spotify-result-copy {
+  font-size: var(--app-text-caption);
   display: flex;
   flex-direction: column;
   min-width: 0;
   gap: 3px;
+}
+
+.spotify-result-copy strong {
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-semibold);
 }
 
 .spotify-result-copy strong,
@@ -137,7 +143,7 @@
 .book-card strong {
   margin-top: 10px;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--app-text-body);
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -147,7 +153,7 @@
   margin-top: 3px;
   overflow: hidden;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: var(--app-text-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -185,7 +191,7 @@
   min-height: 32px;
   margin-top: 10px;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--app-text-body);
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -195,7 +201,7 @@
   margin-top: 3px;
   overflow: hidden;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: var(--app-text-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -253,13 +259,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.97rem;
+  font-size: var(--app-text-title);
 }
 .article-row-copy small,
 .article-row-copy em,
 .article-row-fact {
   color: var(--muted-foreground, #6d6b64);
-  font-size: 0.8rem;
+  font-size: var(--app-text-caption);
   font-style: normal;
 }
 .article-row-copy em {
@@ -301,12 +307,12 @@
 .movie-poster-fallback strong {
   color: var(--foreground);
   font-family: inherit;
-  font-size: 24px;
-  font-weight: 500;
+  font-size: var(--app-text-display);
+  font-weight: var(--app-weight-medium);
 }
 
 .movie-poster-fallback small {
-  font-size: 9px;
+  font-size: var(--app-text-caption);
 }
 
 .movie-row {
@@ -355,7 +361,7 @@
 }
 
 .movie-row-title strong {
-  font-size: 12px;
+  font-size: var(--app-text-title);
 }
 
 .movie-row-title small,
@@ -363,7 +369,7 @@
 .movie-row-context,
 .movie-row-rating {
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: var(--app-text-caption);
 }
 
 .movie-row > svg {
@@ -373,7 +379,7 @@
 
 .movie-row-rating small {
   display: block;
-  font-size: 10px;
+  font-size: var(--app-text-caption);
 }
 
 [data-ui~='inspector-movie-heading'] .movie-poster {
@@ -448,7 +454,7 @@
   display: -webkit-box;
   overflow: hidden;
   font-family: inherit;
-  font-size: 10px;
+  font-size: var(--app-text-caption);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
@@ -490,14 +496,14 @@
 }
 
 .book-row-title strong {
-  font-size: 12px;
+  font-size: var(--app-text-title);
 }
 
 .book-row-title small,
 .book-row-context {
   margin-top: 3px;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: var(--app-text-caption);
 }
 
 .book-row > svg {
@@ -565,6 +571,7 @@
 }
 
 [data-ui~='videos-list'] .video-result-copy {
+  font-size: var(--app-text-caption);
   line-height: 1.25;
 }
 
@@ -573,11 +580,17 @@
 }
 
 .video-result-copy {
+  font-size: var(--app-text-caption);
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   gap: 3px;
+}
+
+.video-result-copy strong {
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-semibold);
 }
 
 .video-result-copy strong,
@@ -589,7 +602,7 @@
 }
 
 .video-result-date {
-  font-size: 11px;
+  font-size: var(--app-text-caption);
   white-space: nowrap;
 }
 
@@ -630,7 +643,7 @@
 }
 .media-card > span:not(.rating-stars) {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: var(--app-text-caption);
   margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -668,7 +681,7 @@
   display: flex;
 }
 .rating-unavailable {
-  font-size: 12px;
+  font-size: var(--app-text-caption);
 }
 .book-row {
   grid-template-columns: var(--library-row-cover-width) minmax(140px, 1fr) 90px 120px 74px 14px;
@@ -677,7 +690,7 @@
 .book-row-year,
 .book-row-context {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: var(--app-text-caption);
 }
 @media (max-width: 1000px) {
   .book-row {
@@ -739,7 +752,7 @@
 [data-ui~='videos-list'] .video-result-copy strong,
 .video-channel-row .video-result-copy strong {
   font-size: var(--library-row-title-size);
-  font-weight: 600;
+  font-weight: var(--app-weight-semibold);
   line-height: 1.3;
 }
 
@@ -769,6 +782,7 @@
 [data-ui~='videos-list'] .video-result .video-result-copy > small,
 .video-channel-row .video-result-date {
   font-size: var(--library-row-metadata-size);
+  line-height: var(--app-leading-body);
 }
 
 .article-row.selected,

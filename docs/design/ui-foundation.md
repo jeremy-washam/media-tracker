@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
 - Status: Index and all six initial Library slices implemented; further design remains open
-- Last updated: 2026-10-13
+- Last updated: 2026-10-29
 
 ## Purpose and scope
 
@@ -92,6 +92,36 @@ cache does not persist across reloads; the existing browser cache still stores
 only initial pages. Inspector history, facet options, and Connections retain
 their explicit pagination controls. Virtualization remains a measured follow-up.
 
+## Approved typography: Balanced (October 29, 2026)
+
+The owner selected the original **Balanced** typography study and approved its
+implementation. The [saved comparison](typography-study/README.md) retains all
+three directions and the rejected smaller-inspector follow-up. This section
+supersedes older typography values in prior polish records and studies.
+
+Use one system-font role scale across production: **12, 14, 16, and 22px**, with
+weights **400, 500, and 600**. Shared tokens live in `apps/web/src/components.css`;
+CSS Modules and shared control compositions apply them. Nested `small`, `strong`,
+and heading elements must not create fractional sizes or an extra bold weight.
+
+| Role                                                              | Size / weight                         |
+| ----------------------------------------------------------------- | ------------------------------------- |
+| Supporting metadata, counts, summaries, grid subtitles            | 12px / 400                            |
+| Navigation and breadcrumb                                         | 14px / 400; selected identity 500     |
+| Controls, collection/inspector tabs, section headings             | 14px / 500                            |
+| Inspector overview, labels, values, descriptions and source links | 14px / 400                            |
+| Grid item titles                                                  | 14px / 600                            |
+| List item titles and subtitles                                    | 16px / 600 title; 14px / 400 subtitle |
+| Inspector item title and expanded wordmark                        | 22px / 500                            |
+
+Keep inspector overview and label/value text at the same 14px size. The owner
+rejected the experiment that reduced both to 12px. Section headings use sentence
+case and ordinary letter spacing; supporting text should not rely on tiny all-caps
+labels. Counts remain normal-weight and muted. Narrow editable inputs retain the
+installed primitive's 16px size, returning to 14px on desktop. Typography changes
+preserve the existing controls, artwork dimensions, 101px row baseline, contained
+scrolling, source semantics, and inspector behavior.
+
 ## October 2026 iterative polish
 
 The [UI polish checklist](../planning/ui-polish.md) supersedes earlier surface
@@ -106,7 +136,7 @@ including half stars; it does not prescribe poster density, colors, or metadata.
 
 Collection section tabs live on the right of the compact workspace header; the
 oversized Library/page heading is removed from the collection body. The breadcrumb
-and all collection/inspector tabs use 12px type. Shared FlatTabs compose the actual
+and all collection/inspector tabs use 14px type. Shared FlatTabs compose the actual
 shadcn Tabs line variant, including keyboard navigation and associated panels.
 Route tabs retain URL-backed search normalization and stable cached counts. The
 header reserves the inspector width while it opens and closes. Header and collection use one horizontal inset token (the collection's existing responsive padding), including the same reserved scrollbar gutter, so the breadcrumb/tab row aligns with the toolbar and list edges.
@@ -125,7 +155,7 @@ and personal Rating; formats do not appear in those rows. Books has no separate
 column-heading row, matching the other Library collections.
 All Library media lists, including Video and Channel lists, share a 101px row baseline,
 matching the taller Article/Podcast/Music presentation. Shared list typography
-uses 16px titles and 13px subtitles/metadata. Additional search excerpts or metadata can expand
+uses 16px titles, 14px subtitles, and 12px metadata. Additional search excerpts or metadata can expand
 a row to preserve that context. List artwork uses 60×90px Book/Movie covers,
 80px square Article/Podcast/Music artwork and channel avatars, and 160×90px Video
 thumbnails. Grid cards retain their independent sizing.
@@ -200,8 +230,8 @@ base layer so they do not override installed component typography.
 
 The owner approved the twelve findings in the [October 12 visual audit](../planning/visual-ui-audit.md).
 Inspectors share a 54px topbar, with independently scrolling content below it.
-Use 22px/500 item titles, 11px/600 section headings, and 12px body/metadata/history
-text. Tabs stretch only within a bounded header; a generic tablist cannot inherit
+Use 22px/500 item titles, 14px/500 section headings, and 14px body/facts text,
+with 12px supporting metadata and dates. Tabs stretch only within a bounded header; a generic tablist cannot inherit
 the full inspector height. Check loaded content geometry, not only tab semantics.
 
 Book rows share one responsive column definition at the pane width, hiding less
@@ -426,7 +456,7 @@ appearance. Font files and original licenses are bundled locally for an offline
 comparison. Candidate A was initially selected, then superseded by candidate H
 from the next reference set. The owner subsequently removed the wordmark, then
 approved the medium-weight system-font treatment from the Library heading mockup. The web
-client now pairs its 30 px compact symbol with a 20 px, weight-500 system-font
+client now pairs its 30 px compact symbol with a 22 px, weight-500 system-font
 Imladris wordmark in the expanded sidebar, following the active foreground color.
 The brand link retains its accessible Imladris name. No custom brand font is
 bundled or loaded. The HTML includes
