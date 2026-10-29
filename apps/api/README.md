@@ -109,7 +109,14 @@ the refreshable movie and video catalog caches. Manual refreshes are available
 at `POST /api/catalogs/tmdb/sync` and
 `POST /api/catalogs/youtube/sync`. Browse requests never call either provider.
 Set `CATALOG_AUTO_REFRESH=true` only after approving full-Library provider
-disclosure and automatic refresh; it defaults off.
+disclosure and automatic refresh; it defaults off. This legacy switch applies
+only to local automatic catalog work. Hosted source rollout keeps it false.
+A hosted Movies restoration instead requires `TMDB_CATALOG_JOB_ID` naming one
+reviewed durable job and `TMDB_CATALOG_UNTIL` expiring inside the source grant.
+The hourly schedule resumes only that job, with at most 80 reserved attempts;
+other catalogs remain paused. Native D1, provider requests, bytes and time are
+bounded independently of source sync. See the [source rollout](../../docs/planning/source-sync-rollout.md)
+for the account-wide review, ceilings and release sequence.
 
 ## Browsing and operations
 

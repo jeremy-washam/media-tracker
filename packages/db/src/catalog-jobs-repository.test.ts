@@ -23,6 +23,18 @@ describe('catalog job ownership', () => {
     expect((await jobs.create('second', 'youtube', at)).id).toBe('first')
   })
 
+  it('retains the attempt ceiling and lease generations across restarts', async () => {
+    await jobs.create('bounded', 'tmdb', at)
+    expect(await jobs.reserve('bounded', null, at, at, 2)).toBe(1)
+    expect(await jobs.release('bounded', 1, at)).toBe(true)
+    expect(await jobs.reserve('bounded', null, at, at, 2)).toBe(2)
+    expect(await jobs.release('bounded', 1, at)).toBe(false)
+    expect(await jobs.release('bounded', 2, at)).toBe(true)
+    const restarted = new SqlCatalogJobsRepository(new SqliteTestClient(database))
+    expect(await restarted.reserve('bounded', null, expired, expired, 2)).toBeNull()
+    expect((await restarted.find('bounded'))?.attemptCount).toBe(2)
+  })
+
   it('reserves once and issues a new generation after release or actual expiry', async () => {
     await jobs.create('job', 'youtube', at)
     expect(await jobs.reserve('job', null, at, '2026-01-01T00:05:00.000Z')).toBe(1)

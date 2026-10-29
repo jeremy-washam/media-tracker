@@ -15,9 +15,10 @@ import { syncLetterboxdRss } from './letterboxd-rss-sync'
 import { syncReadwiseArchive } from './readwise-sync'
 import { acquireReadwiseArticleContent, indexReadwiseArticleContent } from './readwise-content'
 import { syncSpotifySavedEpisodes } from './spotify-sync'
-import { createArticlesRepository } from './env'
+import { createArticlesRepository, createCatalogJobsRepository } from './env'
 import { processTmdbCatalogRefresh, startTmdbCatalogRefresh } from './tmdb-catalog'
 import { processYoutubeCatalogRefresh, startYoutubeCatalogRefresh } from './youtube-catalog'
+import { tmdbGrantAllowed, tmdbGrantAttempts } from './tmdb-grant'
 import { TmdbApiError } from '@media-tracker/connector-tmdb'
 import { YoutubeApiError } from '@media-tracker/connector-youtube'
 import { processSpotifyCatalogBackfill, resumeSpotifyCatalogBackfill } from './spotify-catalog'
@@ -49,6 +50,24 @@ async function enqueueSources(env: Bindings) {
       })
   }
   if (messages.length) await env.SYNC_QUEUE.sendBatch(messages)
+}
+
+async function resumeGrantedTmdbRefresh(env: Bindings) {
+  const job = await createCatalogJobsRepository(env.DB).find(env.TMDB_CATALOG_JOB_ID!)
+  if (
+    !job ||
+    job.provider !== 'tmdb' ||
+    job.attemptCount >= tmdbGrantAttempts ||
+    !['pending', 'running'].includes(job.state)
+  )
+    return
+  await env.SYNC_QUEUE.send({
+    operation: 'refresh_tmdb_catalog',
+    source: 'tmdb',
+    catalogJobId: job.id,
+    catalogCursor: job.cursor ?? '',
+    idempotencyKey: `catalog:tmdb:${job.id}`,
+  })
 }
 
 async function scheduledJob<Result>(
@@ -94,6 +113,9 @@ const worker = {
       // Each source gets its own bounded queue invocation, rather than sharing
       // the scheduled handler's wall-clock lifetime with every other provider.
       context.waitUntil(enqueueSources(env))
+      // Resume only the explicitly reviewed job, never create catalog backlogs.
+      if (tmdbGrantAllowed(env, env.TMDB_CATALOG_JOB_ID))
+        context.waitUntil(resumeGrantedTmdbRefresh(env))
       return
     }
     console.info(
@@ -333,9 +355,12 @@ const worker = {
           env.ARTICLE_CONTENT_ENABLED === 'false') ||
         (result.data.operation === 'refresh_spotify_catalog' &&
           env.SPOTIFY_CATALOG_ENABLED === 'false') ||
-        ((result.data.operation === 'refresh_tmdb_catalog' ||
-          result.data.operation === 'refresh_youtube_catalog') &&
-          env.CATALOG_AUTO_REFRESH === 'false')
+        (result.data.operation === 'refresh_tmdb_catalog' &&
+          (env.AUTH_MODE === 'access'
+            ? !tmdbGrantAllowed(env, result.data.catalogJobId)
+            : env.CATALOG_AUTO_REFRESH === 'false')) ||
+        (result.data.operation === 'refresh_youtube_catalog' &&
+          (env.AUTH_MODE === 'access' || env.CATALOG_AUTO_REFRESH === 'false'))
       ) {
         // Keep queued work recoverable; rollout config leaves consumers detached.
         message.retry({ delaySeconds: 43200 })

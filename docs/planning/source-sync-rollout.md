@@ -127,3 +127,101 @@ Daily activation covers only the three validated sources. The explicit grant
 expires on November 13 at 00:00 UTC, or earlier if the lifetime allocation or
 storage review threshold is reached. Optional content, catalog, maintenance,
 and manual history-import work stays paused. The grant does not renew itself.
+
+## October 29 cost review and bounded Movies restoration
+
+Account-wide analytics from October 14 through the October 29 review showed
+18,372,450 D1 rows written and 144,580,071 rows read, against included monthly
+allowances of 50 million and 25 billion. The database occupied about 1.19 GB
+of the included 5 GB. Workers reported 56,096 requests and 124,852 CPU milliseconds;
+R2 Standard occupied 237 MB, with about 17,400 Class A and 55,200 Class B operations.
+Queues reported 127 billable operations. These figures indicate no usage overage
+beyond the already approved $5 Workers subscription. They are usage estimates,
+not an invoice: both subscription/history billing endpoints reject OAuth and
+require a Billing Read API token. Historical adaptive sampling can omit usage;
+the earlier conservative transfer envelope (6 million CPU milliseconds,
+60,000 Class A and 960,000 Class B operations) also remains within allowances.
+
+The Movies poster gap is cache expiry: 669 matched movie/TV profiles and the image
+configuration expired on October 21 while catalog work was paused. Restoring
+Movies uses a separate, finite grant; `CATALOG_AUTO_REFRESH=false` stays in place.
+`TMDB_CATALOG_JOB_ID` names exactly one durable TMDB refresh job and
+`TMDB_CATALOG_UNTIL` must expire inside the reviewed source window, within 32 days.
+The hourly schedule resumes that job only; it never creates another catalog job.
+No other TMDB job or YouTube, Spotify, or article-content backlog is activated.
+
+Each ten-item batch reserves one of at most 80 durable attempts, including failed
+requests, crashes, and lease recovery. Each attempt permits 128 provider requests,
+16 MiB of responses, a ten-minute deadline, and no more than 1,000 statements in
+one persistence batch. Native D1 metadata is checked between operations, including
+mutation `first()` calls. Work stops at 50,000 observed writes, 50 million reads,
+unmeasurable usage, or the 3 GB storage review threshold. One SQL operation may
+cross a threshold before the next check. The review allocates 200,000 writes and
+100 million reads per attempt, or 16 million writes and 8 billion reads for the
+whole grant, leaving headroom for that operation and the remaining source grant.
+With the existing 30,000 ms CPU limit, 80 attempts reserve at most 2.4 million CPU
+milliseconds. These are engineering allocations, not a Cloudflare dollar cap.
+Changing the job ID or renewing expiry requires another account-wide review.
+
+Deployment must include both the existing source-sync admission migration `0030`
+and the newer catalog-fence migration, renumbered `0031`. Never deploy main-only
+code that removes the current source grants. The QA chat owns the combined
+migration/deployment window; this grant remains inactive until its reviewed job
+is created, configured, and the combined Worker is verified. Record the final
+job, deployed revision, measured usage and poster coverage before calling the
+restoration complete. TMDB's noncommercial API is free with attribution; no new
+paid service or artwork storage is part of this activation.
+
+Pricing references: [Workers](https://developers.cloudflare.com/workers/platform/pricing/),
+[D1](https://developers.cloudflare.com/d1/platform/pricing/),
+[R2](https://developers.cloudflare.com/r2/pricing/),
+[Queues](https://developers.cloudflare.com/queues/platform/pricing/), and
+[TMDB](https://developer.themoviedb.org/docs/faq).
+
+### Activation handoff for the combined release
+
+1. Recheck account-wide usage and preserve the current production resources,
+   Access checks, owner, secret bindings, source allowlist, hourly cron and serial
+   consumer. Carry the protected ignored `apps/api/wrangler.production.jsonc`
+   from the storage-efficiency worktree into the isolated release worktree;
+   never commit it or copy secrets into command arguments. The existing private
+   deployment settings file identifies the same account/database. Do not run the
+   old source-activation helper: it changes source windows and schedules.
+2. Merge the source admission history, audit hardening (`0031`), ratings, and
+   this bounded-grant change. Apply only unapplied migrations, run the combined
+   checks and intended production dry run, and deploy with the two TMDB grant
+   variables initially empty. Check that the existing source flags and Access
+   denial still work before activating anything.
+3. Generate one ULID. Query `catalog_refresh_jobs` for an active TMDB job first;
+   stop for review if there is one. Create the reviewed job with `provider=tmdb`,
+   `state=pending`, a null cursor, zero attempts/counts/quota, and current
+   creation/update timestamps. Use an idempotent `INSERT OR IGNORE` for that
+   exact ID and read it back. This is the durable catalog admission; it does
+   not claim a source-sync reservation or start provider traffic. Preserve that
+   row and its attempt count throughout recovery.
+4. Set `TMDB_CATALOG_JOB_ID` to that exact ID and `TMDB_CATALOG_UNTIL` to
+   **2026-11-13T00:00:00Z**, preserving `SYNC_BUDGET_UNTIL` at the same existing
+   expiry, all source settings, and `CATALOG_AUTO_REFRESH=false`. The catalog
+   allocation is at most 80 attempts / 16 million reserved writes / 8 billion
+   reserved reads / 2.4 million CPU milliseconds; it does not renew itself.
+5. The hourly cron will resume the admitted job. For immediate dispatch, push
+   exactly one JSON message to the existing sync queue:
+   `{ "operation":"refresh_tmdb_catalog", "source":"tmdb", "catalogJobId":"<reviewed ULID>", "catalogCursor":"", "idempotencyKey":"catalog:tmdb:<reviewed ULID>" }`.
+   The Cloudflare queue API uses `{ "body": <that object>, "content_type":"json" }`.
+   Native endpoint permissions are Queues Write or Workers Scripts Write.
+   The queue continuation advances only from the persisted cursor; duplicate
+   deliveries do not reserve the same cursor while its lease is held.
+6. Query only aggregate job counts, current native usage and poster coverage.
+   Record completion plus native D1/Worker usage before reporting success. If a
+   job fails, inspect its safe error and committed cursor; do not zero attempts,
+   replace its ID, or create another grant to work around a stop. Transport/lease
+   recovery uses the same job and remaining attempts. A failed job requires
+   explicit diagnosis before resuming it; normal hourly scheduling resumes only
+   pending/running jobs.
+7. Clear both TMDB grant variables to stop new attempts. An already running
+   invocation retains its original bindings and can finish its bounded work;
+   clearing configuration cannot cancel it instantly. Expiry and the 80-attempt
+   ceiling also stop new work. Queued messages remain recoverable; do not purge
+   source or catalog evidence. Review the source and movie grant together before
+   their November 12, 7 p.m. Eastern expiry. Refreshing another job or extending
+   the expiry requires a fresh account-wide included-allowance review.

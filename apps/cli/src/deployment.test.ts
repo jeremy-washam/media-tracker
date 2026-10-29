@@ -21,6 +21,16 @@ describe('deployment safeguards', () => {
     ]
     configuration.triggers.crons = ['0 * * * *']
     expect(() => validateProductionConfiguration(configuration)).not.toThrow()
+    configuration.vars.TMDB_CATALOG_JOB_ID = '01K8QYJ6Q7G6J0Z3VTXYP5CXDD'
+    configuration.vars.TMDB_CATALOG_UNTIL = configuration.vars.SYNC_BUDGET_UNTIL
+    expect(() => validateProductionConfiguration(configuration)).not.toThrow()
+    configuration.vars.TMDB_CATALOG_UNTIL = new Date(Date.now() + 7200_000).toISOString()
+    expect(() => validateProductionConfiguration(configuration)).toThrow('one reviewed job')
+    configuration.vars.TMDB_CATALOG_UNTIL = configuration.vars.SYNC_BUDGET_UNTIL
+    configuration.vars.TMDB_CATALOG_JOB_ID = '*'
+    expect(() => validateProductionConfiguration(configuration)).toThrow('one reviewed job')
+    delete configuration.vars.TMDB_CATALOG_JOB_ID
+    delete configuration.vars.TMDB_CATALOG_UNTIL
     configuration.vars.CATALOG_AUTO_REFRESH = 'true'
     expect(() => validateProductionConfiguration(configuration)).toThrow('bounded source consumer')
     configuration.vars.CATALOG_AUTO_REFRESH = 'false'

@@ -123,6 +123,20 @@ export function validateProductionConfiguration(
     )
       throw new Error('Controlled retry must name an explicitly enabled source')
   }
+  const tmdbJob = configuration.vars.TMDB_CATALOG_JOB_ID
+  const tmdbUntil = configuration.vars.TMDB_CATALOG_UNTIL
+  if (tmdbJob || tmdbUntil) {
+    const until = Date.parse(tmdbUntil ?? '')
+    if (
+      !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(tmdbJob ?? '') ||
+      configuration.vars.SYNC_ENABLED !== 'true' ||
+      !Number.isFinite(until) ||
+      until <= Date.now() ||
+      until > Date.parse(configuration.vars.SYNC_BUDGET_UNTIL ?? '') ||
+      until > Date.now() + 32 * 86_400_000
+    )
+      throw new Error('TMDB requires one reviewed job and an expiring included-usage grant')
+  }
   if (configuration.vars.SYNC_ENABLED === 'false') {
     const crons = configuration.triggers.crons
     if (

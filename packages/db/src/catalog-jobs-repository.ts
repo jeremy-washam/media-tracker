@@ -63,17 +63,18 @@ export class SqlCatalogJobsRepository {
     cursor: string | null,
     at: string,
     leaseExpiresAt: string,
+    maximumAttempts = Number.MAX_SAFE_INTEGER,
   ): Promise<number | null> {
     const row = await this.database
       .prepare(
         `UPDATE catalog_refresh_jobs SET state='running',attempt_count=attempt_count+1,
            started_at=COALESCE(started_at,?),lease_expires_at=?,safe_error_code=NULL,updated_at=?
-         WHERE id=? AND state IN ('pending','running')
+         WHERE id=? AND state IN ('pending','running') AND attempt_count<?
            AND COALESCE(cursor_value,'')=COALESCE(?,'')
            AND (lease_expires_at IS NULL OR lease_expires_at<=?)
          RETURNING attempt_count`,
       )
-      .bind(at, leaseExpiresAt, at, id, cursor, at)
+      .bind(at, leaseExpiresAt, at, id, maximumAttempts, cursor, at)
       .first<{ attempt_count: number }>()
     return row?.attempt_count ?? null
   }
