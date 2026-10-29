@@ -112,12 +112,25 @@ for (const dark of [false, true]) {
     await page.goto('/library/books/archive')
     const status = page.locator('[data-ui~="health-indicator"]')
     await expect(status).toHaveText('Local API connected')
+    await status.evaluate(async (element) => {
+      await new Promise(requestAnimationFrame)
+      await Promise.all(
+        element.getAnimations().map((animation) => animation.finished.catch(() => {})),
+      )
+    })
     const appearance = () =>
-      status.evaluate((element) => ({
-        background: getComputedStyle(element).backgroundColor,
-        color: getComputedStyle(element).color,
-        shadow: getComputedStyle(element).boxShadow,
-      }))
+      status.evaluate((element) => {
+        const style = getComputedStyle(element)
+        // Compare rendered color, not equivalent oklab/oklch serialization during theme settling.
+        const context = document.createElement('canvas').getContext('2d')!
+        context.fillStyle = style.color
+        context.fillRect(0, 0, 1, 1)
+        return {
+          background: style.backgroundColor,
+          color: Array.from(context.getImageData(0, 0, 1, 1).data),
+          shadow: style.boxShadow,
+        }
+      })
     const before = await appearance()
     await status.hover()
     await expect.poll(appearance).toEqual(before)

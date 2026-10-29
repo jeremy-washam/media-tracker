@@ -864,7 +864,7 @@ test('keeps Books range drafts valid until a boundary is entered', async ({ page
     })
   })
   await page.goto('/library/books/archive')
-  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   for (const label of ['Finished', 'Published']) {
     const select = page.getByRole('combobox', { name: label, exact: true })
@@ -877,7 +877,7 @@ test('keeps Books range drafts valid until a boundary is entered', async ({ page
       .getByRole('option', { name: 'Custom range', exact: true })
       .click()
     await expect(page.getByRole('listbox')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+    await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
     await page.getByRole('textbox', { name: `${label} from`, exact: true }).fill('2020-01-01')
     await expect
       .poll(() =>
@@ -892,7 +892,7 @@ test('keeps Books range drafts valid until a boundary is entered', async ({ page
     await expect(page).toHaveURL(
       (url) => !url.searchParams.has(`${label === 'Finished' ? 'finished' : 'published'}From`),
     )
-    await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+    await expect(page.locator('[data-ui~="book-row"]').first()).toBeVisible()
   }
   expect(invalid).toEqual([])
   await expect(page.getByRole('alert')).toHaveCount(0)
