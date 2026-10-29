@@ -4,8 +4,8 @@
   align-items: center;
   gap: 8px;
   color: #55584b;
-  font-size: 0.76rem;
-  font-weight: 650;
+  font-size: var(--app-text-caption);
+  font-weight: var(--app-weight-normal);
 }
 
 .status-pill-error {
@@ -114,8 +114,8 @@
 
 .app-brand-wordmark {
   font-family: inherit;
-  font-size: 20px;
-  font-weight: 500;
+  font-size: var(--app-text-display);
+  font-weight: var(--app-weight-medium);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -155,17 +155,17 @@
 .global-navigation small,
 .media-navigation small {
   margin-left: auto;
-  font-size: 9px;
-  text-transform: uppercase;
+  font-size: var(--app-text-caption);
+  text-transform: none;
 }
 
 .nav-heading {
   padding: 0 10px 8px;
   color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .sidebar-secondary {
@@ -225,10 +225,11 @@
   border-bottom: 1px solid var(--border);
   color: var(--muted-foreground);
   background: color-mix(in srgb, var(--background), transparent 5%);
-  font-size: 12px;
+  font-size: var(--app-text-body);
 }
 
 .workspace-breadcrumb {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -236,7 +237,7 @@
 
 .workspace-header strong {
   color: var(--foreground);
-  font-weight: 550;
+  font-weight: var(--app-weight-medium);
 }
 
 .workspace-content {
@@ -297,7 +298,7 @@
   }
 
   .sidebar-collapsed .sidebar-health .status-pill {
-    font-size: 10px;
+    font-size: var(--app-text-caption);
   }
 
   .sidebar-collapse {
@@ -358,8 +359,8 @@
 }
 .sidebar-health .status-pill {
   color: var(--muted-foreground);
-  font-weight: 400;
-  font-size: 11px;
+  font-weight: var(--app-weight-normal);
+  font-size: var(--app-text-caption);
 }
 .navigation-sheet .mobile-sidebar {
   z-index: auto;
@@ -383,6 +384,7 @@
   }
 }
 .workspace-breadcrumb {
+  min-width: 0;
   flex-shrink: 0;
 }
 .workspace-header-tabs {

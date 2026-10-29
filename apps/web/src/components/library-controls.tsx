@@ -41,7 +41,7 @@ export function LibrarySelect({
     >
       <SelectTrigger
         className={cn(
-          'min-w-0 max-w-full shrink-0 text-[length:inherit] text-[color:inherit] data-placeholder:text-[color:inherit] font-normal',
+          'min-w-0 max-w-full shrink-0 text-sm text-[color:inherit] data-placeholder:text-[color:inherit] font-medium',
           className,
         )}
         {...props}
@@ -160,11 +160,7 @@ export function LibraryToolbar({
 }: ComponentProps<'div'> & LibraryPart) {
   return (
     <div
-      className={cn(
-        controlsStyles['books-toolbar'],
-        '[&_[data-ui~=toolbar-button]]:text-[11px] [&_[data-ui~=library-sort]]:text-[11px] [&_[data-slot=select-trigger]]:text-[11px] [&_[data-slot=input-group-control]]:text-[12px]',
-        className,
-      )}
+      className={cn(controlsStyles['books-toolbar'], 'text-sm', className)}
       {...props}
       data-ui={['library-toolbar', part].filter(Boolean).join(' ')}
     />
@@ -177,11 +173,7 @@ export function LibraryFilterPanel({
 }: ComponentProps<'section'> & LibraryPart) {
   return (
     <section
-      className={cn(
-        controlsStyles['filter-panel'],
-        'text-[12px] [&_label]:text-[12px] [&_[data-slot=field-label]]:text-[12px] [&_[data-slot=input]]:text-[12px] [&_[data-slot=select-trigger]]:text-[12px] [&_[data-slot=button]]:text-[12px]',
-        className,
-      )}
+      className={cn(controlsStyles['filter-panel'], 'text-sm', className)}
       {...props}
       data-ui={['filter-panel', part].filter(Boolean).join(' ')}
     />

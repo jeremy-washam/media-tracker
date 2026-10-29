@@ -13,19 +13,19 @@
 
 .eyebrow {
   margin: 0 0 14px;
-  color: #8a5c36 !important;
-  font-size: 0.72rem !important;
-  font-weight: 780;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-size: var(--app-text-caption);
+  font-weight: var(--app-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .page-heading h1 {
   max-width: 720px;
   margin: 0;
   font-family: inherit;
-  font-size: clamp(2.65rem, 6.8vw, 5.4rem);
-  font-weight: 520;
+  font-size: var(--app-text-display);
+  font-weight: var(--app-weight-medium);
   letter-spacing: -0.055em;
   line-height: 0.96;
 }
@@ -50,8 +50,8 @@
 .empty-panel h2 {
   margin: 0;
   font-family: inherit;
-  font-size: 1.65rem;
-  font-weight: 520;
+  font-size: var(--app-text-display);
+  font-weight: var(--app-weight-medium);
 }
 
 .empty-panel p {
@@ -90,7 +90,7 @@
 
 .notice h1 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--app-text-title);
 }
 
 .notice p {
@@ -109,18 +109,18 @@
   }
 }
 .page-heading-compact h1 {
-  font-size: 30px;
+  font-size: var(--app-text-display);
   line-height: 1.2;
-  font-weight: 600;
+  font-weight: var(--app-weight-medium);
   letter-spacing: -0.035em;
 }
 .page-heading .eyebrow {
-  color: var(--muted-foreground) !important;
-  font-size: 10px !important;
+  color: var(--muted-foreground);
+  font-size: var(--app-text-caption);
   margin-bottom: 5px;
 }
 .page-heading > p:last-child {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--app-text-body);
   line-height: 1.6;
 }

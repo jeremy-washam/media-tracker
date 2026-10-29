@@ -1,0 +1,1018 @@
+<div id="imladris-type-study" aria-label="Balanced typography with matching inspector text">
+  <div class="im-study" data-profile="balanced" aria-label="Balanced typography"></div>
+</div>
+<style>
+  #imladris-type-study .im-study {
+    --im-bg: light-dark(#fafafa, #181818);
+    --im-side: light-dark(#f2f2f2, #202020);
+    --im-fg: light-dark(#252525, #ededed);
+    --im-muted: light-dark(#656565, #adadad);
+    --im-line: light-dark(#dddddd, #343434);
+    --im-hover: light-dark(#e9e9e9, #2a2a2a);
+    --im-selected: light-dark(#e0e0e0, #343434);
+    --im-input: light-dark(#fdfdfd, #202020);
+    --im-status: light-dark(#37684d, #90b89d);
+    --im-cover-one: #f4e7bc;
+    --im-cover-two: #326065;
+    --im-cover-three: #d8a766;
+    --im-cover-four: #c99e87;
+    --im-cover-five: #326581;
+    --im-cover-six: #a63a32;
+    --im-size-note: 12px;
+    --im-size-body: 14px;
+    --im-size-title: 16px;
+    --im-size-display: 20px;
+    --im-weight-body: 400;
+    --im-weight-label: 500;
+    --im-weight-title: 500;
+    color: var(--im-fg);
+    font:
+      var(--im-weight-body) var(--im-size-body)/1.45 -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    min-width: 0;
+    color-scheme: light dark;
+  }
+  #imladris-type-study .im-study[data-profile='balanced'] {
+    --im-size-display: 22px;
+    --im-weight-title: 600;
+  }
+  #imladris-type-study .im-study[data-profile='readable'] {
+    --im-size-note: 13px;
+    --im-size-body: 15px;
+    --im-size-title: 18px;
+    --im-size-display: 24px;
+  }
+  #imladris-type-study .im-study[data-theme='light'] {
+    color-scheme: light;
+  }
+  #imladris-type-study .im-study[data-theme='dark'] {
+    color-scheme: dark;
+  }
+  #imladris-type-study .im-study * {
+    box-sizing: border-box;
+  }
+  #imladris-type-study .im-app {
+    display: grid;
+    grid-template-columns: 208px minmax(0, 1fr);
+    background: var(--im-bg);
+    min-height: 900px;
+    border: 1px solid var(--im-line);
+    border-radius: 8px;
+    overflow: clip;
+  }
+  #imladris-type-study .im-study button,
+  #imladris-type-study .im-study input,
+  #imladris-type-study .im-study select {
+    font: inherit;
+    color: inherit;
+  }
+  #imladris-type-study .im-study button {
+    border: 0;
+    background: transparent;
+    text-align: left;
+    padding: 0;
+  }
+  #imladris-type-study .im-study button:focus-visible,
+  #imladris-type-study .im-study input:focus-visible,
+  #imladris-type-study .im-study select:focus-visible {
+    outline: 2px solid var(--im-muted);
+    outline-offset: 2px;
+  }
+  #imladris-type-study .im-study svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+  #imladris-type-study .im-sidebar {
+    background: var(--im-side);
+    border-right: 1px solid var(--im-line);
+    display: flex;
+    flex-direction: column;
+  }
+  #imladris-type-study .im-brand {
+    height: 54px;
+    padding: 0 18px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid var(--im-line);
+    font-size: var(--im-size-display);
+    font-weight: 500;
+  }
+  #imladris-type-study .im-brand svg {
+    width: 27px;
+    height: 27px;
+  }
+  #imladris-type-study .im-brand button {
+    margin-left: auto;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-nav {
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  #imladris-type-study .im-nav button,
+  #imladris-type-study .im-foot button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 5px;
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-nav button:hover,
+  #imladris-type-study .im-foot button:hover {
+    background: var(--im-hover);
+  }
+  #imladris-type-study .im-nav button.is-current {
+    background: var(--im-selected);
+    font-weight: 500;
+  }
+  #imladris-type-study .im-nav .im-disabled {
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-later {
+    font-size: var(--im-size-note);
+    margin-left: auto;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-label {
+    font-size: var(--im-size-body);
+    font-weight: 500;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-nav-label {
+    padding: 17px 10px 5px;
+  }
+  #imladris-type-study .im-foot {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid var(--im-line);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  #imladris-type-study .im-health {
+    font-size: var(--im-size-note);
+    color: var(--im-muted);
+    padding: 9px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #imladris-type-study .im-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--im-status);
+    display: inline-block;
+    flex: none;
+  }
+  #imladris-type-study .im-workspace {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 54px 1fr;
+  }
+  #imladris-type-study .im-workspace-head {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--im-line);
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-crumb {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    white-space: nowrap;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-crumb strong {
+    font-weight: 500;
+    color: var(--im-fg);
+  }
+  #imladris-type-study .im-sections {
+    display: flex;
+    height: 100%;
+    align-items: stretch;
+    gap: 22px;
+    margin-left: auto;
+  }
+  #imladris-type-study .im-sections button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  #imladris-type-study .im-sections button[aria-pressed='true']:after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--im-fg);
+  }
+  #imladris-type-study .im-count {
+    font-size: var(--im-size-note);
+    font-weight: 400;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-library {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    min-width: 0;
+    align-items: stretch;
+  }
+  #imladris-type-study .im-collection {
+    min-width: 0;
+    padding: 20px 22px 0;
+    container-type: inline-size;
+  }
+  #imladris-type-study .im-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--im-input);
+    border: 1px solid var(--im-line);
+    border-radius: 5px;
+    flex: 1 1 160px;
+    min-width: 110px;
+    height: 32px;
+    padding: 0 9px;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-search input {
+    min-width: 0;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    outline: none;
+  }
+  #imladris-type-study .im-search input::placeholder {
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-control {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 9px !important;
+    border: 1px solid var(--im-line) !important;
+    border-radius: 5px;
+    background: var(--im-input) !important;
+    white-space: nowrap;
+  }
+  #imladris-type-study .im-toolbar select {
+    max-width: 135px;
+    min-width: 0;
+    border: 1px solid var(--im-line);
+    background: var(--im-input);
+    border-radius: 5px;
+    height: 32px;
+    padding: 0 6px;
+  }
+  #imladris-type-study .im-control[aria-pressed='true'] {
+    background: var(--im-selected) !important;
+  }
+  #imladris-type-study .im-toggle {
+    display: flex;
+    margin-left: auto;
+    gap: 2px;
+  }
+  #imladris-type-study .im-toggle .im-control {
+    width: 32px;
+    padding: 0 !important;
+  }
+  #imladris-type-study .im-summary {
+    font-size: var(--im-size-note);
+    color: var(--im-muted);
+    padding: 13px 0 12px;
+    border-bottom: 1px solid var(--im-line);
+  }
+  #imladris-type-study .im-row {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr) 45px;
+    gap: 14px;
+    align-items: center;
+    width: 100%;
+    min-height: 101px;
+    padding: 5px 8px !important;
+    border-bottom: 1px solid var(--im-line) !important;
+  }
+  #imladris-type-study .im-row.is-selected {
+    background: var(--im-selected);
+  }
+  #imladris-type-study .im-row:hover {
+    background: var(--im-hover);
+  }
+  #imladris-type-study .im-row-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  #imladris-type-study .im-title {
+    font-size: var(--im-size-title);
+    font-weight: var(--im-weight-title);
+    line-height: 1.3;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  #imladris-type-study .im-subtitle {
+    font-size: var(--im-size-body);
+    font-weight: 400;
+    color: var(--im-muted);
+    overflow-wrap: anywhere;
+  }
+  #imladris-type-study .im-meta {
+    font-size: var(--im-size-note);
+    font-weight: 400;
+    color: var(--im-muted);
+    overflow-wrap: anywhere;
+  }
+  #imladris-type-study .im-rating {
+    font-size: var(--im-size-note);
+    color: var(--im-muted);
+    letter-spacing: 1px;
+    white-space: nowrap;
+    align-self: end;
+    margin-bottom: 16px;
+  }
+  #imladris-type-study .im-cover {
+    width: 60px;
+    height: 90px;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+    background: var(--im-cover-one);
+    flex: none;
+  }
+  #imladris-type-study .im-cover:after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    box-shadow: inset 2px 0 3px #0003;
+  }
+  #imladris-type-study .im-cover[data-art='0'] {
+    background:
+      linear-gradient(115deg, transparent 48%, #5b6b6740 49%, transparent 52%),
+      radial-gradient(ellipse at 42% 52%, #798778 0 17%, transparent 18%), var(--im-cover-one);
+  }
+  #imladris-type-study .im-cover[data-art='1'] {
+    background:
+      repeating-linear-gradient(90deg, transparent 0 14px, #d5d2ac44 15px 16px),
+      linear-gradient(25deg, #203f45, transparent), var(--im-cover-two);
+  }
+  #imladris-type-study .im-cover[data-art='2'] {
+    background:
+      linear-gradient(170deg, transparent 45%, #413a2c 46% 48%, transparent 49%),
+      linear-gradient(10deg, #443a29 0 16%, transparent 17%), var(--im-cover-three);
+  }
+  #imladris-type-study .im-cover[data-art='3'] {
+    background:
+      repeating-linear-gradient(90deg, transparent 0 9px, #201d1c88 10px 12px),
+      linear-gradient(0deg, #262624 0 40%, transparent 41%), var(--im-cover-four);
+  }
+  #imladris-type-study .im-cover[data-art='4'] {
+    background:
+      repeating-linear-gradient(170deg, transparent 0 7px, #d6d4bf66 8px 9px),
+      linear-gradient(30deg, #142a42 30%, transparent), var(--im-cover-five);
+  }
+  #imladris-type-study .im-cover[data-art='5'] {
+    background:
+      radial-gradient(ellipse at 50% 50%, #efddaa 0 14%, #292820 15% 19%, transparent 20%),
+      var(--im-cover-six);
+  }
+  #imladris-type-study .im-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: 20px 16px;
+    padding: 18px 0;
+  }
+  #imladris-type-study .im-grid .im-row {
+    border: 0 !important;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 10px;
+    justify-content: start;
+    border-radius: 3px;
+    min-height: 260px;
+  }
+  #imladris-type-study .im-grid .im-cover {
+    width: 100px;
+    height: 150px;
+  }
+  #imladris-type-study .im-grid .im-title {
+    font-size: var(--im-size-body);
+    font-weight: var(--im-weight-title);
+  }
+  #imladris-type-study .im-grid .im-subtitle {
+    font-size: var(--im-size-note);
+  }
+  #imladris-type-study .im-grid .im-rating {
+    margin: 0;
+    align-self: start;
+  }
+  #imladris-type-study .im-inspector {
+    border-left: 1px solid var(--im-line);
+    min-width: 0;
+    margin-top: -54px;
+  }
+  #imladris-type-study .im-workspace:has(.im-inspector) > .im-workspace-head {
+    width: calc(100% - 320px);
+  }
+  #imladris-type-study .im-inspector-tabs {
+    height: 54px;
+    display: flex;
+    align-items: stretch;
+    padding: 0 22px;
+    gap: 22px;
+    border-bottom: 1px solid var(--im-line);
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-inspector-tabs button {
+    font-weight: 500;
+    position: relative;
+  }
+  #imladris-type-study .im-inspector-tabs button[aria-pressed='true']:after {
+    content: '';
+    height: 2px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--im-fg);
+  }
+  #imladris-type-study .im-inspector-tabs .im-close {
+    margin-left: auto;
+  }
+  #imladris-type-study .im-detail {
+    padding: 24px;
+  }
+  #imladris-type-study .im-detail-top {
+    display: flex;
+    gap: 18px;
+    align-items: start;
+    margin-bottom: 22px;
+  }
+  #imladris-type-study .im-detail .im-cover {
+    width: 72px;
+    height: 108px;
+  }
+  #imladris-type-study .im-detail h2 {
+    font-size: var(--im-size-display);
+    font-weight: 500;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    margin: 0 0 8px;
+  }
+  #imladris-type-study .im-detail h3 {
+    font-size: var(--im-size-body);
+    font-weight: 500;
+    margin: 24px 0 8px;
+  }
+  #imladris-type-study .im-detail p {
+    font-size: var(--im-size-body);
+    font-weight: 400;
+    color: var(--im-muted);
+    margin: 0 0 12px;
+    overflow-wrap: anywhere;
+  }
+  #imladris-type-study .im-detail dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px 16px;
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-detail dt {
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-detail dd {
+    margin: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  #imladris-type-study .im-detail .im-detail-link {
+    display: inline-flex;
+    gap: 7px;
+    align-items: center;
+    color: var(--im-fg);
+    font-size: var(--im-size-body);
+    margin-top: 8px;
+  }
+  #imladris-type-study .im-history {
+    padding: 0;
+    list-style: none;
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-study[data-profile='balanced'] .im-detail p,
+  #imladris-type-study .im-study[data-profile='balanced'] .im-detail dl,
+  #imladris-type-study .im-study[data-profile='balanced'] .im-detail .im-detail-link,
+  #imladris-type-study .im-study[data-profile='balanced'] .im-history {
+    font-size: var(--im-size-note);
+    font-weight: 400;
+  }
+  #imladris-type-study .im-history li {
+    padding: 15px 0;
+    border-bottom: 1px solid var(--im-line);
+    display: grid;
+    gap: 5px;
+  }
+  #imladris-type-study .im-connection-list {
+    padding: 6px 28px;
+  }
+  #imladris-type-study .im-source {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--im-line);
+  }
+  #imladris-type-study .im-source-mark {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: var(--im-selected);
+    font-size: var(--im-size-title);
+    font-weight: 500;
+  }
+  #imladris-type-study .im-source .im-title {
+    font-size: var(--im-size-body);
+    font-weight: 500;
+  }
+  #imladris-type-study .im-source .im-subtitle {
+    font-size: var(--im-size-note);
+    margin-top: 4px;
+  }
+  #imladris-type-study .im-source-actions {
+    display: flex;
+    gap: 8px;
+    font-size: var(--im-size-body);
+  }
+  #imladris-type-study .im-status {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    font-size: var(--im-size-note);
+    color: var(--im-muted);
+    margin-top: 5px;
+  }
+  #imladris-type-study .im-role-key {
+    padding: 14px 0 18px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: 400;
+    color: var(--im-muted);
+  }
+  #imladris-type-study .im-role-key strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--im-fg);
+  }
+  #imladris-type-study .im-filter-panel {
+    padding: 14px 0;
+    display: flex;
+    gap: 12px;
+    font-size: var(--im-size-body);
+    align-items: center;
+    border-bottom: 1px solid var(--im-line);
+    flex-wrap: wrap;
+  }
+  #imladris-type-study .im-filter-panel label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  #imladris-type-study .im-mobile-nav {
+    display: none;
+  }
+  #imladris-type-study .im-article .im-cover {
+    width: 50px;
+    height: 60px;
+    border-radius: 3px;
+  }
+  #imladris-type-study .im-article .im-row {
+    grid-template-columns: 50px minmax(0, 1fr);
+    gap: 14px;
+  }
+  #imladris-type-study .im-connections {
+    grid-column: 1/-1;
+  }
+  @container (max-width:440px) {
+    #imladris-type-study .im-search {
+      flex-basis: 100%;
+    }
+    #imladris-type-study .im-row {
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 12px;
+    }
+    #imladris-type-study .im-row > .im-cover {
+      width: 42px;
+      height: 63px;
+    }
+    #imladris-type-study .im-row > .im-rating {
+      display: none;
+    }
+  }
+  @media (max-width: 920px) {
+    #imladris-type-study .im-app {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    #imladris-type-study .im-sidebar {
+      display: none;
+    }
+    #imladris-type-study .im-mobile-nav {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #imladris-type-study .im-library {
+      grid-template-columns: minmax(0, 1fr) 290px;
+    }
+    #imladris-type-study .im-workspace-head {
+      padding: 0 18px;
+    }
+    #imladris-type-study .im-collection {
+      padding: 20px 18px 0;
+    }
+    #imladris-type-study .im-workspace:has(.im-inspector) > .im-workspace-head {
+      width: calc(100% - 290px);
+    }
+  }
+  @media (max-width: 660px) {
+    #imladris-type-study .im-library {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    #imladris-type-study .im-inspector {
+      border-left: 0;
+      border-top: 1px solid var(--im-line);
+    }
+    #imladris-type-study .im-workspace-head {
+      height: auto;
+      min-height: 54px;
+      flex-wrap: wrap;
+      gap: 0 12px;
+      padding: 7px 14px;
+    }
+    #imladris-type-study .im-workspace {
+      grid-template-rows: auto 1fr;
+    }
+    #imladris-type-study .im-sections {
+      height: 40px;
+      gap: 16px;
+    }
+    #imladris-type-study .im-crumb {
+      gap: 7px;
+    }
+    #imladris-type-study .im-collection {
+      padding: 16px 14px 0;
+    }
+    #imladris-type-study .im-detail {
+      padding: 22px;
+    }
+    #imladris-type-study .im-role-key {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #imladris-type-study .im-source {
+      grid-template-columns: 30px minmax(0, 1fr);
+    }
+    #imladris-type-study .im-source-actions {
+      grid-column: 2;
+      flex-wrap: wrap;
+    }
+    #imladris-type-study .im-connection-list {
+      padding: 6px 18px;
+    }
+    #imladris-type-study .im-app {
+      min-height: 1385px;
+    }
+    #imladris-type-study .im-mobile-nav select {
+      max-width: 100px;
+    }
+  }
+  @media (max-width: 660px) {
+    #imladris-type-study .im-inspector {
+      margin-top: 0;
+    }
+    #imladris-type-study .im-workspace:has(.im-inspector) > .im-workspace-head {
+      width: 100%;
+    }
+  }
+  @media (max-width: 920px) {
+    #imladris-type-study .im-crumb {
+      display: none;
+    }
+  }
+  @media (max-width: 660px) {
+    #imladris-type-study .im-app {
+      min-height: 1920px;
+    }
+  }
+  @media (max-width: 660px) {
+    #imladris-type-study .im-library {
+      align-content: start;
+    }
+  }
+</style>
+<script>
+  ;(() => {
+    const root = document.getElementById('imladris-type-study')
+    const profiles = {
+      compact: { name: 'Compact', sizes: [12, 14, 16, 20], weights: '400 / 500' },
+      balanced: { name: 'Balanced', sizes: [12, 14, 16, 22], weights: '400 / 500 / 600' },
+      readable: { name: 'Readable', sizes: [13, 15, 18, 24], weights: '400 / 500' },
+    }
+    const books = [
+      {
+        title: 'The Unbearable Lightness of Being',
+        author: 'Milan Kundera',
+        year: '1984',
+        date: 'Oct 24, 2026',
+        stars: '★★★★',
+        description:
+          'A novel of love, chance, and the weight of a life, set against the upheaval of twentieth-century Prague.',
+      },
+      {
+        title: 'The Manager’s Path',
+        author: 'Camille Fournier',
+        year: '2017',
+        date: 'Oct 18, 2026',
+        stars: '★★★★',
+        description:
+          'A guide to engineering leadership, from mentoring individual contributors to leading teams and organizations.',
+      },
+      {
+        title: 'Stoner',
+        author: 'John Williams',
+        year: '1965',
+        date: 'Oct 12, 2026',
+        stars: '★★★★★',
+        description:
+          'The quiet life of William Stoner, a teacher whose devotion to literature shapes his work and relationships.',
+      },
+      {
+        title: 'Emergent Tokyo',
+        author: 'Jorge Almazán',
+        year: '2022',
+        date: 'Oct 8, 2026',
+        stars: '★★★★',
+        description:
+          'An exploration of the small-scale urban patterns and everyday places that give Tokyo its character.',
+      },
+      {
+        title: 'The Wide Wide Sea',
+        author: 'Hampton Sides',
+        year: '2024',
+        date: 'Sep 28, 2026',
+        stars: '★★★★',
+        description:
+          'An account of James Cook’s final voyage and the encounters that changed the Pacific.',
+      },
+      {
+        title: 'Interpreter of Maladies',
+        author: 'Jhumpa Lahiri',
+        year: '1999',
+        date: 'Sep 21, 2026',
+        stars: '★★★★★',
+        description:
+          'Stories about families, distance, belonging, and the ordinary misunderstandings between people.',
+      },
+    ]
+    const articles = [
+      {
+        title: 'Good systems make room for judgment',
+        author: 'Maggie Appleton · maggieappleton.com',
+        year: '2026',
+        date: 'Oct 25, 2026',
+        description:
+          'Why the most useful tools leave space for interpretation, context, and human decisions.',
+      },
+      {
+        title: 'The streets that make a neighborhood',
+        author: 'Strong Towns · strongtowns.org',
+        year: '2026',
+        date: 'Oct 22, 2026',
+        description:
+          'A close look at the small patterns that make everyday places walkable and welcoming.',
+      },
+      {
+        title: 'Reading in an age of abundance',
+        author: 'The Paris Review · theparisreview.org',
+        year: '2026',
+        date: 'Oct 16, 2026',
+        description:
+          'On choosing a book, following a curiosity, and leaving enough time to pay attention.',
+      },
+      {
+        title: 'Designing for the long view',
+        author: 'Works in Progress · worksinprogress.co',
+        year: '2026',
+        date: 'Oct 11, 2026',
+        description:
+          'What durable infrastructure can teach us about maintaining the systems we depend on.',
+      },
+      {
+        title: 'A library is a collection of decisions',
+        author: 'Anne Helen Petersen · Substack',
+        year: '2026',
+        date: 'Oct 6, 2026',
+        description:
+          'How our collections change as our interests, commitments, and circumstances evolve.',
+      },
+      {
+        title: 'The value of a quiet interface',
+        author: 'Craig Mod · craigmod.com',
+        year: '2026',
+        date: 'Sep 30, 2026',
+        description:
+          'Notes on tools that recede into the background and allow their content to come forward.',
+      },
+    ]
+    const defaults = {
+      view: 'Books',
+      layout: 'List',
+      theme: 'System',
+      inspector: true,
+      selected: 0,
+      history: false,
+      query: '',
+      section: 'Archive',
+      filters: false,
+    }
+    let saved = window.openai?.widgetState
+    let state = { ...defaults, ...(saved?.privateContent || {}) }
+    if (!['Books', 'Articles', 'Connections'].includes(state.view)) state.view = 'Books'
+    function icon(name) {
+      return `<i data-lucide="${name}" aria-hidden="true"></i>`
+    }
+    function cover(i) {
+      return `<span class="im-cover" data-art="${i % 6}" aria-hidden="true"></span>`
+    }
+    function persist() {
+      window.openai
+        ?.setWidgetState({
+          modelContent: {
+            typographyView: state.view,
+            layout: state.layout,
+            appearance: state.theme,
+          },
+          privateContent: state,
+        })
+        ?.catch(() => {})
+    }
+    function nav(label, name, disabled = false) {
+      return `<button type="button" class="cursor-interaction ${state.view === label ? 'is-current' : ''} ${disabled ? 'im-disabled' : ''}" ${disabled ? 'disabled' : `data-view="${label}"`}>${icon(name)}<span>${label}</span>${disabled ? '<span class="im-later">Later</span>' : ''}</button>`
+    }
+    function inspector() {
+      const item = (state.view === 'Articles' ? articles : books)[
+        Math.max(0, Math.min(5, state.selected))
+      ]
+      return `<aside class="im-inspector" aria-label="${item.title} inspector"><div class="im-inspector-tabs"><button type="button" class="cursor-interaction" data-history="false" aria-pressed="${!state.history}">Details</button><button type="button" class="cursor-interaction" data-history="true" aria-pressed="${state.history}">History</button><button class="im-close cursor-interaction" type="button" data-close aria-label="Close inspector">${icon('x')}</button></div><div class="im-detail">${state.history ? `<h2>${item.title}</h2><ol class="im-history"><li><span>Finished reading</span><span class="im-meta">${item.date}</span></li><li><span>${state.view === 'Articles' ? 'Saved to Reader' : 'Added to Hardcover'}</span><span class="im-meta">Sep 12, 2026</span></li><li><span>Imported into Imladris</span><span class="im-meta">Oct 26, 2026</span></li></ol>` : `<div class="im-detail-top">${cover(state.selected)}<div><h2>${item.title}</h2><p>${item.author}</p><span class="im-meta">${item.year}</span></div></div><div class="im-rating">${item.stars || ''}</div><h3>Overview</h3><p>${item.description}</p><h3>${state.view === 'Articles' ? 'Reading' : 'Your reading'}</h3><dl><dt>Status</dt><dd>Read</dd><dt>Finished</dt><dd>${item.date}</dd>${state.view === 'Books' ? '<dt>Your rating</dt><dd>' + item.stars.length + ' / 5</dd>' : ''}</dl><h3>Details</h3><dl><dt>${state.view === 'Articles' ? 'Publisher' : 'Author'}</dt><dd>${item.author.split(' · ')[0]}</dd><dt>${state.view === 'Articles' ? 'Published' : 'First published'}</dt><dd>${item.year}</dd>${state.view === 'Books' ? '<dt>Pages</dt><dd>320</dd><dt>Language</dt><dd>English</dd>' : '<dt>Length</dt><dd>8 min read</dd>'}</dl><h3>Source</h3><p>${state.view === 'Articles' ? 'Readwise Reader' : 'Hardcover'}</p><button type="button" class="im-detail-link cursor-interaction" data-history="true">View source history ${icon('arrow-up-right')}</button>`}</div></aside>`
+    }
+    function collection() {
+      const isArticle = state.view === 'Articles'
+      const items = isArticle ? articles : books
+      const filtered = items
+        .map((b, i) => ({ ...b, i }))
+        .filter((b) => (b.title + ' ' + b.author).toLowerCase().includes(state.query.toLowerCase()))
+      return `<main class="im-collection ${isArticle ? 'im-article' : ''}"><div class="im-toolbar"><label class="im-search">${icon('search')}<input aria-label="Search ${state.view.toLowerCase()}" placeholder="Search ${state.view.toLowerCase()}" value="${state.query.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></label><button class="im-control cursor-interaction" type="button" data-filters aria-expanded="${state.filters}">${icon('sliders-horizontal')}Filters</button><select aria-label="Sort ${state.view.toLowerCase()}"><option>Read date</option><option>Title</option><option>Publish year</option></select><button class="im-control cursor-interaction" type="button" data-sort-dir aria-label="Reverse sort">${icon('arrow-down-wide-narrow')}</button>${!isArticle ? `<div class="im-toggle"><button class="im-control cursor-interaction" type="button" data-layout="List" aria-label="List view" aria-pressed="${state.layout === 'List'}">${icon('list')}</button><button class="im-control cursor-interaction" type="button" data-layout="Grid" aria-label="Grid view" aria-pressed="${state.layout === 'Grid'}">${icon('layout-grid')}</button></div>` : ''}</div>${state.filters ? '<div class="im-filter-panel"><span class="im-label">Rating</span><label><input type="checkbox"> 5 stars</label><label><input type="checkbox"> 4 stars</label><button type="button" class="im-control cursor-interaction" data-filters>Done</button></div>' : ''}<div class="im-summary">${state.query ? filtered.length : isArticle ? '212' : '128'} ${state.view.toLowerCase()} · ${state.section}</div><div class="im-results ${!isArticle && state.layout === 'Grid' ? 'im-grid' : ''}">${filtered.map((b) => `<button type="button" class="im-row cursor-interaction ${state.inspector && b.i === state.selected ? 'is-selected' : ''}" data-select="${b.i}" aria-label="Inspect ${b.title}" aria-pressed="${state.inspector && b.i === state.selected}">${cover(b.i)}<span class="im-row-copy"><span class="im-title">${b.title}</span><span class="im-subtitle">${b.author}</span><span class="im-meta">${isArticle ? '8 min read · ' : b.year + ' · '}${b.date}</span></span>${!isArticle ? `<span class="im-rating" aria-label="${b.stars.length} out of 5 stars">${b.stars}</span>` : ''}</button>`).join('') || '<div class="im-summary">No matching items</div>'}</div></main>`
+    }
+    function connections() {
+      return `<main class="im-connections im-connection-list">${[
+        ['Hardcover', 'H', '128 books · Last synced 2 hours ago'],
+        ['Letterboxd', 'L', '1,206 films · Last synced 3 hours ago'],
+        ['Readwise Reader', 'R', '212 articles · Last synced 34 minutes ago'],
+        ['Spotify', 'S', '624 albums · Last synced 1 hour ago'],
+        ['YouTube', 'Y', '417 videos · Last imported Oct 24, 2026'],
+      ]
+        .map(
+          (s) =>
+            `<section class="im-source"><span class="im-source-mark" aria-hidden="true">${s[1]}</span><div><h2 class="im-title">${s[0]}</h2><div class="im-subtitle">${s[2]}</div><div class="im-status"><span class="im-dot"></span>Connected</div></div><div class="im-source-actions"><button type="button" class="im-control cursor-interaction" data-sync>${icon('refresh-cw')}Sync</button><button type="button" class="im-control cursor-interaction" data-source-details>Details ${icon('chevron-down')}</button></div></section>`,
+        )
+        .join('')}</main>`
+    }
+    function render() {
+      root.querySelectorAll('.im-study').forEach((el) => {
+        const p = profiles[el.dataset.profile]
+        el.dataset.theme = state.theme.toLowerCase()
+        el.innerHTML = `<div class="im-app"><aside class="im-sidebar" aria-label="Navigation"><div class="im-brand">${icon('mountain-snow')}Imladris<button type="button" class="cursor-interaction" data-collapse aria-label="Collapse sidebar">${icon('panel-left-close')}</button></div><nav class="im-nav">${nav('Chat', 'message-square', true)}${nav('Library', 'library-big')}${nav('Recaps', 'chart-no-axes-combined', true)}<div class="im-label im-nav-label">Media</div>${nav('Books', 'book-open')}${nav('Movies', 'clapperboard')}${nav('Articles', 'newspaper')}${nav('Podcasts', 'mic')}${nav('Music', 'music-2')}${nav('Videos', 'video')}</nav><div class="im-foot">${nav('Connections', 'plug')}<button type="button" class="cursor-interaction" data-theme>${icon('sun-moon')}Appearance</button><div class="im-health"><span class="im-dot"></span>Local API connected</div></div></aside><section class="im-workspace"><header class="im-workspace-head"><span class="im-mobile-nav"><select aria-label="Navigate"><option ${state.view === 'Books' ? 'selected' : ''}>Books</option><option ${state.view === 'Articles' ? 'selected' : ''}>Articles</option><option ${state.view === 'Connections' ? 'selected' : ''}>Connections</option></select></span><div class="im-crumb">${state.view === 'Connections' ? '<strong>Connections</strong>' : 'Library <span>/</span><strong>' + state.view + '</strong>'}</div>${state.view !== 'Connections' ? `<div class="im-sections"><button type="button" class="cursor-interaction" data-section="Archive" aria-pressed="${state.section === 'Archive'}">Archive <span class="im-count">${state.view === 'Books' ? '128' : '212'}</span></button><button type="button" class="cursor-interaction" data-section="Queue" aria-pressed="${state.section === 'Queue'}">Queue <span class="im-count">986</span></button></div>` : ''}</header><div class="im-library" style="${!state.inspector || state.view === 'Connections' ? 'grid-template-columns:minmax(0,1fr)' : ''}">${state.view === 'Connections' ? connections() : collection() + (state.inspector ? inspector() : '')}</div></section></div><div class="im-role-key" aria-label="${p.name} type roles"><div><strong>${p.sizes[0]} px · 400</strong>Metadata, counts, inspector body</div><div><strong>${p.sizes[1]} px · ${p.weights}</strong>Navigation, controls, headings, grid titles</div><div><strong>${p.sizes[2]} px · ${el.dataset.profile === 'balanced' ? '600' : '500'}</strong>List titles</div><div><strong>${p.sizes[3]} px · 500</strong>Inspector title, wordmark</div></div>`
+      })
+      if (globalThis.lucide) lucide.createIcons({ attrs: { width: 16, height: 16 } })
+    }
+    root.addEventListener('click', (event) => {
+      const b = event.target.closest('button')
+      if (!b) return
+      if (b.dataset.view) {
+        state.view = ['Articles', 'Connections'].includes(b.dataset.view) ? b.dataset.view : 'Books'
+        state.query = ''
+        state.selected = 0
+        state.inspector = true
+      } else if (b.dataset.select !== undefined) {
+        const i = Number(b.dataset.select)
+        state.inspector = i === state.selected ? !state.inspector : true
+        state.selected = i
+      } else if (b.dataset.layout) {
+        state.layout = b.dataset.layout
+      } else if (b.dataset.history) {
+        state.history = b.dataset.history === 'true'
+      } else if (b.hasAttribute('data-close')) state.inspector = false
+      else if (b.hasAttribute('data-theme')) state.theme = state.theme === 'Dark' ? 'Light' : 'Dark'
+      else if (b.hasAttribute('data-filters')) state.filters = !state.filters
+      else if (b.dataset.section) state.section = b.dataset.section
+      else if (b.hasAttribute('data-collapse')) {
+        const side = b.closest('.im-sidebar')
+        side.style.display = 'none'
+        side.parentElement.style.gridTemplateColumns = 'minmax(0,1fr)'
+        return
+      } else if (b.hasAttribute('data-sync')) {
+        b.textContent = 'Up to date'
+        return
+      } else if (b.hasAttribute('data-source-details')) {
+        const source = b.closest('.im-source')
+        const existing = source.querySelector('.im-source-extra')
+        if (existing) existing.remove()
+        else {
+          const d = document.createElement('div')
+          d.className = 'im-subtitle im-source-extra'
+          d.textContent = 'Latest sync completed · Imported records retain their source history.'
+          source.querySelector('h2').parentElement.append(d)
+        }
+        return
+      } else return
+      render()
+      persist()
+    })
+    root.addEventListener('input', (event) => {
+      if (!event.target.matches('.im-search input')) return
+      const pos = event.target.selectionStart
+      state.query = event.target.value
+      const profile = event.target.closest('.im-study').dataset.profile
+      render()
+      const input = root.querySelector(`[data-profile="${profile}"] .im-search input`)
+      input.focus()
+      input.setSelectionRange(pos, pos)
+      persist()
+    })
+    root.addEventListener('change', (event) => {
+      if (event.target.matches('.im-mobile-nav select')) {
+        state.view = event.target.value
+        state.query = ''
+        state.selected = 0
+        render()
+        persist()
+      }
+    })
+    window.addEventListener('openai:set_globals', (event) => {
+      const incoming = event.detail?.globals?.widgetState?.privateContent
+      if (incoming) {
+        state = { ...defaults, ...incoming }
+        render()
+      }
+    })
+    render()
+    if (globalThis.Tweak) {
+      const tweak = new Tweak({
+        container: root,
+        onChange: () => {
+          render()
+          persist()
+        },
+      })
+      tweak.addSelect(state, 'view', {
+        label: 'Example surface',
+        options: ['Books', 'Articles', 'Connections'],
+      })
+      tweak.addSelect(state, 'layout', { label: 'Books layout', options: ['List', 'Grid'] })
+      tweak.addSelect(state, 'theme', { label: 'Appearance', options: ['System', 'Light', 'Dark'] })
+      tweak.addToggle(state, 'inspector', { label: 'Inspector' })
+    }
+  })()
+</script>
