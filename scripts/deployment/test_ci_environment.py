@@ -11,6 +11,7 @@ class CiEnvironmentTests(unittest.TestCase):
             path = ci_environment.prepare(Path(directory))
             values = dict(line.split('=', 1) for line in path.read_text().splitlines())
             self.assertEqual(values.pop('AUTH_MODE'), 'local')
+            self.assertEqual(values['OPERATING_MONITOR_ENABLED'], 'false')
             self.assertTrue(all(value == 'false' for value in values.values()))
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(ValueError):

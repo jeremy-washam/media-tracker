@@ -2,7 +2,12 @@ import { generateKeyPairSync, createSign } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Readable } from 'node:stream'
-import { Miniflare, Headers as RuntimeHeaders, Response as RuntimeResponse } from 'miniflare'
+import {
+  Miniflare,
+  Headers as RuntimeHeaders,
+  Request as RuntimeRequest,
+  Response as RuntimeResponse,
+} from 'miniflare'
 import { strToU8, zipSync } from 'fflate'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
@@ -87,8 +92,21 @@ export function letterboxdArchive() {
 
 /** A disposable production Worker with synthetic upstreams. It never reads .env or .wrangler state. */
 export async function createWorkerRuntime(
-  options: { seed?: boolean; paused?: boolean; hosted?: boolean } = {},
+  options: {
+    seed?: boolean
+    paused?: boolean
+    hosted?: boolean
+    operatingMonitorFixture?: string
+  } = {},
 ): Promise<WorkerRuntime> {
+  const operatingFixture = options.operatingMonitorFixture
+    ? new URL(options.operatingMonitorFixture)
+    : null
+  if (
+    operatingFixture &&
+    (operatingFixture.protocol !== 'http:' || operatingFixture.hostname !== '127.0.0.1')
+  )
+    throw new Error('Operating runtime fixtures must use loopback HTTP')
   const readerPage = JSON.parse(
     await readFile(
       new URL('../../packages/test-fixtures/readwise/archive-page.json', import.meta.url),
@@ -145,6 +163,14 @@ export async function createWorkerRuntime(
       CATALOG_AUTO_REFRESH: 'false',
       READWISE_TOKEN: 'synthetic-runtime-token',
       HARDCOVER_TOKEN: 'synthetic-runtime-token',
+      ...(operatingFixture
+        ? {
+            OPERATING_MONITOR_ENABLED: 'true',
+            OPERATING_API_TOKEN: 'synthetic-operating-token',
+            CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
+            SYNC_QUEUE_ID: 'b'.repeat(32),
+          }
+        : {}),
     },
     ratelimits: {
       API_RATE_LIMITER: { namespace_id: '1001', simple: { limit: 120, period: 60 } },
@@ -168,9 +194,24 @@ export async function createWorkerRuntime(
       for (const stream of [stdout, stderr])
         stream.on('data', (chunk: Buffer) => logs.push(String(chunk)))
     },
-    async outboundService(request: { url: string; json(): Promise<unknown> }) {
+    async outboundService(request: RuntimeRequest) {
       const url = new URL(request.url)
       outboundRequests.push(url.href)
+      if (operatingFixture && url.origin === 'https://api.cloudflare.com') {
+        // Only the transport is bridged to a loopback fixture. The compiled
+        // Worker's native fetch constructs its Request and handles redirects
+        // before/after this boundary; never replace globalThis.fetch in workerd.
+        const response = await fetch(new URL(url.pathname + url.search, operatingFixture), {
+          method: request.method,
+          headers: Object.fromEntries(request.headers),
+          body: ['GET', 'HEAD'].includes(request.method) ? null : await request.arrayBuffer(),
+          redirect: 'manual',
+        })
+        return new RuntimeResponse(await response.arrayBuffer(), {
+          status: response.status,
+          headers: Object.fromEntries(response.headers),
+        })
+      }
       if (options.hosted && url.href === issuer + '/cdn-cgi/access/certs')
         return RuntimeResponse.json({ keys: [publicKey] })
       if (url.hostname === 'readwise.io') {

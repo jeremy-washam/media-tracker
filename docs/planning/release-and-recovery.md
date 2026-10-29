@@ -9,12 +9,20 @@ resource identity, Access setup, and initial cutover;
 
 The repository now defines credential-free pull-request validation, guarded
 production delivery, a separate reviewed migration release, and read-only
-backup verification. Implementation and local synthetic tests do **not** mean
-GitHub environments, credentials, branch rules, or hosted delivery are activated.
-The[deployment closeout](deployment-closeout.md) records current account setup,
-local/native validation and pending live acceptance. The release owner must
-record the first successful hosted workflow and fresh independent recovery
-rehearsal there. No workflow creates another cloud resource,
+backup verification. [PR 8](https://github.com/jeremy-washam/media-tracker/pull/8)
+merged into main at `651a2be`, and
+[hosted main validation 40949037008](https://github.com/jeremy-washam/media-tracker/actions/runs/40949037008)
+passed. Protected environments and strict main `validate` protection are
+configured. Both environment release tokens and restricted smoke credentials are
+installed; the monitor secret is active in the October 29 21:53:50 UTC maintenance
+deployment. Its gate is closed, native queue paused and consumer detached; only
+the 10-minute monitor cron is active. Production CD remains disabled. Zero active
+source/catalog leases were confirmed at 21:59 UTC; fresh read-only capture is
+running under the held pause. SQL migrations await the full 20-minute hold and
+verified recovery bundle. The original baseline's separate Mac-copy verification
+passed at 21:59:41 UTC; the fresh capture is not yet complete.
+The [deployment closeout](deployment-closeout.md) records remaining live
+acceptance and fresh local recovery rehearsal. No workflow creates another cloud resource,
 changes provider secrets, starts paid services, purges a queue, or automatically
 resumes background work.
 
@@ -74,8 +82,8 @@ secrets are introduced only in the separate deployment step, after trusted-main
 checkout, dependency installation, and builds. Build scripts do not receive
 production credentials.
 
-Require `Validate / validate` on main through a GitHub branch rule/ruleset after
-its first successful hosted run. Protect workflow/release changes through review.
+Main now requires the strict `validate` check after its successful hosted run.
+Protect workflow/release changes through review.
 Never enable a `pull_request_target` job that executes a contributor's checkout.
 
 ## One-time delivery setup
@@ -138,6 +146,31 @@ After live setup and a successful manual smoke, set repository variable
 `PRODUCTION_CD_ENABLED=true`. Until then CI still validates and production jobs
 remain skipped. Do not set this before all environment secrets and protections
 are ready. Stop delivery by removing this variable; this does not pause the app.
+
+The first activation needs a controlled bootstrap before this ordinary guard
+can run: the old Worker lacks the dedicated smoke identity and operating-state
+gate that `release.py` verifies before mutation. Preserve the old configuration,
+Worker version, Time Travel bookmark and private phase receipts. Disable old
+source crons, pause native delivery and detach its consumer, then deploy the new
+maintenance runtime with writes disabled and its gate closed before migrations.
+Verify drained leases, then capture/rehearse the fresh local backup under the
+held pause; read-only capture may overlap the hold once writers have drained.
+Require the full 20-minute pause and verified backup before reviewed migrations,
+then accept the maintenance baseline.
+Do not disable the guard to make later releases pass. The closeout
+checklist owns this one-time sequence.
+
+## Smoke transport troubleshooting
+
+The deployment HTTP client sends `User-Agent: ImladrisDeployment/1.0`. On
+October 29 the live `workers.dev` health endpoint returned 403 for Python
+urllib's default identity despite valid service credentials; the same request
+with this descriptive application identity returned 200. Accept-header changes
+did not resolve it. Cloudflare documents this Browser Integrity Check behavior
+and recommends a descriptive application User-Agent in its
+[Error 1010 guidance](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/).
+Keep redirect following disabled and error bodies private. Do not widen Access
+policy or expose credentials to troubleshoot this transport rejection.
 
 ## Ordinary code release
 
@@ -208,20 +241,32 @@ retained prepared/starting receipt before choosing a forward fix or Time Travel.
 
 ## Backup coverage and retained evidence
 
-| Layer                              | Protection                                                                         | Limit                                                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| D1 operational database            | Always-on Time Travel plus per-release bookmark                                    | 30-day Paid history; same provider/account                                   |
-| Private R2 source evidence/content | Retain immutable source objects and manifests                                      | Retention alone is not an independent backup                                 |
-| Operational state and receipts     | Retain `operations/operating-state.json` and `operations/releases/**` privately    | Exclude from source parsing and cache cleanup                                |
-| Version-2 local recovery bundle    | SQLite + R2 metadata/blobs, hashes, schema, views, sequences, exact FTS vocabulary | Its captured date is its recovery cutoff                                     |
-| Encryption/provider credentials    | Owner-controlled protected credential store                                        | Must be escrowed independently; never put in source/bundle/Actions artifacts |
-| Offsite independent copy           | Owner-selected encrypted destination                                               | Destination/retention must be confirmed; not implied by local verification   |
+| Layer                              | Protection                                                                         | Limit                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| D1 operational database            | Always-on Time Travel plus per-release bookmark                                    | 30-day Paid history; same provider/account                                           |
+| Private R2 source evidence/content | Retain immutable source objects and manifests                                      | Retention alone is not an independent backup                                         |
+| Operational state and receipts     | Retain `operations/operating-state.json` and `operations/releases/**` privately    | Exclude from source parsing and cache cleanup                                        |
+| Version-2 local recovery bundle    | SQLite + R2 metadata/blobs, hashes, schema, views, sequences, exact FTS vocabulary | Its captured date is its recovery cutoff                                             |
+| Encryption/provider credentials    | Owner-controlled protected credential store                                        | Must be escrowed independently; never put in source/bundle/Actions artifacts         |
+| Optional offsite copy              | Existing owner-controlled destination                                              | Protects against Mac loss; not a deployment blocker or implied by local verification |
+
+The accepted default is a protected folder on the Mac outside the repository
+and Cloudflare. That independent local copy protects against provider/account
+loss, but not loss of the Mac. No new backup service is required. Current live
+database and objects total about 1.5 GB; reserve 5–6 GB for the full recovery
+bundle including transfer data and independent restore-test copies.
 
 The existing protected baseline and `verified.sqlite` are retained. Do not
 replace/delete them as cleanup, copy the real private database casually, or
 present the original baseline as a fresh production snapshot. General SQLite
 SQL dumps and database-only exports cannot independently prove R2 completeness
 or contentless-FTS recovery.
+
+The original cutover bundle has been copied to
+`/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; its Mac-copy
+verification passed at 21:59:41 UTC: 94 tables, 1,798,348 rows, 18,126 objects and
+the independently restored FTS vocabulary. Fresh read-only production capture has also started;
+its completion and independent restore remain unverified.
 
 Verify a trusted version-2 local bundle without copying records or changing
 SQLite files:
@@ -230,6 +275,23 @@ SQLite files:
 python3 scripts/deployment/recovery.py \
   --bundle .private/deployment/<retained-bundle> --require-rehearsal
 ```
+
+For a retained copy outside the repository, explicitly name the protected local
+backup root. This keeps the default ignored-directory boundary intact:
+
+```sh
+python3 scripts/deployment/recovery.py \
+  --trusted-local-root /Users/jeremywasham/Backups/Imladris \
+  --bundle /Users/jeremywasham/Backups/Imladris/<retained-bundle> \
+  --require-rehearsal
+```
+
+The trusted root and directories below it must be private (mode `0700`), and
+retained files private (`0600`). Symlinked roots, linked path components, bundle
+escapes, and unprotected files are refused before reading the manifest. All
+checksum, SQLite, provenance, FTS, and independent-restore checks still apply.
+This verifies the Mac copy; it does not claim offsite coverage or a fresh remote
+capture.
 
 Verification checks protected permissions/no symlinks, every retained file and
 object checksum/size, SQLite integrity/foreign keys, all ordinary/virtual table
@@ -249,10 +311,62 @@ pnpm deployment:snapshot --database <approved-local.sqlite> \
 
 A fresh production backup needs a consistent approved capture of native D1 plus
 all referenced R2 evidence and FTS positions, followed by independent restore
-verification. The existing guarded transfer tooling handles those special
-indexes; a naive `wrangler d1 export` replacement is insufficient. Choose and
-validate an encrypted offsite destination before claiming independent disaster
-recovery complete. No new paid backup provider is assumed.
+verification. Existing snapshot/transfer tooling preserves those special
+indexes but does not itself capture fresh production data. The new read-only
+capture tool is running; no fresh production bundle is verified yet. A naive
+`wrangler d1 export` replacement is insufficient. Offsite copying is optional;
+record it only when actually performed. No new paid backup provider is assumed.
+
+## Fresh read-only production capture
+
+Use Python 3.12 with a SQLite build that permits local FTS shadow reconstruction.
+The bundled Python runtime passed all 125 deployment tests without skips; some
+macOS system Python builds enforce defensive SQLite mode, and capture refuses
+those builds before account reads. Run the deployment tests with the same
+Python interpreter selected for capture:
+
+```sh
+python3.12 -m unittest discover -s scripts/deployment -p 'test_*.py'
+```
+
+After disabling writers and confirming drained leases, run from the repository
+root. The token file must contain only the existing release API token, mode
+`0600`; output stays inside ignored `.private` while capturing:
+
+```sh
+python3.12 scripts/deployment/capture.py \
+  --account '<account-id>' \
+  --database '<database-id>' \
+  --bucket media-tracker-raw \
+  --token-file .private/deployment/release-api-token.txt \
+  --output '.private/deployment/<fresh-capture-name>' \
+  --reuse-bundle .private/deployment/paused-cutover-2026-10-13 \
+  --writers-paused \
+  --pause-id '<unique-uninterrupted-maintenance-window-id>' \
+  --page-size 2000
+```
+
+Use the same pause ID to resume only while that exact writer pause has remained
+uninterrupted. Resume rechecks target, schema and source-object inventory and
+continues committed keyset pages and verified objects. A completed manifest is
+verified/rehearsed locally rather than recaptured. Reuse avoids downloading
+unchanged source objects only after current ETag and local checksum checks.
+Only `operations/operating-state.json` is explicitly excluded so the independent
+monitor can continue; all source artifacts remain subject to strict checks.
+
+`--page-size` is optional and defaults to 2,000 rows. Responses are bounded to
+32 MiB; oversized pages halve automatically without committing a failed page or
+advancing its cursor. Native request/read ceilings are persisted across resumes.
+The final-page inventory fix passed against 19 native pages and 18,284 objects.
+The current database copy is complete. Object capture stopped on a weak HTTP
+ETag representation; read-only diagnostics confirmed matching inventory hashes
+and byte counts. A focused transport fix and independent restore remain pending. Copy and verify the finished bundle in the accepted protected
+Mac backup folder before claiming that new recovery point retained.
+
+The owner explicitly approved a separate encryption-key copy; it is saved and
+verified in `/Users/jeremywasham/Backups/Imladris/credentials`, with owner-only
+permissions. Possession of the key and database permits credential decryption.
+Keep both protected, and never place provider credentials or this key in CI.
 
 ## Recovery sequence
 
@@ -273,8 +387,11 @@ recovery complete. No new paid backup provider is assumed.
 5. Reconcile cursors and raw evidence before resuming. Do not advance a cursor
    based on a job message whose durable records were rolled back. Replay
    idempotently and preserve recovery provenance.
-6. Recheck Access/MFA and unauthenticated denial, run full live smoke/owner
-   acceptance, then explicitly resume. Keep the incident recovery point and
+6. Recheck Access/MFA and unauthenticated denial. With the consumer detached,
+   resume native queue delivery, then explicitly clear the R2 pause; verify both
+   agree before reattaching the serial consumer. Clearing the gate first can
+   recreate a sticky pause while native delivery remains paused. Run full live
+   smoke/owner acceptance. Keep the incident recovery point and
    receipt; update the runbook with tested recovery time/data cutoff.
 
 ## Validation evidence to record

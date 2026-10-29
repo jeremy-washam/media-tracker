@@ -1,10 +1,12 @@
 # One-time deployment account setup
 
-The remaining account credentials must be created by the owner. Existing
-Wrangler OAuth can deploy interactively but does not provide the account
-Analytics Read scope needed by the persistent monitor, and must not become a
-GitHub CI credential. Existing SSH Git authentication already permits workflow
-pushes; another GitHub OAuth grant is unnecessary.
+The owner supplied both scoped account tokens on October 29. Both are active;
+D1 and queue reads and the monitor's exact analytics query passed. The current
+usage estimate is $5. The dashboard showed $0 usage overages; native alerts are
+saved at $5 usage warning and $20 usage emergency, approximately $10/$25 total
+including the existing $5 subscription. The release token is installed in both protected GitHub
+environments; the monitor secret is active in the maintenance deployment. Existing
+Wrangler OAuth remains separate from persistent runtime and CI credentials.
 
 ## Create two scoped Cloudflare API tokens
 
@@ -31,26 +33,46 @@ substitute a global API key or grant broad account administration.
 
 A dedicated Access service token and Service Auth policy are also required.
 The Worker independently permits only queryless health and six Library-summary
-GETs for its exact Client ID. The current Cloudflare connection lacks Access Service Tokens permission,
-confirmed by a403 read-only permission probe. Reconnect it with
-`access-service-token.write` and Access application/policy write permissions,
-or create the service token and Service Auth policy through the dashboard.
-Do not broaden either runtime or CI API token to solve this setup-only need. Its secret belongs only in the protected
-GitHub environments. It never substitutes for owner sign-in/MFA.
+GETs for its exact Client ID. On October 29 the owner approved dashboard creation
+of this identity; its Service Auth policy is attached and its credentials are
+installed in both protected GitHub environments. Owner MFA remains unchanged.
+Creation through the API connection returned 403, so neither runtime nor CI
+API token was broadened to perform this setup. The identity never substitutes
+for owner sign-in/MFA.
 
-## Independent backups
+## Local backup destination
 
-Choose an existing destination you control outside the production Cloudflare
-account: an already backed-up/synchronized folder, external drive, or existing
-private object storage. Do not purchase a service just for this step. The operator
-will verify the existing private recovery bundle, preserve its evidence/search
-format, and record the actual copy and recovery rehearsal. A TimeTravel bookmark
-or another object in the same account is not an independent backup.
+The owner accepted a protected folder on the Mac, outside the repository and
+Cloudflare, as the default recovery destination. This protects against provider
+or account loss; it does not protect against losing the Mac. An additional
+offsite copy is optional and is not a deployment blocker. No new service is
+required.
+
+Current live database and object data total about 1.5 GB. Reserve 5–6 GB for the
+full recovery bundle, which also contains transfer data and restore-test copies.
+The retained original bundle passed verification and has been copied to
+`/Users/jeremywasham/Backups/Imladris/original-cutover-2026-10-13`; that separate
+Mac copy passed verification at 21:59:41 UTC: 94 tables, 1,798,348 rows, 18,126
+objects and the independently restored search vocabulary. Fresh read-only production capture has started
+under the held writer pause; its restore verification remains pending. A Time Travel bookmark or
+another object in the same Cloudflare account does not replace the local copy.
+
+The owner explicitly approved a separate encryption-key backup. It is saved and
+verified in the owner-only `/Users/jeremywasham/Backups/Imladris/credentials`
+folder. Possession of this key and the database permits decryption of the stored
+Spotify credential; keep both protected. Provider credentials are never copied
+into CI.
 
 ## Current GitHub setup
 
 The `production` and `production-migrations` environments are provisioned for
 `main` only; migrations require an owner review with self-approval allowed.
-Production delivery remains disabled until credentials, smoke identity, migration
-bootstrap and the first successful validation are verified. See the
+[PR 8](https://github.com/jeremy-washam/media-tracker/pull/8) is merged. Hosted
+[main validation 40949037008](https://github.com/jeremy-washam/media-tracker/actions/runs/40949037008)
+passed at `651a2be`; main requires the strict `validate` check. Production delivery
+remains disabled during the controlled migration bootstrap and live acceptance.
+Maintenance code was deployed at 21:53:50 UTC on October 29 with the operating
+gate closed. Zero active source/catalog leases were confirmed at 21:59 UTC;
+read-only backup capture is running during the held pause. SQL migrations wait
+for both the 20-minute pause and verified fresh recovery bundle. See the
 [release runbook](release-and-recovery.md) for exact protected secrets.
