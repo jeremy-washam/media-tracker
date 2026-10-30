@@ -80,6 +80,12 @@ undated fallback. Active statuses 1 and 2 independently determine Books Queue.
 Aggregate read counts never manufacture rereads. Missing source relationships
 retire only after a complete snapshot; retained Archive history stays available.
 
+Hosted manual source sync returns HTTP 202 after enqueueing the existing source
+job. It checks configuration, operating state and read-only admission eligibility
+without running provider calls in the HTTP request. Processing rechecks all guards.
+A queued receipt is not completion; Connections observes the existing sync activity.
+Local source sync retains its synchronous HTTP 200 result.
+
 Manual and scheduled hosted source syncs share one new allocation per source per
 UTC day and a 23-hour minimum interval. Hardcover continuations and finite
 recovery attempts retain that allocation; local explicit syncs do not use the
@@ -87,8 +93,10 @@ hosted admission policy. Migrations through 0034 are deployed. Hardcover's
 controlled hosted snapshot completed across 23 pages with 1,112 source records,
 128 normalized records and no failures. After owner-restored Premium and the
 Users Management account correction, Spotify's first catalog batch fetched 25
-tracks without errors. Saved-episode source sync and full catalog completion
-remain to verify; configured recurring work alone does not establish success.
+tracks without errors. A later source check saved six raw responses and 196
+source records before its client disconnected, without advancing a cursor. The
+interrupted allocation remains conservatively accounted for; full reconciliation
+and catalog completion remain to verify at the next eligible queued cycle.
 
 ## Spotify and YouTube
 

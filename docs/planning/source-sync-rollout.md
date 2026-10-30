@@ -19,7 +19,7 @@ A rolling 24-hour source guard stops abnormal aggregate work at 100 admissions,
 10 million observed/reserved writes, or 1 billion observed/reserved reads. This
 operational guard is separate from account-wide billing measurement.
 
-The global 20-minute lease serializes HTTP and queue source invocations. Every
+The global 20-minute lease serializes hosted source invocations. Every
 provider request checks the shared pause switch; jobs retain the 10-minute
 invocation deadline, 30-second request timeout, redirect rejection, and 8 MiB
 individual-response ceiling. Record/page checks stop at 1 million observed writes,
@@ -45,11 +45,31 @@ and remaining retry count. A newer admission supersedes older failures, includin
 when it appears between retry discovery and the atomic claim. New allocations
 still require a new UTC day and 23 hours; hourly availability is unchanged.
 
+## Hosted manual dispatch
+
+Hosted manual sync for Letterboxd, Hardcover, Readwise and Spotify enqueues the
+existing `sync_source` operation and returns HTTP **202** after the send succeeds.
+Read-only preflight checks reject disabled/unconfigured sources, operating pauses,
+held source leases and exhausted admission before enqueue. Processing repeats the
+checks and owns the reservation, provider requests, durable evidence and cursor.
+Local development retains the synchronous HTTP **200** source result.
+
+Connections shows queued status and polls source activity. The receipt is not a
+completed run or an exact run identifier. A new run is created only when processing
+starts; a racing scheduler or delivery retry can also affect activity. Existing
+idempotent writes and finite admission guards remain authoritative. The queue
+message key alone does not provide transport-level request deduplication.
+
+Long provider work must not depend on an open browser request. Cloudflare allows
+only [30 seconds of `waitUntil` work after disconnect](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil);
+the existing [Queue consumer has a 15-minute wall-clock limit](https://developers.cloudflare.com/queues/platform/limits/).
+The app keeps its smaller existing provider/deadline/CPU limits. See
+[ADR 0022](../decisions/0022-durable-manual-source-sync.md).
+
 ## Hardcover continuation and crash recovery
 
 Apply migrations **0032** (Hardcover progress) and **0034** (snapshot-bound recovery
-and cooldowns) before deploying dependent code. Hosted HTTP and queue processing
-commit one 50-book library page per invocation under the same durable snapshot
+and cooldowns) before deploying dependent code. Queue processing commits one 50-book library page per invocation under the same durable snapshot
 run. Only the final complete scan retires absence and advances `library-books`.
 Execution progress lives in `hardcover_sync_progress`; completed sync cursors
 still reject running runs.
@@ -154,8 +174,30 @@ That recovery also exposed a UTC-boundary lookup bug: the remaining failed retry
 was hidden after midnight even though its original allocation retained allowance.
 The narrow fix selects only the latest source allocation and fences the atomic
 claim against newer admissions, preserving all existing accounting and limits.
-Regression tests pass; live source-recovery acceptance awaits deployment and the
-provider access check. No admission was reset to perform this diagnostic.
+PR 13 merged into `8c89b44533b849e37cbc8b56bbe206224e7d1cdb` and the
+[ordinary release](https://github.com/jeremy-washam/media-tracker/actions/runs/40980943229)
+passed validation, deployment and authenticated smoke at **00:49:23.637 UTC**.
+It passed 907 TypeScript and 147 Python tests, 267 browser tests, 18 real-stack
+acceptance tests, 13 native Worker tests and coverage gates.
+
+One retained source attempt started at **00:50:02.561 UTC**. The validation
+client's 60-second timeout canceled its Worker at **00:51:01.926 UTC** (59,940 ms
+wall time, 632 ms CPU). Six raw responses and 196 source records were durable,
+with the latest acquisition at 00:50:52.618; no cursor advanced. This establishes
+provider access and partial durable progress, not a completed reconciliation.
+The admission retains its October 29 day/start, attempts 3, retry count 2 and
+unknown in-flight usage; it remains conservatively charged. No counter, budget,
+in-flight marker or credential was reset, and no second source request was sent.
+
+After the lease and 20-minute orphan guard expired, the existing reviewed operator
+procedure closed exactly that abandoned visible run at **01:10:31.849 UTC** with
+`source_run_interrupted`; repeating it made zero writes. Verification at
+01:10:50.447 retained all six raw responses, 196 source records, no cursor committed
+by this run and the unchanged unknown admission. Terminal run counters remained
+unchanged, not reconstructed from partial data. A fresh Spotify allocation next becomes
+eligible at **2026-10-30 15:07:56.391 UTC (11:07 a.m. EDT)**; the next hourly dispatch
+is **16:00 UTC (noon EDT)**, subject to ordinary gates. Hosted manual dispatch now
+uses the queue path described above to prevent another client-disconnect cancel.
 
 The reviewed legacy October 17 Hardcover and October 28 Spotify source runs had
 no active lease, progress, snapshot admission, catalog role or committed cursor.

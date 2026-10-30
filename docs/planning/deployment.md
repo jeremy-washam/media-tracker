@@ -12,8 +12,8 @@ apart. Hardcover's controlled snapshot completed 23 pages with 1,112 source
 records, 128 normalized records and no failures. The first ordinary automatic
 release, native YouTube publication, and the real midnight article/content cycle
 passed; see the closeout for exact evidence and duplicate-delivery limitations.
-Spotify's saved-episode source retry, full catalog completion after the account
-allowlist correction, and a subsequent genuinely eligible daily source cycle remain
+Spotify's next eligible queued source reconciliation, full catalog completion
+after the account allowlist correction, and a subsequent daily source cycle remain
 open. The sections below retain the original
 cutover procedures and dated transfer receipts. They do not establish current
 activation or override the operating policy below.

@@ -15,6 +15,14 @@ merged Balanced typography changes. The ordinary-release acceptance recorded
 below was collected against main
 `3044d2ad5e5db5b7436537cb5f289cbf8e932115` through 2026-10-30 00:10 UTC.
 
+[PR 13](https://github.com/jeremy-washam/media-tracker/pull/13) subsequently merged
+at **00:38:23 UTC** as `8c89b44533b849e37cbc8b56bbe206224e7d1cdb`.
+[Main pipeline 40980943229](https://github.com/jeremy-washam/media-tracker/actions/runs/40980943229)
+passed validation, deployment and authenticated smoke at **00:49:23.637 UTC**.
+Its gates passed 907 TypeScript, 147 Python, 267 browser, 18 real-stack and 13
+native runtime tests, with 72.42% coverage. The cross-midnight retry correction
+was live at that checkpoint; the later queued-manual-sync preparation is recorded below.
+
 The protected [migration release](https://github.com/jeremy-washam/media-tracker/actions/runs/40968424590)
 passed on exact main revision `9a6a877`. Migrations 0032–0034 are applied, all 34
 migration names match, `PRAGMA quick_check` is `ok`, and production has zero
@@ -56,20 +64,20 @@ measurement and unpaused queue, without operator intervention.
 
 ## Acceptance checklist
 
-| Area                      | Live evidence                                                                                                                                                                                          | Remaining acceptance                                                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| Cost safeguards           | Successful native monitor/drill; absent/stale/future states return 503; midnight timeout retained fresh data and the next real 00:10 collection recovered normally                                     | Alerts and pause remain approximate; they are not a guaranteed invoice cap                                                    |
-| Source reliability        | Hardcover complete: 23 pages, 1,112 source records, 128 normalized records, zero failures, final cursor committed; Letterboxd/Readwise succeeded October 29                                            | Spotify retained-retry fix release/acceptance pending; next eligible daily cycle remains unobserved                           |
-| Catalog/content           | Movies and YouTube publication verified; actual hourly cron created no empty catalog job; maintenance completed; 20 ready/full articles, 251 chunks, excerpt/FTS and correlated duplicate guard passed | Spotify track catalog access recovered (25/25); ongoing job/full backfill and saved-episode source recovery remain unverified |
-| Hosted imports            | Streamed bounds, existing owner export imports and continuation; native import/resume/ZIP-bomb acceptance passed                                                                                       | Hosted ZIP limits remain explicit; complete historical coverage still needs manual source exports                             |
-| Observability/performance | Owner-only operations; safe Spotify endpoint/status diagnostic; 20 representative live list/detail/history checks all 200                                                                              | Single-pass latency is recorded below, not a percentile or performance SLO                                                    |
-| Recovery/security         | Fresh independent Mac data backup and restore verified; migration rehearsal passed; separate approved key backup decrypt proof passed; restricted CI identity verified                                 | Optional offsite copy protects against Mac loss; service identity expires October 29, 2027                                    |
-| CI/CD                     | Reviewed migration workflow and first ordinary exact-main validation/deployment/authenticated smoke passed; scoped secrets in both main-only environments; guarded CD enabled                          | Retain configuration/schema checks and exact-revision delivery for subsequent releases                                        |
-| Documentation             | Owning setup, recovery, source, architecture and plan documents reconciled with actual deployment                                                                                                      | Keep incomplete provider/scheduler gates explicit; do not infer full acceptance from synthetic tests                          |
+| Area                      | Live evidence                                                                                                                                                                 | Remaining acceptance                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Cost safeguards           | Successful native monitor/drill; absent/stale/future states return 503; midnight timeout retained fresh data and the next real 00:10 collection recovered normally            | Alerts and pause remain approximate; they are not a guaranteed invoice cap                                                |
+| Source reliability        | Hardcover complete; Letterboxd/Readwise succeeded October 29; canceled Spotify retry retained six raw objects / 196 source records; guarded orphan closure verified           | Queued-manual-sync fix release, full source success and next eligible daily cycle remain open                             |
+| Catalog/content           | Movies and YouTube verified; hourly/article/duplicate checks passed; Spotify track catalog access recovered with 300 distinct records verified and 425 returned by 00:51      | Spotify catalog job/full backfill remain incomplete; metadata progress does not establish complete source synchronization |
+| Hosted imports            | Streamed bounds, existing owner export imports and continuation; native import/resume/ZIP-bomb acceptance passed                                                              | Hosted ZIP limits remain explicit; complete historical coverage still needs manual source exports                         |
+| Observability/performance | Owner-only operations; safe Spotify endpoint/status diagnostic; 20 representative live list/detail/history checks all 200                                                     | Single-pass latency is recorded below, not a percentile or performance SLO                                                |
+| Recovery/security         | Fresh independent Mac data backup and restore verified; migration rehearsal passed; separate approved key backup decrypt proof passed; restricted CI identity verified        | Optional offsite copy protects against Mac loss; service identity expires October 29, 2027                                |
+| CI/CD                     | Reviewed migration workflow and first ordinary exact-main validation/deployment/authenticated smoke passed; scoped secrets in both main-only environments; guarded CD enabled | Retain configuration/schema checks and exact-revision delivery for subsequent releases                                    |
+| Documentation             | Owning setup, recovery, source, architecture and plan documents reconciled with actual deployment                                                                             | Keep incomplete provider/scheduler gates explicit; do not infer full acceptance from synthetic tests                      |
 
 A local test is not a live activation. A bounded first batch is not a completed
 backfill, and a simulated clock is not an observed production scheduled cycle.
-Spotify's account dependency does not prevent browsing or other sources.
+No further account input is needed for the current Spotify follow-through.
 
 ## Operating policy and verified stop/resume
 
@@ -212,24 +220,65 @@ Management and added it. One bounded catalog retry was accepted with HTTP 202 at
 **00:27:38 UTC**. At **00:28:05 UTC**, that same job was pending in its tracks
 phase with 25 requested, 25 returned, zero unavailable and no error. This verifies
 track catalog API access after the account addition, which appears to have
-resolved that access block. The job and full backfill remain unverified; status
-still reported 18,206 remaining tracks, so no remaining-count reduction is claimed.
-This metadata fetch does not verify saved-episode source sync: one retained source
-retry awaits the PR 13 release. Keep API flags and the source allowlist unchanged,
+resolved that access block. By **00:43:55 UTC**, 300 distinct track records were
+verified; by **00:51 UTC**, the same job had returned 425 with zero errors.
+The job/full backfill remain incomplete, and no remaining-count reduction is
+claimed from its status field. Metadata progress is separate from source sync.
+Keep API flags and the source allowlist unchanged,
 without another catalog retry while observing this job. No agent purchase, new app,
 reauthorization, manual credential replacement or allowance reset was performed.
 
 A manual source attempt also exposed a cross-midnight retained-retry bug: discovery
-filtered failed allocations to the current UTC day. A prepared query correction
+filtered failed allocations to the current UTC day. The PR 13 query correction
 selects only the latest retained failed allocation across days, with an atomic
 newer-admission fence when claiming it. It preserves the original day/start,
 cumulative reservation/usage, cooldown and attempt ceilings, plus all new-allocation
 daily/23-hour, scheduler, lease and rolling guards; no migration is needed.
-The focused suite passed 41 tests, including 12 new regressions. The full local
-check passed 907 TypeScript and 147 Python tests; the production build/dry run
-and all 13 native runtime tests passed. PR 13's release and live verification
-remain pending; this fix is not deployed and no new source fetch has been
-established. Functional production remains `3044d2ad` until that release passes.
+The focused suite passed 41 tests, including 12 new regressions; the full checks
+and exact-main release above passed, so this correction is live on `8c89b445`.
+
+The single retained source HTTP retry began at **00:50:02.561 UTC**. Its caller's
+60-second read timeout canceled the native invocation at **00:51:01.926 UTC**
+(59,940 ms wall time, 632 ms CPU), rather than a provider 403. Six raw objects
+and 196 source records were durably committed, latest at **00:50:52.618 UTC**;
+no cursor was committed or advanced for this run, so full source completion is
+not established. The
+original October 29 admission and start `1793290076391` remain intact at
+attempt 3 / retry 2. Unknown attempt usage is conservatively charged with a
+retained `inFlight=1` marker; the marker does not establish an active provider
+request after the known cancellation. Do not reset accounting or resend the retry.
+
+After source lease expiry at **01:10:02.016 UTC**, the existing guarded
+`reconcile_source_runs.py` procedure closed exactly one visibly orphaned run at
+**01:10:31.849 UTC**. Verification at **01:10:50.447 UTC** confirmed failed status
+with `source_run_interrupted`; repeated apply wrote nothing and reported one
+already-closed run. All six raw objects / 196 source records were retained, with
+no cursor committed for this run. Terminal counters remained zero without
+reconstruction; they do not imply zero durable work. The original October 29
+admission/start `1793290076391`, running status, attempts 3 / retry 2 and retained
+`inFlight=1` conservative marker remained unchanged. Protected proof:
+`.private/deployment/closeout-2026-10-29/spotify-canceled-source-closure-proof.json`.
+
+A backend/client change to send
+all four hosted manual source syncs through the existing queue with HTTP 202
+and honest queued/polling UI was in progress at the **00:51 UTC follow-through
+checkpoint**, retaining local HTTP 200. At that checkpoint it was not yet
+validated or released. The next legitimate fresh Spotify
+allocation is **October 30 15:07:56.391 UTC (11:07 EDT)**, with the next hourly
+cron at **16:00 UTC (noon EDT)**. Source success and that eligible cycle remain
+open; no additional account input is needed.
+
+At the **October 30 approximately 01:08 UTC** local validation checkpoint, the
+queued-manual-sync change passed the full check (943 TypeScript / 147 Python),
+production build/dry run, all 15 native runtime tests, all 18 Chromium/WebKit
+real-stack tests and all 272 browser tests. Four light/dark desktop/narrow
+screenshots and independent code reviews passed. Its compiled-Worker test observed the requesting TCP
+socket close while the synthetic provider response remained held, then released
+the response and verified independent queue completion with durable raw records
+and a committed cursor. These completed local checks do not establish a new
+hosted release; exact-revision hosted CI and delivery retain their own receipts.
+The queued-manual-sync code is committed as `d9ea713`; PR 14's hosted validation
+and release remain to be verified. Preparation does not establish live activation.
 
 The real hourly `0 * * * *` invocation completed successfully at
 **2026-10-30 00:00:17.063 UTC**. Its script version matched the current

@@ -240,11 +240,19 @@ does not establish full backfill completion or saved-episode source access. The
 job continues at its existing pace and limits. Existing configuration and
 credentials were retained. No agent purchase, new app or reauthorization occurred.
 
-The retained source retry was separately hidden by a UTC-midnight lookup bug.
-The prepared PR 13 correction uses only the latest admission and fences claims
-against newer work without resetting its original accounting or limits. Local
-checks passed 907 TypeScript and 147 Python tests, production builds/dry run, and
-13 native Worker tests. Release and live source-retry acceptance remain pending.
+PR 13's retained-retry correction was released on exact-main `8c89b445` at
+**00:49:23.637 UTC**, with all validation and authenticated smoke checks passing.
+A single source check at 00:50:02.561 saved six raw responses and 196 source
+records before the validation client's timeout canceled the Worker at 00:51:01.926.
+No cursor advanced. The original allocation remains exhausted and its unknown
+usage conservatively accounted for; no second source request or allowance reset
+was made. Guarded cleanup closed only the abandoned visible run at
+**01:10:31.849 UTC**, with a repeated zero-write no-op. All partial evidence and
+unknown admission usage remained intact. Full reconciliation next awaits the eligible queued cycle: fresh
+admission at **15:07:56.391 UTC**, hourly dispatch at **16:00 UTC**, subject to gates.
+The new hosted manual path enqueues existing source work and returns 202 without
+binding execution to the requesting browser. Local sync still returns its final
+200 result.
 
 The independent operating monitor recovered successfully at **00:10:25 UTC**
 with a fresh normal/open state, a $5 estimate and the native queue unpaused.

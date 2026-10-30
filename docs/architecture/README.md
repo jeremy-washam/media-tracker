@@ -82,6 +82,17 @@ historical per-media implementation plans.
   parsing, cursors, and identifier mapping.
 - `packages/test-fixtures`: synthetic and sanitized payloads only.
 
+## Manual source execution
+
+Hosted manual source requests enqueue the existing source operation and return
+202 after a successful send. Read-only admission preflight does not reserve or
+reset work; the queue consumer rechecks eligibility and owns source execution.
+Local development retains synchronous 200 results. Connections observes queued
+and running activity and refreshes Library data after terminal transitions.
+This prevents browser disconnects from canceling long hosted source work without
+changing connector, evidence, cursor or finite admission rules. See
+[ADR 0022](../decisions/0022-durable-manual-source-sync.md).
+
 ## Connector contract
 
 Connectors converge on this behavior even if a source cannot implement every
