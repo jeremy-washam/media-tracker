@@ -37,7 +37,7 @@ provider work. Library reads never initiate provider calls.
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | TMDB movie/TV/configuration        | Refresh when missing or within seven days of the 30-day expiry; retry unresolved title matches after 90 days or a matcher change | 10 items, 128 HTTP requests including matching, 16 MiB response bytes                                                      |
 | YouTube video/channel/category     | Refresh exact video IDs when missing or within seven days of expiry; publish only the complete fenced job                        | 250 videos, at most 12 list requests, 16 MiB response bytes                                                                |
-| Spotify track/episode              | Refresh missing/error or observations at least 21 days old, including previously unavailable IDs                                 | 25 exact IDs, at most 26 HTTP requests including token refresh, 16 MiB response bytes; normally one minute between batches |
+| Spotify track/episode/artist       | Refresh missing/error or observations at least 21 days old, including previously unavailable IDs                                 | 25 exact IDs, at most 26 HTTP requests including token refresh, 16 MiB response bytes; normally one minute between batches |
 | Reader HTML                        | Reserve at most 20 current-source targets per scheduling call; stagger at six seconds per article                                | Three acquisition attempts per source version, at most three HTTP attempts per delivery; 8 MiB responses and 4 MiB HTML    |
 | Article text indexing              | Continue from durable chunk ordinal; publish only a complete current-source manifest                                             | 12 chunks per delivery; extracted object at most 4 MiB                                                                     |
 | YouTube physical cache maintenance | Existing five-minute cron, beginning two days before expiry                                                                      | 1,000 logical deletions per invocation; actual indexed writes measured separately                                          |
@@ -48,6 +48,14 @@ completed jobs are reused for that UTC day; active jobs resume their committed
 cursor. Spotify scheduling similarly uses a provider/day job ID and resumes an
 active job instead of creating another scan. Explicit Spotify backfill remains
 an owner action with its own job ID.
+
+Artist photos use exact Spotify artist identities and share the track phase's
+25-request batch. When both kinds need work, reserve up to 12 slots for artists;
+when fewer tracks remain, artists fill the unused slots. Prioritize artists by
+listening history, preserve raw catalog responses before publishing photos, and
+retain the placeholder when the provider has no photo. Artist-only batches do
+not rebuild track search. Apply migration `0035_spotify_artist_artwork.sql`
+before deploying artist acquisition and read support.
 
 A catalog job stops after eight reservations beyond its expected successful
 batch count. Successful progress can span a large library without a lifetime

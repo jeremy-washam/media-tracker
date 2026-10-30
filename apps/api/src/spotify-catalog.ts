@@ -329,23 +329,25 @@ export async function processSpotifyCatalogBackfill(
     // request budget with exact artist lookups, prioritizing frequently heard artists.
     const artists =
       current.phase === 'tracks'
-        ? await library.listArtistsNeedingArtwork(Math.floor(batchSize / 2), spotifyStaleBefore(at))
+        ? await library.listArtistsNeedingArtwork(batchSize, spotifyStaleBefore(at))
+        : []
+    const tracks =
+      current.phase === 'tracks'
+        ? await library.listTracksNeedingMetadata(
+            batchSize - Math.min(artists.length, Math.floor(batchSize / 2)),
+            spotifyStaleBefore(at),
+          )
         : []
     const candidates =
       current.phase === 'tracks'
         ? [
-            ...artists.map((value) => ({
+            ...artists.slice(0, batchSize - tracks.length).map((value) => ({
               kind: 'artist' as const,
               id: value.spotifyId,
               uri: value.artistUri,
               mediaItemId: value.artistId,
             })),
-            ...(
-              await library.listTracksNeedingMetadata(
-                batchSize - artists.length,
-                spotifyStaleBefore(at),
-              )
-            ).map((value) => ({
+            ...tracks.map((value) => ({
               kind: 'track' as const,
               id: value.trackId,
               uri: value.trackUri,

@@ -239,6 +239,45 @@ describe('Spotify catalog backfill', () => {
     )
   })
 
+  it.each([0, 13])(
+    'fills the shared batch with artists when %i tracks remain',
+    async (trackCount) => {
+      mocks.artists.mockResolvedValue(
+        Array.from({ length: 25 }, (_, index) => ({
+          artistId: `artist${index}`,
+          spotifyId: `artist${index}`,
+          artistUri: `spotify:artist:artist${index}`,
+        })),
+      )
+      mocks.candidates.mockResolvedValue(
+        Array.from({ length: trackCount }, (_, index) => ({
+          mediaItemId: `song${index}`,
+          trackId: `track${index}`,
+          trackUri: `spotify:track:track${index}`,
+        })),
+      )
+      mocks.fetchArtist.mockRejectedValue(new SpotifyApiError('missing', 404))
+      mocks.fetchTrack.mockRejectedValue(new SpotifyApiError('missing', 404))
+      await processSpotifyCatalogBackfill(
+        { SYNC_QUEUE: { send: mocks.send } } as unknown as Bindings,
+        {
+          idempotencyKey: 'artist-batch',
+          source: 'spotify',
+          operation: 'refresh_spotify_catalog',
+          catalogJobId: 'job-1',
+        },
+      )
+      expect(mocks.fetchArtist).toHaveBeenCalledTimes(25 - trackCount)
+      expect(mocks.fetchTrack).toHaveBeenCalledTimes(trackCount)
+      expect(mocks.advance).toHaveBeenCalledWith(
+        'job-1',
+        1,
+        expect.objectContaining({ requested: 25, returned: 0, unavailable: 25 }),
+      )
+      expect(mocks.fail).not.toHaveBeenCalled()
+    },
+  )
+
   it('switches to episode work when the track batch has no candidates', async () => {
     mocks.candidates.mockResolvedValue([])
     mocks.backlog.mockResolvedValue({ tracks: 0, episodes: 20 })
