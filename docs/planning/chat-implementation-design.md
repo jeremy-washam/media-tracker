@@ -1,6 +1,6 @@
 # Chat backend implementation design
 
-- Status: Implementation complete; release validation in progress
+- Status: Implemented; rollout follows the guarded exact-revision release process
 - Updated: 2026-10-30
 - Parent: [AI Chat plan](ai-chat-plan.md)
 - Query contract: [AI query design](ai-query-design.md)
@@ -38,9 +38,8 @@ Existing Library/inspector behavior stays intact.
 Implementation uses the official OpenAI SDK 7.45.1 and GPT-6.1 Sol. Key authentication
 and a bounded live text request passed. The linked organization has $43 included
 credit, November 12 expiry and no paid API billing plan/payment method. The key
-is in ignored local configuration and an encrypted Worker Secret. End-to-end
-release evidence will be recorded after deployment; implementation is not evidence
-that production has been upgraded.
+is in ignored local configuration and an encrypted Worker Secret. The exact-revision release receipt records deployment and hosted acceptance;
+implementation alone is not evidence that production has been upgraded.
 
 ## Independent research and triage
 

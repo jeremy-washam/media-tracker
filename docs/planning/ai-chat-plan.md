@@ -1,6 +1,6 @@
 # AI Chat Implementation Proposal
 
-- Status: Familiar Chat implemented; release validation in progress
+- Status: Familiar Chat implemented; rollout is recorded by exact-revision release receipts
 - Researched: 2026-09-19
 - Updated: 2026-10-30; Pro subscription linked and available API credits confirmed
 - Scope: Multi-model Chat over the personal media ledger, with reusable queries

@@ -1,6 +1,6 @@
 # Chat subscription access and provider portability
 
-- Status: Subscription, no-paid-funding check, key authentication and initial text call verified; full release checks in progress
+- Status: Subscription funding, key authentication, text/title and web probes verified
 - Updated: 2026-10-30
 - Evidence: [verification and agent triage](research/chat-access-verification-2026-10-29.md)
 
@@ -172,7 +172,8 @@ text, automatic-title and native web-search probes passed. Direct probes used an
 estimated $0.032955 of the authorized $13 allowance. Ordinary browser/runtime
 fixtures use synthetic upstreams and spend no model credits.
 
-Finish the complete checks, exact-revision guarded migration/deployment, then
+The release procedure is to run the complete checks and exact-revision guarded
+migration/deployment, then
 verify the actual hosted Library tool round trip and cited web answer through the
 owner session. Keep the private probe ledger and application reservations in the
 combined live-test accounting. Do not deliberately exhaust credits or add billing.

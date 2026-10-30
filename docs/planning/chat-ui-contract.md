@@ -1,6 +1,6 @@
 # Chat UI and backend contract
 
-- Status: Familiar selected and implemented; production release validation in progress
+- Status: Familiar selected and implemented
 - Updated: 2026-10-30
 - Parents: [UI foundation](../design/ui-foundation.md), [backend design](chat-implementation-design.md)
 
