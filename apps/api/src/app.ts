@@ -1,3 +1,4 @@
+import chatRoutes from './chat/routes'
 import {
   ApiErrorSchema,
   ArticleDetailSchema,
@@ -688,6 +689,7 @@ const app = new OpenAPIHono<AppEnv>({
 app.use('*', securityHeaders)
 app.use('*', requestContext)
 app.use('*', requestLogger)
+app.route('/api/chat', chatRoutes)
 
 app.openapi(healthRoute, (context) => {
   return context.json(

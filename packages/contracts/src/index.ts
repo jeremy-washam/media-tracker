@@ -341,3 +341,4 @@ export type CatalogSyncResponse = z.infer<typeof CatalogSyncResponseSchema>
 export type YoutubeImportResponse = z.infer<typeof YoutubeImportResponseSchema>
 
 export type SyncRunsResponse = z.infer<typeof SyncRunsResponseSchema>
+export * from './chat'

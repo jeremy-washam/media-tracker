@@ -62,6 +62,32 @@ export function validateProductionConfiguration(
     configuration.limits.cpu_ms > 30000
   )
     throw new Error('Production CPU limit must be between 1 and 30000 milliseconds')
+  const chatBindings = configuration.durable_objects?.bindings ?? []
+  if (
+    chatBindings.length !== 1 ||
+    chatBindings[0]?.name !== 'CHAT_CONVERSATIONS' ||
+    chatBindings[0]?.class_name !== 'ChatConversationObject' ||
+    chatBindings[0]?.script_name
+  )
+    throw new Error('Chat requires the local conversation Durable Object binding')
+  if (
+    JSON.stringify(configuration.migrations) !==
+    JSON.stringify([{ tag: 'chat-v1', new_sqlite_classes: ['ChatConversationObject'] }])
+  )
+    throw new Error('Unexpected conversation storage migration')
+  if (!['true', 'false'].includes(configuration.vars.CHAT_ENABLED))
+    throw new Error('Explicit CHAT_ENABLED configuration is required')
+  if (
+    configuration.vars.CHAT_ENABLED === 'true' &&
+    (!configuration.vars.CHAT_CREDIT_PERIOD ||
+      !Number.isFinite(Number(configuration.vars.CHAT_CREDIT_LIMIT_USD)) ||
+      Number(configuration.vars.CHAT_CREDIT_LIMIT_USD) <= 0 ||
+      Number(configuration.vars.CHAT_CREDIT_LIMIT_USD) > 13 ||
+      !Number.isFinite(Date.parse(configuration.vars.CHAT_CREDIT_EXPIRES_AT)))
+  )
+    throw new Error(
+      'Chat requires an explicit included-credit period, expiry and allowance of at most $13',
+    )
   const namespaces = new Set<string>()
   for (const [name, maximum] of [
     ['API_RATE_LIMITER', 120],

@@ -76,11 +76,24 @@ async function scheduledJob<Result>(
   }
 }
 
+export { ChatConversationObject } from './chat/conversation-object'
+
 const worker = {
   async fetch(request: Request, env: Bindings, context: ExecutionContext) {
     const denied = await authorizeRequest(request, env)
     if (denied) return denied
-    if (env.SYNC_ENABLED === 'false' && !['GET', 'HEAD', 'OPTIONS'].includes(request.method))
+    const chatControl =
+      (request.method === 'DELETE' &&
+        /^\/api\/chat\/conversations\/c_[a-f0-9]{32}$/.test(new URL(request.url).pathname)) ||
+      (request.method === 'POST' &&
+        /^\/api\/chat\/conversations\/c_[a-f0-9]{32}\/runs\/[^/]+\/cancel$/.test(
+          new URL(request.url).pathname,
+        ))
+    if (
+      !chatControl &&
+      env.SYNC_ENABLED === 'false' &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+    )
       return privateAccessError(503, 'Sync is paused during deployment.')
     const pathname = new URL(request.url).pathname
     if (pathname === '/__scheduled' && env.AUTH_MODE !== 'local')
@@ -94,6 +107,7 @@ const worker = {
         { headers: { 'cache-control': 'no-store' } },
       )
     if (
+      !chatControl &&
       !(request.method === 'GET' && pathname === '/api/health' && !new URL(request.url).search) &&
       !(await operatingWorkAllowed(env))
     )

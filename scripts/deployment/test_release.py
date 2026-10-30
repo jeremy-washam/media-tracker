@@ -97,6 +97,20 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, 'actual sync queue'):
             release.verify_live(self.configuration, self.live, self.queues)
 
+    def test_only_reviewed_first_chat_namespace_can_extend_live_configuration(self):
+        self.configuration['durable_objects']={'bindings':[{'name':'CHAT_CONVERSATIONS','class_name':'ChatConversationObject'}]}
+        self.configuration['migrations']=[{'tag':'chat-v1','new_sqlite_classes':['ChatConversationObject']}]
+        self.configuration['vars'].update({'CHAT_ENABLED':'true','CHAT_CREDIT_PERIOD':'test','CHAT_CREDIT_LIMIT_USD':'13','CHAT_CREDIT_EXPIRES_AT':'2026-11-12T00:00:00Z'})
+        release.verify_live(self.configuration,self.live,self.queues)
+        changed=copy.deepcopy(self.live)
+        changed['bindings'][1]['text']='false'
+        with self.assertRaises(release.ReleaseError): release.verify_live(self.configuration,changed,self.queues)
+        self.live['bindings'].extend([{'name':key,'type':'plain_text','text':value} for key,value in self.configuration['vars'].items() if key.startswith('CHAT_')])
+        self.live['bindings'].append({'name':'CHAT_CONVERSATIONS','type':'durable_object_namespace','class_name':'ChatConversationObject','namespace_id':'synthetic'})
+        release.verify_live(self.configuration,self.live,self.queues)
+        self.live['bindings'][-1]['class_name']='WrongClass'
+        with self.assertRaises(release.ReleaseError): release.verify_live(self.configuration,self.live,self.queues)
+
     def test_consumer_and_schedule_drift_stops_release(self):
         release.verify_schedules(self.configuration, {'schedules': [{'cron': '0 * * * *'}]})
         with self.assertRaises(release.ReleaseError):

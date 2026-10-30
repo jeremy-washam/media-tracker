@@ -66,6 +66,18 @@
   access research, evidence-backed queries, and proposed delivery sequence
 - [AI query design](planning/ai-query-design.md): proposed validated query tools,
   evidence retrieval, and bounded execution; no runtime integration
+- [Chat setup options](planning/chat-options.md): independent research, SDK/runtime
+  alternatives, pros/cons, and provider choices
+- [Chat backend design](planning/chat-implementation-design.md): proposed full
+  lifecycle, persistence, tool access, recovery, and UI-independent milestones
+- [Chat subscription funding](planning/chat-subscription-access.md): Pro-included
+  API credits, SIWC differences, billing boundaries, and verified recommendation
+- [Chat UI/backend contract](planning/chat-ui-contract.md): agreed sidebar,
+  favorites, composer/Stop, reasoning summaries, tool activity, and durable states
+- [Chat UI review](design/chat-ui-review.md): three interactive mock variants for
+  owner review before production UI implementation
+- [Tolkien quote candidates](design/tolkien-quote-candidates.md): 100 passage
+  references for review and the six short excerpts enabled in the mock
 
 Implementation plans retain dated research, delivery stages, and validation
 records. Their current-status notes and the desktop UI foundation supersede

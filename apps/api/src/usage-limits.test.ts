@@ -43,6 +43,21 @@ describe('authenticated API usage protection', () => {
       if (key === 'api') expect(setupResult.write).not.toHaveBeenCalled()
     },
   )
+  it('allows Stop under the ordinary API limit when the write allowance is exhausted', async () => {
+    const { env, write, api } = setup()
+    write.mockResolvedValue({ success: false })
+    expect(
+      await limitApiUsage(
+        request(
+          'POST',
+          `/api/chat/conversations/c_${'a'.repeat(32)}/runs/c_${'a'.repeat(32)}.01K00000000000000000000001/cancel`,
+        ),
+        env,
+      ),
+    ).toBeNull()
+    expect(api).toHaveBeenCalledOnce()
+    expect(write).not.toHaveBeenCalled()
+  })
   it('fails closed when protection is missing or unavailable', async () => {
     expect((await limitApiUsage(request(), { AUTH_MODE: 'access' }))?.status).toBe(503)
     const { env, api } = setup()

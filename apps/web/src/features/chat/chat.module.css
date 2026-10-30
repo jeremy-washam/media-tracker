@@ -1,0 +1,332 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  margin-top: 18px;
+}
+.sections {
+  overflow-y: auto;
+  min-height: 0;
+  padding-block: 12px;
+  scrollbar-width: thin;
+}
+.chatList {
+  display: grid;
+  gap: 2px;
+}
+.chatRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  position: relative;
+  border-radius: 8px;
+}
+.chatRow:hover {
+  background: var(--sidebar-accent);
+}
+.chatRow[data-selected='true'] {
+  background: var(--secondary);
+}
+.chatLink {
+  min-width: 0;
+  flex: 1;
+  display: block;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 39px;
+  padding-inline: 10px 14px;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--foreground);
+}
+.rowActions {
+  display: flex;
+  position: absolute;
+  right: 4px;
+  top: 7px;
+  opacity: 0;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.chatRow:hover .rowActions,
+.chatRow:focus-within .rowActions,
+.chatRow:has([aria-expanded='true']) .rowActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.chatRow:hover .chatLink,
+.chatRow:focus-within .chatLink,
+.chatRow:has([aria-expanded='true']) .chatLink {
+  padding-right: 64px;
+}
+.sidebarNote {
+  padding: 4px 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.page {
+  height: calc(100dvh - var(--workspace-header-height));
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.transcript {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 34px max(32px, calc((100% - 736px) / 2));
+  scrollbar-width: thin;
+}
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  padding-bottom: 28px;
+}
+.userMessage {
+  margin-left: auto;
+  padding: 14px 19px;
+  border-radius: 18px 18px 4px 18px;
+  background: var(--secondary);
+  width: fit-content;
+  max-width: 88%;
+  font-size: 16px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistantMessage {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity {
+  margin-bottom: 12px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.preview,
+.summary {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 7px 0 14px 19px;
+  max-width: 560px;
+  white-space: pre-wrap;
+}
+.preview {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.activity:has([data-panel-open]) .preview {
+  display: none;
+}
+.summary {
+  border-left: 1px solid var(--border);
+  padding-left: 14px;
+  margin-left: 6px;
+}
+.toolList {
+  margin: 10px 0 14px 7px;
+  border-left: 1px solid var(--border);
+  padding-left: 17px;
+}
+.tool {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 0;
+  color: var(--foreground);
+}
+.tool small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.answer {
+  font-size: 16px;
+  line-height: 1.75;
+}
+.answer p {
+  margin: 0 0 20px;
+}
+.answer h1,
+.answer h2,
+.answer h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 26px 0 12px;
+}
+.answer a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.answer ul,
+.answer ol {
+  padding-left: 24px;
+  margin-block: 12px 20px;
+}
+.answer ul {
+  list-style: disc;
+}
+.answer ol {
+  list-style: decimal;
+}
+.answer li + li {
+  margin-top: 8px;
+}
+.answer pre {
+  max-width: 100%;
+  overflow: auto;
+  background: var(--secondary);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 13px;
+}
+.answer :not(pre) > code {
+  background: var(--secondary);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.answer table {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin-block: 20px;
+}
+.answer td,
+.answer th {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.answer blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 16px;
+  color: var(--muted-foreground);
+}
+.references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.references a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+}
+.composerWrap {
+  width: min(736px, calc(100% - 64px));
+  margin: 0 auto;
+  padding-block: 8px 28px;
+  position: relative;
+}
+.page:has(.empty) .transcript {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 28px;
+}
+.page:has(.empty) .composerWrap {
+  margin-bottom: clamp(60px, 26dvh, 320px);
+}
+.empty {
+  text-align: center;
+  max-width: 640px;
+}
+.empty blockquote {
+  font-size: clamp(23px, 2.3vw, 32px);
+  line-height: 1.4;
+  font-weight: 400;
+  text-wrap: balance;
+  margin: 0;
+}
+.empty p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  margin-top: 14px;
+}
+.empty cite {
+  font-style: normal;
+}
+.connection,
+.runNotice,
+.working {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.connection {
+  margin-bottom: 8px;
+}
+.working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pulse {
+  display: inline-block;
+  border-radius: 50%;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  background: currentColor;
+  animation: breathe 1.8s ease-in-out infinite;
+}
+.jump {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (max-width: 760px) {
+  .transcript {
+    padding: 24px 20px;
+  }
+  .composerWrap {
+    width: calc(100% - 32px);
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .userMessage {
+    max-width: 94%;
+    font-size: 15px;
+  }
+  .answer {
+    font-size: 15px;
+  }
+  .page:has(.empty) .composerWrap {
+    margin-bottom: clamp(28px, 20dvh, 180px);
+  }
+}
+@media (hover: none) {
+  .rowActions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .chatLink {
+    padding-right: 64px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}

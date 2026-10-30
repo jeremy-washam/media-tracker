@@ -1,15 +1,28 @@
 # How AI queries the media ledger
 
 - Status: Proposed implementation design; no runtime changes
-- Updated: 2026-09-19
+- Updated: 2026-10-29
 - Parent: [AI Chat proposal](ai-chat-plan.md)
 
 ## Recommendation
 
 Build a shared media query service with authenticated HTTP endpoints for the UI
-and typed tool adapters for models. Search is a necessary capability, but search
-alone cannot answer exact analytics, retrieve complete item details, or support
-quotations. Keep those operations distinct.
+and two typed tool adapters for models:
+
+- `query_media`: search/filter the collection and return items, statistics, or
+  both using the same filters.
+- `get_media_details`: retrieve details for typed item references, optionally
+  including history, reviews, highlights, and relevant authorized text passages.
+
+Both tools return evidence references with relevant facts/results. Aggregation
+and evidence retrieval remain bounded server responsibilities; they do not need
+separate model-facing tools. The database computes statistics over all matches,
+independently of item pagination.
+
+Reuse the current media-specific repositories, lexical indexes, and article
+content manifests/chunks. The [Chat proposal's baseline](ai-chat-plan.md#observed-starting-point)
+records the October repository review and the differences between Library browse
+semantics and Chat history queries.
 
 The model does not connect to D1. It requests an operation by emitting a tool
 name and structured arguments. Our application validates and executes that
@@ -27,10 +40,9 @@ Example question: “Which books did I finish in 2025, and how many were there?�
 2. The conversation service loads bounded conversation context and supplies the
    model with current date/timezone, query semantics, and tool schemas. It does
    not send the entire Library or database schema.
-3. The model requests `search_media` with a book filter and the 2025 consumption
-   interval. It also requests `aggregate_history` with the same filter and an
-   explicit distinct-item count. Independent calls can run together.
-4. The tool dispatcher validates both requests, checks scope and limits, and
+3. The model requests `query_media` with a book filter, the 2025 consumption
+   interval, `output: both`, and an explicit distinct-item count.
+4. The tool dispatcher validates the request, checks scope and limits, and
    calls the media query service. That service invokes repository queries.
 5. D1 returns matching rows and the exact count over all qualifying rows. Both
    use the same filter compiler; totals do not count just the returned page.
@@ -45,16 +57,20 @@ Illustrative tool request; names and fields are proposed contracts:
 
 ```json
 {
-  "tool": "search_media",
+  "tool": "query_media",
   "arguments": {
     "scope": "archive",
+    "output": "both",
     "filters": {
       "types": ["book"],
       "consumed": {
         "from": "2025-01-01",
         "toExclusive": "2026-01-01",
-        "timezone": "America/Los_Angeles"
+        "timezone": "America/New_York"
       }
+    },
+    "statistics": {
+      "measures": ["distinct_items"]
     },
     "sort": "consumed_desc",
     "limit": 20
@@ -93,6 +109,10 @@ Synthetic result sketch; example identifiers and counts are not real records:
     }
   ],
   "nextCursor": null,
+  "statistics": {
+    "measures": [{ "name": "distinct_items", "value": 1, "unit": "books" }],
+    "evidenceRef": "example-query-1"
+  },
   "coverage": {
     "scope": "imported_archive",
     "undatedItemsInScope": 2,
@@ -107,6 +127,37 @@ available corpus; it does not prove that the owner never consumed such material.
 Relative-date interpretation and inferred consumption dates should be visible
 when they materially affect an answer.
 
+## Tool contract
+
+`query_media` has one filter vocabulary and an explicit `output` choice:
+
+- `items`: return a bounded item page and its continuation cursor.
+- `statistics`: compute supported measures, optionally grouped by period, media
+  type, or creator, across the full matching set without loading item pages.
+- `both`: return a bounded item page and statistics over that same matching set.
+
+Allowlist filters, measures, and grouping combinations. Distinguish distinct
+items, consumption occurrences, playback observations, and observed time with
+explicit units. Bound grouped output separately and disclose truncation or
+provide continuation; an item limit never limits the population being counted.
+Reuse the same matching relation for items and statistics and detect revision
+changes between reads. The combined tool response alone does not imply a frozen
+database snapshot.
+
+`get_media_details` accepts bounded typed references (`kind` and `id`), since
+albums, artists, shows, and channels are not all canonical media items. Metadata
+is the default; optional includes select history, reviews, highlights, or text
+passages, with a passage query when relevant. Limit each included collection and
+provide continuation for larger histories/content. Return content availability,
+coverage, and citation references containing public source/evidence IDs or
+manifest/chunk identities, hashes/versions, and locators. Resolve those references
+server-side; do not accept model-supplied storage keys.
+
+Evidence references accompany facts and computed statistics from either tool;
+citations must not depend on the model remembering a separate evidence call.
+Requests for unavailable or disallowed content return an explicit availability
+result rather than implying that the work was read.
+
 ## HTTP endpoints versus model tools
 
 The two are adapters onto the same behavior. When orchestration runs in the
@@ -115,18 +166,17 @@ HTTP request back into its own Worker, and the model provider does not need
 network access to the private API. The browser uses the HTTP version. A remote
 companion can use an authenticated transport or a later MCP adapter.
 
-| Behavior                             | Model tool          | Proposed authenticated HTTP surface                               |
-| ------------------------------------ | ------------------- | ----------------------------------------------------------------- |
-| Filter and rank Library items        | `search_media`      | `POST /api/media/search`                                          |
-| Read an item's supported details     | `get_media_details` | Extend existing `GET /api/media/{id}`; tool may batch bounded IDs |
-| Compute counts or grouped statistics | `aggregate_history` | `POST /api/history/aggregate`                                     |
-| Read selected supporting text/facts  | `get_evidence`      | Add `GET /api/evidence/{id}` when evidence disclosure needs it    |
+| Behavior                                        | Model tool          | HTTP surface                                                                                                                  |
+| ----------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Search/filter and optionally compute statistics | `query_media`       | Proposed `POST /api/media/query` when an HTTP consumer needs the combined contract                                            |
+| Read details and optional supporting content    | `get_media_details` | Reuse existing media-specific Library detail/history/highlight services; add a validated batch/include route only when needed |
 
-Keep `GET /api/media` for straightforward paginated browsing. It can accept
-simple URL-friendly filters and invoke the same query service. Use a POST search
-body for composable filters, multiple text clauses, and later retrieval options;
-it remains a read-only operation. The exact URL is less important than one
-implementation of membership, date, identity, and pagination semantics.
+Keep existing Library collection and `/summary` endpoints and their `section`
+contract. Collection responses contain `data`/`nextCursor`; summaries accept
+filters but exclude sort, pagination, and presentation options. Reuse underlying
+repositories without forcing Library to adopt Chat output modes. The generic
+`GET /api/media` remains a minimal compatibility API; enriching it is not a Chat
+prerequisite. Tool boundaries need not map one-to-one to HTTP routes.
 
 Avoid a separate “AI search database” containing different interpretations of
 history. There is also no need to expose one generic endpoint that lets callers
@@ -169,21 +219,22 @@ does not freeze the database.
 Examples: a title fragment, a creator name, a phrase from a review, or a saved
 article mentioning a term.
 
-Add a rebuildable FTS5 search projection in D1. Cloudflare explicitly documents
-FTS5 support, so a separate search service is not required for this first version.
-Validate migrations, ranking, and update behavior against the project's D1
-runtime before shipping.
+Reuse the media-specific FTS5 projections already in D1, including article
+metadata/highlights and contentless text search. Fill measured ranking/field
+gaps rather than adding a separate AI search database. Validate any new
+migrations, ranking, and update behavior against the project's D1 runtime.
 [Cloudflare SQL support](https://developers.cloudflare.com/d1/sql-api/sql-statements/).
 
-Initially index available title, creator, description, and reviews with origin
-references. Query exact/prefix title and creator matches ahead of broad body
+Expose available title, creator, description, and reviews with origin
+references. Rank exact/prefix title and creator matches ahead of broad body
 matches; tune ranking with representative examples. Treat the public query as
 plain text and compile bounded FTS syntax rather than accepting arbitrary FTS
 operators. SQL binding alone does not prevent malformed FTS expressions.
 
-Missing acquisition remains missing data: Hardcover creator fields, for example,
-need connector enrichment before author search works reliably for those books.
-The [inspector proposal](media-inspector.md) inventories field availability.
+Missing acquisition remains missing data. Existing Hardcover contributor
+projections support author lookup, while field availability still varies by item.
+Use current repositories/source reports to inventory gaps; the September
+[inspector proposal](media-inspector.md) predates the shipped Library foundations.
 Search results should identify the matched field and provide a short excerpt
 where permitted, enabling the model to select useful records before requesting
 larger text. Validate all result IDs and membership against authoritative data.
@@ -198,10 +249,11 @@ Search availability must never be a prerequisite for preserving raw imports.
 Examples: “What have I read about paying attention?” or “Compare the arguments
 in those essays,” where relevant passages may use different words.
 
-Add authorized content acquisition, document/chunk records, and embeddings when
-these questions become the next delivery goal. The search service then combines
-lexical and vector candidates, applies structured scope filters, deduplicates by
-item, and fetches the best supporting excerpts. The chat model does not need to
+Reuse existing authorized article content and document/chunk records. Extend
+coverage to other sources and add optional embeddings when measured retrieval
+gaps justify them. The query service can then combine lexical and vector
+candidates, apply structured scope filters, deduplicate by item, and fetch the
+best supporting excerpts. The chat model does not need to
 know which vector database or embedding model implements this operation.
 
 Embedding a short description permits retrieval about that description; it does
@@ -249,7 +301,15 @@ errors that permit a bounded correction. Repeated identical queries can reuse a
 result within its valid data revision. Cancellation stops further model/tool
 work and records the interrupted state.
 
-Store evidence references at execution time. An item card references a media ID;
+The [UI/backend contract](chat-ui-contract.md) owns response activity. Emit an
+actual lifecycle for each logical `query_media`/`get_media_details` execution,
+with safe filters, result count/coverage, known timestamps and evidence IDs.
+Persist before publishing; replay and streamed arguments must not inflate the
+UI's tool-call count. Keep tool activity distinct from optional provider reasoning
+summaries and final answer text. Existing query/evidence semantics do not change.
+
+Store evidence references at execution time. An item card references a typed
+resource ID;
 a factual citation references a source record or a stored aggregate result with
 query parameters and supporting data/version information. Neither should be
 created by parsing a model-generated title after the answer arrives.
@@ -266,17 +326,25 @@ plotted totals.
 
 ## First implementation slice
 
-1. Define common consumption filters, coverage, count semantics, and evidence
-   contracts with synthetic fixtures.
-2. Extend media details and add structured search/aggregation repository methods.
-   Expose the corresponding authenticated routes and use them in Library.
-3. Add the D1 FTS5 projection, backfill/rebuild operation, and change handling.
-4. Add four model tool adapters and a bounded conversation loop. Demonstrate the
-   same evidence-backed question with two model providers.
+1. Define the two tool contracts: `query_media` with items/statistics/both output,
+   and `get_media_details` with optional supporting content. Specify common
+   consumption filters, coverage, count semantics, and citation references.
+2. Compose existing media repositories/indexes and add occurrence-aware queries
+   and exact measures/groupings. Books latest-read and Podcasts latest-activity
+   browse filters must not substitute for any-occurrence history queries. Reuse
+   current Library HTTP contracts; add a query route only when a consumer needs it.
+3. Extend article passage retrieval to return citation-ready manifest/chunk
+   identities, versions/hashes, locators, and coverage. Reuse existing acquisition,
+   indexing, and recovery; fill measured lexical gaps without a second text store.
+4. Add two model tool adapters and a bounded conversation loop. Demonstrate the
+   same evidence-backed question with OpenAI and a fake adapter with a different
+   capability/event profile. Future live providers use the same contracts.
 5. Evaluate exact counts, repeated consumption, unknown/inferred/partial dates,
    timezone boundaries, pagination, concurrent sync, missing metadata/text,
-   invalid tool arguments, and unsupported measures.
-6. Add semantic retrieval after corpus acquisition and measured lexical gaps
+   invalid tool arguments, and unsupported measures. Verify items-only,
+   statistics-only, and combined results agree; item pagination must not change
+   statistics. Exercise optional evidence includes and unavailable content.
+6. Add semantic retrieval after corpus coverage and measured lexical gaps
    justify it. Keep the initial implementation useful without embeddings.
 
 This slice does not require an unrestricted SQL agent, a provider-hosted copy of

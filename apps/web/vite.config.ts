@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => {
               libraryReview: 'library-review.html',
               specimen: 'specimen.html',
               headerPreview: 'header-preview.html',
+              chatReview: 'chat-review.html',
             },
       },
     },

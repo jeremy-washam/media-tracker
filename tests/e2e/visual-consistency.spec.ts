@@ -565,7 +565,7 @@ for (const dark of [false, true]) {
     expect(await toolbar.getByRole('textbox').evaluate((e) => getComputedStyle(e).fontSize)).toBe(
       '14px',
     )
-    for (const action of ['Chat — not available yet', 'Recaps — not available yet']) {
+    for (const action of ['Recaps — not available yet']) {
       expect(
         (await page.getByRole('button', { name: action, exact: true }).boundingBox())!.height,
       ).toBe(38)

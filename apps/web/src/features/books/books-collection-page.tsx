@@ -749,7 +749,13 @@ function FilterPanel({
   )
 }
 
-function BookInspector({ mediaItemId, onClose }: { mediaItemId: string; onClose: () => void }) {
+export function BookInspector({
+  mediaItemId,
+  onClose,
+}: {
+  mediaItemId: string
+  onClose: () => void
+}) {
   const [tab, setTab] = useState<'details' | 'history'>('details')
   const inspectorRef = useRef<HTMLElement>(null)
   const onCloseRef = useRef(onClose)

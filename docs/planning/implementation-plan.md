@@ -983,3 +983,13 @@ interface; the Reader-specific Articles Feed is explicitly in scope.
       numeric cache lifetime, but its Developer Terms require temporary caching
       and prohibit indefinite storage of Spotify Content. Refresh alone does
       not resolve the interim retention risk in ADR 0014.
+
+## 22. Familiar Chat
+
+The owner selected Familiar and authorized implementation, testing and private
+deployment on October 30. The [Chat backend design](chat-implementation-design.md)
+and [ADR 0023](../decisions/0023-owned-chat-runtime.md) own the implemented API,
+SQLite history/runs, provider boundary, Library/web tools, credits and recovery.
+The [UI contract](chat-ui-contract.md) owns the accepted sidebar/composer/activity
+behavior. Research/mocks remain retained; quote curation is deferred by the owner.
+Production completion requires the guarded migration release and hosted smoke.

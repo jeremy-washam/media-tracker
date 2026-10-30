@@ -1,7 +1,7 @@
 # Desktop UI Foundation
 
 - Status: Index and all six initial Library slices implemented; further design remains open
-- Last updated: 2026-10-29
+- Last updated: 2026-10-30
 
 ## Purpose and scope
 
@@ -350,22 +350,67 @@ URL-addressable and remembered.
 
 ## Chat
 
-Support new conversations, ordinary AI chat interaction affordances, and chat
-history. Save individual outputs as named artifacts with previews and a link
-back to the originating conversation. A bookmarked/renamed conversation is an
-acceptable fallback MVP, but separate saved outputs are the design direction.
+### Agreed first-release interaction plan (October 30, 2026)
 
-Artifacts may include interactive visualizations or generated lists. For example, “the 10 best LA movies” can be saved as a generated list artifact.
-A future Lists surface would add deliberate collection management; it is not
-required now. Linking Artifacts to Lists is a possible later relationship, not
-initial scope. Visualizations work inline and can expand for more room.
+The owner supplied ChatGPT website references and approved the interaction scope
+below. Three visual mockups are requested for review before production UI work;
+no visual variant has been selected. The [review study](chat-ui-review.md) owns
+reopening instructions; the [backend/UI contract](../planning/chat-ui-contract.md)
+owns persistence, events and acceptance details.
+
+- Keep Imladris branding, existing global navigation and the shared Index shell.
+  Place chat navigation **below the existing application navigation in the same
+  sidebar**, never in a second column beside it. The chat section starts with
+  **New Chat**, followed by **Favorites** and **Chats**.
+  Both section headings have a chevron to expand/collapse; remember their states.
+- Favorites have **no product limit**. Favorited chats appear only in Favorites,
+  without a second row in Chats. Keep every favorite reachable when the list is
+  long. Default ordering is most recently active first.
+- Rows show a star and a more button on hover or keyboard focus. The more menu
+  contains only **Rename**, **Favorite/Unfavorite**, and **Delete**. Use the actual
+  installed interaction primitives and accessible touch/keyboard affordances.
+- Generate an initial title automatically and allow renaming. Opening New Chat
+  shows an empty draft; it does not need to create an empty saved chat immediately.
+- Use a classic expanding multiline composer with **Send** as its only action.
+  During generation the same control becomes **Stop**. Future custom actions
+  may sit on the left; omit attachment, voice, model and custom-action controls
+  from the first version.
+- Place the composer centrally in the empty landing state and at the bottom of
+  an active conversation. Use ordinary user/assistant conversation presentation.
+  Omit promotional empty-state slogans, subtitles and persistent keyboard hints.
+  The owner requested rotating Tolkien quotes with a reviewable candidate list;
+  reproduce only authorized text and distinguish unquoted candidates from the
+  actual enabled display set.
+  Omit per-message actions, including copy, branching, regenerate, rating,
+  sharing and overflow menus, in this release.
+- Show **Thinking** with a provider-supplied summary preview when supported and
+  available. Summary text may arrive intermittently; a loading state must work
+  without it. Do not expose hidden reasoning or invent progress descriptions.
+- Show actual web/Library tool activity and an expandable **N tool calls** summary.
+  Distinguish running, successful, failed and cancelled calls. Preserve readable
+  activity and partial responses after Stop or interruption.
+- Media references open the shared compact inspector. Keep exact Library evidence
+  and web citations distinct. No permanent secondary Library pane is required.
+
+Reasoning previews in the study are explicitly simulated. API support is model-
+and access-mode-specific; the mock does not prove live model availability or
+identical ChatGPT internal behavior. The first provider remains OpenAI behind
+portable message, activity and tool contracts.
+
+### Later outputs and discovery
+
+Saved individual outputs as named artifacts with previews and links back to the
+originating conversation remain a longer-term direction. A favorited/renamed
+conversation is the first-release way to save and revisit a result. Inline
+visualizations and generated lists can be explored later; their appearance in an
+older study does not add a first-release message action or artifact builder.
 
 Responses can reference media through clickable cards opening the shared
 inspector. This should eventually include catalog items outside the Library,
-without adding them to Library merely by inspection. Catalog integration and identity resolution are needed to support reliable
-references beyond imported items. The separate [catalog reconnaissance](../sources/catalogs.md)
-covers options across all six media types, including TMDB for films. Its provider
-recommendations are research, not a decision that any integration is implemented.
+without adding them to Library merely by inspection. Catalog integration and
+identity resolution are needed for reliable external references. The separate
+[catalog reconnaissance](../sources/catalogs.md) covers options across all six
+media types; provider recommendations are research, not shipped integration.
 
 ## Recaps
 
