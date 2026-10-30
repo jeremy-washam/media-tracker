@@ -289,7 +289,7 @@ export function ArticlesCollectionPage({ section }: { section: Section }) {
             <span>
               {articles.isPending || !summary
                 ? null
-                : `${(summary?.filteredCount ?? 0).toLocaleString()} of ${(summary?.totalCount ?? 0).toLocaleString()} ${(summary?.totalCount ?? 0) === 1 ? 'article' : 'articles'}${section === 'archive' && summary?.occurrenceCount != null ? ` · ${summary.occurrenceCount.toLocaleString()} archive ${summary.occurrenceCount === 1 ? 'occurrence' : 'occurrences'}` : ''}`}
+                : `${(summary?.filteredCount ?? 0).toLocaleString()} of ${(summary?.totalCount ?? 0).toLocaleString()} ${(summary?.totalCount ?? 0) === 1 ? 'article' : 'articles'}`}
             </span>
             {summary?.coverage.lastSuccessfulSyncAt ? (
               <small>Reader synced {formatDate(summary.coverage.lastSuccessfulSyncAt)}</small>

@@ -9,7 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-block: 1px solid var(--border);
 }
 
 .spotify-result {
@@ -375,11 +374,6 @@
 .movie-row > svg {
   width: 14px;
   color: var(--muted-foreground);
-}
-
-.movie-row-rating small {
-  display: block;
-  font-size: var(--app-text-caption);
 }
 
 [data-ui~='inspector-movie-heading'] .movie-poster {

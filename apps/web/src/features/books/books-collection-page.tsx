@@ -363,9 +363,6 @@ export function BooksCollectionPage({ collection }: { collection: 'archive' | 'q
             {books.isPending || !summary ? null : (
               <span>
                 {count.toLocaleString()} {count === 1 ? 'book' : 'books'}
-                {collection === 'archive' && summary
-                  ? ` · ${summary.counts.supportedReads.toLocaleString()} supported reads`
-                  : ''}
               </span>
             )}
             {summary?.freshness.degraded ? <strong>Hardcover sync needs attention</strong> : null}
@@ -740,7 +737,7 @@ function FilterPanel({
                 options={[
                   ...Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((rating) => ({
                     value: String(rating),
-                    label: [rating, '/5'].join(''),
+                    label: `${rating} ★`,
                   })),
                 ]}
               />
@@ -905,7 +902,9 @@ function BookDetails({ book }: { book: BookDetail }) {
           {book.personalRating !== null ? (
             <>
               <dt>Personal rating</dt>
-              <dd>{book.personalRating}/5</dd>
+              <dd>
+                <RatingStars rating={book.personalRating} />
+              </dd>
             </>
           ) : null}
         </dl>
@@ -975,7 +974,7 @@ function BookDetails({ book }: { book: BookDetail }) {
             <>
               <dt>Community rating</dt>
               <dd>
-                {book.community.rating.toFixed(2)}/5 ·{' '}
+                <RatingStars rating={book.community.rating} /> ·{' '}
                 {book.community.ratingsCount.toLocaleString()} ratings
               </dd>
             </>

@@ -288,9 +288,6 @@ export function VideosCollectionPage({ view }: { view: View }) {
                 ? null
                 : `${(summary?.filteredCount ?? 0).toLocaleString()} ${view === 'channels' ? 'channels' : 'videos'}`}
             </span>
-            {view === 'archive' && summary ? (
-              <small>{countLabel(summary.occurrenceCount, 'supported watch')}</small>
-            ) : null}
           </div>
           <LibraryAppliedFilters media="videos" search={search} onChange={update} />
         </LibraryCollectionHeader>

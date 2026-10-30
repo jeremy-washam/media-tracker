@@ -156,8 +156,9 @@ links the default cursor. Shared navigation and tab compositions set their own
 default cursor. Ordinary links use a pointer. Text inputs retain their text
 cursor; disabled and busy controls retain their specific cursors.
 The current Letterboxd reference
-applies only to small, muted personal-rating stars below Book and Movie artwork,
-including half stars; it does not prescribe poster density, colors, or metadata.
+applies only to small, muted rating stars across Book and Movie lists, grids,
+and inspectors, including fractional stars; it does not prescribe poster
+density, colors, or metadata.
 
 Collection section tabs live on the right of the compact workspace header; the
 oversized Library/page heading is removed from the collection body. The breadcrumb
@@ -184,6 +185,7 @@ uses 16px titles, 14px subtitles, and 12px metadata. Additional search excerpts 
 a row to preserve that context. List artwork uses 60×90px Book/Movie covers,
 80px square Article/Podcast/Music artwork and channel avatars, and 160×90px Video
 thumbnails. Grid cards retain their independent sizing.
+Collections omit an extra list border above the first item.
 Collection list rows are transparent at rest and share the same separators,
 horizontal spacing, muted hover background, and selection treatment.
 
@@ -333,9 +335,10 @@ Show each item once, with all supported consumption occurrences inside its
 inspector. For Books, collection filters, display, and sorting use the latest
 supported read occurrence only; older reads remain in History and do not satisfy
 collection predicates. Other media types must follow their accepted
-media-specific surface contract. Where useful, distinguish unique-item and
-occurrence counts. Never substitute ingestion or source-recorded dates for
-unknown consumption dates.
+media-specific surface contract. Collection summaries show item counts only;
+consumption totals remain inside inspectors. Movie results show stars without a Viewing qualifier, while the
+inspector retains current-film and viewing-rating source context. Never substitute
+ingestion or source-recorded dates for unknown consumption dates.
 
 The inspector includes available metadata, source links, ratings, notes,
 highlights, and history. Source provenance can be disclosed there without

@@ -1,7 +1,3 @@
-.movies-list {
-  border-top: 1px solid var(--border);
-}
-
 .movie-filter-check {
   display: flex;
   align-items: center;

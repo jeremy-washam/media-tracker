@@ -84,6 +84,16 @@ for (const dark of [false, true]) {
       await expect.poll(() => results.evaluate((element) => element.scrollTop)).toBeGreaterThan(300)
       expect((await toolbar.boundingBox())!.y).toBe(initial.y)
       await expect(summary).toBeInViewport()
+      {
+        expect(
+          await rows
+            .first()
+            .evaluate((element) => getComputedStyle(element.parentElement!).borderTopWidth),
+        ).toBe('0px')
+      }
+      await expect(summary).not.toContainText(
+        /supported reads?|archive occurrences?|watches|supported watch|playback observations?/i,
+      )
       expect(
         await page
           .locator('[data-ui~="collection-header"]')
