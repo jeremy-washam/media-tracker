@@ -1,3 +1,4 @@
+import { ChatSnapshotSchema } from '../../packages/contracts/src/chat'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Response as RuntimeResponse } from 'miniflare'
 import { createWorkerRuntime, type WorkerRuntime } from '../support/worker-runtime'
@@ -8,7 +9,7 @@ let releaseSlow: (() => void) | undefined
 const waitSlow = new Promise<void>((resolve) => {
   releaseSlow = resolve
 })
-function completion(text: string) {
+function completion(text: string, summarySize = 0) {
   const response = {
     id: `resp_synthetic_${submissions}`,
     status: 'completed',
@@ -25,6 +26,16 @@ function completion(text: string) {
   }
   return new RuntimeResponse(
     [
+      ...(summarySize
+        ? [
+            {
+              type: 'response.reasoning_summary_text.delta',
+              item_id: 'summary',
+              summary_index: 0,
+              delta: 'x'.repeat(summarySize),
+            },
+          ]
+        : []),
       { type: 'response.output_text.delta', item_id: 'msg_synthetic', delta: text },
       { type: 'response.completed', response },
     ]
@@ -67,6 +78,8 @@ beforeAll(async () => {
         input: unknown[]
         instructions: string
       }
+      if (JSON.stringify(body.input).includes('Summary overflow'))
+        return completion('Synthetic answer', 45000)
       if (JSON.stringify(body.input).includes('Slow fixture')) await waitSlow
       return completion(
         body.instructions.startsWith('Write a short factual')
@@ -163,6 +176,21 @@ describe('real SQLite Durable Object lifecycle behind owner Access', () => {
         })
       ).status,
     ).toBe(404)
+  })
+  it('rejects oversized provider parts before they can corrupt saved history', async () => {
+    const first = await read('/api/chat/conversations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ operationKey: crypto.randomUUID(), text: 'Summary overflow fixture' }),
+    })
+    expect(first.status).toBe(202)
+    const run = first.data.run as { id: string; conversationId: string }
+    const end = await finished(run.conversationId, run.id)
+    expect(end.status).toBe('failed')
+    expect(end.errorCode).toBe('chat_response_limit')
+    const snapshot = await read(`/api/chat/conversations/${run.conversationId}`)
+    expect(snapshot.status).toBe(200)
+    expect(ChatSnapshotSchema.safeParse(snapshot.data).success).toBe(true)
   })
   it('acknowledges Stop before a late provider result and never turns it into a completed response', async () => {
     const response = await read('/api/chat/conversations', {

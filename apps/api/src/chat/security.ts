@@ -67,7 +67,7 @@ export function publicChatUrl(value: string): string | null {
       !host.includes('.')
     )
       return null
-    return url.href
+    return url.href.length <= 4096 ? url.href : null
   } catch {
     return null
   }

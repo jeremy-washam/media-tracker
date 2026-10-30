@@ -5,6 +5,7 @@ import {
   ChatSendSchema,
   ChatPublicRunSchema,
   ChatConversationIdSchema,
+  ChatPartSchema,
 } from '@media-tracker/contracts'
 import {
   D1DatabaseClient,
@@ -482,7 +483,9 @@ export class ChatConversationObject {
         this.repository.settleAttempt(id, run.id)
       },
       parts: (parts) => {
-        this.repository.updateParts(run.id, parts)
+        const validated = ChatPartSchema.array().max(200).safeParse(parts)
+        if (!validated.success) throw new Error('chat_response_limit')
+        this.repository.updateParts(run.id, validated.data)
       },
       checkpoint: async (result: ChatProviderResult) => {
         const object = await this.object(run.id, 'checkpoints', result.raw)

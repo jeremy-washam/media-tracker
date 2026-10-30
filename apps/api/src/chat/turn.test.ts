@@ -320,6 +320,7 @@ describe('OpenAI transport and egress boundaries', () => {
     )
     expect(publicChatUrl('http://127.0.0.1/private')).toBeNull()
     expect(publicChatUrl('http://localhost./private')).toBeNull()
+    expect(publicChatUrl('https://example.com/' + '中'.repeat(1500))).toBeNull()
     expect(publicChatUrl('javascript:alert(1)')).toBeNull()
     expect(() => validatePublicSearch('email user@example.com', [])).toThrow(
       'chat_private_search_blocked',
