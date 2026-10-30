@@ -140,7 +140,7 @@ export async function executeChatTurn(input: {
     }
     if (!result) throw new Error('chat_provider_stream_interrupted')
     await hooks.checkpoint(result)
-    await hooks.settle(id, provider.charge(result))
+    if (result.usageKnown) await hooks.settle(id, provider.charge(result))
     aborted(signal)
     if (result.status !== 'completed')
       throw new Error(
@@ -307,7 +307,7 @@ export async function generateChatTitle(input: {
     if (event.type === 'text') text += event.text
     if (event.type === 'completed') result = event.result
   }
-  if (result) await input.hooks.settle(id, input.provider.charge(result))
+  if (result?.usageKnown) await input.hooks.settle(id, input.provider.charge(result))
   return result?.status === 'completed' && text.trim()
     ? text
         .trim()

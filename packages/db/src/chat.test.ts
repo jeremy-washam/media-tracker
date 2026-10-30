@@ -119,6 +119,18 @@ describe('application-owned chat persistence', () => {
     first.database.close()
     second.database.close()
   })
+  it('retains earlier unknown attempts when a later provider call reports known usage', () => {
+    const { repository, database } = local()
+    repository.admit(admission)
+    repository.start(rid, at)
+    repository.beginAttempt('unknown', rid)
+    repository.beginAttempt('known', rid)
+    repository.settleAttempt('known', rid)
+    expect(repository.run(rid)?.usageUnknown).toBe(true)
+    repository.settleAttempt('unknown', rid)
+    expect(repository.run(rid)?.usageUnknown).toBe(false)
+    database.close()
+  })
   it('keeps unresolved object writes in the deletion manifest and cleans ready evidence in bounded batches', () => {
     const { repository, database } = local()
     repository.admit(admission)

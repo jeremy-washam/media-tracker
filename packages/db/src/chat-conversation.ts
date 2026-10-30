@@ -301,7 +301,13 @@ export class SqlChatConversation {
       )
       const run = this.run(runId)
       if (run) {
-        run.usageUnknown = false
+        run.usageUnknown =
+          [
+            ...this.database.exec(
+              "SELECT 1 FROM chat_attempts WHERE run_id=? AND json_extract(body,'$.status')<>'settled' LIMIT 1",
+              runId,
+            ),
+          ].length > 0
         this.saveRun(run)
       }
     })
@@ -316,7 +322,7 @@ export class SqlChatConversation {
     this.database.transaction(() => {
       const run = this.run(id)
       if (!run || run.status !== 'running') return
-      Object.assign(run, fields, { usageUnknown: false })
+      Object.assign(run, fields)
       this.saveRun(run)
     })
   }

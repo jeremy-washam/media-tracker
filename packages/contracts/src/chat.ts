@@ -15,10 +15,13 @@ export const ChatMediaKindSchema = z.enum([
   'show',
   'channel',
 ])
-const safeUrl = z.url().refine((value) => {
-  const u = new URL(value)
-  return ['https:', 'http:'].includes(u.protocol) && !u.username && !u.password
-}, 'Invalid public link')
+const safeUrl = z
+  .url()
+  .max(4096)
+  .refine((value) => {
+    const u = new URL(value)
+    return ['https:', 'http:'].includes(u.protocol) && !u.username && !u.password
+  }, 'Invalid public link')
 export const ChatPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), id: boundedId, text: z.string().max(300_000) }),
   z.object({ type: z.literal('reasoning_summary'), id: boundedId, text: z.string().max(40_000) }),

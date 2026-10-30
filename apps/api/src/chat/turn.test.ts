@@ -17,6 +17,7 @@ const result = (calls: ChatProviderResult['calls'] = []): ChatProviderResult => 
   output: [{ opaque_example_provider_checkpoint: 'never public' }],
   raw: { secret_native_checkpoint: 'opaque reasoning' },
   calls,
+  usageKnown: true,
   inputTokens: 100,
   outputTokens: 20,
   cachedTokens: 10,
@@ -184,6 +185,24 @@ describe('portable owned chat orchestration', () => {
     })
     expect(test.hooks.reserve).toHaveBeenCalledTimes(2)
   })
+  it('keeps the reservation when a completed provider response has no usable usage report', async () => {
+    const test = setup(),
+      provider = new OtherProvider([
+        [
+          { type: 'text', id: 'answer', text: 'Complete answer' },
+          { type: 'completed', result: { ...result(), usageKnown: false } },
+        ],
+      ])
+    await executeChatTurn({
+      runId: 'run',
+      provider,
+      messages: [message],
+      signal: test.controller.signal,
+      hooks: test.hooks,
+    })
+    expect(test.hooks.checkpoint).toHaveBeenCalledOnce()
+    expect(test.hooks.settle).not.toHaveBeenCalled()
+  })
   it('retains an unknown reservation after a broken stream and never automatically retries inference', async () => {
     const test = setup(),
       stream = vi.fn(async function* () {
@@ -224,6 +243,17 @@ describe('OpenAI transport and egress boundaries', () => {
           delta: 'Checking sources.',
         },
         { type: 'response.output_text.delta', item_id: 'message', delta: 'Answer.' },
+        {
+          type: 'response.output_text.annotation.added',
+          item_id: 'message',
+          annotation: {
+            type: 'url_citation',
+            title: 'Source',
+            url: 'https://example.com/source?query=' + 'a'.repeat(1000),
+            start_index: 0,
+            end_index: 1,
+          },
+        },
         { type: 'response.completed', response: completed },
       ]
       return new Response(
@@ -250,6 +280,8 @@ describe('OpenAI transport and egress boundaries', () => {
     expect(submitted.input).toEqual([{ role: 'user', content: 'Question' }])
     expect(events[0]).toEqual({ type: 'summary', id: 'reasoning:0', text: 'Checking sources.' })
     expect(events[1]).toEqual({ type: 'text', id: 'message', text: 'Answer.' })
+    const citation = events.find((event) => event.type === 'citation')
+    expect(citation?.id.length).toBeLessThanOrEqual(160)
     expect(customFetch).toHaveBeenCalledTimes(1)
   })
   it('does not retry a failed provider submission', async () => {
@@ -287,6 +319,7 @@ describe('OpenAI transport and egress boundaries', () => {
       'chat_cursor_invalid',
     )
     expect(publicChatUrl('http://127.0.0.1/private')).toBeNull()
+    expect(publicChatUrl('http://localhost./private')).toBeNull()
     expect(publicChatUrl('javascript:alert(1)')).toBeNull()
     expect(() => validatePublicSearch('email user@example.com', [])).toThrow(
       'chat_private_search_blocked',

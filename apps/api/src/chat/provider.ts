@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import type { ResponseInput, Tool, ResponseOutputItem } from 'openai/resources/responses/responses'
-import { publicChatUrl } from './security'
+import { chatDigest, publicChatUrl } from './security'
 
 export interface ChatProviderResult {
   id: string
@@ -8,6 +8,7 @@ export interface ChatProviderResult {
   output: unknown[]
   raw: unknown
   calls: { id: string; name: string; arguments: string }[]
+  usageKnown: boolean
   inputTokens: number
   outputTokens: number
   cachedTokens: number
@@ -123,8 +124,8 @@ export class OpenAIChatProvider implements ChatProvider {
         if (url)
           yield {
             type: 'citation',
-            id: `web:${url}`,
-            title: event.annotation.title.slice(0, 500),
+            id: `web:${await chatDigest(url)}`,
+            title: (event.annotation.title || new URL(url).hostname).slice(0, 500),
             url,
           }
       } else if (
@@ -167,6 +168,12 @@ export class OpenAIChatProvider implements ChatProvider {
                   item.type === 'function_call',
               )
               .map((item) => ({ id: item.call_id, name: item.name, arguments: item.arguments })),
+            usageKnown:
+              !!usage &&
+              Number.isFinite(usage.input_tokens) &&
+              usage.input_tokens >= 0 &&
+              Number.isFinite(usage.output_tokens) &&
+              usage.output_tokens >= 0,
             inputTokens: usage?.input_tokens ?? 0,
             outputTokens: usage?.output_tokens ?? 0,
             cachedTokens: usage?.input_tokens_details?.cached_tokens ?? 0,

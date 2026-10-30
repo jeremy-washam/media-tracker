@@ -53,9 +53,10 @@ export async function readChatCursor(
 }
 export function publicChatUrl(value: string): string | null {
   try {
+    if (value.length > 4096) return null
     const url = new URL(value)
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null
-    const host = url.hostname.toLowerCase()
+    const host = url.hostname.toLowerCase().replace(/\.$/, '')
     if (
       host === 'localhost' ||
       host.endsWith('.local') ||
