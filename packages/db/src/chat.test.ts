@@ -248,12 +248,76 @@ describe('complete Library queries and bounded credit admission', () => {
     expect((await media.articlePassages('article', 'orchard')).map((x) => x.manifest_id)).toEqual([
       'manifest-2',
     ])
+    database.exec(
+      `INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,upstream_state,created_at,updated_at) VALUES('article-occurrence','article','reader','document','readwise_archive_state','2026-10-30','day','source_asserted','active','${at}','${at}')`,
+    )
+    expect(
+      (await media.query({ ...query, filters: { types: ['article'], query: 'orchard' } }))
+        .statistics?.measures.distinct_items,
+    ).toBe(1)
     const before = await media.revision()
     database.exec(
       "UPDATE readwise_documents SET updated_at_source='2026-10-31T12:00:00Z' WHERE id='document'",
     )
     expect(await media.revision()).not.toBe(before)
     expect(await media.articlePassages('article')).toEqual([])
+    expect(
+      (await media.query({ ...query, filters: { types: ['article'], query: 'orchard' } }))
+        .statistics?.measures.distinct_items,
+    ).toBe(0)
+    database.close()
+  })
+  it('excludes expired video search metadata and binds cursors to the next publication expiry', async () => {
+    const { database, media } = ledger()
+    item(database, 'video', '2026-10-01')
+    database.exec("UPDATE media_items SET type='video' WHERE id='video'")
+    database.exec(
+      "INSERT INTO video_search(media_item_id,titles,channel_titles,origin_kind,origin_key,expires_at) VALUES('video','publicationcanary','channel','video','video','2000-01-01T00:00:00Z')",
+    )
+    expect(
+      (await media.query({ ...query, filters: { query: 'publicationcanary' } })).statistics
+        ?.measures.distinct_items,
+    ).toBe(0)
+    database.exec(
+      "UPDATE video_search SET expires_at='2099-01-01T00:00:00Z';INSERT INTO youtube_search_expiry(document_kind,document_rowid,expires_at) SELECT 'video',rowid,expires_at FROM video_search WHERE media_item_id='video'",
+    )
+    expect(
+      (await media.query({ ...query, filters: { query: 'publicationcanary' } })).statistics
+        ?.measures.distinct_items,
+    ).toBe(1)
+    expect(await media.revision('2098-12-31T23:59:59Z')).not.toBe(
+      await media.revision('2099-01-01T00:00:01Z'),
+    )
+    database.close()
+  })
+  it('separates distinct items from reconsumption and never sums distinct date groups as unique people/items', async () => {
+    const { database, media } = ledger()
+    item(database, 'reread', '2026-01-01')
+    database.exec(
+      `INSERT INTO archive_entries(id,media_item_id,connection_id,source_occurrence_key,admission_reason,consumed_at_value,consumed_at_precision,consumed_at_basis,upstream_state,created_at,updated_at) VALUES('prior-read','reread','connection','prior-read','hardcover_finished_read','2025-01-01','day','source_asserted','active','${at}','${at}')`,
+    )
+    const result = await media.query({
+      ...query,
+      statistics: { ...query.statistics, groupBy: 'year' },
+      filters: { minimumOccurrences: 2 },
+    })
+    expect(result.statistics?.measures).toEqual({ distinct_items: 1, consumption_occurrences: 2 })
+    expect(result.statistics?.groups.map((group) => group.distinct_items)).toEqual([1, 1])
+    expect(
+      (
+        await media.query({
+          ...query,
+          filters: {
+            minimumOccurrences: 2,
+            consumed: {
+              from: '2026-01-01',
+              toExclusive: '2027-01-01',
+              timezone: 'America/New_York',
+            },
+          },
+        })
+      ).statistics?.measures.distinct_items,
+    ).toBe(0)
     database.close()
   })
   it('reserves concurrent requests atomically and never authorizes a repeated or overspent reservation', async () => {

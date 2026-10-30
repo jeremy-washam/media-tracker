@@ -95,7 +95,7 @@ export async function queryChatMedia(env: Bindings, args: unknown): Promise<Chat
       ...result,
       more: undefined,
       nextCursor,
-      asOf: new Date().toISOString(),
+      asOf: result.asOf,
       citationFormat:
         'Cite returned items with Markdown [Title](library:KIND:ID). Reference only IDs in this result.',
     },
@@ -298,6 +298,7 @@ export async function getChatMediaDetails(env: Bindings, args: unknown): Promise
       title: String(item.title ?? 'Untitled'),
     })
   }
+  if ((await repository.revision()) !== revision) throw new ChatConflict('chat_cursor_stale')
   return {
     content: {
       data,

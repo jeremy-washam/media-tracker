@@ -395,7 +395,9 @@ source actions remain native provider details, not extra fabricated tool calls.
 
 `query_media` shares one matching population between item pages and exact totals;
 its signed cursor binds query and a monotonic Library revision. Trigger increments
-avoid archive-wide revision scans. Consumption windows use New York calendar
+avoid archive-wide revision scans. Discovery includes ready, version-matched
+article bodies. Video metadata matches respect the read clock and source channel;
+the cursor revision also binds the next search-index expiry. Consumption windows use New York calendar
 boundaries, retaining unknown/partial dates. Rating thresholds use occurrence
 ratings normalized to five; coverage counts describe eligible source records
 before the occurrence-rating/minimum-occurrence filters. Instant groups before

@@ -76,7 +76,7 @@ function temporal(input: ChatMediaQuery, overlap = false) {
   }
   return { sql: sql.length ? sql.join(' AND ') : '1=1', values }
 }
-function matching(input: ChatMediaQuery) {
+function matching(input: ChatMediaQuery, at: string) {
   const where: string[] = [],
     values: DatabaseValue[] = []
   if (input.filters.types?.length) {
@@ -89,14 +89,19 @@ function matching(input: ChatMediaQuery) {
   }
   if (input.filters.query) {
     const fts = plainFts(input.filters.query),
-      tables = ['book_search', 'movie_search', 'article_search', 'video_search']
+      tables = ['book_search', 'movie_search', 'article_search']
+    const textSearch = fts
+      ? `OR m.id IN (${tables.map((table) => `SELECT media_item_id FROM ${table} WHERE ${table} MATCH ?`).join(' UNION ')}
+      UNION SELECT cm.media_item_id FROM article_content_search_map sm JOIN article_content_manifests cm ON cm.id=sm.manifest_id JOIN readwise_documents d ON d.id=cm.readwise_document_id JOIN article_content_search cs ON cs.rowid=sm.rowid WHERE article_content_search MATCH ? AND cm.state='ready' AND d.upstream_state='active' AND COALESCE(cm.source_updated_at,'')=COALESCE(d.updated_at_source,'')
+      UNION SELECT vs.media_item_id FROM video_search vs WHERE video_search MATCH ? AND(vs.expires_at IS NULL OR vs.expires_at>?) AND(vs.origin_kind<>'channel' OR vs.origin_key=(SELECT p.channel_id FROM video_library_projection p WHERE p.media_item_id=vs.media_item_id)))`
+      : ''
     where.push(
-      `(COALESCE(m.title,'') LIKE ? ESCAPE '\\' OR COALESCE(m.primary_creator_name,'') LIKE ? ESCAPE '\\' ${fts ? 'OR m.id IN (' + tables.map((table) => `SELECT media_item_id FROM ${table} WHERE ${table} MATCH ?`).join(' UNION ') + ')' : ''})`,
+      `(COALESCE(m.title,'') LIKE ? ESCAPE '\\' OR COALESCE(m.primary_creator_name,'') LIKE ? ESCAPE '\\' ${textSearch})`,
     )
     values.push(
       like(input.filters.query),
       like(input.filters.query),
-      ...(fts ? tables.map(() => fts) : []),
+      ...(fts ? [...tables.map(() => fts), fts, fts, at] : []),
     )
   }
   where.push(
@@ -132,18 +137,19 @@ function matching(input: ChatMediaQuery) {
 }
 export class SqlChatMedia {
   constructor(private readonly database: DatabaseClient) {}
-  async revision() {
-    return String(
-      (
-        await this.database
-          .prepare('SELECT revision FROM chat_library_revision WHERE id=1')
-          .first<{ revision: number }>()
-      )?.revision ?? 0,
-    )
+  async revision(at = new Date().toISOString()) {
+    const row = await this.database
+      .prepare(
+        'SELECT revision,(SELECT MIN(expires_at) FROM youtube_search_expiry WHERE expires_at>?) deadline FROM chat_library_revision WHERE id=1',
+      )
+      .bind(at)
+      .first<{ revision: number; deadline: string | null }>()
+    return `${row?.revision ?? 0}:${row?.deadline ?? ''}`
   }
   async query(input: ChatMediaQuery, offset = 0) {
-    const { sql, values } = matching(input),
-      revision = await this.revision()
+    const at = new Date().toISOString(),
+      { sql, values } = matching(input, at),
+      revision = await this.revision(at)
     const totals = await this.database
       .prepare(
         `${sql} SELECT (SELECT COUNT(*) FROM matched) distinct_items,(SELECT COUNT(*) FROM occurrences a JOIN matched m ON m.id=a.media_item_id) consumption_occurrences,(SELECT COUNT(*) FROM archive_entries a JOIN eligible m ON m.id=a.media_item_id WHERE a.upstream_state='active' AND a.consumed_at_value IS NULL) undated_occurrences`,
@@ -204,14 +210,16 @@ export class SqlChatMedia {
               groupsTruncated: groups.length > 120,
             },
       more,
+      asOf: at,
       revision,
-      stable: (await this.revision()) === revision,
+      stable: (await this.revision(at)) === revision,
       coverage: {
         scope: input.scope,
         undatedOccurrences: totals?.undated_occurrences ?? 0,
         uncertainDateOccurrences: uncertain?.count ?? 0,
         limitations: [
           'Counts describe imported active records, not guaranteed complete upstream history.',
+          'An item may appear in multiple date groups; their distinct-item counts are not additive.',
           'An Archive occurrence is source-defined; a podcast occurrence may summarize multiple playback observations.',
           'Instant-based calendar groups before 2007 are reported as unknown; later instants use America/New_York daylight boundaries.',
           'Partially overlapping year/month records are excluded from exact counts and reported as uncertain. Unknown dates are never assigned to a period.',

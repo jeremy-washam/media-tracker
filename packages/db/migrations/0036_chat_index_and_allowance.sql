@@ -90,3 +90,27 @@ CREATE TRIGGER chat_revision_article_content_chunks_update AFTER UPDATE ON artic
 BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
 CREATE TRIGGER chat_revision_article_content_chunks_delete AFTER DELETE ON article_content_chunks
 BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_video_profiles_insert AFTER INSERT ON youtube_published_video_profiles
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_video_profiles_update AFTER UPDATE ON youtube_published_video_profiles
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_video_profiles_delete AFTER DELETE ON youtube_published_video_profiles
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_channel_profiles_insert AFTER INSERT ON youtube_published_channel_profiles
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_channel_profiles_update AFTER UPDATE ON youtube_published_channel_profiles
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_channel_profiles_delete AFTER DELETE ON youtube_published_channel_profiles
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_categories_insert AFTER INSERT ON youtube_published_categories
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_categories_update AFTER UPDATE ON youtube_published_categories
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_published_categories_delete AFTER DELETE ON youtube_published_categories
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_search_expiry_insert AFTER INSERT ON youtube_search_expiry
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_search_expiry_update AFTER UPDATE ON youtube_search_expiry
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER chat_revision_youtube_search_expiry_delete AFTER DELETE ON youtube_search_expiry
+BEGIN UPDATE chat_library_revision SET revision=revision+1 WHERE id=1; END;
