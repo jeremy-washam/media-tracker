@@ -99,9 +99,9 @@ export class SqlChatIndex {
     return (
       (await this.database
         .prepare(
-          'INSERT INTO chat_run_leases SELECT ?,? WHERE (SELECT COUNT(*) FROM chat_run_leases WHERE expires_at>?)<2 ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at RETURNING id',
+          'INSERT INTO chat_run_leases SELECT ?,? WHERE EXISTS(SELECT 1 FROM chat_run_leases WHERE id=? AND expires_at>?) OR (SELECT COUNT(*) FROM chat_run_leases WHERE expires_at>?)<2 ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at RETURNING id',
         )
-        .bind(id, expires, at)
+        .bind(id, expires, id, at, at)
         .first<{ id: string }>()) !== null
     )
   }

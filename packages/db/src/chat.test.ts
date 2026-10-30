@@ -344,9 +344,12 @@ describe('complete Library queries and bounded credit admission', () => {
     expect(await index.spent('test')).toBe(9)
     expect(await index.acquireRun('r1', at, '2027')).toBe(true)
     expect(await index.acquireRun('r2', at, '2027')).toBe(true)
+    expect(await index.acquireRun('r1', at, '2028')).toBe(true)
     expect(await index.acquireRun('r3', at, '2027')).toBe(false)
     await index.releaseRun('r1')
     expect(await index.acquireRun('r3', at, '2027')).toBe(true)
+    database.exec("INSERT INTO chat_run_leases VALUES('r1','2000')")
+    expect(await index.acquireRun('r1', at, '2028')).toBe(false)
     database.close()
   })
   it('invalidates moving collection cursors and rejects stale/out-of-order publication after deletion', async () => {

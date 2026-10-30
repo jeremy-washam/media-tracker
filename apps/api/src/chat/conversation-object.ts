@@ -453,6 +453,15 @@ export class ChatConversationObject {
         if (this.repository.run(run.id)?.status !== 'running')
           throw new ChatConflict('chat_run_inactive')
         await this.allowed()
+        const now = Date.now()
+        if (
+          !(await this.index.acquireRun(
+            run.id,
+            new Date(now).toISOString(),
+            new Date(now + 240_000).toISOString(),
+          ))
+        )
+          throw new ChatConflict('chat_concurrency_limit', 429)
       },
       reserve: async (id, amount) => {
         if (
@@ -537,6 +546,8 @@ export class ChatConversationObject {
         this.repository.run(run.id)?.status === 'completed' &&
         this.repository.message(run.userMessageId)?.sequence === 1
       ) {
+        const namingController = new AbortController()
+        this.controller = namingController
         try {
           const title = await generateChatTitle({
             runId: run.id,
@@ -546,7 +557,7 @@ export class ChatConversationObject {
               .map((x) => x.text)
               .join(''),
             provider,
-            signal: AbortSignal.timeout(20_000),
+            signal: AbortSignal.any([AbortSignal.timeout(20_000), namingController.signal]),
             hooks: {
               checkAllowed: () => this.allowed(),
               reserve: async (id, amount) => {
@@ -568,6 +579,8 @@ export class ChatConversationObject {
           if (title) this.repository.generatedTitle(title, meta.metadataRevision)
         } catch {
           /* A failed optional title keeps the fallback and its unknown-cost reservation. */
+        } finally {
+          if (this.controller === namingController) this.controller = null
         }
       }
     } finally {

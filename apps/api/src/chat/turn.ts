@@ -298,12 +298,15 @@ export async function generateChatTitle(input: {
     maxOutputTokens: 128,
     signal: input.signal,
   }
+  input.signal.throwIfAborted()
   await input.hooks.checkAllowed()
   const id = `${input.runId}:title`
   await input.hooks.reserve(id, input.provider.reservation(request))
+  input.signal.throwIfAborted()
   let text = '',
     result: ChatProviderResult | null = null
   for await (const event of input.provider.stream(request)) {
+    input.signal.throwIfAborted()
     if (event.type === 'text') text += event.text
     if (event.type === 'completed') result = event.result
   }
