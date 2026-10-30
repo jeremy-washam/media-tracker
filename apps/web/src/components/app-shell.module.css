@@ -385,7 +385,12 @@
 }
 .workspace-breadcrumb {
   min-width: 0;
-  flex-shrink: 0;
+  overflow: hidden;
+}
+.workspace-breadcrumb > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .workspace-header-tabs {
   height: 100%;

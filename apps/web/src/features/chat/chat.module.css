@@ -4,29 +4,34 @@
   min-height: 0;
   flex: 1;
   margin-top: 18px;
+  gap: 16px;
 }
 .sections {
   overflow-y: auto;
   min-height: 0;
-  padding-block: 12px;
+  padding-bottom: 12px;
   scrollbar-width: thin;
+}
+.sections > div + div {
+  margin-top: 20px;
 }
 .chatList {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  padding-top: 5px;
 }
 .chatRow {
   display: flex;
   align-items: center;
   min-width: 0;
   position: relative;
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 .chatRow:hover {
-  background: var(--sidebar-accent);
+  background: var(--surface-hover);
 }
 .chatRow[data-selected='true'] {
-  background: var(--secondary);
+  background: var(--selection);
 }
 .chatLink {
   min-width: 0;
@@ -37,9 +42,20 @@
   white-space: nowrap;
   line-height: 39px;
   padding-inline: 10px 14px;
-  font-size: 14px;
+  font-family: inherit;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-normal);
   text-decoration: none;
+  color: var(--muted-foreground);
+  cursor: default;
+}
+.chatRow[data-selected='true'] .chatLink,
+.chatRow:hover .chatLink,
+.chatRow:focus-within .chatLink {
   color: var(--foreground);
+}
+.chatRow[data-selected='true'] .chatLink {
+  font-weight: var(--app-weight-medium);
 }
 .rowActions {
   display: flex;
@@ -62,9 +78,12 @@
   padding-right: 64px;
 }
 .sidebarNote {
-  padding: 4px 10px;
+  margin: 0;
+  padding: 8px 10px;
+  font-family: inherit;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--app-text-body);
+  font-weight: var(--app-weight-normal);
 }
 .page {
   height: calc(100dvh - var(--workspace-header-height));
@@ -125,6 +144,12 @@
   color: var(--muted-foreground);
   font-size: 14px;
 }
+.activity [data-panel-open] > svg:last-child {
+  transform: rotate(90deg);
+}
+.activity [data-slot='collapsible-trigger'] > svg:last-child {
+  transition: transform 150ms ease;
+}
 .preview,
 .summary {
   font-size: 14px;
@@ -153,11 +178,23 @@
   padding-left: 17px;
 }
 .tool {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 16px;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 0;
+  color: var(--foreground);
+}
+.tool > svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+}
+.tool > div {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 10px 0;
-  color: var(--foreground);
 }
 .tool small {
   color: var(--muted-foreground);
@@ -173,7 +210,7 @@
 .answer h1,
 .answer h2,
 .answer h3 {
-  font-size: 17px;
+  font-size: var(--app-text-title);
   font-weight: 600;
   margin: 26px 0 12px;
 }
@@ -201,13 +238,13 @@
   background: var(--secondary);
   border-radius: 8px;
   padding: 16px;
-  font-size: 13px;
+  font-size: var(--app-text-body);
 }
 .answer :not(pre) > code {
   background: var(--secondary);
   padding: 2px 4px;
   border-radius: 4px;
-  font-size: 0.9em;
+  font-size: var(--app-text-body);
 }
 .answer table {
   display: block;
@@ -234,7 +271,7 @@
   gap: 4px 16px;
   margin-top: 14px;
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--app-text-caption);
 }
 .references a {
   max-width: 100%;
@@ -244,7 +281,7 @@
 .composerWrap {
   width: min(736px, calc(100% - 64px));
   margin: 0 auto;
-  padding-block: 8px 28px;
+  padding-block: 16px 24px;
   position: relative;
 }
 .page:has(.empty) .transcript {
@@ -261,15 +298,15 @@
   max-width: 640px;
 }
 .empty blockquote {
-  font-size: clamp(23px, 2.3vw, 32px);
-  line-height: 1.4;
+  font-size: var(--app-text-display);
+  line-height: 1.5;
   font-weight: 400;
   text-wrap: balance;
   margin: 0;
 }
 .empty p {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--app-text-caption);
   margin-top: 14px;
 }
 .empty cite {
@@ -278,7 +315,7 @@
 .connection,
 .runNotice,
 .working {
-  font-size: 13px;
+  font-size: var(--app-text-body);
   color: var(--muted-foreground);
   line-height: 1.6;
 }
@@ -298,6 +335,13 @@
   flex-shrink: 0;
   background: currentColor;
   animation: breathe 1.8s ease-in-out infinite;
+}
+.finishedDot {
+  width: 7px;
+  height: 7px;
+  margin-inline: 3px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .jump {
   position: absolute;
@@ -324,10 +368,10 @@
   }
   .userMessage {
     max-width: 94%;
-    font-size: 15px;
+    font-size: var(--app-text-title);
   }
   .answer {
-    font-size: 15px;
+    font-size: var(--app-text-title);
   }
   .page:has(.empty) .composerWrap {
     margin-bottom: clamp(28px, 20dvh, 180px);
