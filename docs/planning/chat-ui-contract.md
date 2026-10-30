@@ -38,8 +38,9 @@ technology. The existing shared media inspector remains the citation target.
 
 Familiar's sidebar uses 39px conversation rows, a 16px gap after New Chat and
 20px between sections. Section triggers span the available width and use the
-shared disclosure Button variant with a visible neutral hover. Resting chat
-titles are muted; the selected title has the shared foreground and medium weight.
+shared disclosure Button variant with a visible neutral hover. Chat titles stay
+muted in both themes, including hover and selection; the selected title uses
+medium weight and the selection background.
 Empty section text uses the same 14px system-font role as navigation. Chat text
 uses the approved 12/14/16/22px scale. The composer retains a visible keyboard
 focus ring; its Send/Stop addon and disabled button use the normal arrow cursor.

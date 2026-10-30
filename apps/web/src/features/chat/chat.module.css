@@ -49,11 +49,6 @@
   color: var(--muted-foreground);
   cursor: default;
 }
-.chatRow[data-selected='true'] .chatLink,
-.chatRow:hover .chatLink,
-.chatRow:focus-within .chatLink {
-  color: var(--foreground);
-}
 .chatRow[data-selected='true'] .chatLink {
   font-weight: var(--app-weight-medium);
 }
