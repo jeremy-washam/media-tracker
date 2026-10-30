@@ -14,6 +14,9 @@ and inspectors; Movie results omit the viewing-rating qualifier.
 Library lists omit the extra border above their first item.
 Results have 16px of space below the fixed collection header. Artwork cards grow
 with their text; Movie titles reserve two complete lines above the metadata.
+The top 12px of the results viewport fades into the page background as content
+scrolls beneath the header. The initial gap keeps the first items outside that
+fade, and the header has no dark drop shadow.
 Music artist lists, grids, and inspectors use separately acquired Spotify artist
 photos when available.
 Books omits column headings, and the passive API status does not change
