@@ -98,6 +98,8 @@ export async function createWorkerRuntime(
     hosted?: boolean
     sourceSync?: boolean
     beforeReadwiseResponse?: () => Promise<void>
+    chat?: boolean
+    chatProvider?: (request: RuntimeRequest) => Promise<RuntimeResponse>
     operatingMonitorFixture?: string
   } = {},
 ): Promise<WorkerRuntime> {
@@ -156,6 +158,15 @@ export async function createWorkerRuntime(
     compatibilityDate: '2026-07-18',
     compatibilityFlags: ['nodejs_compat'],
     bindings: {
+      ...(options.chat
+        ? {
+            CHAT_ENABLED: 'true',
+            OPENAI_API_KEY: 'synthetic-chat-key',
+            CHAT_CREDIT_PERIOD: 'synthetic-test',
+            CHAT_CREDIT_LIMIT_USD: '13',
+            CHAT_CREDIT_EXPIRES_AT: '2099-01-01T00:00:00Z',
+          }
+        : {}),
       AUTH_MODE: options.hosted ? 'access' : 'local',
       ...(options.hosted
         ? { ACCESS_TEAM_DOMAIN: issuer, ACCESS_AUD: audience, OWNER_EMAIL: owner }
@@ -179,6 +190,10 @@ export async function createWorkerRuntime(
       API_RATE_LIMITER: { namespace_id: '1001', simple: { limit: 120, period: 60 } },
       WRITE_RATE_LIMITER: { namespace_id: '1002', simple: { limit: 10, period: 60 } },
     },
+    durableObjects: {
+      CHAT_CONVERSATIONS: { className: 'ChatConversationObject', useSQLite: true },
+    },
+    durableObjectsPersist: false,
     d1Databases: ['DB'],
     d1Persist: false,
     r2Buckets: ['RAW_BUCKET'],
@@ -215,6 +230,8 @@ export async function createWorkerRuntime(
           headers: Object.fromEntries(response.headers),
         })
       }
+      if (url.hostname === 'api.openai.com' && options.chatProvider)
+        return options.chatProvider(request)
       if (options.hosted && url.href === issuer + '/cdn-cgi/access/certs')
         return RuntimeResponse.json({ keys: [publicKey] })
       if (url.hostname === 'readwise.io') {

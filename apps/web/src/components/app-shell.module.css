@@ -427,3 +427,11 @@
   overflow: hidden;
   scrollbar-gutter: stable;
 }
+
+.app-workspace:has([data-ui='chat-page']) .workspace-content {
+  padding: 0;
+  overflow: hidden;
+}
+.app-workspace:has([data-ui='chat-page'] [data-ui='media-inspector']) {
+  z-index: 50;
+}

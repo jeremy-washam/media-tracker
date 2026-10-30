@@ -13,6 +13,7 @@ import { MusicCollectionPage } from './features/music/music-collection-page'
 import { parseMusicRouteSearch } from './features/music/music-route-search'
 import { VideosCollectionPage } from './features/videos/videos-collection-page'
 import { parseVideosRouteSearch } from './features/videos/videos-route-search'
+import { ChatPage } from './features/chat/chat-page'
 import { ConnectionsPage } from './pages/connections-page'
 
 const rootRoute = createRootRoute({
@@ -137,8 +138,24 @@ const connectionsRoute = createRoute({
   component: ConnectionsPage,
 })
 
+const chatIndexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chat',
+  component: () => <ChatPage />,
+})
+const chatConversationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chat/$conversationId',
+  component: () => {
+    const { conversationId } = chatConversationRoute.useParams()
+    return <ChatPage key={conversationId} conversationId={conversationId} />
+  },
+})
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  chatIndexRoute,
+  chatConversationRoute,
   booksArchiveRoute,
   booksQueueRoute,
   moviesArchiveRoute,

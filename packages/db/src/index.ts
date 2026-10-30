@@ -88,3 +88,8 @@ export * from './schema'
 
 export { SqlCredentialStore } from './credentials'
 export { SqlSourceSyncAdmission } from './source-sync-admission'
+export { SqlChatConversation, ChatConflict } from './chat-conversation'
+export type { ChatSql } from './chat-conversation'
+export { SqlChatIndex } from './chat-index'
+export { SqlChatMedia, chatCalendarInstant } from './chat-media'
+export type { ChatMediaQuery } from './chat-media'

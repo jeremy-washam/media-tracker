@@ -38,3 +38,5 @@ changes, add a new ADR that supersedes the old one rather than rewriting history
 21. [Bounded production operation and emergency pause](./0021-bounded-production-operations.md)
 
 22. [Durable hosted manual source sync](./0022-durable-manual-source-sync.md)
+
+23. [Application-owned chat runtime and provider adapters](./0023-owned-chat-runtime.md)

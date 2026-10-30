@@ -766,7 +766,7 @@ function DateSelect({
   )
 }
 
-function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) {
+export function ArticleInspector({ id, onClose }: { id: string; onClose: () => void }) {
   const [tab, setTab] = useState<'details' | 'history'>('details')
   const ref = useRef<HTMLElement>(null)
   const closeRef = useRef(onClose)

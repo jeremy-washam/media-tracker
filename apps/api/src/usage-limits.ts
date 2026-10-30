@@ -13,9 +13,16 @@ export async function limitApiUsage(
     return privateAccessError(503, 'Usage protection is not configured.')
   try {
     const api = await env.API_RATE_LIMITER.limit({ key: 'imladris-owner-api' })
-    const write = ['GET', 'HEAD', 'OPTIONS'].includes(request.method)
-      ? true
-      : api.success && (await env.WRITE_RATE_LIMITER.limit({ key: 'imladris-owner-write' })).success
+    const control =
+      request.method === 'POST' &&
+      /^\/api\/chat\/conversations\/c_[a-f0-9]{32}\/runs\/[^/]+\/cancel$/.test(
+        new URL(request.url).pathname,
+      )
+    const write =
+      ['GET', 'HEAD', 'OPTIONS'].includes(request.method) || control
+        ? true
+        : api.success &&
+          (await env.WRITE_RATE_LIMITER.limit({ key: 'imladris-owner-write' })).success
     if (api.success && write) return null
   } catch {
     return privateAccessError(503, 'Usage protection is temporarily unavailable.')

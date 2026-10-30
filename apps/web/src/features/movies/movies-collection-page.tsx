@@ -801,7 +801,7 @@ function MovieFilters({
   )
 }
 
-function MovieInspector({
+export function MovieInspector({
   mediaItemId,
   search,
   onClose,

@@ -108,7 +108,19 @@ def verify_live(configuration, live, queues):
         raise ReleaseError('Unexpected production target or authentication mode')
     bindings = live.get('bindings', [])
     plaintext = {item['name']: item.get('text') for item in bindings if item['type'] == 'plain_text'}
-    if plaintext != configuration['vars']:
+    wanted_objects = {(item['name'], item['class_name'], item.get('script_name') or configuration['name']) for item in configuration.get('durable_objects', {}).get('bindings', [])}
+    actual_objects = {(item['name'], item.get('class_name'), item.get('script_name') or configuration['name']) for item in bindings if item['type'] == 'durable_object_namespace'}
+    new_chat = (wanted_objects == {('CHAT_CONVERSATIONS', 'ChatConversationObject', 'media-tracker')}
+                and not actual_objects and configuration.get('migrations') == [{'tag': 'chat-v1', 'new_sqlite_classes': ['ChatConversationObject']}])
+    chat_variables = {'CHAT_ENABLED', 'CHAT_CREDIT_PERIOD', 'CHAT_CREDIT_LIMIT_USD', 'CHAT_CREDIT_EXPIRES_AT'}
+    if wanted_objects != actual_objects and not new_chat:
+        raise ReleaseError('Production Durable Object binding drifted')
+    expected_variables = configuration['vars']
+    if new_chat:
+        # Only this first, code-reviewed namespace migration may introduce these
+        # four bounded settings. Existing variables must still match exactly.
+        expected_variables = {key: value for key, value in expected_variables.items() if key not in chat_variables}
+    if plaintext != expected_variables:
         raise ReleaseError('Production variables drifted; reconcile protected configuration first')
     wanted_d1 = {(item['binding'], item['database_id']) for item in configuration.get('d1_databases', [])}
     actual_d1 = {(item['name'], item['id']) for item in bindings if item['type'] == 'd1'}
@@ -137,7 +149,7 @@ def verify_live(configuration, live, queues):
     actual_limits = {item['name']: (str(item['namespace_id']), item['simple']) for item in bindings if item['type'] == 'ratelimit'}
     if wanted_limits != actual_limits:
         raise ReleaseError('Production rate limits drifted')
-    if any(item['type'] not in {'plain_text', 'secret_text', 'd1', 'r2_bucket', 'queue', 'assets', 'ratelimit'} for item in bindings):
+    if any(item['type'] not in {'plain_text', 'secret_text', 'd1', 'r2_bucket', 'queue', 'assets', 'ratelimit', 'durable_object_namespace'} for item in bindings):
         raise ReleaseError('Unrecognized production binding requires explicit release support')
 
 
@@ -318,6 +330,7 @@ def deploy(revision, migration_digest=None):
         record_phase(journal, receipt, 'migration-verified', path)
     record_phase(journal, receipt, 'deploy-starting', path)
     run(['pnpm', '--filter', '@media-tracker/cli', 'start', 'deployment', 'deploy'])
+    verify_live(configuration, management(account, '/workers/scripts/media-tracker/settings'), management(account, '/queues'))
     after = read_operating_state(path, journal / 'after')
     if operating['paused'] and (not after['paused'] or after.get('pausedAt') != operating.get('pausedAt')):
         raise ReleaseError('Production release did not preserve the emergency pause')

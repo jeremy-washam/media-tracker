@@ -690,7 +690,7 @@ function PodcastItem({
   )
 }
 
-function PodcastInspector({
+export function PodcastInspector({
   id,
   kind,
   onClose,

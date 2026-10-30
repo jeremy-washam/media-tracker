@@ -21,8 +21,12 @@ Music artist lists, grids, and inspectors use separately acquired Spotify artist
 photos when available.
 Books omits column headings, and the passive API status does not change
 appearance on hover.
-The legacy History component is not routed. Chat and Recaps remain disabled
-navigation; Settings has no production route.
+The legacy History component is not routed. Chat opens the selected Familiar
+interface with saved history, Favorites, streaming activity and Library citations.
+Recaps remains disabled; Settings has no production route. Chat uses the existing
+sidebar, with New Chat and collapsible Favorites/Chats below application navigation.
+See [Chat runtime](../../docs/decisions/0023-owned-chat-runtime.md) for lifecycle,
+provider and credit boundaries.
 Connections uses compact source rows with bundled official logos and labeled
 connection-state icons. Sync/coverage summaries remain visible; Collapsible
 details retain source limitations and attempt/export dates. The account form

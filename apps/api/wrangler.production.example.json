@@ -30,7 +30,11 @@
     "OPERATING_MONITOR_ENABLED": "false",
     "CLOUDFLARE_ACCOUNT_ID": "",
     "SYNC_QUEUE_ID": "",
-    "SMOKE_SERVICE_TOKEN_ID": ""
+    "SMOKE_SERVICE_TOKEN_ID": "",
+    "CHAT_ENABLED": "false",
+    "CHAT_CREDIT_PERIOD": "",
+    "CHAT_CREDIT_LIMIT_USD": "0",
+    "CHAT_CREDIT_EXPIRES_AT": ""
   },
   "d1_databases": [
     {
@@ -85,5 +89,19 @@
       "enabled": true,
       "head_sampling_rate": 0.01
     }
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_CONVERSATIONS",
+        "class_name": "ChatConversationObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "chat-v1",
+      "new_sqlite_classes": ["ChatConversationObject"]
+    }
+  ]
 }

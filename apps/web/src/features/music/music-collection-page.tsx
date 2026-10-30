@@ -692,7 +692,7 @@ function MusicItem({
   )
 }
 
-function MusicInspector({
+export function MusicInspector({
   id,
   view,
   onClose,

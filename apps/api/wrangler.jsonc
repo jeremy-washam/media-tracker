@@ -8,6 +8,10 @@
   "preview_urls": false,
   "vars": {
     "AUTH_MODE": "local",
+    "CHAT_ENABLED": "true",
+    "CHAT_CREDIT_PERIOD": "subscription-2026-10-30",
+    "CHAT_CREDIT_LIMIT_USD": "13",
+    "CHAT_CREDIT_EXPIRES_AT": "2026-11-12T00:00:00Z",
     "OPERATING_MONITOR_ENABLED": "false",
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
@@ -19,6 +23,10 @@
     "TMDB_CATALOG_JOB_ID": "",
     "TMDB_CATALOG_UNTIL": "",
   },
+  "durable_objects": {
+    "bindings": [{ "name": "CHAT_CONVERSATIONS", "class_name": "ChatConversationObject" }],
+  },
+  "migrations": [{ "tag": "chat-v1", "new_sqlite_classes": ["ChatConversationObject"] }],
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",

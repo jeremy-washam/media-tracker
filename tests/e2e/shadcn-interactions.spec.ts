@@ -66,6 +66,10 @@ test('isolates mobile navigation focus and restores it', async ({ page }) => {
     await page.keyboard.press('Tab')
     await expect.poll(() => sheet.evaluate((e) => e.contains(document.activeElement))).toBe(true)
   }
+  // Test the modal's Escape behavior without a nested tooltip owning the key.
+  // Navigation additions can change where a fixed number of Tab presses ends.
+  await sheet.getByRole('button', { name: 'Close', exact: true }).focus()
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(sheet).toHaveCount(0)
   await expect(trigger).toBeFocused()

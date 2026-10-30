@@ -834,7 +834,7 @@ function VideoItem({
   )
 }
 
-function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
+export function VideoInspector({ id, onClose }: { id: string; onClose: () => void }) {
   const inspectorRef = useInspectorFocus(onClose, id)
   const [tab, setTab] = useState<'details' | 'history' | 'channel'>('details')
   const detail = useQuery({
@@ -1144,7 +1144,7 @@ function ChannelPreview({
   )
 }
 
-function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) {
+export function ChannelInspector({ id, onClose }: { id: string; onClose: () => void }) {
   const inspectorRef = useInspectorFocus(onClose, id)
   const [tab, setTab] = useState<'details' | 'library'>('details')
   const [membership, setMembership] = useState<'archive' | 'queue'>('archive')

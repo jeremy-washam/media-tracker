@@ -17,6 +17,12 @@ import {
 } from '@media-tracker/db'
 
 export interface Bindings extends Pick<WorkerBindings, 'ASSETS' | 'DB' | 'RAW_BUCKET'> {
+  CHAT_CONVERSATIONS?: DurableObjectNamespace
+  OPENAI_API_KEY?: string
+  CHAT_ENABLED?: string
+  CHAT_CREDIT_LIMIT_USD?: string
+  CHAT_CREDIT_PERIOD?: string
+  CHAT_CREDIT_EXPIRES_AT?: string
   API_RATE_LIMITER?: WorkerBindings['API_RATE_LIMITER']
   WRITE_RATE_LIMITER?: WorkerBindings['WRITE_RATE_LIMITER']
   OPERATING_MONITOR_ENABLED?: string
