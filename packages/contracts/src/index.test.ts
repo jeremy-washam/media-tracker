@@ -13,10 +13,24 @@ import {
   MovieDetailSchema,
   MoviesQuerySchema,
   SyncJobSchema,
+  SourceSyncQueuedResponseSchema,
   VideosQuerySchema,
 } from './index'
 
 describe('API contracts', () => {
+  it('distinguishes a queued source receipt from completed work or an allocated run', () => {
+    const queued = { status: 'queued', source: 'spotify', requestId: 'request-1' }
+    expect(SourceSyncQueuedResponseSchema.parse(queued)).toEqual(queued)
+    for (const changes of [
+      { status: 'succeeded' },
+      { source: 'youtube' },
+      { requestId: '' },
+      { syncRunId: 'unallocated-run' },
+    ])
+      expect(SourceSyncQueuedResponseSchema.safeParse({ ...queued, ...changes }).success).toBe(
+        false,
+      )
+  })
   it('requires queue jobs to carry an idempotency key', () => {
     const result = SyncJobSchema.safeParse({
       idempotencyKey: '',

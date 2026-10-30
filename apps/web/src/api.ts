@@ -9,6 +9,7 @@ import {
   ReadwiseSyncResponseSchema,
   SpotifyImportResponseSchema,
   SpotifySyncResponseSchema,
+  SourceSyncQueuedResponseSchema,
   YoutubeImportResponseSchema,
 } from '@media-tracker/contracts'
 
@@ -22,6 +23,7 @@ import type {
   ReadwiseSyncResponse,
   SpotifyImportResponse,
   SpotifySyncResponse,
+  SourceSyncQueuedResponse,
   YoutubeImportResponse,
 } from '@media-tracker/contracts'
 
@@ -64,27 +66,34 @@ export const fetchSyncRuns = async (cursor?: string) =>
     ),
   )
 
-export const syncReadwise = async (
-  fetcher: typeof fetch = fetch,
-): Promise<ReadwiseSyncResponse> => {
-  const response = await fetcher('/api/connections/readwise/sync', {
+async function postSourceSync<Result>(
+  source: SourceSyncQueuedResponse['source'],
+  completedSchema: { parse(value: unknown): Result },
+  fetcher: typeof fetch,
+): Promise<Result | SourceSyncQueuedResponse> {
+  const response = await fetcher(`/api/connections/${source}/sync`, {
     method: 'POST',
     headers: { accept: 'application/json' },
   })
-  if (!response.ok) throw new Error(`Readwise sync failed with status ${response.status}.`)
-  return ReadwiseSyncResponseSchema.parse(await response.json())
+  if (response.status === 202) {
+    const queued = SourceSyncQueuedResponseSchema.parse(await response.json())
+    if (queued.source !== source) throw new Error('Sync response source does not match request.')
+    return queued
+  }
+  if (response.status !== 200)
+    throw new Error(`Sync request failed with status ${response.status}.`)
+  return completedSchema.parse(await response.json())
 }
+
+export const syncReadwise = async (
+  fetcher: typeof fetch = fetch,
+): Promise<ReadwiseSyncResponse | SourceSyncQueuedResponse> =>
+  postSourceSync('readwise', ReadwiseSyncResponseSchema, fetcher)
 
 export const syncHardcover = async (
   fetcher: typeof fetch = fetch,
-): Promise<HardcoverSyncResponse> => {
-  const response = await fetcher('/api/connections/hardcover/sync', {
-    method: 'POST',
-    headers: { accept: 'application/json' },
-  })
-  if (!response.ok) throw new Error(`Hardcover sync failed with status ${response.status}.`)
-  return HardcoverSyncResponseSchema.parse(await response.json())
-}
+): Promise<HardcoverSyncResponse | SourceSyncQueuedResponse> =>
+  postSourceSync('hardcover', HardcoverSyncResponseSchema, fetcher)
 
 export const importLetterboxd = async (
   archive: File,
@@ -101,14 +110,8 @@ export const importLetterboxd = async (
 
 export const syncLetterboxd = async (
   fetcher: typeof fetch = fetch,
-): Promise<LetterboxdRssSyncResponse> => {
-  const response = await fetcher('/api/connections/letterboxd/sync', {
-    method: 'POST',
-    headers: { accept: 'application/json' },
-  })
-  if (!response.ok) throw new Error(`Letterboxd sync failed with status ${response.status}.`)
-  return LetterboxdRssSyncResponseSchema.parse(await response.json())
-}
+): Promise<LetterboxdRssSyncResponse | SourceSyncQueuedResponse> =>
+  postSourceSync('letterboxd', LetterboxdRssSyncResponseSchema, fetcher)
 
 export const importSpotify = async (
   archive: File,
@@ -153,14 +156,10 @@ export const importSpotify = async (
   return { ...chunk, ...totals }
 }
 
-export const syncSpotify = async (fetcher: typeof fetch = fetch): Promise<SpotifySyncResponse> => {
-  const response = await fetcher('/api/connections/spotify/sync', {
-    method: 'POST',
-    headers: { accept: 'application/json' },
-  })
-  if (!response.ok) throw new Error(`Spotify sync failed with status ${response.status}.`)
-  return SpotifySyncResponseSchema.parse(await response.json())
-}
+export const syncSpotify = async (
+  fetcher: typeof fetch = fetch,
+): Promise<SpotifySyncResponse | SourceSyncQueuedResponse> =>
+  postSourceSync('spotify', SpotifySyncResponseSchema, fetcher)
 
 export const importYoutube = async (
   archive: File,

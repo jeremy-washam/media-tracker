@@ -36,3 +36,5 @@ changes, add a new ADR that supersedes the old one rather than rewriting history
 20. [Fenced catalog publication and partial sync checkpoints](./0020-fenced-catalog-publication.md)
 
 21. [Bounded production operation and emergency pause](./0021-bounded-production-operations.md)
+
+22. [Durable hosted manual source sync](./0022-durable-manual-source-sync.md)

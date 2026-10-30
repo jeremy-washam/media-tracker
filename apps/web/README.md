@@ -45,7 +45,11 @@ automatic full-chain refreshes on remount/focus/reconnect while preserving exact
 position; explicit import/sync invalidation still refreshes them safely.
 
 Connections polls its head activity page and account status every minute while
-idle and every five seconds during active work. Older activity is unpolled.
+idle and every five seconds during active work. Hosted manual source sync returns
+202 queued acceptance; it does not report imported totals before processing.
+Connections keeps a bounded queued state while waiting for activity and refreshes
+Library snapshots when polling observes a terminal run transition. Local source
+sync retains its synchronous result. Older activity is unpolled.
 Hardcover page responses distinguish background continuation from a completed
 reconciliation; the first page does not claim full import completion.
 Health retains thirty-second polling. See the owning

@@ -1,10 +1,18 @@
-import { activityIsRunning, ACTIVE_POLL_INTERVAL, IDLE_POLL_INTERVAL } from '../connections-queries'
+import {
+  activityIsRunning,
+  ACTIVE_POLL_INTERVAL,
+  IDLE_POLL_INTERVAL,
+  prepareQueuedSourceSync,
+  observeSyncActivity,
+  type PollingSource,
+  type QueuedSourceSync,
+} from '../connections-queries'
 import { invalidateLibraryQueries } from '../library-queries'
 import { Notice, FileUploadButton } from '@/components/ui-patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   CaretDown,
   CheckCircle,
@@ -14,7 +22,7 @@ import {
   Warning,
   UploadSimple,
 } from '@/components/icons'
-import type { ConnectionsResponse } from '@media-tracker/contracts'
+import type { ConnectionsResponse, SyncRunsResponse } from '@media-tracker/contracts'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
@@ -26,6 +34,7 @@ import {
   useQuery,
   useQueryClient,
   useIsMutating,
+  type InfiniteData,
 } from '@tanstack/react-query'
 
 import {
@@ -65,6 +74,48 @@ export function ConnectionsPage() {
   const queryClient = useQueryClient()
   const [youtubeKey, setYoutubeKey] = useState('')
   const mutating = useIsMutating() > 0
+  const [queuedSyncs, setQueuedSyncs] = useState<QueuedSourceSync[]>([])
+  const queuedRef = useRef<QueuedSourceSync[]>([])
+  const observedActivity = useRef<SyncRunsResponse | undefined>(undefined)
+  const queuedWaiting = queuedSyncs.some((pending) => pending.waiting)
+  useEffect(() => {
+    observedActivity.current = queryClient.getQueryData<InfiniteData<SyncRunsResponse>>([
+      'sync-runs',
+    ])?.pages[0]
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type !== 'updated' ||
+        event.action.type !== 'success' ||
+        event.query.queryKey.length !== 1 ||
+        event.query.queryKey[0] !== 'sync-runs'
+      )
+        return
+      const page = (event.query.state.data as InfiniteData<SyncRunsResponse> | undefined)?.pages[0]
+      if (!page) return
+      const observation = observeSyncActivity(observedActivity.current, page, queuedRef.current)
+      observedActivity.current = page
+      if (observation.queued.length !== queuedRef.current.length) {
+        queuedRef.current = observation.queued
+        setQueuedSyncs(observation.queued)
+      }
+      if (observation.refreshLibrary) void invalidateLibraryQueries(queryClient)
+    })
+  }, [queryClient])
+  useEffect(() => {
+    const waiting = queuedSyncs.filter((pending) => pending.waiting)
+    if (waiting.length === 0) return
+    const timer = window.setTimeout(
+      () => {
+        const now = Date.now()
+        queuedRef.current = queuedRef.current.map((pending) =>
+          pending.expiresAt <= now ? { ...pending, waiting: false } : pending,
+        )
+        setQueuedSyncs(queuedRef.current)
+      },
+      Math.max(0, Math.min(...waiting.map((pending) => pending.expiresAt)) - Date.now()),
+    )
+    return () => window.clearTimeout(timer)
+  }, [queuedSyncs])
   const runs = useInfiniteQuery({
     queryKey: ['sync-runs'],
     initialPageParam: undefined as string | undefined,
@@ -72,7 +123,7 @@ export function ConnectionsPage() {
     getNextPageParam: () => undefined,
     maxPages: 1,
     refetchInterval: (query) =>
-      mutating || activityIsRunning(query.state.data?.pages[0])
+      mutating || queuedWaiting || activityIsRunning(query.state.data?.pages[0])
         ? ACTIVE_POLL_INTERVAL
         : IDLE_POLL_INTERVAL,
   })
@@ -94,8 +145,7 @@ export function ConnectionsPage() {
     ).values(),
   ].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   const hasOlder = olderRuns.data ? olderRuns.hasNextPage : Boolean(runs.data?.pages[0]?.nextCursor)
-  const refreshAfterMutation = async () => {
-    await invalidateLibraryQueries(queryClient)
+  const refreshActivity = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['connections'] }),
       queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
@@ -103,6 +153,39 @@ export function ConnectionsPage() {
       queryClient.resetQueries({ queryKey: ['sync-runs-history'] }),
     ])
   }
+  const refreshAfterMutation = async () => {
+    await invalidateLibraryQueries(queryClient)
+    await refreshActivity()
+  }
+  const handleSourceSyncSuccess = (
+    result: unknown,
+    _variables: void,
+    pending: QueuedSourceSync,
+  ) => {
+    if (!(
+      typeof result === 'object' &&
+      result !== null &&
+      'status' in result &&
+      result.status === 'queued'
+    ))
+      return
+    const queued = [
+      ...queuedRef.current.filter((entry) => entry.source !== pending.source),
+      pending,
+    ]
+    const page = queryClient.getQueryData<InfiniteData<SyncRunsResponse>>(['sync-runs'])?.pages[0]
+    const observation = page ? observeSyncActivity(observedActivity.current, page, queued) : null
+    queuedRef.current = observation?.queued ?? queued
+    setQueuedSyncs(queuedRef.current)
+    if (observation?.refreshLibrary) void invalidateLibraryQueries(queryClient)
+  }
+  const handleSourceSyncSettled = (result: unknown) =>
+    typeof result === 'object' &&
+    result !== null &&
+    'status' in result &&
+    result.status === 'queued'
+      ? refreshActivity()
+      : refreshAfterMutation()
   const resumed = useMutation({
     mutationFn: (input: {
       source: 'spotify' | 'youtube'
@@ -115,13 +198,21 @@ export function ConnectionsPage() {
     queryKey: ['connections'],
     queryFn: () => fetchConnections(),
     refetchInterval: () =>
-      mutating || activityIsRunning(runs.data?.pages[0])
+      mutating || queuedWaiting || activityIsRunning(runs.data?.pages[0])
         ? ACTIVE_POLL_INTERVAL
         : IDLE_POLL_INTERVAL,
   })
   const readwiseSync = useMutation({
     mutationFn: () => syncReadwise(),
-    onSettled: refreshAfterMutation,
+    onMutate: () =>
+      prepareQueuedSourceSync(
+        'readwise',
+        connections.data?.data.find((connection) => connection.source === 'readwise')?.id ?? null,
+        queryClient.getQueryData<InfiniteData<SyncRunsResponse>>(['sync-runs'])?.pages[0],
+        Date.now(),
+      ),
+    onSuccess: handleSourceSyncSuccess,
+    onSettled: handleSourceSyncSettled,
   })
   const letterboxdImport = useMutation({
     mutationFn: (archive: File) => importLetterboxd(archive),
@@ -129,11 +220,27 @@ export function ConnectionsPage() {
   })
   const hardcoverSync = useMutation({
     mutationFn: () => syncHardcover(),
-    onSettled: refreshAfterMutation,
+    onMutate: () =>
+      prepareQueuedSourceSync(
+        'hardcover',
+        connections.data?.data.find((connection) => connection.source === 'hardcover')?.id ?? null,
+        queryClient.getQueryData<InfiniteData<SyncRunsResponse>>(['sync-runs'])?.pages[0],
+        Date.now(),
+      ),
+    onSuccess: handleSourceSyncSuccess,
+    onSettled: handleSourceSyncSettled,
   })
   const letterboxdSync = useMutation({
     mutationFn: () => syncLetterboxd(),
-    onSettled: refreshAfterMutation,
+    onMutate: () =>
+      prepareQueuedSourceSync(
+        'letterboxd',
+        connections.data?.data.find((connection) => connection.source === 'letterboxd')?.id ?? null,
+        queryClient.getQueryData<InfiniteData<SyncRunsResponse>>(['sync-runs'])?.pages[0],
+        Date.now(),
+      ),
+    onSuccess: handleSourceSyncSuccess,
+    onSettled: handleSourceSyncSettled,
   })
   const spotifyImport = useMutation({
     mutationFn: (archive: File) => importSpotify(archive),
@@ -141,7 +248,15 @@ export function ConnectionsPage() {
   })
   const spotifySync = useMutation({
     mutationFn: () => syncSpotify(),
-    onSettled: refreshAfterMutation,
+    onMutate: () =>
+      prepareQueuedSourceSync(
+        'spotify',
+        connections.data?.data.find((connection) => connection.source === 'spotify')?.id ?? null,
+        queryClient.getQueryData<InfiniteData<SyncRunsResponse>>(['sync-runs'])?.pages[0],
+        Date.now(),
+      ),
+    onSuccess: handleSourceSyncSuccess,
+    onSettled: handleSourceSyncSettled,
   })
   const youtubeImport = useMutation({
     mutationFn: (input: { archive: File; connectionId?: string }) =>
@@ -154,6 +269,25 @@ export function ConnectionsPage() {
       ),
     onSettled: refreshAfterMutation,
   })
+
+  const sourceIsQueued = (source: PollingSource) =>
+    queuedSyncs.some((pending) => pending.source === source && pending.waiting)
+  const sourceIsBusy = (source: PollingSource) => {
+    const connectionId = connections.data?.data.find(
+      (connection) => connection.source === source,
+    )?.id
+    const latest = runs.data?.pages[0]?.data.find(
+      (run) =>
+        run.source === source &&
+        (!connectionId || run.connectionId === connectionId) &&
+        !run.catalogProgress &&
+        ['backfill', 'reconcile'].includes(run.kind),
+    )
+    return (
+      sourceIsQueued(source) ||
+      (latest !== undefined && ['pending', 'running'].includes(latest.status))
+    )
+  }
 
   return (
     <section className={styles.page} data-ui="connections-page" aria-label="Connections">
@@ -180,30 +314,46 @@ export function ConnectionsPage() {
                   variant="outline"
                   size="sm"
                   type="button"
-                  disabled={readwiseSync.isPending}
+                  disabled={runs.isPending || readwiseSync.isPending || sourceIsBusy('readwise')}
                   onClick={() => readwiseSync.mutate()}
                 >
-                  {readwiseSync.isPending ? (
+                  {readwiseSync.isPending || sourceIsBusy('readwise') ? (
                     <Spinner aria-hidden="true" />
                   ) : (
                     <ArrowsClockwise aria-hidden="true" />
                   )}
-                  {readwiseSync.isPending ? 'Syncing…' : 'Sync now'}
+                  {readwiseSync.isPending
+                    ? 'Requesting…'
+                    : runs.isPending
+                      ? 'Checking…'
+                      : sourceIsQueued('readwise')
+                        ? 'Queued…'
+                        : sourceIsBusy('readwise')
+                          ? 'Syncing…'
+                          : 'Sync now'}
                 </Button>
               ) : connection.source === 'hardcover' ? (
                 <Button
                   variant="outline"
                   size="sm"
                   type="button"
-                  disabled={hardcoverSync.isPending}
+                  disabled={runs.isPending || hardcoverSync.isPending || sourceIsBusy('hardcover')}
                   onClick={() => hardcoverSync.mutate()}
                 >
-                  {hardcoverSync.isPending ? (
+                  {hardcoverSync.isPending || sourceIsBusy('hardcover') ? (
                     <Spinner aria-hidden="true" />
                   ) : (
                     <ArrowsClockwise aria-hidden="true" />
                   )}
-                  {hardcoverSync.isPending ? 'Syncing…' : 'Sync now'}
+                  {hardcoverSync.isPending
+                    ? 'Requesting…'
+                    : runs.isPending
+                      ? 'Checking…'
+                      : sourceIsQueued('hardcover')
+                        ? 'Queued…'
+                        : sourceIsBusy('hardcover')
+                          ? 'Syncing…'
+                          : 'Sync now'}
                 </Button>
               ) : connection.source === 'letterboxd' ? (
                 <div className={styles.actionGroup}>
@@ -211,15 +361,25 @@ export function ConnectionsPage() {
                     variant="outline"
                     size="sm"
                     type="button"
-                    disabled={letterboxdSync.isPending}
+                    disabled={
+                      runs.isPending || letterboxdSync.isPending || sourceIsBusy('letterboxd')
+                    }
                     onClick={() => letterboxdSync.mutate()}
                   >
-                    {letterboxdSync.isPending ? (
+                    {letterboxdSync.isPending || sourceIsBusy('letterboxd') ? (
                       <Spinner aria-hidden="true" />
                     ) : (
                       <ArrowsClockwise aria-hidden="true" />
                     )}
-                    {letterboxdSync.isPending ? 'Syncing…' : 'Sync now'}
+                    {letterboxdSync.isPending
+                      ? 'Requesting…'
+                      : runs.isPending
+                        ? 'Checking…'
+                        : sourceIsQueued('letterboxd')
+                          ? 'Queued…'
+                          : sourceIsBusy('letterboxd')
+                            ? 'Syncing…'
+                            : 'Sync now'}
                   </Button>
                   <FileUploadButton
                     buttonSize="sm"
@@ -241,15 +401,23 @@ export function ConnectionsPage() {
                     variant="outline"
                     size="sm"
                     type="button"
-                    disabled={spotifySync.isPending}
+                    disabled={runs.isPending || spotifySync.isPending || sourceIsBusy('spotify')}
                     onClick={() => spotifySync.mutate()}
                   >
-                    {spotifySync.isPending ? (
+                    {spotifySync.isPending || sourceIsBusy('spotify') ? (
                       <Spinner aria-hidden="true" />
                     ) : (
                       <ArrowsClockwise aria-hidden="true" />
                     )}
-                    {spotifySync.isPending ? 'Syncing…' : 'Sync now'}
+                    {spotifySync.isPending
+                      ? 'Requesting…'
+                      : runs.isPending
+                        ? 'Checking…'
+                        : sourceIsQueued('spotify')
+                          ? 'Queued…'
+                          : sourceIsBusy('spotify')
+                            ? 'Syncing…'
+                            : 'Sync now'}
                   </Button>
                   <FileUploadButton
                     buttonSize="sm"
@@ -301,16 +469,26 @@ export function ConnectionsPage() {
             ))
           : null}
       </div>
-      {readwiseSync.isSuccess ? (
+      {queuedSyncs.map((pending) => (
+        <p className="checkpoint-note" role="status" key={pending.source}>
+          {pending.waiting
+            ? `${sourceNames[pending.source]} sync queued. Follow Recent sync activity for the result.`
+            : `${sourceNames[pending.source]} sync request accepted. No new sync activity observed yet. Check Recent sync activity before trying again.`}
+        </p>
+      ))}
+      {readwiseSync.isSuccess && !('status' in readwiseSync.data) ? (
         <p className="checkpoint-note">
           Imported {readwiseSync.data.archiveItems} Archive items from{' '}
           {readwiseSync.data.sourceRecords} Reader records.
         </p>
       ) : null}
       {readwiseSync.isError ? (
-        <Notice>Readwise sync failed. Confirm the Worker has a valid READWISE_TOKEN secret.</Notice>
+        <Notice>
+          Readwise sync request could not be confirmed. Check Recent sync activity before trying
+          again.
+        </Notice>
       ) : null}
-      {hardcoverSync.isSuccess ? (
+      {hardcoverSync.isSuccess && !('status' in hardcoverSync.data) ? (
         <p className="checkpoint-note">
           {hardcoverSync.data.continuation ? (
             <>
@@ -328,7 +506,8 @@ export function ConnectionsPage() {
       ) : null}
       {hardcoverSync.isError ? (
         <Notice>
-          Hardcover sync failed. Confirm the Worker has a valid HARDCOVER_TOKEN secret.
+          Hardcover sync request could not be confirmed. Check Recent sync activity before trying
+          again.
         </Notice>
       ) : null}
       {letterboxdImport.isSuccess ? (
@@ -343,7 +522,7 @@ export function ConnectionsPage() {
           Letterboxd import failed. Select the ZIP downloaded from Letterboxd’s export page.
         </Notice>
       ) : null}
-      {letterboxdSync.isSuccess ? (
+      {letterboxdSync.isSuccess && !('status' in letterboxdSync.data) ? (
         <p className="checkpoint-note">
           {letterboxdSync.data.unchanged
             ? `Letterboxd RSS is current (${letterboxdSync.data.feedEntries} recent entries checked).`
@@ -351,7 +530,10 @@ export function ConnectionsPage() {
         </p>
       ) : null}
       {letterboxdSync.isError ? (
-        <Notice>Letterboxd RSS sync failed. Confirm the configured username and try again.</Notice>
+        <Notice>
+          Letterboxd sync request could not be confirmed. Check Recent sync activity before trying
+          again.
+        </Notice>
       ) : null}
       {spotifyImport.isSuccess ? (
         <p className="checkpoint-note">
@@ -365,14 +547,16 @@ export function ConnectionsPage() {
           Spotify import failed. Select the Extended Streaming History ZIP from Spotify.
         </Notice>
       ) : null}
-      {spotifySync.isSuccess ? (
+      {spotifySync.isSuccess && !('status' in spotifySync.data) ? (
         <p className="checkpoint-note">
           Reconciled {spotifySync.data.archiveEpisodes} consumed saved episodes,{' '}
           {spotifySync.data.savedShows} followed shows, and {spotifySync.data.recentTracks} recent
           track observations; enriched {spotifySync.data.catalogTracks} additional tracks.
         </p>
       ) : null}
-      {spotifySync.isSuccess && spotifySync.data.partialFailures.length > 0 ? (
+      {spotifySync.isSuccess &&
+      !('status' in spotifySync.data) &&
+      spotifySync.data.partialFailures.length > 0 ? (
         <Notice>
           Some Spotify reads could not be refreshed: {spotifySync.data.partialFailures.join(', ')}.
           Retained data remains available.
@@ -380,7 +564,8 @@ export function ConnectionsPage() {
       ) : null}
       {spotifySync.isError ? (
         <Notice>
-          Spotify sync failed. Confirm its client ID and refresh token are configured.
+          Spotify sync request could not be confirmed. Check Recent sync activity before trying
+          again.
         </Notice>
       ) : null}
       {youtubeImport.isSuccess ? (

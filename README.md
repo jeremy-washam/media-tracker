@@ -113,7 +113,9 @@ capture and independent restore verification are available. Hardcover's controll
 hosted snapshot completed across 23 pages with 1,112 source records, 128 normalized
 records and no failures. After restoring Premium and adding the connected account
 to Spotify Users Management, the first catalog batch fetched 25 tracks without
-errors. Saved-episode source sync and full catalog completion remain to verify.
+errors. A later source check saved six raw responses and 196 source records before
+its validation client disconnected; no cursor advanced. Full source reconciliation
+and catalog completion remain to verify at the next eligible queued cycle.
 CI validation and guarded automatic production delivery passed on main `3044d2ad`;
 the complete YouTube catalog publication and live artwork/search checks also passed.
 The [closeout](docs/planning/deployment-closeout.md) tracks scheduled-cycle evidence

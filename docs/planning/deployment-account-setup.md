@@ -120,6 +120,13 @@ automatic pause. The next real collection recovered at **2026-10-30 00:10:25.976
 UTC**; direct R2 readback confirmed normal/open operation, a $5 estimate and an
 unpaused queue.
 
+At the later **2026-10-30 00:49:23.637 UTC** release checkpoint,
+[main pipeline 40980943229](https://github.com/jeremy-washam/media-tracker/actions/runs/40980943229)
+passed validation, deployment and authenticated smoke for PR 13's merged revision
+`8c89b44533b849e37cbc8b56bbe206224e7d1cdb` (merged 00:38:23). Its gates passed
+907 TypeScript, 147 Python, 267 browser, 18 real-stack and 13 native runtime tests,
+with 72.42% coverage. The cross-midnight retained-source-retry correction was live.
+
 The owner confirmed active Spotify Premium again at **2026-10-30 00:16 UTC**.
 One manual catalog request was accepted at 00:17:34; its first bounded job still
 failed with `spotify_http_403`, verified at 00:18:28, with requested/returned/
@@ -130,21 +137,50 @@ absent from Users Management and added it. One bounded catalog retry was accepte
 with HTTP 202 at **00:27:38 UTC**. By **00:28:05 UTC**, the same pending job's
 tracks phase had 25 requested, 25 returned, zero unavailable and no error,
 verifying track catalog API access. The account addition appears to have resolved
-that access block; the job/full backfill remain unverified. Status still reported
-18,206 remaining tracks, so no remaining-count reduction is claimed. Metadata
-access does not establish saved-episode source recovery: one retained source
-retry awaits PR 13 release. Keep API flags and the source allowlist unchanged,
+that access block. By **00:43:55 UTC**, 300 distinct track records were verified;
+by **00:51 UTC**, the same ongoing job had returned 425 with zero errors. The full
+job/backfill remained incomplete; no remaining-count reduction is claimed from
+its status field. Metadata progress is separate from source sync.
+Keep API flags and the source allowlist unchanged,
 without another catalog retry while observing this job. No new
 subscription/app, agent purchase, reauthorization or manual credential replacement
 was performed.
 
-A cross-midnight retained-source-retry correction is prepared for PR 13, with
-41 focused tests passing (12 new). The full local check passed 907 TypeScript
-and 147 Python tests; production build/dry run and all 13 native runtime tests
-passed. Release and live verification remain pending. It retains original admission accounting and existing guards,
-requires no migration and is not deployed. Functional production remains
-`3044d2ad`; no new Spotify source fetch has been established. Spotify saved-episode
-source recovery, catalog job completion and a genuinely next-eligible daily source
-cycle remain acceptance work. See the
+The deployed PR 13 correction retains original admission accounting and existing
+guards without a migration. One retained source retry started at **00:50:02.561
+UTC**, persisting six raw objects / 196 source records, latest at 00:50:52.618.
+The caller's 60-second read timeout canceled its native invocation at
+**00:51:01.926 UTC** (59,940 ms wall / 632 ms CPU); this was not a provider 403.
+No cursor was committed or advanced for this run. The original October 29
+day/start `1793290076391` and attempt 3 / retry 2 were preserved, with conservatively
+charged unknown attempt usage and a retained `inFlight=1` marker. That marker
+does not prove an active provider request after cancellation. Do not reset
+or resend. After lease expiry at **01:10:02.016 UTC**, guarded reconciliation
+closed exactly one orphaned run at **01:10:31.849 UTC**. Verification at
+**01:10:50.447 UTC** confirmed failed status / `source_run_interrupted`, retention
+of all six raw objects / 196 source records and no cursor committed for this run.
+The repeat wrote nothing. Terminal counters stayed zero without reconstruction;
+they do not imply zero durable work. Original admission day/start, running status,
+attempts 3 / retry 2 and the conservative `inFlight=1` marker remained unchanged.
+
+At the **00:51 UTC follow-through checkpoint**, a change to queue all four hosted
+manual syncs with HTTP 202 and honest queued/polling UI (retaining local HTTP 200)
+was in progress, not yet validated or released. Full source success, catalog job
+completion and a genuinely next-eligible daily cycle remained acceptance work.
+The next legitimate fresh Spotify allocation is October 30 **15:07:56.391 UTC
+(11:07 EDT)**, followed by hourly cron at **16:00 UTC (noon EDT)**. No additional
+account input is needed. See the
 [closeout checklist](deployment-closeout.md) for current activation status and the
 [release runbook](release-and-recovery.md) for exact protected secrets.
+
+At the **October 30 approximately 01:08 UTC** local validation checkpoint, the
+queued-manual-sync change passed the full check (943 TypeScript / 147 Python),
+production build/dry run, all 15 native runtime tests, all 18 Chromium/WebKit
+real-stack tests and all 272 browser tests. Four light/dark desktop/narrow
+screenshots and independent reviews passed. The compiled-Worker test observed the requesting TCP socket
+close before releasing a held synthetic provider response, then verified queue
+completion with durable raw records and cursor commit. These completed local
+checks do not establish a new hosted release; exact-revision hosted CI and
+delivery have separate receipts.
+The queued-manual-sync code is committed as `d9ea713`; PR 14's hosted validation
+and release remain to be verified.

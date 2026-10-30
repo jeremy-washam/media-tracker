@@ -62,7 +62,13 @@ Podcast and Music option searches debounce for 250 ms.
 ## Connections
 
 Connections and the newest activity page poll every minute while idle, and every
-five seconds during browser mutations or observed active catalog/sync work.
+five seconds during browser mutations, the bounded hosted queued-source window,
+or observed active catalog/sync work. Hosted manual sync returns 202 only after
+queue acceptance; this invalidates activity rather than declaring Library changes.
+Observed terminal activity transitions invalidate Library snapshots, including
+a queued source that finishes before its first running poll. The queued receipt
+is not a sync-run identifier, and a bounded waiting state can expire without
+claiming completion. Local completed source responses retain the existing flow.
 Older activity uses a separate, explicitly paginated, unpolled snapshot. Rows
 are deduplicated by run ID, with current head data taking precedence. Import/sync
 completion or failure resets older activity and invalidates operational and

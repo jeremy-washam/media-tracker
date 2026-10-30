@@ -60,7 +60,9 @@ previously confirmed Premium, then reported cancellation during the October 29
 access investigation. The owner has since confirmed restoring Premium, but the
 first catalog retry still returned 403. After the owner added the missing
 connected account in Users Management, a catalog retry fetched 25 tracks without
-errors. Saved-episode source sync and the complete backfill remain to verify.
+errors. A subsequent source check saved six raw responses and 196 source records
+before the validation client disconnected; no cursor advanced. Full source
+reconciliation and the complete backfill remain to verify.
 
 ## Source surfaces
 
@@ -128,6 +130,19 @@ and committed **25 tracks with zero errors or unavailable records** by
 it does not establish saved-episode access or full backfill completion.
 Cancellation alone was not the complete observed access block. No agent purchase,
 new app, reauthorization or manual credential replacement was made.
+
+The cross-midnight recovery fix was released at **00:49:23.637 UTC**. One retained
+source attempt at 00:50:02.561 saved six raw responses and 196 source records;
+the validation client's 60-second timeout then canceled the Worker at
+00:51:01.926. The cursor did not advance. Keep the original exhausted admission's
+unknown in-flight usage and conservative charge; do not refund/reset it or resend.
+The guarded orphan procedure closed only the abandoned visible run at
+**01:10:31.849 UTC**; repeating it made zero writes. All six raw responses and 196
+source records remained, with no cursor committed by this run and the admission
+unchanged. The next fresh allocation becomes eligible at **15:07:56.391 UTC (11:07 a.m. EDT)**,
+with hourly dispatch at **16:00 UTC (noon EDT)**, subject to ordinary gates.
+Hosted manual sync uses durable queue dispatch and reports acceptance separately
+from source completion; local sync retains its synchronous result.
 See the [source rollout evidence](../planning/source-sync-rollout.md#live-closeout-evidence--october-29-2026).
 
 ### OAuth flow

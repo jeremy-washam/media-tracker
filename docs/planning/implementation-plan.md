@@ -46,6 +46,14 @@ estimate and unpaused queue.
 See the closeout checklist for exact release evidence and later updates;
 deployment does not imply every provider has passed acceptance.
 
+[PR 13](https://github.com/jeremy-washam/media-tracker/pull/13) merged at 00:38:23
+UTC as `8c89b44533b849e37cbc8b56bbe206224e7d1cdb`.
+[Main pipeline 40980943229](https://github.com/jeremy-washam/media-tracker/actions/runs/40980943229)
+passed validation, deployment and authenticated smoke at 00:49:23.637 UTC:
+907 TypeScript, 147 Python, 267 browser, 18 real-stack and 13 native runtime
+tests passed with 72.42% coverage. The cross-midnight retry correction was live
+at that checkpoint.
+
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
 root opens Books Archive. Source-derived Queue, Reader Feed, Podcast Following,
@@ -73,24 +81,56 @@ the retained deployment input. The owner found the account absent from Users
 Management and added it. One bounded catalog retry was accepted with HTTP 202
 at 00:27:38. By 00:28:05 the same pending job's tracks phase had requested 25,
 returned 25, zero unavailable and no error, verifying track catalog API access.
-The account addition appears to have resolved that access block; the job/full
-backfill remain unverified and status still reported 18,206 remaining tracks.
-Metadata access does not establish saved-episode source recovery: one retained
-source retry awaits PR 13 release. Keep API flags and the allowlist unchanged,
+The account addition appears to have resolved that access block. By 00:43:55,
+300 distinct track records were verified; by 00:51, the ongoing catalog job had
+returned 425 with zero errors. The full job/backfill remain incomplete; do not
+infer a remaining-count reduction from its status field. Metadata progress is
+separate from source sync. Keep API flags and the allowlist unchanged,
 with no additional catalog retry while observing this job, and no new
 subscription/app or credential replacement. Premium restoration alone had not
 resolved the observed API failure.
 
-A prepared source-admission correction allows only the latest retained failed
+The deployed PR 13 source-admission correction allows only the latest retained failed
 allocation to retry across UTC midnight, with an atomic newer-admission fence.
 It preserves original day/start, cumulative reservation/usage, cooldown and
 ceilings, and all new-allocation daily/23-hour, scheduler, lease and rolling guards.
 No migration is required. The focused suite passed 41 tests, including 12 new
 regressions. The full local check passed 907 TypeScript and 147 Python tests;
-production build/dry run and all 13 native runtime tests passed. PR 13 release
-and live verification remain pending.
-The fix is not deployed: functional production remains `3044d2ad`, and a new
-Spotify source fetch has not been established.
+production build/dry run and all 13 native runtime tests passed, followed by the
+successful exact-main release above.
+
+One retained source retry began at 00:50:02.561 UTC and persisted six raw objects
+and 196 source records, latest at 00:50:52.618. The caller's 60-second read
+timeout canceled its native invocation at 00:51:01.926 (59,940 ms wall / 632 ms
+CPU); this was not a provider 403 or completed sync. No cursor was committed or
+advanced for this run. The original October 29 admission/start `1793290076391`
+and attempt 3 / retry 2 remain intact, with conservatively charged unknown attempt
+usage and a retained `inFlight=1` marker. That marker does not prove an active
+provider request after cancellation. No reset or resend is appropriate.
+After lease expiry, guarded reconciliation closed exactly one visibly orphaned
+run at **01:10:31.849 UTC**. Verification at **01:10:50.447 UTC** confirmed failed
+status / `source_run_interrupted`, all six raw objects / 196 source records
+retained and no cursor committed for this run. A repeat wrote nothing. Terminal
+counters stayed zero without reconstruction, so they do not mean zero durable
+work. The original October 29 admission/start, running status, attempt 3 / retry 2
+and conservative `inFlight=1` marker stayed unchanged. A follow-up to
+queue all four hosted manual syncs with HTTP 202 and honest queued/polling UI
+(retaining local HTTP 200) was in progress at the **00:51 UTC follow-through
+checkpoint**, not yet validated or released.
+At the **October 30 approximately 01:08 UTC** local validation checkpoint, this
+queued-sync change passed the full check (943 TypeScript / 147 Python), production
+build/dry run, all 15 native runtime tests, all 18 Chromium/WebKit real-stack tests
+and all 272 browser tests. Four light/dark desktop/narrow screenshots and
+independent reviews passed. The compiled-Worker TCP test observed the requesting socket close before
+releasing a held synthetic provider response, then verified queue completion,
+durable raw records and cursor commit. These completed local checks do not claim
+a new hosted release; exact-revision hosted CI and delivery have separate receipts.
+The queued-manual-sync code is committed as `d9ea713`; PR 14's hosted validation
+and release remain to be verified.
+The next fresh Spotify allocation is October 30 15:07:56.391 UTC (11:07 EDT),
+and the next eligible hourly cron is 16:00 UTC (noon EDT). Full source success
+and the true next-eligible daily cycle remain open; no further account input is
+needed.
 The real October 30 hourly invocation completed at 00:00:17.063 UTC without an
 empty catalog refresh; five-minute maintenance also completed. Its article batch
 finished with 20 jobs / 20 attempts / zero failures, 20 ready/full manifests,

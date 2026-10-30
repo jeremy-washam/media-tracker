@@ -55,6 +55,7 @@ import {
   SpotifyImportResponseSchema,
   SpotifyCatalogJobResponseSchema,
   SpotifySyncResponseSchema,
+  SourceSyncQueuedResponseSchema,
   SyncRunsResponseSchema,
   VideoChannelDetailSchema,
   VideoChannelLibraryQuerySchema,
@@ -90,6 +91,7 @@ import { LetterboxdRssConfigurationError, syncLetterboxdRss } from './letterboxd
 import { requestContext, requestLogger, securityHeaders } from './middleware'
 import { ReadwiseTokenMissingError, syncReadwiseArchive } from './readwise-sync'
 import { runSourceSync } from './source-sync'
+import { queueHostedSourceSync } from './manual-source-sync'
 import { SyncDeferredError } from './sync-budget'
 import { hydrateArticleTextExcerpts } from './article-excerpts'
 import {
@@ -518,6 +520,10 @@ const readwiseSyncRoute = createRoute({
   tags: ['Connections'],
   responses: {
     200: jsonContent(ReadwiseSyncResponseSchema, 'Completed Readwise Archive import'),
+    202: jsonContent(
+      SourceSyncQueuedResponseSchema,
+      'Hosted source sync queued; execution remains pending',
+    ),
     503: jsonContent(ApiErrorSchema, 'Readwise is not configured or unavailable'),
   },
 })
@@ -541,6 +547,10 @@ const hardcoverSyncRoute = createRoute({
       HardcoverSyncResponseSchema,
       'Hardcover reconciliation progress or completed snapshot',
     ),
+    202: jsonContent(
+      SourceSyncQueuedResponseSchema,
+      'Hosted source sync queued; execution remains pending',
+    ),
     503: jsonContent(ApiErrorSchema, 'Hardcover is not configured or unavailable'),
   },
 })
@@ -551,6 +561,10 @@ const letterboxdSyncRoute = createRoute({
   tags: ['Connections'],
   responses: {
     200: jsonContent(LetterboxdRssSyncResponseSchema, 'Completed Letterboxd RSS poll'),
+    202: jsonContent(
+      SourceSyncQueuedResponseSchema,
+      'Hosted source sync queued; execution remains pending',
+    ),
     503: jsonContent(ApiErrorSchema, 'Letterboxd RSS is not configured'),
   },
 })
@@ -584,6 +598,10 @@ const spotifySyncRoute = createRoute({
   tags: ['Connections'],
   responses: {
     200: jsonContent(SpotifySyncResponseSchema, 'Completed Spotify saved-episode sync'),
+    202: jsonContent(
+      SourceSyncQueuedResponseSchema,
+      'Hosted source sync queued; execution remains pending',
+    ),
     503: jsonContent(ApiErrorSchema, 'Spotify is not configured or unavailable'),
   },
 })
@@ -1503,6 +1521,12 @@ app.openapi(youtubeCatalogSyncRoute, async (context) => {
 })
 
 app.openapi(readwiseSyncRoute, async (context) => {
+  const queued = await queueHostedSourceSync(
+    { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+    'readwise',
+    context.get('requestId'),
+  )
+  if (queued) return context.json(queued, 202)
   try {
     return context.json(
       ReadwiseSyncResponseSchema.parse(
@@ -1533,6 +1557,12 @@ app.openapi(readwiseSyncRoute, async (context) => {
 })
 
 app.openapi(hardcoverSyncRoute, async (context) => {
+  const queued = await queueHostedSourceSync(
+    { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+    'hardcover',
+    context.get('requestId'),
+  )
+  if (queued) return context.json(queued, 202)
   try {
     const result = await runSourceSync(
       {
@@ -1609,6 +1639,12 @@ app.openapi(letterboxdImportRoute, async (context) => {
 })
 
 app.openapi(letterboxdSyncRoute, async (context) => {
+  const queued = await queueHostedSourceSync(
+    { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+    'letterboxd',
+    context.get('requestId'),
+  )
+  if (queued) return context.json(queued, 202)
   try {
     return context.json(
       LetterboxdRssSyncResponseSchema.parse(
@@ -1709,6 +1745,12 @@ app.openapi(spotifyImportContinueRoute, async (context) => {
 })
 
 app.openapi(spotifySyncRoute, async (context) => {
+  const queued = await queueHostedSourceSync(
+    { ...context.env, DATABASE_USAGE_OBSERVER: context.get('databaseUsageObserver') },
+    'spotify',
+    context.get('requestId'),
+  )
+  if (queued) return context.json(queued, 202)
   try {
     return context.json(
       SpotifySyncResponseSchema.parse(

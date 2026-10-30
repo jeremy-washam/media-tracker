@@ -28,6 +28,18 @@ export const ApiErrorSchema = z.object({
   }),
 })
 
+// This acknowledges a Queue send, not a completed sync or an allocated run.
+// requestId traces the HTTP request; it does not deduplicate Queue delivery.
+export const SourceSyncQueuedResponseSchema = z
+  .object({
+    status: z.literal('queued'),
+    source: z.enum(['letterboxd', 'hardcover', 'readwise', 'spotify']),
+    requestId: z.string().min(1).max(128),
+  })
+  .strict()
+
+export type SourceSyncQueuedResponse = z.infer<typeof SourceSyncQueuedResponseSchema>
+
 export const HealthResponseSchema = z.object({
   status: z.literal('ok'),
   service: z.literal('media-tracker-api'),
