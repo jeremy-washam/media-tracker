@@ -289,7 +289,12 @@ export function ChatPage({ conversationId }: { conversationId?: string }) {
   }
   const latest = data?.latestRun
   return (
-    <section className={styles.page} aria-label="Chat" data-ui="chat-page">
+    <section
+      className={styles.page}
+      aria-label="Chat"
+      data-ui="chat-page"
+      data-inspector-open={Boolean(reference)}
+    >
       <div
         className={styles.transcript}
         ref={scroll}

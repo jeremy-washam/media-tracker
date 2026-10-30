@@ -93,6 +93,7 @@ for (const dark of [false, true]) {
 test('reads the real synthetic Library, renders actual summaries/tool counts, and opens the shared inspector with focus return', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(new URL('/chat', runtime.url).href)
   await page.getByRole('textbox', { name: 'Message Imladris' }).fill('Find a book in my library')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
@@ -104,8 +105,20 @@ test('reads the real synthetic Library, renders actual summaries/tool counts, an
   await citation.click()
   const inspector = page.getByRole('complementary', { name: 'Book inspector' })
   await expect(inspector).toBeVisible()
+  const bounds = await inspector.boundingBox()
+  expect(bounds).toMatchObject({ x: 1080, y: 0, width: 360 })
+  expect(bounds!.height).toBeCloseTo(900, 0)
+  const composer = await page.getByRole('textbox', { name: 'Message Imladris' }).boundingBox()
+  expect(composer!.y).toBeGreaterThan(700)
+  expect(composer!.x + composer!.width).toBeLessThanOrEqual(bounds!.x)
+  await page.screenshot({ path: '.private/chat-implementation/chat-inspector-desktop.png' })
   await inspector.getByRole('tab', { name: 'History', exact: true }).click()
   await expect(inspector.getByRole('tabpanel', { name: 'History', exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  const narrow = await inspector.boundingBox()
+  expect(narrow).toMatchObject({ x: 30, y: 0, width: 360 })
+  expect(narrow!.height).toBeCloseTo(844, 0)
+  await page.screenshot({ path: '.private/chat-implementation/chat-inspector-narrow.png' })
   await page.keyboard.press('Escape')
   await expect(inspector).toBeHidden()
   await expect(citation).toBeFocused()

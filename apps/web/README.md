@@ -25,6 +25,9 @@ The legacy History component is not routed. Chat opens the selected Familiar
 interface with saved history, Favorites, streaming activity and Library citations.
 Recaps remains disabled; Settings has no production route. Chat uses the existing
 sidebar, with New Chat and collapsible Favorites/Chats below application navigation.
+Chat citations open the shared 360px inspector at the right edge of the viewport.
+Desktop Chat reserves that width; at 1180px and below it overlays the conversation
+without squeezing the transcript or moving the composer.
 See [Chat runtime](../../docs/decisions/0023-owned-chat-runtime.md) for lifecycle,
 provider and credit boundaries.
 Connections uses compact source rows with bundled official logos and labeled
