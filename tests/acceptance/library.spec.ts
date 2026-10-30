@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { ConnectionsResponseSchema } from '../../packages/contracts/src/index'
 import {
   createWorkerRuntime,
   runtimeBookTitle,
@@ -111,9 +112,30 @@ test('resumes an interrupted real import from Connections and refreshes Library 
     `/api/connections/youtube/import/${first.importId}/continue`,
     runtime.url,
   )
-  // Verify the real import response before asserting its refreshed UI state.
-  // Backend/network failures should report their own acceptance stage rather
-  // than appearing as a missing Connections refresh after the locator timeout.
+  // Observe the browser's completed account refresh before checking the DOM.
+  // Its active polling interval is five seconds, so a five-second DOM deadline
+  // can expire before the next real refresh has even arrived on a busy runner.
+  const refreshed = page.waitForResponse(
+    async (response) => {
+      const url = new URL(response.url())
+      if (
+        response.request().method() !== 'GET' ||
+        url.origin !== continuationUrl.origin ||
+        url.pathname !== '/api/connections' ||
+        response.status() !== 200
+      )
+        return false
+      const body = ConnectionsResponseSchema.parse(await response.json())
+      const connection = body.data.find(
+        (item) => item.source === 'youtube' && item.label === 'ResumeUI',
+      )
+      return (
+        !!connection &&
+        !connection.incompleteImports.some((item) => item.importId === first.importId)
+      )
+    },
+    { timeout: 15_000 },
+  )
   const [continued] = await Promise.all([
     page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -123,6 +145,7 @@ test('resumes an interrupted real import from Connections and refreshes Library 
         url.pathname === continuationUrl.pathname
       )
     }),
+    refreshed,
     resume.click(),
   ])
   expect(continued.status()).toBe(200)

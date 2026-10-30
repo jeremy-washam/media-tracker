@@ -4,13 +4,28 @@ import {
   type WorkerRuntime,
   runtimeBookTitle,
 } from '../support/worker-runtime'
-import { syntheticChatProvider } from '../support/chat-provider'
+import {
+  holdSyntheticChatResponse,
+  releaseSyntheticChatResponses,
+  syntheticChatProvider,
+} from '../support/chat-provider'
 let runtime: WorkerRuntime
 test.beforeAll(async () => {
   runtime = await createWorkerRuntime({ chat: true, chatProvider: syntheticChatProvider })
 })
 test.afterAll(async () => {
   await runtime?.dispose()
+})
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus)
+    console.error(
+      'Synthetic Chat acceptance UI state:\n' +
+        (await page
+          .locator('body')
+          .innerText()
+          .catch(() => 'Page unavailable')),
+    )
+  releaseSyntheticChatResponses()
 })
 test.beforeEach(async ({ page }) => {
   await page.route('https://**/*', (route) => route.abort())
@@ -93,6 +108,7 @@ for (const dark of [false, true]) {
 test('reads the real synthetic Library, renders actual summaries/tool counts, and opens the shared inspector with focus return', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(new URL('/chat', runtime.url).href)
   await page.getByRole('textbox', { name: 'Message Imladris' }).fill('Find a book in my library')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
@@ -104,8 +120,20 @@ test('reads the real synthetic Library, renders actual summaries/tool counts, an
   await citation.click()
   const inspector = page.getByRole('complementary', { name: 'Book inspector' })
   await expect(inspector).toBeVisible()
+  const bounds = await inspector.boundingBox()
+  expect(bounds).toMatchObject({ x: 1080, y: 0, width: 360 })
+  expect(bounds!.height).toBeCloseTo(900, 0)
+  const composer = await page.getByRole('textbox', { name: 'Message Imladris' }).boundingBox()
+  expect(composer!.y).toBeGreaterThan(700)
+  expect(composer!.x + composer!.width).toBeLessThanOrEqual(bounds!.x)
+  await page.screenshot({ path: '.private/chat-implementation/chat-inspector-desktop.png' })
   await inspector.getByRole('tab', { name: 'History', exact: true }).click()
   await expect(inspector.getByRole('tabpanel', { name: 'History', exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  const narrow = await inspector.boundingBox()
+  expect(narrow).toMatchObject({ x: 30, y: 0, width: 360 })
+  expect(narrow!.height).toBeCloseTo(844, 0)
+  await page.screenshot({ path: '.private/chat-implementation/chat-inspector-narrow.png' })
   await page.keyboard.press('Escape')
   await expect(inspector).toBeHidden()
   await expect(citation).toBeFocused()
@@ -113,6 +141,7 @@ test('reads the real synthetic Library, renders actual summaries/tool counts, an
 test('keeps a partial answer on Stop and after reloading, then supports another turn', async ({
   page,
 }) => {
+  const release = holdSyntheticChatResponse('A slow response please')
   await page.goto(new URL('/chat', runtime.url).href)
   await page.getByRole('textbox', { name: 'Message Imladris' }).fill('A slow response please')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
@@ -120,6 +149,7 @@ test('keeps a partial answer on Stop and after reloading, then supports another 
   await expect(page.getByText('A streamed answer that stays saved.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Stop response', exact: true }).click()
   await expect(page.getByText('Response stopped.', { exact: true })).toBeVisible()
+  release()
   await page.reload()
   await expect(page.getByText('Response stopped.', { exact: true })).toBeVisible()
   await expect(page.getByText('A streamed answer that stays saved.', { exact: true })).toBeVisible()
@@ -183,6 +213,7 @@ test('recovers a lost send acknowledgement after reload using the original opera
 test('reloads an active response without cancelling it or submitting replacement inference', async ({
   page,
 }) => {
+  const release = holdSyntheticChatResponse('A slow response that survives reload')
   const before = runtime.outboundRequests.filter((url) => url.includes('api.openai.com')).length
   await page.goto(new URL('/chat', runtime.url).href)
   await page
@@ -193,6 +224,8 @@ test('reloads an active response without cancelling it or submitting replacement
   await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toBeVisible()
   await page.reload()
   await expect(page.getByText('A streamed answer that stays saved.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toBeVisible()
+  release()
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible()
   await expect(page.getByRole('article', { name: 'Your message' })).toHaveCount(1)
   expect(

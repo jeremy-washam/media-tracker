@@ -74,6 +74,23 @@
   flex-direction: column;
   overflow: hidden;
 }
+.page[data-inspector-open='true'] {
+  padding-right: 360px;
+}
+.page > [data-ui~='book-inspector'],
+.page > [data-ui~='media-inspector'] {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(360px, 100vw);
+  height: 100dvh;
+  z-index: 60;
+  overscroll-behavior: contain;
+}
+@media (max-width: 1180px) {
+  .page[data-inspector-open='true'] {
+    padding-right: 0;
+  }
+}
 .transcript {
   overflow-y: auto;
   flex: 1;
