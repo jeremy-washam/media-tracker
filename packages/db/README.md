@@ -82,3 +82,9 @@ synthetic-only adapter in `src/test-support/sqlite.ts` enables foreign keys,
 atomic rollback and D1's per-statement parameter ceiling, captures actual queries
 for plan checks, and exposes statement/batch failure injection. Local SQLite
 coverage still needs complementary Worker/D1 integration tests.
+
+Migration 0035 adds artist image URLs and acquisition state/time separately from
+track-credit metadata. Artist lists and inspectors share that stored image.
+Exact catalog lookups prioritize pending artists by lifetime playback count;
+success with no image and 404s both leave a stable fallback without deleting
+credits or listening observations. Track metadata refresh does not erase photos.

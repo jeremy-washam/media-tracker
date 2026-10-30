@@ -88,7 +88,8 @@ export async function scheduleCatalogWork(
           env.DB,
           env.DATABASE_USAGE_OBSERVER,
         ).catalogBacklogCounts(spotifyStaleBefore(at))
-        if (backlog.tracks > 0 || backlog.episodes > 0) await startSpotifyCatalogBackfill(env, at)
+        if (backlog.tracks > 0 || backlog.episodes > 0 || backlog.artists > 0)
+          await startSpotifyCatalogBackfill(env, at)
       },
     ])
   if (env.ARTICLE_CONTENT_ENABLED === 'true' && env.READWISE_TOKEN)

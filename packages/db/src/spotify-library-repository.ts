@@ -789,6 +789,52 @@ export class SqlSpotifyLibraryRepository {
     }))
   }
 
+  async listArtistsNeedingArtwork(limit = 12, staleBefore?: string) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50)
+      throw new TypeError('Spotify artist backlog limit must be between 1 and 50')
+    const rows = await statement(
+      this.database,
+      `
+      SELECT a.id,a.spotify_artist_id,a.spotify_artist_uri
+      FROM spotify_song_artists a
+      JOIN spotify_song_track_artists ta ON ta.artist_id=a.id
+      JOIN spotify_song_tracks t ON t.media_item_id=ta.media_item_id
+      WHERE a.artwork_state='pending' OR (? IS NOT NULL AND a.artwork_observed_at<=?)
+      GROUP BY a.id ORDER BY SUM(t.playback_count) DESC,a.id LIMIT ?`,
+      [staleBefore ?? null, staleBefore ?? null, limit],
+    ).all<{ id: string; spotify_artist_id: string; spotify_artist_uri: string }>()
+    return rows.results.map((row) => ({
+      artistId: row.id,
+      spotifyId: row.spotify_artist_id,
+      artistUri: row.spotify_artist_uri,
+    }))
+  }
+
+  async applyArtistArtwork(value: {
+    artistId: string
+    spotifyId: string
+    artistUri: string
+    imageUrl: string | null
+    observedAt: string
+    unavailable?: boolean
+  }): Promise<void> {
+    await statement(
+      this.database,
+      `
+      UPDATE spotify_song_artists SET image_url=?,artwork_state=?,artwork_observed_at=?,updated_at=?
+      WHERE id=? AND spotify_artist_id=? AND spotify_artist_uri=?`,
+      [
+        value.imageUrl,
+        value.unavailable ? 'unavailable' : 'available',
+        value.observedAt,
+        value.observedAt,
+        value.artistId,
+        value.spotifyId,
+        value.artistUri,
+      ],
+    ).run()
+  }
+
   async listPodcastEpisodesNeedingMetadata(
     limit = 10,
     staleBefore?: string,
@@ -873,10 +919,19 @@ export class SqlSpotifyLibraryRepository {
       this.database,
       `SELECT
        (SELECT COUNT(*) FROM spotify_song_tracks WHERE metadata_state IN ('export_only','expired','error') OR (? IS NOT NULL AND metadata_observed_at<=?)) tracks,
-       (SELECT COUNT(*) FROM spotify_podcast_episodes WHERE availability_state IN ('unknown','error') OR (? IS NOT NULL AND metadata_observed_at<=?)) episodes`,
-      [staleBefore ?? null, staleBefore ?? null, staleBefore ?? null, staleBefore ?? null],
-    ).first<{ tracks: number; episodes: number }>()
-    return { tracks: row?.tracks ?? 0, episodes: row?.episodes ?? 0 }
+       (SELECT COUNT(*) FROM spotify_podcast_episodes WHERE availability_state IN ('unknown','error') OR (? IS NOT NULL AND metadata_observed_at<=?)) episodes,
+       (SELECT COUNT(*) FROM spotify_song_artists a WHERE (artwork_state='pending' OR (? IS NOT NULL AND artwork_observed_at<=?)) AND EXISTS
+         (SELECT 1 FROM spotify_song_track_artists ta WHERE ta.artist_id=a.id)) artists`,
+      [
+        staleBefore ?? null,
+        staleBefore ?? null,
+        staleBefore ?? null,
+        staleBefore ?? null,
+        staleBefore ?? null,
+        staleBefore ?? null,
+      ],
+    ).first<{ tracks: number; episodes: number; artists: number }>()
+    return { tracks: row?.tracks ?? 0, episodes: row?.episodes ?? 0, artists: row?.artists ?? 0 }
   }
 
   async markTrackMetadataUnavailable(mediaItemIds: readonly string[], at: string): Promise<void> {
@@ -2128,7 +2183,7 @@ export class SqlSpotifyLibraryRepository {
         title: (row.name as string | null) ?? 'Unknown artist',
         subtitle: null,
         album: null,
-        imageUrl: null,
+        imageUrl: row.image_url as string | null,
         latestPlayedAt: row.latest_played_at as string | null,
         playbackCount: Number(row.matching_playback_count ?? 0),
         observedMs: Number(row.matching_observed_ms ?? 0),

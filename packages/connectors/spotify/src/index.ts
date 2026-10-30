@@ -15,6 +15,8 @@ export {
   fetchSpotifyPlayer,
   fetchSpotifyRecentlyPlayed,
   fetchSpotifyTracks,
+  fetchSpotifyArtistResponse,
+  parseSpotifyArtistResponse,
   fetchSpotifyTrackResponse,
   parseSpotifyTrackResponse,
   fetchSpotifyEpisodeResponse,

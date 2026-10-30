@@ -174,3 +174,9 @@ Local source sync stays paused while hosted credentials own refresh-token
 rotation. Recovery must use the hosted encrypted credential store rather than
 copying or rotating an older local token. No live retry or credential mutation
 was performed as part of the source-code regression work.
+
+Exact artist-catalog acquisition uses `fetchSpotifyArtistResponse` and
+`parseSpotifyArtistResponse`, preserving response bytes separately from parsing.
+Artist photos come from `/v1/artists/{id}`; simplified Track credits do not
+provide them. Artist response IDs and URIs must match the requested exact identity
+before publishing the image. An empty images array is a valid missing photo.

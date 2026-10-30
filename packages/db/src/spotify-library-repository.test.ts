@@ -364,6 +364,80 @@ describe('Spotify library repository', () => {
     await expect(repository.listTracksNeedingMetadata()).resolves.toEqual([])
   })
 
+  it('keeps artist artwork separate from track credits and serves it in collections and details', async () => {
+    await repository.projectHistory({
+      podcasts: [],
+      songs: [
+        {
+          id: 'listen',
+          connectionId: 'spotify',
+          sourceRecordId: 'song-record',
+          mediaItemId: 'song',
+          trackUri: 'spotify:track:1',
+          trackId: '1',
+          occurredAt: '2026-01-01T00:00:00Z',
+          millisecondsPlayed: 100,
+          sourceKind: 'export',
+          skipped: false,
+          trackName: 'Track',
+          artistName: 'Artist',
+          albumName: null,
+          reasonStart: null,
+          reasonEnd: null,
+          parserVersion: 'test',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+    const track = {
+      mediaItemId: 'song',
+      trackUri: 'spotify:track:1',
+      trackId: '1',
+      title: 'Track',
+      artists: [{ id: 'artist', uri: 'spotify:artist:artist', name: 'Artist' }],
+      album: null,
+      canonicalUrl: null,
+      durationMs: null,
+      explicit: null,
+      isrc: null,
+      observedAt: '2026-01-01T00:00:00Z',
+    }
+    await repository.applyTrackMetadata(track)
+    await expect(repository.listArtistsNeedingArtwork()).resolves.toEqual([
+      { artistId: 'artist', spotifyId: 'artist', artistUri: 'spotify:artist:artist' },
+    ])
+    const artwork = {
+      artistId: 'artist',
+      spotifyId: 'artist',
+      artistUri: 'spotify:artist:artist',
+      imageUrl: 'https://example.invalid/artist.jpg',
+      observedAt: '2026-01-02T00:00:00Z',
+    }
+    await repository.applyArtistArtwork({ ...artwork, spotifyId: 'different' })
+    expect((await repository.listArtistsNeedingArtwork()).length).toBe(1)
+    await repository.applyArtistArtwork(artwork)
+    // Later simplified track credits must not erase the separately acquired photo.
+    await repository.applyTrackMetadata({ ...track, observedAt: '2026-01-03T00:00:00Z' })
+    await expect(repository.listArtistsNeedingArtwork()).resolves.toEqual([])
+    expect((await repository.listArtistsNeedingArtwork(12, '2026-01-02T00:00:00Z')).length).toBe(1)
+    expect((await repository.catalogBacklogCounts('2026-01-02T00:00:00Z')).artists).toBe(1)
+    expect((await repository.catalogBacklogCounts()).artists).toBe(0)
+    expect((await repository.listMusic({ view: 'artists', limit: 10 })).data[0]).toMatchObject({
+      imageUrl: artwork.imageUrl,
+      playbackCount: 1,
+    })
+    await expect(repository.findMusic('artist', 'artist')).resolves.toMatchObject({
+      imageUrl: artwork.imageUrl,
+      playbackCount: 1,
+    })
+    await repository.applyArtistArtwork({ ...artwork, imageUrl: null, unavailable: true })
+    await expect(repository.listArtistsNeedingArtwork()).resolves.toEqual([])
+    await expect(repository.findMusic('artist', 'artist')).resolves.toMatchObject({
+      imageUrl: null,
+      playbackCount: 1,
+    })
+  })
+
   it('uses matching occurrence scope for Music source and date aggregates', async () => {
     database.exec(
       `INSERT INTO source_records(id,raw_object_id,connection_id,record_type,record_path,observed_at,parser_version,disposition,upstream_state) VALUES('recent-record','raw','spotify','recent','$[3]','2026-02-01T00:00:00Z','test','normalized','active')`,

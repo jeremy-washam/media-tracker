@@ -13,6 +13,13 @@ are historical; operational catalog resume/progress is now implemented. Schedule
 catalog refresh, long-list virtualization, and the remaining hardening are still
 follow-ups.
 
+October 30 artwork fix: migration 0035 adds separately observed artist artwork.
+The existing catalog job shares its 25-request budget between tracks and exact
+artist-photo lookups during the track phase, prioritizing frequently heard
+artists. Collections and inspectors use the acquired artist image URL. Simplified
+track credits cannot overwrite artist photos; no album cover is presented as
+an artist portrait. Existing raw-evidence retention, leases and retry rules apply.
+
 ## Current catalog-backfill decision (2026-09-21)
 
 The accepted interim retention decision is [ADR 0014](../decisions/0014-spotify-catalog-retention-interim.md):

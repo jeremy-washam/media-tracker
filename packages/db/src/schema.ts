@@ -1553,6 +1553,11 @@ export const spotifySongArtists = sqliteTable('spotify_song_artists', {
   spotifyArtistId: text('spotify_artist_id').notNull(),
   name: text('name'),
   canonicalUrl: text('canonical_url'),
+  imageUrl: text('image_url'),
+  artworkState: text('artwork_state', { enum: ['pending', 'available', 'unavailable'] })
+    .notNull()
+    .default('pending'),
+  artworkObservedAt: text('artwork_observed_at'),
   metadataObservedAt: text('metadata_observed_at'),
   updatedAt: text('updated_at').notNull(),
 })
