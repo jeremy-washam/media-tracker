@@ -317,6 +317,7 @@ export const SpotifyCatalogJobResponseSchema = z.object({
   requestedCount: z.number().int().nonnegative(),
   returnedCount: z.number().int().nonnegative(),
   unavailableCount: z.number().int().nonnegative(),
+  remainingArtists: z.number().int().nonnegative().default(0),
   remainingTracks: z.number().int().nonnegative(),
   remainingEpisodes: z.number().int().nonnegative(),
   nextAttemptAt: z.string().nullable(),

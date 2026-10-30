@@ -226,6 +226,7 @@ export type SpotifyOperation =
   | 'saved_shows'
   | 'player'
   | 'recent_tracks'
+  | 'artist_catalog'
   | 'track_catalog'
   | 'episode_catalog'
   | 'token_refresh'
@@ -242,6 +243,7 @@ function operationFor(url: URL): SpotifyOperation {
   if (url.pathname === '/v1/me/player/recently-played') return 'recent_tracks'
   if (url.pathname.startsWith('/v1/me/player')) return 'player'
   if (url.pathname.startsWith('/v1/episodes/')) return 'episode_catalog'
+  if (url.pathname.startsWith('/v1/artists/')) return 'artist_catalog'
   if (url.pathname.startsWith('/v1/tracks')) return 'track_catalog'
   return 'unknown'
 }
@@ -443,6 +445,38 @@ export function parseSpotifyTrackResponse(response: {
   bytes: Uint8Array
 }): SpotifyTrackObservation {
   return track(trackSchema.parse(JSON.parse(new TextDecoder().decode(response.bytes))))
+}
+
+export async function fetchSpotifyArtistResponse(input: {
+  accessToken: string
+  id: string
+  fetch?: typeof fetch
+}): Promise<{ bytes: Uint8Array; contentType: string }> {
+  if (!/^[A-Za-z0-9]+$/.test(input.id)) throw new TypeError('Invalid Spotify artist ID')
+  const response = await spotifyResponse({
+    ...input,
+    url: new URL(`https://api.spotify.com/v1/artists/${input.id}`),
+  })
+  return { bytes: response.bytes, contentType: response.contentType ?? 'application/json' }
+}
+
+export function parseSpotifyArtistResponse(response: { bytes: Uint8Array }) {
+  const value = artistSchema
+    .extend({
+      images: z
+        .array(z.object({ url: z.url() }))
+        .nullable()
+        .optional(),
+      external_urls: z.object({ spotify: z.url().nullable().optional() }).nullable().optional(),
+    })
+    .parse(JSON.parse(new TextDecoder().decode(response.bytes)))
+  return {
+    id: value.id,
+    uri: value.uri,
+    name: value.name,
+    imageUrl: value.images?.[0]?.url ?? null,
+    canonicalUrl: value.external_urls?.spotify ?? null,
+  }
 }
 
 export async function fetchSpotifyEpisodeResponse(input: {

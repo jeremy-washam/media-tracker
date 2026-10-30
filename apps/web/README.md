@@ -7,8 +7,17 @@ search/filter/sort, complete counts, cursor pagination, and contextual inspector
 Collection search, filters, sort, layout, counts, and applied-filter chips remain
 visible above the results scroll viewport. Filter options open in a modal Sheet;
 removing an applied group also clears dependent bounds. Infinite pagination and
-scroll restoration continue to use the results viewport. Books omits column
-headings, and the passive API status does not change appearance on hover.
+scroll restoration continue to use the results viewport. Collection summaries
+show item counts without additional consumption totals.
+Available ratings use shared stars, including fractional stars, in collections
+and inspectors; Movie results omit the viewing-rating qualifier.
+Library lists omit the extra border above their first item.
+Results have 16px of space below the fixed collection header. Artwork cards grow
+with their text; Movie titles reserve two complete lines above the metadata.
+Music artist lists, grids, and inspectors use separately acquired Spotify artist
+photos when available.
+Books omits column headings, and the passive API status does not change
+appearance on hover.
 The legacy History component is not routed. Chat and Recaps remain disabled
 navigation; Settings has no production route.
 Connections uses compact source rows with bundled official logos and labeled

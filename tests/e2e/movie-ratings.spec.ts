@@ -12,6 +12,7 @@ for (const appearance of ['light', 'dark']) {
       await installDefaultApiMocks(page)
       const viewingOnly = {
         ...movie,
+        displayTitle: 'A Very Long Movie Title That Needs More Than Two Lines in a Small Card',
         personal: {
           currentRating: null,
           viewingRating: { value: 3.5, archiveEntryId: 'viewing-one', watchedOn: '2026-09-12' },
@@ -62,18 +63,35 @@ for (const appearance of ['light', 'dark']) {
       await page.goto('/library/movies/archive?view=list')
       const row = page.locator('[data-collection-item="movie-one"]')
       if (width === 1440) {
-        await expect(row.getByText('3.5/5')).toBeVisible()
-        await expect(row.getByText('Viewing', { exact: true })).toBeVisible()
+        await expect(row.getByRole('img', { name: '3.5 out of 5 stars' })).toBeVisible()
+        await expect(row.getByText('Viewing', { exact: true })).toHaveCount(0)
         await expect(
-          page.locator('[data-collection-item="movie-current"]').getByText('4.5/5'),
+          page
+            .locator('[data-collection-item="movie-current"]')
+            .getByRole('img', { name: '4.5 out of 5 stars' }),
         ).toBeVisible()
       }
       await page.getByRole('button', { name: 'Grid view' }).click()
       await expect(row.getByRole('img', { name: '3.5 out of 5 stars' })).toBeVisible()
-      await expect(row.getByText('Viewing rating')).toBeVisible()
+      await expect(row.getByText('Viewing rating')).toHaveCount(0)
+      const cardGeometry = await row.evaluate((element) => {
+        const title = element.querySelector(':scope > strong')!
+        const metadata = element.querySelector(':scope > span:last-child')!
+        return {
+          titleHeight: title.getBoundingClientRect().height,
+          titleLineHeight: parseFloat(getComputedStyle(title).lineHeight),
+          metadataBottom: metadata.getBoundingClientRect().bottom,
+          cardBottom: element.getBoundingClientRect().bottom,
+        }
+      })
+      expect(cardGeometry.titleHeight).toBeGreaterThanOrEqual(cardGeometry.titleLineHeight * 2 - 1)
+      expect(cardGeometry.metadataBottom).toBeLessThanOrEqual(cardGeometry.cardBottom - 6)
       await row.click()
       const inspector = page.getByRole('complementary', { name: 'Movie inspector' })
-      await expect(inspector.getByText('Latest viewing rating 3.5/5')).toBeVisible()
+      await expect(inspector.getByRole('img', { name: '3.5 out of 5 stars' }).first()).toBeVisible()
+      await expect(
+        inspector.getByText('Latest viewing rating', { exact: true }).first(),
+      ).toBeVisible()
       await expect(inspector.getByText('No current rating imported')).toBeVisible()
       await expect(inspector.getByText('Current film rating', { exact: true })).toBeVisible()
       await expect

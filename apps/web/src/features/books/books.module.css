@@ -1,7 +1,3 @@
-.books-list {
-  border-top: 1px solid var(--border);
-}
-
 [data-ui~='inspector-section'] .book-description {
   color: var(--foreground);
 }

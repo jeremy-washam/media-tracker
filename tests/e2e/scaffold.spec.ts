@@ -1262,7 +1262,7 @@ test('keeps incomplete Movie filter drafts out of API requests', async ({ page }
   await page.getByLabel('Watched date from').fill('2020-01-01')
   await page.getByLabel('Release year from').fill('2020')
   await page.getByRole('combobox', { name: 'Minimum rating', exact: true }).click()
-  await page.getByRole('option', { name: '4', exact: true }).click()
+  await page.getByRole('option', { name: '4 ★', exact: true }).click()
   await expect
     .poll(() =>
       requested.some(

@@ -63,6 +63,11 @@ describe('catalog and content scheduling', () => {
       expect.objectContaining({ at, refreshBefore: '2026-11-05T12:00:00.000Z', limit: 1 }),
     )
   })
+  it('starts a catalog job when only artist artwork needs acquisition', async () => {
+    mocks.backlog.mockResolvedValue({ tracks: 0, episodes: 0, artists: 1 })
+    await scheduleCatalogWork(env, at)
+    expect(mocks.spotify).toHaveBeenCalledWith(env, at)
+  })
   it('resumes existing work and starts due metadata independently', async () => {
     mocks.active.mockImplementation(async (provider: string) =>
       provider === 'tmdb' ? { id: 'active' } : null,

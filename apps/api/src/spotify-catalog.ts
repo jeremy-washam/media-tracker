@@ -4,6 +4,8 @@ import { SyncBudget, SyncDeferredError } from './sync-budget'
 import { catalogRetryLimitReached, spotifyStaleBefore, retryAfterSeconds } from './catalog-policy'
 import {
   SpotifyApiError,
+  fetchSpotifyArtistResponse,
+  parseSpotifyArtistResponse,
   fetchSpotifyEpisodeResponse,
   fetchSpotifyTrackResponse,
   parseSpotifyEpisodeResponse,
@@ -77,7 +79,7 @@ async function persistResponse(input: {
   env: Bindings
   connectionId: string
   runId: string
-  kind: 'track' | 'episode'
+  kind: 'track' | 'episode' | 'artist'
   id: string
   response: { bytes: Uint8Array; contentType: string }
   at: ReturnType<typeof utcInstant>
@@ -123,7 +125,7 @@ async function responseForCandidate(input: {
   env: Bindings
   connectionId: string
   runId: string
-  kind: 'track' | 'episode'
+  kind: 'track' | 'episode' | 'artist'
   id: string
   accessToken: string
 }): Promise<{ bytes: Uint8Array; contentType: string; raw: RawObject }> {
@@ -152,17 +154,23 @@ async function responseForCandidate(input: {
     }
   }
   const response =
-    input.kind === 'track'
-      ? await fetchSpotifyTrackResponse({
+    input.kind === 'artist'
+      ? await fetchSpotifyArtistResponse({
           accessToken: input.accessToken,
           id: input.id,
           fetch: input.env.SYNC_FETCH ?? fetch,
         })
-      : await fetchSpotifyEpisodeResponse({
-          accessToken: input.accessToken,
-          id: input.id,
-          fetch: input.env.SYNC_FETCH ?? fetch,
-        })
+      : input.kind === 'track'
+        ? await fetchSpotifyTrackResponse({
+            accessToken: input.accessToken,
+            id: input.id,
+            fetch: input.env.SYNC_FETCH ?? fetch,
+          })
+        : await fetchSpotifyEpisodeResponse({
+            accessToken: input.accessToken,
+            id: input.id,
+            fetch: input.env.SYNC_FETCH ?? fetch,
+          })
   const raw = await persistResponse({
     ...input,
     response,
@@ -174,7 +182,7 @@ async function responseForCandidate(input: {
 async function recordResponse(input: {
   env: Bindings
   raw: RawObject
-  kind: 'track' | 'episode'
+  kind: 'track' | 'episode' | 'artist'
   id: string
 }): Promise<void> {
   const record: SourceRecord = {
@@ -261,6 +269,7 @@ export async function spotifyCatalogJobStatus(env: Bindings, id: string) {
     requestedCount: job.requestedCount,
     returnedCount: job.returnedCount,
     unavailableCount: job.unavailableCount,
+    remainingArtists: backlog.artists,
     remainingTracks: backlog.tracks,
     remainingEpisodes: backlog.episodes,
     nextAttemptAt: job.nextAttemptAt,
@@ -313,18 +322,38 @@ export async function processSpotifyCatalogBackfill(
   let advanced = false
   let requested = 0
   let returned = 0
+  let tracksReturned = 0
   let unavailable = 0
   try {
+    // Artist credits in Track responses carry no photos. Share the existing
+    // request budget with exact artist lookups, prioritizing frequently heard artists.
+    const artists =
+      current.phase === 'tracks'
+        ? await library.listArtistsNeedingArtwork(batchSize, spotifyStaleBefore(at))
+        : []
+    const tracks =
+      current.phase === 'tracks'
+        ? await library.listTracksNeedingMetadata(
+            batchSize - Math.min(artists.length, Math.floor(batchSize / 2)),
+            spotifyStaleBefore(at),
+          )
+        : []
     const candidates =
       current.phase === 'tracks'
-        ? (await library.listTracksNeedingMetadata(batchSize, spotifyStaleBefore(at))).map(
-            (value) => ({
+        ? [
+            ...artists.slice(0, batchSize - tracks.length).map((value) => ({
+              kind: 'artist' as const,
+              id: value.spotifyId,
+              uri: value.artistUri,
+              mediaItemId: value.artistId,
+            })),
+            ...tracks.map((value) => ({
               kind: 'track' as const,
               id: value.trackId,
               uri: value.trackUri,
               mediaItemId: value.mediaItemId,
-            }),
-          )
+            })),
+          ]
         : (await library.listPodcastEpisodesNeedingMetadata(batchSize, spotifyStaleBefore(at))).map(
             (value) => ({
               kind: 'episode' as const,
@@ -335,7 +364,7 @@ export async function processSpotifyCatalogBackfill(
           )
     if (candidates.length === 0) {
       const backlog = await library.catalogBacklogCounts(spotifyStaleBefore(at))
-      if (backlog.tracks > 0 || backlog.episodes > 0) {
+      if (backlog.tracks > 0 || backlog.episodes > 0 || backlog.artists > 0) {
         advanced = await jobs.advance(current.id, leaseToken, {
           phase: current.phase === 'tracks' ? 'episodes' : 'tracks',
           requested: 0,
@@ -366,7 +395,16 @@ export async function processSpotifyCatalogBackfill(
         })
       } catch (error) {
         if (error instanceof SpotifyApiError && error.status === 404) {
-          if (candidate.kind === 'track')
+          if (candidate.kind === 'artist')
+            await library.applyArtistArtwork({
+              artistId: candidate.mediaItemId,
+              spotifyId: id,
+              artistUri: candidate.uri,
+              imageUrl: null,
+              observedAt: at,
+              unavailable: true,
+            })
+          else if (candidate.kind === 'track')
             await library.markTrackMetadataUnavailable([candidate.mediaItemId], at)
           else await library.markEpisodeCatalogUnavailable(candidate.mediaItemId, at)
           requested++
@@ -375,7 +413,19 @@ export async function processSpotifyCatalogBackfill(
         }
         throw error
       }
-      if (candidate.kind === 'track') {
+      if (candidate.kind === 'artist') {
+        const value = parseSpotifyArtistResponse(response)
+        if (value.id !== candidate.id || value.uri !== candidate.uri)
+          throw new Error('Spotify artist identity mismatch')
+        await recordResponse({ env, raw: response.raw, kind, id })
+        await library.applyArtistArtwork({
+          artistId: candidate.mediaItemId,
+          spotifyId: id,
+          artistUri: candidate.uri,
+          imageUrl: value.imageUrl,
+          observedAt: response.raw.acquiredAt,
+        })
+      } else if (candidate.kind === 'track') {
         const value = parseSpotifyTrackResponse(response)
         if (value.id !== candidate.id || value.uri !== candidate.uri)
           throw new Error('Spotify track identity mismatch')
@@ -388,6 +438,7 @@ export async function processSpotifyCatalogBackfill(
           ),
           { rebuildSearch: false },
         )
+        tracksReturned++
       } else {
         const value = parseSpotifyEpisodeResponse(response)
         if (value.episodeId !== candidate.id || value.episodeUri !== candidate.uri)
@@ -413,8 +464,9 @@ export async function processSpotifyCatalogBackfill(
       requested++
       returned++
     }
-    if (current.phase === 'tracks') await library.rebuildMusicSearch()
-    else {
+    if (current.phase === 'tracks') {
+      if (tracksReturned > 0) await library.rebuildMusicSearch()
+    } else {
       await library.rebuildPodcastProjection()
       await library.rebuildPodcastSearch()
     }
@@ -433,7 +485,7 @@ export async function processSpotifyCatalogBackfill(
     if (error instanceof CatalogRetryError) throw error
     if (advanced || error instanceof CatalogLeaseLostError)
       throw new CatalogRetryError(60, { cause: error })
-    if (current.phase === 'tracks' && returned > 0) await library.rebuildMusicSearch()
+    if (tracksReturned > 0) await library.rebuildMusicSearch()
     if (current.phase === 'episodes' && returned > 0) {
       await library.rebuildPodcastProjection()
       await library.rebuildPodcastSearch()

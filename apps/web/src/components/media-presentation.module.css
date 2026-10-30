@@ -9,7 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-block: 1px solid var(--border);
 }
 
 .spotify-result {
@@ -377,11 +376,6 @@
   color: var(--muted-foreground);
 }
 
-.movie-row-rating small {
-  display: block;
-  font-size: var(--app-text-caption);
-}
-
 [data-ui~='inspector-movie-heading'] .movie-poster {
   width: 80px;
   height: 120px;
@@ -625,7 +619,7 @@
 }
 .media-card {
   width: 154px;
-  height: 304px;
+  min-height: 304px;
   padding: 7px;
   gap: 0;
 }
@@ -640,6 +634,10 @@
   min-height: 0;
   margin-top: 6px;
   line-height: 1.4;
+  flex-shrink: 0;
+}
+.movie-card.media-card > strong {
+  min-height: 2.8em;
 }
 .media-card > span:not(.rating-stars) {
   color: var(--muted-foreground);
@@ -648,6 +646,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .rating-stars {
   display: inline-flex;

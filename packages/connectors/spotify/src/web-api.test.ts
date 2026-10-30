@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  fetchSpotifyArtistResponse,
+  parseSpotifyArtistResponse,
   fetchSpotifyPlayer,
   fetchSpotifyRecentlyPlayed,
   fetchSpotifySavedEpisodesPage,
@@ -320,4 +322,39 @@ it('bounds quota classification and discards unknown private reason values', asy
       }),
     ).rejects.toMatchObject({ status: 429, reason: null })
   }
+})
+
+describe('Spotify artist catalog', () => {
+  it('retains exact response bytes and parses genuine artist images', async () => {
+    const body = JSON.stringify({
+      id: 'artist1',
+      uri: 'spotify:artist:artist1',
+      name: 'Artist',
+      images: [{ url: 'https://example.invalid/artist.jpg' }],
+    })
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(body))
+    const response = await fetchSpotifyArtistResponse({
+      id: 'artist1',
+      accessToken: 'secret',
+      fetch: fetcher,
+    })
+    expect(new TextDecoder().decode(response.bytes)).toBe(body)
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe('https://api.spotify.com/v1/artists/artist1')
+    expect(parseSpotifyArtistResponse(response)).toMatchObject({
+      id: 'artist1',
+      imageUrl: 'https://example.invalid/artist.jpg',
+    })
+    expect(
+      parseSpotifyArtistResponse({
+        bytes: new TextEncoder().encode(
+          JSON.stringify({
+            id: 'artist1',
+            uri: 'spotify:artist:artist1',
+            name: 'Artist',
+            images: [],
+          }),
+        ),
+      }).imageUrl,
+    ).toBeNull()
+  })
 })

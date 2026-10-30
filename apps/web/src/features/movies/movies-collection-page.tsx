@@ -358,9 +358,6 @@ export function MoviesCollectionPage({ collection }: { collection: 'archive' | '
             {movies.isPending || !summary ? null : (
               <span>
                 {count.toLocaleString()} {count === 1 ? 'movie' : 'movies'}
-                {collection === 'archive' && summary && summary.filteredOccurrenceCount !== null
-                  ? ` · ${summary?.filteredOccurrenceCount.toLocaleString()} ${summary?.filteredOccurrenceCount === 1 ? 'watch' : 'watches'}`
-                  : ''}
               </span>
             )}
             {collection === 'queue' && summary?.sourceFreshness.lastCompleteExportAt ? (
@@ -475,7 +472,6 @@ function MovieResult({
       : 'Director unavailable'
   const viewingRating = collection === 'archive' ? movie.personal.viewingRating : null
   const rating = movie.personal.currentRating ?? viewingRating?.value ?? null
-  const isViewingRating = movie.personal.currentRating === null && viewingRating !== null
   if (layout === 'grid') {
     return (
       <MediaCard
@@ -493,7 +489,6 @@ function MovieResult({
       >
         <MoviePoster movie={movie} />
         <RatingStars rating={rating} />
-        {isViewingRating ? <small>Viewing rating</small> : null}
         <strong>{movie.displayTitle}</strong>
         <span>{[movie.releaseYear, director].filter(Boolean).join(' · ')}</span>
       </MediaCard>
@@ -527,8 +522,7 @@ function MovieResult({
       <span className={mediaStyles['movie-row-director']}>{director}</span>
       <span className={mediaStyles['movie-row-context']}>{context}</span>
       <span className={mediaStyles['movie-row-rating']}>
-        {rating === null ? '—' : `${rating}/5`}
-        {isViewingRating ? <small>Viewing</small> : null}
+        <RatingStars rating={rating} />
       </span>
       <CaretRight aria-hidden="true" />
     </MediaRowButton>
@@ -722,7 +716,7 @@ function MovieFilters({
                   { value: '', label: 'Min' },
                   ...Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => ({
                     value: String(value),
-                    label: String(value),
+                    label: `${value} ★`,
                   })),
                 ]}
               />
@@ -739,7 +733,7 @@ function MovieFilters({
                   { value: '', label: 'Max' },
                   ...Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => ({
                     value: String(value),
-                    label: String(value),
+                    label: `${value} ★`,
                   })),
                 ]}
               />
@@ -943,11 +937,11 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
           </span>
           {movie.personal.currentRating !== null ? (
             <strong className={moviesStyles['movie-personal-rating']}>
-              Your rating {movie.personal.currentRating}/5
+              Your rating <RatingStars rating={movie.personal.currentRating} />
             </strong>
           ) : movie.personal.viewingRating ? (
             <strong className={moviesStyles['movie-personal-rating']}>
-              Latest viewing rating {movie.personal.viewingRating.value}/5
+              Latest viewing rating <RatingStars rating={movie.personal.viewingRating.value} />
             </strong>
           ) : null}
           {movie.personal.liked ? (
@@ -990,15 +984,17 @@ function MovieDetails({ movie }: { movie: MovieDetail }) {
         <dl className={inspectorStyles['detail-list']}>
           <dt>Current film rating</dt>
           <dd>
-            {movie.personal.currentRating === null
-              ? 'No current rating imported'
-              : `${movie.personal.currentRating}/5`}
+            {movie.personal.currentRating === null ? (
+              'No current rating imported'
+            ) : (
+              <RatingStars rating={movie.personal.currentRating} />
+            )}
           </dd>
           {movie.personal.viewingRating ? (
             <>
               <dt>Latest viewing rating</dt>
               <dd>
-                {movie.personal.viewingRating.value}/5
+                <RatingStars rating={movie.personal.viewingRating.value} />
                 {movie.personal.viewingRating.watchedOn
                   ? ` · ${formatDate(movie.personal.viewingRating.watchedOn)}`
                   : ' · watched date unknown'}
@@ -1149,7 +1145,11 @@ function MovieHistory({
                   : 'Watched — date unknown'}
               </strong>
               {entry.matchesFilter ? <small>Matches filter</small> : null}
-              {entry.rating ? <p>{entry.rating.value}/5</p> : null}
+              {entry.rating ? (
+                <p>
+                  <RatingStars rating={entry.rating.value} />
+                </p>
+              ) : null}
               {entry.sourceRewatch ? <p>Marked as a rewatch</p> : null}
               {entry.reviewText ? (
                 <p className={moviesStyles['movie-review']}>{entry.reviewText}</p>

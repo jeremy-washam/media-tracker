@@ -9,8 +9,16 @@
 
 ### Current catalog-backfill implementation
 
-Exact-ID enrichment of export-derived tracks and episodes now uses
-`GET /tracks/{id}` and `GET /episodes/{id}` in a durable, bounded queue job.
+Exact-ID enrichment uses `GET /tracks/{id}`, `GET /episodes/{id}`, and
+[`GET /artists/{id}`](https://developer.spotify.com/documentation/web-api/reference/get-an-artist)
+in a durable, bounded queue job. Simplified artist credits in Track responses
+carry no photos. Artist lookups acquire genuine artist image URLs separately,
+retain the exact response and source observation, and never create listens.
+Track-phase batches reserve up to 12 of the existing 25 requests for pending
+artist artwork, ordered by lifetime playback count. Empty image arrays and 404s
+are recorded without repeated immediate retries. Artist artwork becomes eligible
+again on the same staleness horizon as track metadata; transient failures retain the
+existing retry/backoff policy. Browsing never starts provider requests.
 Start or resume it with `POST /api/catalogs/spotify/sync`; inspect progress with
 `GET /api/catalogs/spotify/jobs/{jobId}`. Each batch handles at most 25 IDs,
 alternates track and episode work, normally waits 60 seconds before the next

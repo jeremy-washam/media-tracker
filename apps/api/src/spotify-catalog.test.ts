@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   saveRun: vi.fn(),
   fetchTrack: vi.fn(),
   candidates: vi.fn(),
+  artists: vi.fn(),
+  applyArtist: vi.fn(),
+  fetchArtist: vi.fn(),
   backlog: vi.fn(),
   applyTrack: vi.fn(),
   unavailable: vi.fn(),
@@ -45,6 +48,8 @@ vi.mock('./env', () => ({
   }),
   createSpotifyLibraryRepository: () => ({
     listTracksNeedingMetadata: mocks.candidates,
+    listArtistsNeedingArtwork: mocks.artists,
+    applyArtistArtwork: mocks.applyArtist,
     catalogBacklogCounts: mocks.backlog,
     applyTrackMetadata: mocks.applyTrack,
     markTrackMetadataUnavailable: mocks.unavailable,
@@ -62,6 +67,7 @@ vi.mock('./spotify-credentials', () => ({
 vi.mock('@media-tracker/connector-spotify', async (original) => ({
   ...(await original<typeof import('@media-tracker/connector-spotify')>()),
   fetchSpotifyTrackResponse: mocks.fetchTrack,
+  fetchSpotifyArtistResponse: mocks.fetchArtist,
 }))
 
 import { processSpotifyCatalogBackfill } from './spotify-catalog'
@@ -71,6 +77,7 @@ describe('Spotify catalog backfill', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.job.attemptCount = 0
+    mocks.artists.mockResolvedValue([])
     mocks.reserve.mockResolvedValue(1)
     mocks.advance.mockResolvedValue(true)
     mocks.defer.mockResolvedValue(true)
@@ -168,6 +175,108 @@ describe('Spotify catalog backfill', () => {
     )
     expect(mocks.unavailable).not.toHaveBeenCalled()
   })
+
+  it('preserves exact artist responses and publishes photos within the same request budget', async () => {
+    mocks.artists.mockResolvedValue([
+      { artistId: 'artist1', spotifyId: 'artist1', artistUri: 'spotify:artist:artist1' },
+    ])
+    mocks.candidates.mockResolvedValue([])
+    mocks.fetchArtist.mockResolvedValue({
+      bytes: new TextEncoder().encode(
+        JSON.stringify({
+          id: 'artist1',
+          uri: 'spotify:artist:artist1',
+          name: 'Artist',
+          images: [{ url: 'https://example.invalid/artist.jpg' }],
+        }),
+      ),
+      contentType: 'application/json',
+    })
+    const env = {
+      RAW_BUCKET: { put: mocks.put },
+      SYNC_QUEUE: { send: mocks.send },
+    } as unknown as Bindings
+    await processSpotifyCatalogBackfill(env, {
+      idempotencyKey: 'artist',
+      source: 'spotify',
+      operation: 'refresh_spotify_catalog',
+      catalogJobId: 'job-1',
+    })
+    expect(mocks.candidates).toHaveBeenCalledWith(24, expect.any(String))
+    expect(mocks.rebuildMusic).not.toHaveBeenCalled()
+    expect(mocks.rawCommit).toHaveBeenCalledTimes(2)
+    expect(mocks.applyArtist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artistId: 'artist1',
+        imageUrl: 'https://example.invalid/artist.jpg',
+      }),
+    )
+    expect(mocks.rawCommit.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.applyArtist.mock.invocationCallOrder[0]!,
+    )
+  })
+
+  it('records a missing artist photo response without removing listening history', async () => {
+    mocks.artists.mockResolvedValue([
+      { artistId: 'artist1', spotifyId: 'artist1', artistUri: 'spotify:artist:artist1' },
+    ])
+    mocks.candidates.mockResolvedValue([])
+    mocks.fetchArtist.mockRejectedValue(new SpotifyApiError('missing', 404))
+    const env = { SYNC_QUEUE: { send: mocks.send } } as unknown as Bindings
+    await processSpotifyCatalogBackfill(env, {
+      idempotencyKey: 'artist',
+      source: 'spotify',
+      operation: 'refresh_spotify_catalog',
+      catalogJobId: 'job-1',
+    })
+    expect(mocks.applyArtist).toHaveBeenCalledWith(
+      expect.objectContaining({ imageUrl: null, unavailable: true }),
+    )
+    expect(mocks.advance).toHaveBeenCalledWith(
+      'job-1',
+      1,
+      expect.objectContaining({ requested: 1, returned: 0, unavailable: 1 }),
+    )
+  })
+
+  it.each([0, 13])(
+    'fills the shared batch with artists when %i tracks remain',
+    async (trackCount) => {
+      mocks.artists.mockResolvedValue(
+        Array.from({ length: 25 }, (_, index) => ({
+          artistId: `artist${index}`,
+          spotifyId: `artist${index}`,
+          artistUri: `spotify:artist:artist${index}`,
+        })),
+      )
+      mocks.candidates.mockResolvedValue(
+        Array.from({ length: trackCount }, (_, index) => ({
+          mediaItemId: `song${index}`,
+          trackId: `track${index}`,
+          trackUri: `spotify:track:track${index}`,
+        })),
+      )
+      mocks.fetchArtist.mockRejectedValue(new SpotifyApiError('missing', 404))
+      mocks.fetchTrack.mockRejectedValue(new SpotifyApiError('missing', 404))
+      await processSpotifyCatalogBackfill(
+        { SYNC_QUEUE: { send: mocks.send } } as unknown as Bindings,
+        {
+          idempotencyKey: 'artist-batch',
+          source: 'spotify',
+          operation: 'refresh_spotify_catalog',
+          catalogJobId: 'job-1',
+        },
+      )
+      expect(mocks.fetchArtist).toHaveBeenCalledTimes(25 - trackCount)
+      expect(mocks.fetchTrack).toHaveBeenCalledTimes(trackCount)
+      expect(mocks.advance).toHaveBeenCalledWith(
+        'job-1',
+        1,
+        expect.objectContaining({ requested: 25, returned: 0, unavailable: 25 }),
+      )
+      expect(mocks.fail).not.toHaveBeenCalled()
+    },
+  )
 
   it('switches to episode work when the track batch has no candidates', async () => {
     mocks.candidates.mockResolvedValue([])

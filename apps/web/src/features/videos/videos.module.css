@@ -9,7 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-block: 1px solid var(--border);
 }
 
 .video-thumbnail {
