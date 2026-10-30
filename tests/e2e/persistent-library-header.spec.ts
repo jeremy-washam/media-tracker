@@ -78,6 +78,9 @@ for (const dark of [false, true]) {
       const summary = page.locator('[data-ui~="collection-summary"]')
       const initial = (await toolbar.boundingBox())!
       const results = page.locator('[data-ui~="library-collection"]')
+      const header = (await page.locator('[data-ui~="collection-header"]').boundingBox())!
+      const firstRow = (await rows.first().boundingBox())!
+      expect(firstRow.y - (header.y + header.height)).toBeGreaterThanOrEqual(12)
       await results.evaluate((element) => {
         element.scrollTop = 600
       })

@@ -186,6 +186,9 @@ a row to preserve that context. List artwork uses 60×90px Book/Movie covers,
 80px square Article/Podcast/Music artwork and channel avatars, and 160×90px Video
 thumbnails. Grid cards retain their independent sizing.
 Collections omit an extra list border above the first item.
+Leave 16px below the fixed collection header before results begin. Artwork cards
+grow with their content, and Movie titles reserve two complete lines so neither
+titles nor metadata are clipped by a fixed card height.
 Collection list rows are transparent at rest and share the same separators,
 horizontal spacing, muted hover background, and selection treatment.
 
