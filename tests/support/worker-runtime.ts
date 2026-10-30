@@ -96,6 +96,8 @@ export async function createWorkerRuntime(
     seed?: boolean
     paused?: boolean
     hosted?: boolean
+    sourceSync?: boolean
+    beforeReadwiseResponse?: () => Promise<void>
     operatingMonitorFixture?: string
   } = {},
 ): Promise<WorkerRuntime> {
@@ -159,6 +161,7 @@ export async function createWorkerRuntime(
         ? { ACCESS_TEAM_DOMAIN: issuer, ACCESS_AUD: audience, OWNER_EMAIL: owner }
         : {}),
       SYNC_ENABLED: options.paused ? 'false' : 'true',
+      ...(options.sourceSync ? { SYNC_SOURCES: 'readwise,hardcover' } : {}),
       MAINTENANCE_ENABLED: 'false',
       CATALOG_AUTO_REFRESH: 'false',
       READWISE_TOKEN: 'synthetic-runtime-token',
@@ -215,6 +218,7 @@ export async function createWorkerRuntime(
       if (options.hosted && url.href === issuer + '/cdn-cgi/access/certs')
         return RuntimeResponse.json({ keys: [publicKey] })
       if (url.hostname === 'readwise.io') {
+        await options.beforeReadwiseResponse?.()
         if (url.pathname === '/api/v2/export/')
           return RuntimeResponse.json({ count: 0, nextPageCursor: null, results: [] })
         if (url.pathname === '/api/v3/list/') {

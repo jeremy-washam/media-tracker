@@ -24,6 +24,30 @@ const validHealthResponse = {
 }
 
 describe('API client', () => {
+  it.each([
+    ['readwise', syncReadwise],
+    ['hardcover', syncHardcover],
+    ['letterboxd', syncLetterboxd],
+    ['spotify', syncSpotify],
+  ] as const)(
+    '%s validates queued receipts separately from local completed results',
+    async (source, sync) => {
+      const queued = { status: 'queued', source, requestId: 'synthetic-request' }
+      const fetcher = vi.fn(async () => Response.json(queued, { status: 202 }))
+      await expect(sync(fetcher)).resolves.toEqual(queued)
+      expect(fetcher).toHaveBeenCalledTimes(1)
+      for (const body of [
+        { ...queued, source: source === 'spotify' ? 'readwise' : 'spotify' },
+        { ...queued, requestId: '' },
+        { syncRunId: 'not-a-queued-receipt' },
+      ]) {
+        await expect(sync(async () => Response.json(body, { status: 202 }))).rejects.toThrow()
+      }
+      await expect(sync(async () => Response.json(queued))).rejects.toThrow()
+      await expect(sync(async () => Response.json({}, { status: 503 }))).rejects.toThrow('503')
+    },
+  )
+
   it('validates successful health responses', async () => {
     const fetcher = vi.fn(async () => Response.json(validHealthResponse)) as unknown as typeof fetch
 

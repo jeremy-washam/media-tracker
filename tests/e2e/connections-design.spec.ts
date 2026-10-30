@@ -354,3 +354,246 @@ for (const dark of [false, true]) {
     await expect(progress).toHaveCount(0)
   })
 }
+
+const queuedRun = {
+  id: 'synthetic-background-source',
+  source: 'spotify',
+  connectionId: 'synthetic-spotify',
+  connectionLabel: 'Spotify',
+  kind: 'reconcile',
+  status: 'running',
+  sourceRecords: 0,
+  normalizedRecords: 0,
+  failedRecords: 0,
+  errorCode: null,
+  errorMessage: null,
+  startedAt: '2026-10-30T01:00:00.000Z',
+  finishedAt: null,
+}
+
+for (const dark of [false, true]) {
+  test(`queued manual sync observes completion and refreshes cached Library in ${dark ? 'dark' : 'light'}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (dark) => localStorage.setItem('media-tracker:dark', String(dark)),
+      dark,
+    )
+    await page.clock.install()
+    let phase: 'queued' | 'running' | 'succeeded' = 'queued'
+    let polls = 0
+    await page.route('**/api/sync-runs*', (route) => {
+      polls++
+      return route.fulfill({
+        json: {
+          data:
+            phase === 'queued'
+              ? []
+              : [
+                  {
+                    ...queuedRun,
+                    status: phase,
+                    sourceRecords: phase === 'succeeded' ? 25 : 0,
+                    finishedAt: phase === 'succeeded' ? '2026-10-30T01:01:00.000Z' : null,
+                  },
+                ],
+          nextCursor: null,
+        },
+      })
+    })
+    await page.route('**/api/connections/spotify/sync', (route) =>
+      route.fulfill({
+        status: 202,
+        json: { status: 'queued', source: 'spotify', requestId: 'synthetic-enqueue-only' },
+      }),
+    )
+    await page.goto('/library/books/archive')
+    await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+    await page.clock.runFor(300)
+    const hasBookCache = () =>
+      page.evaluate(() => {
+        const saved = JSON.parse(
+          localStorage.getItem('media-tracker:library-initial-pages:v2') ?? '{"entries":[]}',
+        )
+        return saved.entries.some(
+          (entry: { path: string; page?: unknown }) =>
+            entry.path === '/library/books/archive' && entry.page,
+        )
+      })
+    await expect.poll(hasBookCache).toBe(true)
+    await page.getByRole('link', { name: 'Connections', exact: true }).click()
+    const row = page.locator('[data-source=spotify]')
+    await row.getByRole('button', { name: 'Sync now', exact: true }).click()
+    const queued = page.getByRole('status').filter({ hasText: 'Spotify sync queued.' })
+    await expect(queued).toBeVisible()
+    await expect(row.getByRole('button', { name: 'Queued…', exact: true })).toBeDisabled()
+    await expect(page.getByText(/Reconciled .* consumed saved episodes/)).toHaveCount(0)
+    expect(await hasBookCache()).toBe(true)
+    const beforePoll = polls
+    await page.clock.runFor(5100)
+    await expect.poll(() => polls).toBeGreaterThan(beforePoll)
+    await expect(queued).toBeVisible()
+    for (const width of [1280, 390, 320]) {
+      await page.setViewportSize({ width, height: 844 })
+      await queued.scrollIntoViewIfNeeded()
+      expect(await queued.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      )
+      expect(
+        await page
+          .getByRole('region', { name: 'Connections', exact: true })
+          .evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true)
+      await row.scrollIntoViewIfNeeded()
+      const button = await row.getByRole('button', { name: 'Queued…', exact: true }).boundingBox()
+      expect(button!.height).toBe(28)
+      expect(button!.x).toBeGreaterThanOrEqual(0)
+      expect(button!.x + button!.width).toBeLessThanOrEqual(width)
+      if (width !== 390)
+        await page.screenshot({
+          path: test.info().outputPath(`queued-${dark ? 'dark' : 'light'}-${width}.png`),
+          animations: 'disabled',
+        })
+    }
+    phase = 'running'
+    await page.clock.runFor(5100)
+    await expect(row.getByRole('button', { name: 'Syncing…', exact: true })).toBeDisabled()
+    await expect(queued).toHaveCount(0)
+    expect(await hasBookCache()).toBe(true)
+    phase = 'succeeded'
+    await page.clock.runFor(5100)
+    await expect(
+      page.getByText('25 source records · 0 normalized · 0 failed', { exact: true }),
+    ).toBeVisible()
+    await expect(row.getByRole('button', { name: 'Sync now', exact: true })).toBeEnabled()
+    await expect.poll(hasBookCache).toBe(false)
+    await expect(page.getByText(/Reconciled .* consumed saved episodes/)).toHaveCount(0)
+  })
+}
+
+test('queued acceptance with no new run ends fast waiting without claiming failure or completion', async ({
+  page,
+}) => {
+  await page.clock.install()
+  let polls = 0
+  await page.route('**/api/sync-runs*', (route) => {
+    polls++
+    return route.fulfill({ json: { data: [], nextCursor: null } })
+  })
+  await page.route('**/api/connections/readwise/sync', (route) =>
+    route.fulfill({
+      status: 202,
+      json: { status: 'queued', source: 'readwise', requestId: 'synthetic-guard-race' },
+    }),
+  )
+  await page.goto('/connections')
+  const row = page.locator('[data-source=readwise]')
+  await row.getByRole('button', { name: 'Sync now', exact: true }).click()
+  await expect(row.getByRole('button', { name: 'Queued…', exact: true })).toBeDisabled()
+  await page.clock.fastForward(121_000)
+  await expect(
+    page.getByRole('status').filter({ hasText: 'No new sync activity observed yet.' }),
+  ).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Sync now', exact: true })).toBeEnabled()
+  const afterWaiting = polls
+  await page.clock.runFor(5100)
+  expect(polls).toBe(afterWaiting)
+  await expect(page.getByText(/Imported .* Archive items from/)).toHaveCount(0)
+  await expect(page.getByText(/sync failed/)).toHaveCount(0)
+})
+
+test('a rejected manual request points to activity without diagnosing credentials', async ({
+  page,
+}) => {
+  await page.route('**/api/connections/readwise/sync', (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Synthetic admission stop',
+          requestId: 'synthetic',
+        },
+      },
+    }),
+  )
+  await page.goto('/connections')
+  const row = page.locator('[data-source=readwise]')
+  await row.getByRole('button', { name: 'Sync now', exact: true }).click()
+  await expect(
+    page.getByText(
+      'Readwise sync request could not be confirmed. Check Recent sync activity before trying again.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'sync queued.' })).toHaveCount(0)
+  await expect(row.getByRole('button', { name: 'Sync now', exact: true })).toBeEnabled()
+})
+
+test('cached Connections remount refreshes Library for a background run completed before its first poll', async ({
+  page,
+}) => {
+  await page.clock.install()
+  let completed = false
+  let polls = 0
+  const oldRun = {
+    ...queuedRun,
+    id: 'synthetic-old-source',
+    status: 'succeeded',
+    sourceRecords: 1,
+    normalizedRecords: 1,
+    finishedAt: '2026-10-30T01:01:00.000Z',
+  }
+  await page.route('**/api/sync-runs*', (route) => {
+    polls++
+    return route.fulfill({
+      json: {
+        data: completed
+          ? [
+              {
+                ...oldRun,
+                id: 'synthetic-new-background-source',
+                sourceRecords: 7,
+                startedAt: '2026-10-30T02:00:00.000Z',
+                finishedAt: '2026-10-30T02:01:00.000Z',
+              },
+              oldRun,
+            ]
+          : [oldRun],
+        nextCursor: null,
+      },
+    })
+  })
+  await page.goto('/connections')
+  await expect(
+    page.getByText('1 source records · 1 normalized · 0 failed', { exact: true }),
+  ).toBeVisible()
+  await page.getByRole('link', { name: 'Books', exact: true }).click()
+  await expect(page.getByRole('button', { name: /A Distant Book/ })).toBeVisible()
+  await page.clock.runFor(300)
+  const hasBookCache = () =>
+    page.evaluate(() => {
+      const saved = JSON.parse(
+        localStorage.getItem('media-tracker:library-initial-pages:v2') ?? '{"entries":[]}',
+      )
+      return saved.entries.some(
+        (entry: { path: string; page?: unknown }) =>
+          entry.path === '/library/books/archive' && entry.page,
+      )
+    })
+  await expect.poll(hasBookCache).toBe(true)
+  const beforeRemount = polls
+  await page.getByRole('link', { name: 'Connections', exact: true }).click()
+  await expect(
+    page.getByText('1 source records · 1 normalized · 0 failed', { exact: true }),
+  ).toBeVisible()
+  expect(polls).toBe(beforeRemount)
+  expect(await hasBookCache()).toBe(true)
+  completed = true
+  await page.clock.runFor(60_100)
+  await expect(
+    page.getByText('7 source records · 1 normalized · 0 failed', { exact: true }),
+  ).toBeVisible()
+  await expect.poll(hasBookCache).toBe(false)
+  await expect(page.getByRole('status').filter({ hasText: 'sync queued.' })).toHaveCount(0)
+})
