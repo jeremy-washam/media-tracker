@@ -84,9 +84,11 @@ Manual and scheduled hosted source syncs share one new allocation per source per
 UTC day and a 23-hour minimum interval. Hardcover continuations and finite
 recovery attempts retain that allocation; local explicit syncs do not use the
 hosted admission policy. Migrations through 0034 are deployed. Hardcover's
-controlled hosted snapshot completed across 23 pages and 1,112 books without
-failed records. Spotify HTTP 403 still requires provider-specific live acceptance;
-configured recurring work alone does not establish success.
+controlled hosted snapshot completed across 23 pages with 1,112 source records,
+128 normalized records and no failures. After owner-restored Premium and the
+Users Management account correction, Spotify's first catalog batch fetched 25
+tracks without errors. Saved-episode source sync and full catalog completion
+remain to verify; configured recurring work alone does not establish success.
 
 ## Spotify and YouTube
 

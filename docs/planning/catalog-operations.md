@@ -136,11 +136,12 @@ publication, current channel association/search and expiry behavior. A small
 synthetic fixture alone does not establish production-scale completion.
 
 Spotify source and catalog work both recorded HTTP 403; its account-side
-eligibility/access check is tracked in the source rollout. Newly acquired
-article excerpt/FTS, duplicate delivery and subsequent real hourly work remain
-live gates until observed. The next configured hourly pass is 00:00 UTC; the
-23:00 transition did not produce an article reservation, so no successful
-article acquisition is inferred from flags alone.
+eligibility/access check is tracked in the source rollout. At this failure
+checkpoint, newly acquired article excerpt/FTS, duplicate delivery and subsequent
+real hourly work still required live evidence. The 23:00 transition did not
+produce an article reservation, so no successful article acquisition was inferred
+from flags alone. The observed 00:00 pass and article acceptance are recorded
+below.
 
 ### Publication repair and controlled retry
 
@@ -156,13 +157,97 @@ Regressions cover 20,000 synthetic videos, 4,000 provider-remapped channels,
 24 MB of descriptions and 60,000 thumbnails, plus
 owner history/search preservation, cursor invalidation, expiry fallback and
 rollback after a late search-expiry failure. This validates the publication
-shape, not a production CPU guarantee: real descriptions/search volume still
-need a controlled live completion. Resume the existing durable job only after
-the validated fix is deployed, retaining its exact cursor/counts/attempts; do
-not create another job or refetch the completed video pages to work around it.
+shape rather than a production CPU guarantee. The controlled completion below
+supplied native evidence without creating another job, resetting attempts or
+refetching the completed video pages.
 
 The final combined local gate passed `pnpm check` with **895 TypeScript / 147
 Python tests**, production builds and **13 native Worker-runtime tests**. The
 YouTube import fixture now loads the complete migration chain, matching the
-current repository rather than omitting the existing media-first index. The
-controlled live completion remains pending until the validated release lands.
+current repository rather than omitting the existing media-first index.
+
+### Native publication acceptance and restored scheduling
+
+The ordinary protected main release passed validation, deployment and its six
+summary checks at **23:56:29 UTC** on October 29. At **23:57:19 UTC**,
+`CATALOG_AUTO_REFRESH=true` was restored consistently in the native Worker,
+canonical configuration and both protected GitHub environments. The temporary
+catalog hold is resolved; source admission, article work and the independent
+operating monitor remained enabled throughout.
+
+The existing YouTube job completed at **23:57:28 UTC**, on attempt 85. Its
+counts remained **20,292 requested, 18,695 returned and 1,597 omitted**. The
+committed pages were reused, with no additional provider fetch. The success
+state, released lease, exact published job and channel aggregate revision were
+verified durably after completion.
+
+Seven read-only aggregate queries at 23:57:48 UTC reported zero writes and
+confirmed all 20,292 current published profiles map to owner videos. All 18,695
+available videos have current artwork, comprising 88,559 thumbnail variants;
+16,921 profiles have descriptions. Provider search documents match their
+published title/description/tag payloads and expiry, with no unmapped documents
+or missing expiry mappings. Owner search covers all 20,292 videos. Before/after
+owner and source counts, rollup totals and text-length aggregates match; this is
+consistency evidence rather than a byte-for-byte audit of every source row.
+
+Owner HTTP acceptance returned 200 for all 20 checks. Browser acceptance loaded
+current video artwork, descriptions, history and channel panels, and a
+description-only search returned the sampled video. These checks establish
+successful native publication and sampled delivery; they do not establish that
+every external image URL loads indefinitely.
+
+### Observed hourly, maintenance and article acceptance
+
+The real hourly cron completed successfully at **00:00:17 UTC on October 30**
+on the restored normal configuration. Before/after observations at 23:59:34 and
+00:02:03 UTC retained nine TMDB jobs with 1,414 requested IDs and nine YouTube
+jobs with 40,584 requested IDs, with no active catalog jobs. This observed pass
+created no empty refresh job. The independent five-minute maintenance cron
+completed at **00:00:44 UTC** with zero failed operations.
+
+All 20 reserved article acquisitions completed by 00:02:53 UTC: 20 jobs,
+20 attempts and no recorded failures. At 00:05:12 UTC, all 20 manifests were
+ready with full coverage, and all 251 chunks had their required FTS mappings.
+The selected article's acquired text hash, all eight chunk checksums and search
+mappings were verified. Owner text-only search returned its hydrated excerpt.
+
+One completed article message was deliberately redelivered at **00:03:25 UTC**
+with the ordinary queue idle before and after. The durable attempt count, raw
+acquisition count, manifests, chunks and FTS metadata did not change; the
+approximate dead-letter count remained three. In the controlled
+00:03:23–00:04:16 UTC window, native Worker logs recorded one successful Queue
+invocation with batch size one and one article-acquisition usage event reporting
+one statement. This correlated window and unchanged durable state establish the
+duplicate guard for the controlled replay. The success log does not identify
+the exact message key. Unmeasured `first()` queries and a reported write count
+of zero are not evidence that total database usage was measured as zero.
+
+### Spotify owner action and remaining daily acceptance
+
+The owner restored Spotify Premium and confirmed it active at **00:16 UTC**.
+Spotify's [quota-mode guidance](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
+and [development-mode migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
+require active owner Premium for development-mode API access. The first catalog
+retry at **00:17:34 UTC** still failed with `spotify_http_403`, with zero requested
+or returned records. The owner's screenshot confirmed Development Mode and a
+Client ID matching the retained deployment input.
+
+The owner then found the connected account missing from Users Management and
+added it. One ordinary bounded catalog retry accepted at **00:27:38 UTC** fetched
+and committed **25 requested / 25 returned / zero unavailable** tracks without
+errors by **00:28:05 UTC**. Track-catalog API access is restored; this first batch
+does not establish full backfill completion or saved-episode source access. The
+job continues at its existing pace and limits. Existing configuration and
+credentials were retained. No agent purchase, new app or reauthorization occurred.
+
+The retained source retry was separately hidden by a UTC-midnight lookup bug.
+The prepared PR 13 correction uses only the latest admission and fences claims
+against newer work without resetting its original accounting or limits. Local
+checks passed 907 TypeScript and 147 Python tests, production builds/dry run, and
+13 native Worker tests. Release and live source-retry acceptance remain pending.
+
+The independent operating monitor recovered successfully at **00:10:25 UTC**
+with a fresh normal/open state, a $5 estimate and the native queue unpaused.
+The observed hourly pass does not establish a later source reconciliation after
+its daily/23-hour eligibility window; that genuinely eligible daily cycle remains
+pending.

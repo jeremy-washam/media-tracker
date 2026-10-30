@@ -56,8 +56,11 @@ Recommended integration shape:
 
 This is still a good fit for a private, single-user app. Development mode is
 specifically intended for apps accessing one Spotify account, and the owner
-previously confirmed Premium. Current eligibility still needs an account-side
-check when investigating the October 29 HTTP 403.
+previously confirmed Premium, then reported cancellation during the October 29
+access investigation. The owner has since confirmed restoring Premium, but the
+first catalog retry still returned 403. After the owner added the missing
+connected account in Users Management, a catalog retry fetched 25 tracks without
+errors. Saved-episode source sync and the complete backfill remain to verify.
 
 ## Source surfaces
 
@@ -111,8 +114,20 @@ The current hosted retry refreshed its token, then `GET /me/episodes` returned 4
 not explain it. Check the existing matching app's status, owner Premium and
 Users Management account before replacing the grant. The encrypted hosted store
 retains neither actual grant scopes nor account eligibility. A separate local
-probe's validated scopes do not prove the hosted grant's scope. No current cause
-has been established; no new app, purchase or reauthorization was performed.
+probe's validated scopes do not prove the hosted grant's scope. The owner later
+reported cancelling Premium and subsequently confirmed restoring it. Spotify's
+[migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
+states that Development Mode apps stop functioning when the owner's Premium
+lapses. A normal catalog retry accepted at **2026-10-30 00:17:34 UTC** still failed
+with `spotify_http_403`, verified at 00:18:28 with no new catalog records. The
+owner's screenshot confirms Development Mode and matches the retained deployment
+Client ID. The owner then found the connected account missing from Users
+Management and added it. One catalog retry accepted at **00:27:38 UTC** fetched
+and committed **25 tracks with zero errors or unavailable records** by
+**00:28:05 UTC**. This confirms track-catalog access with the existing credential;
+it does not establish saved-episode access or full backfill completion.
+Cancellation alone was not the complete observed access block. No agent purchase,
+new app, reauthorization or manual credential replacement was made.
 See the [source rollout evidence](../planning/source-sync-rollout.md#live-closeout-evidence--october-29-2026).
 
 ### OAuth flow

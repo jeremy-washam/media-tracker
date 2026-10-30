@@ -513,6 +513,6 @@ account measurement is inferred from synthetic tests.
 
 Migrations through 0034 and the resumable normal Worker configuration are now
 deployed. The controlled hosted snapshot subsequently completed 23 pages and
-1,112 books without failed records, with the completed cursor recorded at
+1,112 source records, 128 normalized records and no failures, with the completed cursor recorded at
 `2026-10-29T23:04:25.695Z`. This confirms the hosted continuation chain, while the
 deployment closeout separately tracks continued operation and other providers.

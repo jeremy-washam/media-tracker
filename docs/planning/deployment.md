@@ -4,15 +4,17 @@ Current status and remaining acceptance gates are maintained in the
 [deployment closeout](deployment-closeout.md). The private Library is live,
 owner Access/MFA and remote transfer/restore are verified, and daily source sync
 is configured for Letterboxd, Hardcover, Readwise, and Spotify under the normal
-configuration deployed from main revision `9a6a877`. Migrations through 0034 and
+configuration deployed from main revision `3044d2ad`. Migrations through 0034 and
 foreign-key checks are complete, and a fresh protected local database/R2 recovery
 copy passed independent restore verification. Hourly cron checks eligibility;
 new allocations are limited to one per source per UTC day and at least 23 hours
-apart. Hardcover's controlled snapshot completed 23 pages and 1,112 books with no
-failed records. Spotify HTTP 403, recurring catalog/content, and
-automatic production delivery still need live acceptance. CI validation is
-enabled together with guarded automatic production delivery; the first ordinary
-release still needs verification. The sections below retain the original
+apart. Hardcover's controlled snapshot completed 23 pages with 1,112 source
+records, 128 normalized records and no failures. The first ordinary automatic
+release, native YouTube publication, and the real midnight article/content cycle
+passed; see the closeout for exact evidence and duplicate-delivery limitations.
+Spotify's saved-episode source retry, full catalog completion after the account
+allowlist correction, and a subsequent genuinely eligible daily source cycle remain
+open. The sections below retain the original
 cutover procedures and dated transfer receipts. They do not establish current
 activation or override the operating policy below.
 

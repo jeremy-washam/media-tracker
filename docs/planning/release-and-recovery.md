@@ -18,9 +18,77 @@ installed. The October 29 maintenance bootstrap began at 21:53:50 UTC with the
 gate closed, queue paused, consumer detached and only the monitor cron active;
 zero active source/catalog leases were confirmed at 21:59 UTC. Fresh capture,
 independent restore, protected Mac-copy verification and a separate migration
-rehearsal subsequently passed. The normal production configuration from main
-`9a6a877` is now deployed. Guarded ordinary production CD is enabled with normal configuration installed in both protected environments; its first ordinary release still needs verification. Spotify's HTTP 403
-failure remains unfinished. The original baseline's separate Mac-copy verification
+rehearsal subsequently passed before the protected migration release of
+`9a6a877`. The first ordinary
+[main pipeline 40975073224](https://github.com/jeremy-washam/media-tracker/actions/runs/40975073224)
+subsequently passed validation, automatic deployment of exact-main `3044d2ad`
+and authenticated smoke at **23:56:29.258 UTC**.
+
+The normal configuration now includes `CATALOG_AUTO_REFRESH=true`, restored at
+**23:57:19.646 UTC** and reconciled across the live Worker, canonical configuration
+and both protected GitHub environments. Native variables, bindings, limits,
+schedules, serial consumer and all six summary smoke checks passed. The existing
+YouTube job published successfully at **23:57:28.555 UTC**, resolving the earlier
+CPU failure and refresh hold.
+
+The real **2026-10-30 00:00:17.063 UTC** hourly invocation completed on the current
+deployed script, with unchanged catalog job/request totals and zero active jobs;
+it created no empty catalog job. Five-minute maintenance completed at
+00:00:44.992 UTC. The entire article batch finished by 00:02:53 UTC with
+20 jobs / 20 attempts / zero failures. Final 00:05:12 checks found
+20 ready/full manifests, 251 chunks and no missing FTS. Protected article text,
+all eight selected-article chunk checksums/mappings, owner text-only search and
+hydrated excerpt passed verification.
+
+The 00:03:25.411 UTC completed-key replay left durable attempts, raw acquisitions
+and manifest/chunk/FTS metadata unchanged. A complete controlled log window showed
+one successful queue batch of one and its acquisition-usage event; queue depth
+was zero before/after and approximate DLQ depth stayed three. Success logs omit
+message ID/key, so this is correlated duplicate-guard evidence rather than direct
+message-identity proof. The one observed `first()` statement was unmeasured;
+reported zero writes do not establish measured zero writes. Historical DLQ
+messages were retained without purge or replay.
+
+The 00:00 monitor collection timed out on a native API read. Its still-fresh
+23:50 normal/open $5 snapshot was retained without fabricated freshness or an
+automatic pause. The next real collection recovered at **2026-10-30 00:10:25.976
+UTC**, verified directly in R2 as normal/open with a $5 estimate and unpaused
+queue. This is release acceptance against `3044d2ad` through that timestamp;
+later main revisions retain their own exact-revision validation and receipts.
+
+After that release-acceptance checkpoint, the owner confirmed active Spotify
+Premium at **00:16 UTC**. One manual catalog request was accepted at **00:17:34**;
+its first bounded job still failed with `spotify_http_403`, verified at **00:18:28**,
+with requested/returned/unavailable counters all zero. The existing 18,206 tracks
+remain, with no new provider records. The owner's **00:23** screenshot confirms
+Development Mode and a Client ID matching the retained deployment input. The
+owner found the account absent from Users Management and added it. One bounded
+catalog retry was accepted with HTTP 202 at **00:27:38 UTC**. By **00:28:05 UTC**,
+the same pending job's tracks phase had 25 requested, 25 returned, zero unavailable
+and no error, verifying track catalog API access. The account addition appears
+to have resolved that access block. The job/full backfill remain unverified;
+status still reported 18,206 remaining tracks, so no remaining-count reduction is
+claimed. Metadata fetches do not verify saved-episode source recovery: one
+retained source retry awaits PR 13 release. Premium restoration alone had not
+resolved the observed API failure. Keep API flags and the source allowlist
+unchanged, without another catalog retry while observing this job. No new
+subscription/app, agent purchase, reauthorization or manual
+credential replacement was performed.
+
+A manual source attempt exposed current-day filtering of retained failed retries
+across UTC midnight; it did not establish a new provider fetch. The prepared
+correction selects only the latest retained failed allocation across days and
+atomically refuses its claim if a newer admission appears. It preserves the
+original day/start, cumulative reservation/usage, cooldown, retry/attempt ceilings
+and all new-allocation daily/23-hour, scheduler, lease and rolling guards, without
+a migration or allowance reset. The focused suite passed 41 tests, including 12
+new regressions. The full local check passed 907 TypeScript and 147 Python tests;
+production build/dry run and all 13 native runtime tests passed. PR 13 release
+and live verification remain pending; this fix is not deployed and functional
+production remains `3044d2ad`.
+Spotify saved-episode source recovery, catalog job completion and the next
+genuinely eligible daily source cycle remain unfinished.
+The original baseline's separate Mac-copy verification
 passed at 21:59:41 UTC; fresh-backup evidence is recorded below.
 The [deployment closeout](deployment-closeout.md) records remaining live
 acceptance. No workflow creates another cloud resource,

@@ -39,6 +39,12 @@ restarting does not replenish an allocation. Failed database operations,
 unmeasured statements, and unknown in-flight work retain conservative accounting.
 Routine daily allocations do not erase previous evidence or unknown work.
 
+An explicitly requested failed retry can reuse the latest source allocation after
+midnight, retaining its original day/start, cumulative usage, provider cooldown
+and remaining retry count. A newer admission supersedes older failures, including
+when it appears between retry discovery and the atomic claim. New allocations
+still require a new UTC day and 23 hours; hourly availability is unchanged.
+
 ## Hardcover continuation and crash recovery
 
 Apply migrations **0032** (Hardcover progress) and **0034** (snapshot-bound recovery
@@ -105,8 +111,10 @@ these live gates.
 
 ## Live closeout evidence — October 29, 2026
 
-Main `9a6a877` is deployed in normal operation after the protected migration
-release applied 0032–0034. All 34 migration names, ownership/retry columns and
+Main `3044d2ad` passed ordinary automatic deployment and authenticated smoke in
+[run 40975073224](https://github.com/jeremy-washam/media-tracker/actions/runs/40975073224)
+at 23:56:29 UTC. The earlier protected migration release on `9a6a877` applied
+0032–0034. All 34 migration names, ownership/retry columns and
 zero foreign-key violations were verified. Native queue delivery is open and
 the serial consumer is attached. These are live configuration checks, not a
 claim that every provider has passed its next eligible daily cycle.
@@ -129,8 +137,25 @@ cause. `user-library-read` authorizes saved-library access;
 establish the 403 cause. See [quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes),
 [saved episodes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes)
 and the [February changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026).
-The developer dashboard is signed out; owner account input is pending. No new
-app, subscription, reauthorization or credential change was made.
+The owner subsequently reported cancelling Premium, then confirmed restoring it.
+Spotify requires active Premium for Development Mode apps and documents that a
+lapse stops the app. One normal catalog retry at **2026-10-30 00:17:34 UTC** was
+accepted, but its first request still failed with `spotify_http_403`; verification
+at 00:18:28 showed zero requested/returned catalog records. The owner's screenshot
+confirms Development Mode and a Client ID matching the retained deployment input.
+The owner then found the connected account absent from Users Management and added
+it. One catalog retry accepted at **00:27:38 UTC** had fetched and committed
+**25 requested / 25 returned / zero unavailable** tracks without errors by
+**00:28:05 UTC**. Track-catalog API access is restored; the full backfill and
+saved-episode source sync are not yet established by this batch. No new app,
+agent purchase, reauthorization or manual credential replacement was made.
+
+That recovery also exposed a UTC-boundary lookup bug: the remaining failed retry
+was hidden after midnight even though its original allocation retained allowance.
+The narrow fix selects only the latest source allocation and fences the atomic
+claim against newer admissions, preserving all existing accounting and limits.
+Regression tests pass; live source-recovery acceptance awaits deployment and the
+provider access check. No admission was reset to perform this diagnostic.
 
 The reviewed legacy October 17 Hardcover and October 28 Spotify source runs had
 no active lease, progress, snapshot admission, catalog role or committed cursor.
@@ -140,6 +165,16 @@ zero-write no-op. Counts, evidence and admission accounting were retained; the
 completed October 29 Hardcover snapshot was untouched. Connections now shows
 that snapshot as succeeded and the abandoned Spotify run as interrupted rather
 than polling it indefinitely as running.
+
+The real hourly invocation at **2026-10-30 00:00:17.063 UTC** succeeded on the
+current deployed version. Admissions remained attached to their October 29
+allocations; a new UTC day alone did not bypass the 23-hour eligibility guard.
+The same cycle reserved 20 Reader content targets, all of which completed with
+one acquisition attempt each and no failures. Twenty full ready manifests and
+251 indexed chunks had no missing search mappings. New text/checksums, an
+owner-authenticated text search/excerpt, and controlled duplicate delivery passed
+the [catalog/content acceptance checks](catalog-operations.md). This observed
+hourly scheduling is distinct from a subsequent eligible daily source fetch.
 
 Full source closeout remains subject to the acceptance requirements above,
 including actual subsequent eligible scheduled runs. Local clocks and same-day

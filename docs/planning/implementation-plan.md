@@ -1,6 +1,6 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-10-29
+Last updated: 2026-10-30 UTC
 
 Deployment closeout is the active priority. The[closeout checklist](deployment-closeout.md)
 tracks permanent cost safeguards, source recovery, recurring catalog/content,
@@ -24,14 +24,27 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
-## Current checkout and production status (2026-10-29)
+## Current checkout and production status (2026-10-30 UTC)
 
-The normal production configuration is deployed from main revision `9a6a877` with
+Deployment acceptance recorded through 2026-10-30 00:10 UTC used main revision
+`3044d2ad` with
 migrations through 0034; foreign-key checks passed and a fresh protected local
 database/R2 copy passed independent restore verification. CI validation and
-guarded automatic production delivery are enabled; the first ordinary release
-still needs verification. See the closeout checklist for exact release evidence and later
-updates; deployment does not imply every provider has passed acceptance.
+guarded automatic production delivery are enabled. The first ordinary
+[main pipeline 40975073224](https://github.com/jeremy-washam/media-tracker/actions/runs/40975073224)
+passed validation, deployment and authenticated smoke at **23:56:29.258 UTC**.
+[PR 12](https://github.com/jeremy-washam/media-tracker/pull/12) resolved the YouTube
+publication CPU failure; `CATALOG_AUTO_REFRESH=true` was restored and reconciled
+with both protected environment configurations at **23:57:19.646 UTC**. The same
+existing YouTube job succeeded at **23:57:28.555 UTC** with unchanged provider
+counters, native publication/search/expiry checks and live artwork/inspector
+verification in dark and light appearance. The 00:00 UTC monitor read timed out;
+it retained the still-fresh 23:50 normal/open $5 estimate without inventing a new
+measurement or pausing. The next real collection recovered at
+**2026-10-30 00:10:25.976 UTC**, verified directly in R2 as normal/open with a $5
+estimate and unpaused queue.
+See the closeout checklist for exact release evidence and later updates;
+deployment does not imply every provider has passed acceptance.
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -49,8 +62,44 @@ are complete. The owner verified all six media families, search, filters,
 inspectors/history and article excerpts. Hourly source dispatch now checks daily
 eligibility; new hosted allocations are limited to one per source per UTC day
 and at least 23 hours apart. Hardcover's controlled hosted snapshot completed
-23 pages and 1,112 books without failed records. Spotify's HTTP 403, recurring
-catalog/content, and release automation require live acceptance. See the
+23 pages with 1,112 source records, 128 normalized records and zero failures.
+After the 00:10 acceptance checkpoint, the owner confirmed active Spotify Premium
+at 00:16 UTC. One manual catalog request was accepted at 00:17:34; its first
+bounded job still failed with `spotify_http_403`, verified at 00:18:28, with
+requested/returned/unavailable counters all zero. The 18,206 existing tracks
+remain; no new provider records or recovered source fetch were established.
+The owner's 00:23 screenshot confirms Development Mode and a Client ID matching
+the retained deployment input. The owner found the account absent from Users
+Management and added it. One bounded catalog retry was accepted with HTTP 202
+at 00:27:38. By 00:28:05 the same pending job's tracks phase had requested 25,
+returned 25, zero unavailable and no error, verifying track catalog API access.
+The account addition appears to have resolved that access block; the job/full
+backfill remain unverified and status still reported 18,206 remaining tracks.
+Metadata access does not establish saved-episode source recovery: one retained
+source retry awaits PR 13 release. Keep API flags and the allowlist unchanged,
+with no additional catalog retry while observing this job, and no new
+subscription/app or credential replacement. Premium restoration alone had not
+resolved the observed API failure.
+
+A prepared source-admission correction allows only the latest retained failed
+allocation to retry across UTC midnight, with an atomic newer-admission fence.
+It preserves original day/start, cumulative reservation/usage, cooldown and
+ceilings, and all new-allocation daily/23-hour, scheduler, lease and rolling guards.
+No migration is required. The focused suite passed 41 tests, including 12 new
+regressions. The full local check passed 907 TypeScript and 147 Python tests;
+production build/dry run and all 13 native runtime tests passed. PR 13 release
+and live verification remain pending.
+The fix is not deployed: functional production remains `3044d2ad`, and a new
+Spotify source fetch has not been established.
+The real October 30 hourly invocation completed at 00:00:17.063 UTC without an
+empty catalog refresh; five-minute maintenance also completed. Its article batch
+finished with 20 jobs / 20 attempts / zero failures, 20 ready/full manifests,
+251 chunks and no missing FTS. Newly acquired text/chunk checksums, owner text-only
+search and hydrated excerpt were verified. A controlled completed-key replay
+left attempts, acquisitions and manifest/chunk/FTS metadata unchanged; queue/log
+correlation supports duplicate-guard acceptance, with no direct message-ID proof
+or measured zero-write claim. The next genuinely eligible daily source cycle
+remains acceptance work. See the
 [deployment closeout](deployment-closeout.md) for the
 current checklist and[deployment runbook](deployment.md) for transfer evidence.
 
@@ -459,7 +508,8 @@ raw-page retention, canonical projection, manual sync, and hosted daily admissio
 are implemented. Hosted snapshots continue one durable 50-book page per
 invocation under the same run; only a completed scan advances the completed
 cursor and retires absent source relationships. Controlled hosted completion
-passed on October 29 across 23 pages and 1,112 books with no failed records. The
+passed on October 29 across 23 pages, 1,112 source records and 128 normalized
+records with zero failures. The
 earlier Read-shelf-only local validation returned
 127 Read books and 127 supported occurrences on repeated reconciliation without
 canonical duplicates; those counts describe the historical test, not the current

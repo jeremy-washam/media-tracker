@@ -204,4 +204,138 @@ describe('durable source sync admission', () => {
       db.close()
     }
   })
+
+  it('uses the final retained retry across midnight without resetting its row or cumulative usage', async () => {
+    const { db, repository } = fixture()
+    const started = Date.parse('2026-10-29T23:58:00Z')
+    const afterMidnight = started + 3 * 60_000
+    const reservation = JSON.stringify({ requests: 32, pages: 24, records: 1000, bytes: 8388608 })
+    const usage = JSON.stringify({
+      requests: 4,
+      pages: 2,
+      records: 25,
+      bytes: 1000,
+      rowsRead: 100,
+      rowsWritten: 20,
+    })
+    try {
+      expect(await repository.reserve('spotify', started, reservation)).toBe(true)
+      await repository.finish('spotify', started, started + 1000, 'failed', usage)
+      expect(await repository.claimRetry('spotify', started, started + 2000)).toBe(true)
+      await repository.finish('spotify', started, started + 3000, 'failed', usage)
+      expect(await repository.available('spotify', afterMidnight)).toBe(false)
+      expect(await repository.reserve('spotify', afterMidnight, '{}')).toBe(false)
+      expect(await repository.retryable('spotify', afterMidnight)).toMatchObject({
+        started_at: started,
+        attempts: 2,
+        reservation_json: reservation,
+        usage_json: usage,
+      })
+      expect(await repository.claimRetry('spotify', started, afterMidnight)).toBe(true)
+      expect(
+        db
+          .prepare(
+            "SELECT day,started_at,attempts,retry_count,reservation_json,usage_json FROM source_sync_admission WHERE source='spotify'",
+          )
+          .all(),
+      ).toEqual([
+        {
+          day: '2026-10-29',
+          started_at: started,
+          attempts: 3,
+          retry_count: 2,
+          reservation_json: reservation,
+          usage_json: JSON.stringify({ ...JSON.parse(usage), inFlight: 1 }),
+        },
+      ])
+      const cumulative = JSON.stringify({ ...JSON.parse(usage), requests: 7, bytes: 1600 })
+      await repository.finish('spotify', started, afterMidnight + 1000, 'failed', cumulative)
+      expect(await repository.retryable('spotify', afterMidnight + 2000)).toBeNull()
+      expect(await repository.claimRetry('spotify', started, afterMidnight + 2000)).toBe(false)
+      expect(
+        db
+          .prepare(
+            "SELECT day,started_at,usage_json FROM source_sync_admission WHERE source='spotify'",
+          )
+          .all(),
+      ).toEqual([{ day: '2026-10-29', started_at: started, usage_json: cumulative }])
+    } finally {
+      db.close()
+    }
+  })
+
+  it.each([
+    ['exhausted retries', 'retry_count=2'],
+    ['exhausted attempts', 'attempts=3'],
+    ['unknown usage', 'usage_json=NULL'],
+    ['non-object usage', "usage_json='[]'"],
+    ['in-flight usage', `usage_json='{"inFlight":1}'`],
+    ['provider cooldown', 'retry_not_before=1793330000000'],
+    ['terminal stop', "stop_reason='limit_reached'"],
+  ])('blocks cross-day recovery with %s', async (_reason, update) => {
+    const { db, repository } = fixture()
+    const started = Date.parse('2026-10-29T23:58:00Z')
+    const now = started + 3 * 60_000
+    try {
+      await repository.reserve('spotify', started, '{}')
+      await repository.finish('spotify', started, started + 1000, 'failed', '{}')
+      db.exec(`UPDATE source_sync_admission SET ${update} WHERE source='spotify'`)
+      const before = db.prepare("SELECT * FROM source_sync_admission WHERE source='spotify'").get()
+      expect(await repository.retryable('spotify', now)).toBeNull()
+      expect(await repository.claimRetry('spotify', started, now)).toBe(false)
+      expect(
+        db.prepare("SELECT * FROM source_sync_admission WHERE source='spotify'").get(),
+      ).toEqual(before)
+    } finally {
+      db.close()
+    }
+  })
+
+  it.each(['running', 'succeeded', 'failed'] as const)(
+    'does not fall back to an older failure behind a newer %s admission',
+    async (outcome) => {
+      const { db, repository } = fixture()
+      const started = Date.parse('2026-10-28T23:58:00Z')
+      const next = started + 24 * 60 * 60_000
+      try {
+        await repository.reserve('spotify', started, '{}')
+        await repository.finish('spotify', started, started + 1000, 'failed', '{}')
+        expect(await repository.reserve('spotify', next, '{}')).toBe(true)
+        await repository.finish('spotify', next, next + 1000, outcome, '{}')
+        if (outcome === 'failed')
+          db.exec(
+            "UPDATE source_sync_admission SET retry_count=2 WHERE source='spotify' AND day='2026-10-29'",
+          )
+        expect(await repository.retryable('spotify', next + 3 * 60_000)).toBeNull()
+        expect(await repository.claimRetry('spotify', started, next + 3 * 60_000)).toBe(false)
+      } finally {
+        db.close()
+      }
+    },
+  )
+
+  it('atomically rejects a retained claim when a newer admission appears after discovery', async () => {
+    const { db, repository } = fixture()
+    const started = Date.parse('2026-10-28T23:58:00Z')
+    const next = started + 24 * 60 * 60_000
+    try {
+      await repository.reserve('spotify', started, '{}')
+      await repository.finish('spotify', started, started + 1000, 'failed', '{"requests":4}')
+      expect(await repository.retryable('spotify', next - 1000)).toMatchObject({
+        started_at: started,
+      })
+      expect(await repository.reserve('spotify', next, '{}')).toBe(true)
+      const before = db
+        .prepare("SELECT * FROM source_sync_admission WHERE source='spotify' ORDER BY started_at")
+        .all()
+      expect(await repository.claimRetry('spotify', started, next + 1000)).toBe(false)
+      expect(
+        db
+          .prepare("SELECT * FROM source_sync_admission WHERE source='spotify' ORDER BY started_at")
+          .all(),
+      ).toEqual(before)
+    } finally {
+      db.close()
+    }
+  })
 })
