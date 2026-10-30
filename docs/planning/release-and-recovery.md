@@ -56,16 +56,38 @@ UTC**, verified directly in R2 as normal/open with a $5 estimate and unpaused
 queue. This is release acceptance against `3044d2ad` through that timestamp;
 later main revisions retain their own exact-revision validation and receipts.
 
-The owner reported canceling Spotify Premium and chose to restore it personally.
-Spotify's Development Mode policy requires active Premium; a lapse is consistent
-with the 403 if already expired, while the actual app mode/expiration remain
-unverified. Keep Spotify API flags and the source allowlist unchanged. After
-owner restoration, retest the existing connection's bounded source sync and
-catalog job without resetting admissions or attempts. If 403 persists, inspect
-the matching app's status, Users Management and granted scopes before considering
-reauthorization. No subscription purchase, new app or manual credential
-replacement was performed; Spotify API recovery remains unverified. That recovery
-and the next genuinely eligible daily source cycle remain unfinished.
+After that release-acceptance checkpoint, the owner confirmed active Spotify
+Premium at **00:16 UTC**. One manual catalog request was accepted at **00:17:34**;
+its first bounded job still failed with `spotify_http_403`, verified at **00:18:28**,
+with requested/returned/unavailable counters all zero. The existing 18,206 tracks
+remain, with no new provider records. The owner's **00:23** screenshot confirms
+Development Mode and a Client ID matching the retained deployment input. The
+owner found the account absent from Users Management and added it. One bounded
+catalog retry was accepted with HTTP 202 at **00:27:38 UTC**. By **00:28:05 UTC**,
+the same pending job's tracks phase had 25 requested, 25 returned, zero unavailable
+and no error, verifying track catalog API access. The account addition appears
+to have resolved that access block. The job/full backfill remain unverified;
+status still reported 18,206 remaining tracks, so no remaining-count reduction is
+claimed. Metadata fetches do not verify saved-episode source recovery: one
+retained source retry awaits PR 13 release. Premium restoration alone had not
+resolved the observed API failure. Keep API flags and the source allowlist
+unchanged, without another catalog retry while observing this job. No new
+subscription/app, agent purchase, reauthorization or manual
+credential replacement was performed.
+
+A manual source attempt exposed current-day filtering of retained failed retries
+across UTC midnight; it did not establish a new provider fetch. The prepared
+correction selects only the latest retained failed allocation across days and
+atomically refuses its claim if a newer admission appears. It preserves the
+original day/start, cumulative reservation/usage, cooldown, retry/attempt ceilings
+and all new-allocation daily/23-hour, scheduler, lease and rolling guards, without
+a migration or allowance reset. The focused suite passed 41 tests, including 12
+new regressions. The full local check passed 907 TypeScript and 147 Python tests;
+production build/dry run and all 13 native runtime tests passed. PR 13 release
+and live verification remain pending; this fix is not deployed and functional
+production remains `3044d2ad`.
+Spotify saved-episode source recovery, catalog job completion and the next
+genuinely eligible daily source cycle remain unfinished.
 The original baseline's separate Mac-copy verification
 passed at 21:59:41 UTC; fresh-backup evidence is recorded below.
 The [deployment closeout](deployment-closeout.md) records remaining live

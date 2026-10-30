@@ -111,30 +111,38 @@ export class SqlSourceSyncAdmission {
   }
 
   async retryable(source: string, now: number): Promise<SourceSyncReservation | null> {
+    // A retained allocation does not expire at midnight. Only its latest
+    // admission may retry; an older failure cannot bypass newer work.
     return this.db
       .prepare(
         `SELECT started_at,reservation_json,usage_json,attempts,snapshot_run_id,
       COALESCE((SELECT json_extract(hp.checkpoint_json,'$.scanComplete') FROM hardcover_sync_progress hp
         WHERE hp.sync_run_id=a.snapshot_run_id LIMIT 1),0) scan_complete
-      FROM source_sync_admission a WHERE source=? AND day=? AND outcome='failed'
+      FROM source_sync_admission a WHERE source=? AND outcome='failed'
       AND retry_count<2 AND attempts<CASE WHEN source='hardcover' THEN 96 ELSE 3 END
       AND usage_json IS NOT NULL AND json_type(usage_json)='object' AND COALESCE(json_extract(usage_json,'$.inFlight'),0)=0
-      AND stop_reason IS NULL AND retry_not_before<=?`,
+      AND stop_reason IS NULL AND retry_not_before<=?
+      AND NOT EXISTS (SELECT 1 FROM source_sync_admission newer
+        WHERE newer.source=a.source AND newer.started_at>a.started_at)
+      ORDER BY started_at DESC LIMIT 1`,
       )
-      .bind(source, new Date(now).toISOString().slice(0, 10), now)
+      .bind(source, now)
       .first<SourceSyncReservation>()
   }
 
   async claimRetry(source: string, started: number, now = Date.now()): Promise<boolean> {
     const result = await this.db
       .prepare(
-        `UPDATE source_sync_admission SET attempts=attempts+1,
+        `UPDATE source_sync_admission AS a SET attempts=attempts+1,
       retry_count=retry_count+1,outcome='running',finished_at=NULL,
       usage_json=json_set(usage_json,'$.inFlight',1)
       WHERE source=? AND day=? AND started_at=? AND outcome='failed' AND retry_count<2
       AND attempts<CASE WHEN source='hardcover' THEN 96 ELSE 3 END AND stop_reason IS NULL
       AND usage_json IS NOT NULL AND json_type(usage_json)='object' AND COALESCE(json_extract(usage_json,'$.inFlight'),0)=0
-      AND retry_not_before<=? RETURNING source`,
+      AND retry_not_before<=?
+      AND NOT EXISTS (SELECT 1 FROM source_sync_admission newer
+        WHERE newer.source=a.source AND newer.started_at>a.started_at)
+      RETURNING source`,
       )
       .bind(source, new Date(started).toISOString().slice(0, 10), started, now)
       .all<{ source: string }>()

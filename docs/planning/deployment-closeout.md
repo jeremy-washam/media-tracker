@@ -56,16 +56,16 @@ measurement and unpaused queue, without operator intervention.
 
 ## Acceptance checklist
 
-| Area                      | Live evidence                                                                                                                                                                                          | Remaining acceptance                                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| Cost safeguards           | Successful native monitor/drill; absent/stale/future states return 503; midnight timeout retained fresh data and the next real 00:10 collection recovered normally                                     | Alerts and pause remain approximate; they are not a guaranteed invoice cap                                                       |
-| Source reliability        | Hardcover complete: 23 pages, 1,112 source records, 128 normalized records, zero failures, final cursor committed; Letterboxd/Readwise succeeded October 29                                            | Owner restores active Premium, then bounded existing Spotify source/catalog retest; next eligible daily cycle remains unobserved |
-| Catalog/content           | Movies and YouTube publication verified; actual hourly cron created no empty catalog job; maintenance completed; 20 ready/full articles, 251 chunks, excerpt/FTS and correlated duplicate guard passed | Existing Spotify catalog retest follows owner Premium restoration; API recovery remains unverified                               |
-| Hosted imports            | Streamed bounds, existing owner export imports and continuation; native import/resume/ZIP-bomb acceptance passed                                                                                       | Hosted ZIP limits remain explicit; complete historical coverage still needs manual source exports                                |
-| Observability/performance | Owner-only operations; safe Spotify endpoint/status diagnostic; 20 representative live list/detail/history checks all 200                                                                              | Single-pass latency is recorded below, not a percentile or performance SLO                                                       |
-| Recovery/security         | Fresh independent Mac data backup and restore verified; migration rehearsal passed; separate approved key backup decrypt proof passed; restricted CI identity verified                                 | Optional offsite copy protects against Mac loss; service identity expires October 29, 2027                                       |
-| CI/CD                     | Reviewed migration workflow and first ordinary exact-main validation/deployment/authenticated smoke passed; scoped secrets in both main-only environments; guarded CD enabled                          | Retain configuration/schema checks and exact-revision delivery for subsequent releases                                           |
-| Documentation             | Owning setup, recovery, source, architecture and plan documents reconciled with actual deployment                                                                                                      | Keep incomplete provider/scheduler gates explicit; do not infer full acceptance from synthetic tests                             |
+| Area                      | Live evidence                                                                                                                                                                                          | Remaining acceptance                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Cost safeguards           | Successful native monitor/drill; absent/stale/future states return 503; midnight timeout retained fresh data and the next real 00:10 collection recovered normally                                     | Alerts and pause remain approximate; they are not a guaranteed invoice cap                                                    |
+| Source reliability        | Hardcover complete: 23 pages, 1,112 source records, 128 normalized records, zero failures, final cursor committed; Letterboxd/Readwise succeeded October 29                                            | Spotify retained-retry fix release/acceptance pending; next eligible daily cycle remains unobserved                           |
+| Catalog/content           | Movies and YouTube publication verified; actual hourly cron created no empty catalog job; maintenance completed; 20 ready/full articles, 251 chunks, excerpt/FTS and correlated duplicate guard passed | Spotify track catalog access recovered (25/25); ongoing job/full backfill and saved-episode source recovery remain unverified |
+| Hosted imports            | Streamed bounds, existing owner export imports and continuation; native import/resume/ZIP-bomb acceptance passed                                                                                       | Hosted ZIP limits remain explicit; complete historical coverage still needs manual source exports                             |
+| Observability/performance | Owner-only operations; safe Spotify endpoint/status diagnostic; 20 representative live list/detail/history checks all 200                                                                              | Single-pass latency is recorded below, not a percentile or performance SLO                                                    |
+| Recovery/security         | Fresh independent Mac data backup and restore verified; migration rehearsal passed; separate approved key backup decrypt proof passed; restricted CI identity verified                                 | Optional offsite copy protects against Mac loss; service identity expires October 29, 2027                                    |
+| CI/CD                     | Reviewed migration workflow and first ordinary exact-main validation/deployment/authenticated smoke passed; scoped secrets in both main-only environments; guarded CD enabled                          | Retain configuration/schema checks and exact-revision delivery for subsequent releases                                        |
+| Documentation             | Owning setup, recovery, source, architecture and plan documents reconciled with actual deployment                                                                                                      | Keep incomplete provider/scheduler gates explicit; do not infer full acceptance from synthetic tests                          |
 
 A local test is not a live activation. A bounded first batch is not a completed
 backfill, and a simulated clock is not an observed production scheduled cycle.
@@ -195,24 +195,41 @@ comparison was performed. Native publication and browser artwork/inspector check
 resolve the earlier CPU-failure hold without increasing runtime or provider
 allowances.
 
-Spotify's bounded source retry refreshed the hosted token successfully, then
-received **HTTP 403 from saved episodes**. The owner subsequently reported
-canceling Spotify Premium and chose to restore Premium personally.
-Spotify's [Development Mode policy](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
-and [migration guidance](https://developer.spotify.com/documentation/web-api/references/changes/february-2026)
-require active Premium. A lapse is consistent with the observed 403 if Premium
-had already expired; the app's actual dashboard mode and expiration timing remain
-unverified, so the cause has not been confirmed.
+After the 00:10 release-acceptance checkpoint, the owner confirmed active Spotify
+Premium again at **00:16 UTC**. A single manual catalog request was accepted at
+**00:17:34 UTC**, but its first bounded job failed with `spotify_http_403`, verified
+at **00:18:28 UTC**. Requested, returned and unavailable counters were all zero;
+the existing 18,206 tracks remain, with no new provider records. Earlier, the
+bounded source retry refreshed the hosted token successfully but received 403
+from saved episodes. Premium restoration has not established API recovery.
 
-Keep the Spotify API flags and source allowlist unchanged. After the owner
-confirms active Premium, retest the existing connection's bounded source sync
-and catalog job, preserving admission/attempt accounting. If 403 persists, inspect
-the matching existing app's status, exact account in Users Management and granted
-scopes before considering reauthorization. Existing credential metadata does not
-retain the actual grant scopes. No subscription purchase, new Spotify app,
+The owner's **00:23 UTC** screenshot confirms Development Mode and a Client ID
+matching the retained deployment input. Spotify's
+[Development Mode policy](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
+and [migration guidance](https://developer.spotify.com/documentation/web-api/references/changes/february-2026)
+require active Premium. The owner then found the account absent from Users
+Management and added it. One bounded catalog retry was accepted with HTTP 202 at
+**00:27:38 UTC**. At **00:28:05 UTC**, that same job was pending in its tracks
+phase with 25 requested, 25 returned, zero unavailable and no error. This verifies
+track catalog API access after the account addition, which appears to have
+resolved that access block. The job and full backfill remain unverified; status
+still reported 18,206 remaining tracks, so no remaining-count reduction is claimed.
+This metadata fetch does not verify saved-episode source sync: one retained source
+retry awaits the PR 13 release. Keep API flags and the source allowlist unchanged,
+without another catalog retry while observing this job. No agent purchase, new app,
 reauthorization, manual credential replacement or allowance reset was performed.
-Spotify API recovery remains unverified; earlier catalog progress does not
-establish newly completed work.
+
+A manual source attempt also exposed a cross-midnight retained-retry bug: discovery
+filtered failed allocations to the current UTC day. A prepared query correction
+selects only the latest retained failed allocation across days, with an atomic
+newer-admission fence when claiming it. It preserves the original day/start,
+cumulative reservation/usage, cooldown and attempt ceilings, plus all new-allocation
+daily/23-hour, scheduler, lease and rolling guards; no migration is needed.
+The focused suite passed 41 tests, including 12 new regressions. The full local
+check passed 907 TypeScript and 147 Python tests; the production build/dry run
+and all 13 native runtime tests passed. PR 13's release and live verification
+remain pending; this fix is not deployed and no new source fetch has been
+established. Functional production remains `3044d2ad` until that release passes.
 
 The real hourly `0 * * * *` invocation completed successfully at
 **2026-10-30 00:00:17.063 UTC**. Its script version matched the current

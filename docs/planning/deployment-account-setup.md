@@ -120,14 +120,31 @@ automatic pause. The next real collection recovered at **2026-10-30 00:10:25.976
 UTC**; direct R2 readback confirmed normal/open operation, a $5 estimate and an
 unpaused queue.
 
-The owner reported canceling Spotify Premium and chose to restore it personally.
-Spotify's Development Mode policy requires active Premium; the actual app mode
-and expiration timing remain unverified, so the 403 cause is not confirmed.
-After the owner confirms active Premium, retest the existing connection's bounded
-source sync and catalog job, leaving API flags and the source allowlist unchanged.
-If 403 persists, check the matching app's status, Users Management and granted
-scopes. No subscription purchase, new app, reauthorization or manual credential
-replacement was performed. Spotify API recovery and a genuinely next-eligible
-daily source cycle remain acceptance work. See the
+The owner confirmed active Spotify Premium again at **2026-10-30 00:16 UTC**.
+One manual catalog request was accepted at 00:17:34; its first bounded job still
+failed with `spotify_http_403`, verified at 00:18:28, with requested/returned/
+unavailable counters all zero. The existing 18,206 tracks remain, with no new
+provider records. The owner's 00:23 screenshot confirms Development Mode and a
+Client ID matching the retained deployment input. The owner found the account
+absent from Users Management and added it. One bounded catalog retry was accepted
+with HTTP 202 at **00:27:38 UTC**. By **00:28:05 UTC**, the same pending job's
+tracks phase had 25 requested, 25 returned, zero unavailable and no error,
+verifying track catalog API access. The account addition appears to have resolved
+that access block; the job/full backfill remain unverified. Status still reported
+18,206 remaining tracks, so no remaining-count reduction is claimed. Metadata
+access does not establish saved-episode source recovery: one retained source
+retry awaits PR 13 release. Keep API flags and the source allowlist unchanged,
+without another catalog retry while observing this job. No new
+subscription/app, agent purchase, reauthorization or manual credential replacement
+was performed.
+
+A cross-midnight retained-source-retry correction is prepared for PR 13, with
+41 focused tests passing (12 new). The full local check passed 907 TypeScript
+and 147 Python tests; production build/dry run and all 13 native runtime tests
+passed. Release and live verification remain pending. It retains original admission accounting and existing guards,
+requires no migration and is not deployed. Functional production remains
+`3044d2ad`; no new Spotify source fetch has been established. Spotify saved-episode
+source recovery, catalog job completion and a genuinely next-eligible daily source
+cycle remain acceptance work. See the
 [closeout checklist](deployment-closeout.md) for current activation status and the
 [release runbook](release-and-recovery.md) for exact protected secrets.

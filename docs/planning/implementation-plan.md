@@ -63,13 +63,34 @@ inspectors/history and article excerpts. Hourly source dispatch now checks daily
 eligibility; new hosted allocations are limited to one per source per UTC day
 and at least 23 hours apart. Hardcover's controlled hosted snapshot completed
 23 pages with 1,112 source records, 128 normalized records and zero failures.
-The owner reported canceling Spotify Premium and chose to restore it personally.
-Active Premium is required by Spotify's Development Mode policy; the app's actual
-mode and Premium expiration timing remain unverified. After owner restoration,
-retest the existing connection's bounded source sync and catalog job with API
-flags and the allowlist unchanged. If 403 persists, inspect the matching app's
-status, Users Management and granted scopes. No subscription purchase or manual
-Spotify credential change was made; API recovery remains unverified.
+After the 00:10 acceptance checkpoint, the owner confirmed active Spotify Premium
+at 00:16 UTC. One manual catalog request was accepted at 00:17:34; its first
+bounded job still failed with `spotify_http_403`, verified at 00:18:28, with
+requested/returned/unavailable counters all zero. The 18,206 existing tracks
+remain; no new provider records or recovered source fetch were established.
+The owner's 00:23 screenshot confirms Development Mode and a Client ID matching
+the retained deployment input. The owner found the account absent from Users
+Management and added it. One bounded catalog retry was accepted with HTTP 202
+at 00:27:38. By 00:28:05 the same pending job's tracks phase had requested 25,
+returned 25, zero unavailable and no error, verifying track catalog API access.
+The account addition appears to have resolved that access block; the job/full
+backfill remain unverified and status still reported 18,206 remaining tracks.
+Metadata access does not establish saved-episode source recovery: one retained
+source retry awaits PR 13 release. Keep API flags and the allowlist unchanged,
+with no additional catalog retry while observing this job, and no new
+subscription/app or credential replacement. Premium restoration alone had not
+resolved the observed API failure.
+
+A prepared source-admission correction allows only the latest retained failed
+allocation to retry across UTC midnight, with an atomic newer-admission fence.
+It preserves original day/start, cumulative reservation/usage, cooldown and
+ceilings, and all new-allocation daily/23-hour, scheduler, lease and rolling guards.
+No migration is required. The focused suite passed 41 tests, including 12 new
+regressions. The full local check passed 907 TypeScript and 147 Python tests;
+production build/dry run and all 13 native runtime tests passed. PR 13 release
+and live verification remain pending.
+The fix is not deployed: functional production remains `3044d2ad`, and a new
+Spotify source fetch has not been established.
 The real October 30 hourly invocation completed at 00:00:17.063 UTC without an
 empty catalog refresh; five-minute maintenance also completed. Its article batch
 finished with 20 jobs / 20 attempts / zero failures, 20 ready/full manifests,

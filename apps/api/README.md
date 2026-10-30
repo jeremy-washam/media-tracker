@@ -85,9 +85,10 @@ UTC day and a 23-hour minimum interval. Hardcover continuations and finite
 recovery attempts retain that allocation; local explicit syncs do not use the
 hosted admission policy. Migrations through 0034 are deployed. Hardcover's
 controlled hosted snapshot completed across 23 pages with 1,112 source records,
-128 normalized records and no failures. Spotify's owner plans to restore active
-Premium, after which the existing connection needs a bounded source/catalog retry;
-configured recurring work alone does not establish success.
+128 normalized records and no failures. After owner-restored Premium and the
+Users Management account correction, Spotify's first catalog batch fetched 25
+tracks without errors. Saved-episode source sync and full catalog completion
+remain to verify; configured recurring work alone does not establish success.
 
 ## Spotify and YouTube
 

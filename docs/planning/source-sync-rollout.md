@@ -39,6 +39,12 @@ restarting does not replenish an allocation. Failed database operations,
 unmeasured statements, and unknown in-flight work retain conservative accounting.
 Routine daily allocations do not erase previous evidence or unknown work.
 
+An explicitly requested failed retry can reuse the latest source allocation after
+midnight, retaining its original day/start, cumulative usage, provider cooldown
+and remaining retry count. A newer admission supersedes older failures, including
+when it appears between retry discovery and the atomic claim. New allocations
+still require a new UTC day and 23 hours; hourly availability is unchanged.
+
 ## Hardcover continuation and crash recovery
 
 Apply migrations **0032** (Hardcover progress) and **0034** (snapshot-bound recovery
@@ -131,15 +137,25 @@ cause. `user-library-read` authorizes saved-library access;
 establish the 403 cause. See [quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes),
 [saved episodes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes)
 and the [February changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026).
-The owner subsequently reported cancelling Premium and chose to restore it
-independently. Spotify requires active Premium for Development Mode apps and
-documents that a lapse stops the app. If the cancellation has taken effect,
-that is consistent with the observed 403; current app mode and subscription
-expiry remain unverified. Keep the existing Spotify configuration enabled and
-retry within the retained admission limits after Premium is active. If 403
-persists, continue the matching-app/allowlist/scopes diagnostic above. No new
-app, agent purchase, reauthorization or credential change was made; API recovery
-still needs a successful source and catalog retest.
+The owner subsequently reported cancelling Premium, then confirmed restoring it.
+Spotify requires active Premium for Development Mode apps and documents that a
+lapse stops the app. One normal catalog retry at **2026-10-30 00:17:34 UTC** was
+accepted, but its first request still failed with `spotify_http_403`; verification
+at 00:18:28 showed zero requested/returned catalog records. The owner's screenshot
+confirms Development Mode and a Client ID matching the retained deployment input.
+The owner then found the connected account absent from Users Management and added
+it. One catalog retry accepted at **00:27:38 UTC** had fetched and committed
+**25 requested / 25 returned / zero unavailable** tracks without errors by
+**00:28:05 UTC**. Track-catalog API access is restored; the full backfill and
+saved-episode source sync are not yet established by this batch. No new app,
+agent purchase, reauthorization or manual credential replacement was made.
+
+That recovery also exposed a UTC-boundary lookup bug: the remaining failed retry
+was hidden after midnight even though its original allocation retained allowance.
+The narrow fix selects only the latest source allocation and fences the atomic
+claim against newer admissions, preserving all existing accounting and limits.
+Regression tests pass; live source-recovery acceptance awaits deployment and the
+provider access check. No admission was reset to perform this diagnostic.
 
 The reviewed legacy October 17 Hardcover and October 28 Spotify source runs had
 no active lease, progress, snapshot admission, catalog role or committed cursor.

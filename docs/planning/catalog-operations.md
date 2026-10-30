@@ -224,19 +224,27 @@ of zero are not evidence that total database usage was measured as zero.
 
 ### Spotify owner action and remaining daily acceptance
 
-The owner reported cancelling Spotify Premium and chose to restore it personally.
-Spotify's current [quota-mode guidance](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
+The owner restored Spotify Premium and confirmed it active at **00:16 UTC**.
+Spotify's [quota-mode guidance](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
 and [development-mode migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
-require the app owner to have active Premium for development-mode API access.
-An effective lapse is consistent with the observed source/catalog HTTP 403;
-the app's mode and the subscription's effective expiry have not been verified.
+require active owner Premium for development-mode API access. The first catalog
+retry at **00:17:34 UTC** still failed with `spotify_http_403`, with zero requested
+or returned records. The owner's screenshot confirmed Development Mode and a
+Client ID matching the retained deployment input.
 
-Spotify's API configuration and source allowlist remain enabled, ready for the
-owner's restoration. Once Premium is active, use a bounded retry with the
-existing connection and credentials, then verify source and catalog results.
-Persistent 403 responses still require app-status, account-allowlist and granted
-scope diagnostics. No restored API access is claimed. The agent did not purchase
-a subscription, reset credentials or require reauthorization.
+The owner then found the connected account missing from Users Management and
+added it. One ordinary bounded catalog retry accepted at **00:27:38 UTC** fetched
+and committed **25 requested / 25 returned / zero unavailable** tracks without
+errors by **00:28:05 UTC**. Track-catalog API access is restored; this first batch
+does not establish full backfill completion or saved-episode source access. The
+job continues at its existing pace and limits. Existing configuration and
+credentials were retained. No agent purchase, new app or reauthorization occurred.
+
+The retained source retry was separately hidden by a UTC-midnight lookup bug.
+The prepared PR 13 correction uses only the latest admission and fences claims
+against newer work without resetting its original accounting or limits. Local
+checks passed 907 TypeScript and 147 Python tests, production builds/dry run, and
+13 native Worker tests. Release and live source-retry acceptance remain pending.
 
 The independent operating monitor recovered successfully at **00:10:25 UTC**
 with a fresh normal/open state, a $5 estimate and the native queue unpaused.
