@@ -80,11 +80,20 @@ for (const dark of [false, true]) {
       const results = page.locator('[data-ui~="library-collection"]')
       const header = (await page.locator('[data-ui~="collection-header"]').boundingBox())!
       const firstRow = (await rows.first().boundingBox())!
-      expect(firstRow.y - (header.y + header.height)).toBeGreaterThanOrEqual(12)
+      expect(firstRow.y - (header.y + header.height)).toBeGreaterThanOrEqual(16)
+      expect(await results.evaluate((element) => getComputedStyle(element).maskImage)).toContain(
+        'linear-gradient',
+      )
+      if (media === 'movies' && section === 'archive')
+        await page.screenshot({ path: `/tmp/imladris-fade-${dark ? 'dark' : 'light'}-rest.png` })
       await results.evaluate((element) => {
         element.scrollTop = 600
       })
       await expect.poll(() => results.evaluate((element) => element.scrollTop)).toBeGreaterThan(300)
+      if (media === 'movies' && section === 'archive')
+        await page.screenshot({
+          path: `/tmp/imladris-fade-${dark ? 'dark' : 'light'}-scrolled.png`,
+        })
       expect((await toolbar.boundingBox())!.y).toBe(initial.y)
       await expect(summary).toBeInViewport()
       {
@@ -101,7 +110,7 @@ for (const dark of [false, true]) {
         await page
           .locator('[data-ui~="collection-header"]')
           .evaluate((element) => getComputedStyle(element).boxShadow),
-      ).not.toBe('none')
+      ).toBe('none')
       const trigger = page.getByRole('button', { name: 'Filters', exact: true })
       await trigger.click()
       const dialog = page.getByRole('dialog', { name: 'Collection filters' })
