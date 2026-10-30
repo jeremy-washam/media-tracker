@@ -1,9 +1,30 @@
 import { Request, Response } from 'miniflare'
 
+const heldResponses = new Map<string, { promise: Promise<void>; release: () => void }>()
+
+/** Keep a real stream active until the test has observed the transition it exercises. */
+export function holdSyntheticChatResponse(prompt: string) {
+  let release!: () => void
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const held = { promise, release }
+  heldResponses.set(prompt, held)
+  return () => {
+    if (heldResponses.get(prompt) === held) heldResponses.delete(prompt)
+    release()
+  }
+}
+
+export function releaseSyntheticChatResponses() {
+  for (const held of heldResponses.values()) held.release()
+  heldResponses.clear()
+}
+
 /** Synthetic Responses transport; the production SDK, tool loop, D1 and SQLite remain real. */
 export async function syntheticChatProvider(request: Request): Promise<Response> {
   const body = (await request.json()) as { input: Record<string, unknown>[]; instructions: string }
-  const user = (body.input.find((x) => x.role === 'user')?.content as string) ?? '',
+  const user = (body.input.filter((x) => x.role === 'user').at(-1)?.content as string) ?? '',
     last = body.input.filter((x) => x.type === 'function_call_output').at(-1)
   const id = `resp_${crypto.randomUUID()}`
   let text = 'A streamed answer that stays saved.',
@@ -115,12 +136,14 @@ export async function syntheticChatProvider(request: Request): Promise<Response>
     },
   }
   const encode = (event: unknown) => new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
-  const slow = /slow/i.test(user) && !body.instructions.startsWith('Write a short factual')
+  const held = body.instructions.startsWith('Write a short factual')
+    ? undefined
+    : heldResponses.get(user)
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for (const event of events) controller.enqueue(encode(event))
-        if (slow) await new Promise((resolve) => setTimeout(resolve, 3500))
+        if (held) await held.promise
         controller.enqueue(encode(completed))
         controller.close()
       } catch {

@@ -7,6 +7,8 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   timeout: 60_000,
+  // Admission, durable alarms and stream replay cross real runtime boundaries.
+  expect: { timeout: 15_000 },
   reporter: [['list'], ['html', { outputFolder: 'playwright-report/acceptance', open: 'never' }]],
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [
