@@ -12,6 +12,7 @@ for (const appearance of ['light', 'dark']) {
       await installDefaultApiMocks(page)
       const viewingOnly = {
         ...movie,
+        displayTitle: 'A Very Long Movie Title That Needs More Than Two Lines in a Small Card',
         personal: {
           currentRating: null,
           viewingRating: { value: 3.5, archiveEntryId: 'viewing-one', watchedOn: '2026-09-12' },
@@ -73,6 +74,18 @@ for (const appearance of ['light', 'dark']) {
       await page.getByRole('button', { name: 'Grid view' }).click()
       await expect(row.getByRole('img', { name: '3.5 out of 5 stars' })).toBeVisible()
       await expect(row.getByText('Viewing rating')).toHaveCount(0)
+      const cardGeometry = await row.evaluate((element) => {
+        const title = element.querySelector(':scope > strong')!
+        const metadata = element.querySelector(':scope > span:last-child')!
+        return {
+          titleHeight: title.getBoundingClientRect().height,
+          titleLineHeight: parseFloat(getComputedStyle(title).lineHeight),
+          metadataBottom: metadata.getBoundingClientRect().bottom,
+          cardBottom: element.getBoundingClientRect().bottom,
+        }
+      })
+      expect(cardGeometry.titleHeight).toBeGreaterThanOrEqual(cardGeometry.titleLineHeight * 2 - 1)
+      expect(cardGeometry.metadataBottom).toBeLessThanOrEqual(cardGeometry.cardBottom - 6)
       await row.click()
       const inspector = page.getByRole('complementary', { name: 'Movie inspector' })
       await expect(inspector.getByRole('img', { name: '3.5 out of 5 stars' }).first()).toBeVisible()

@@ -12,6 +12,8 @@ show item counts without additional consumption totals.
 Available ratings use shared stars, including fractional stars, in collections
 and inspectors; Movie results omit the viewing-rating qualifier.
 Library lists omit the extra border above their first item.
+Results have 16px of space below the fixed collection header. Artwork cards grow
+with their text; Movie titles reserve two complete lines above the metadata.
 Books omits column headings, and the passive API status does not change
 appearance on hover.
 The legacy History component is not routed. Chat and Recaps remain disabled
