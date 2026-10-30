@@ -3,7 +3,7 @@
 Status: full-library ingestion has been verified with the real API. The October
 hosted reconciliation was interrupted. The resumable Worker implementation below
 is deployed with migrations through 0034, and its October 29 controlled hosted
-snapshot completed 23 pages and 1,112 books without failed records.
+snapshot completed 23 pages with 1,112 source records, 128 normalized records and no failures.
 
 This package owns book-history backfill, scheduled full reconciliation, edition
 and reread identity, and source-specific parsing. See the
@@ -96,7 +96,7 @@ platform cause. The protected failed response was inspected only for aggregate
 shape. No private database copy, production write, source activation, or token
 change was made during implementation. Migrations through 0034 are now deployed;
 the October 29 controlled hosted run subsequently completed all 23 pages and
-1,112 books without failed records. Its completed cursor was recorded at
+1,112 source records, 128 normalized records and no failures. Its completed cursor was recorded at
 `2026-10-29T23:04:25.695Z`. This verifies a complete hosted continuation chain;
 continued scheduled operation remains subject to the shared daily admission and
 operating monitor.

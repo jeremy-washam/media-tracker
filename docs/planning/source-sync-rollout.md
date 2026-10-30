@@ -105,8 +105,10 @@ these live gates.
 
 ## Live closeout evidence — October 29, 2026
 
-Main `9a6a877` is deployed in normal operation after the protected migration
-release applied 0032–0034. All 34 migration names, ownership/retry columns and
+Main `3044d2ad` passed ordinary automatic deployment and authenticated smoke in
+[run 40975073224](https://github.com/jeremy-washam/media-tracker/actions/runs/40975073224)
+at 23:56:29 UTC. The earlier protected migration release on `9a6a877` applied
+0032–0034. All 34 migration names, ownership/retry columns and
 zero foreign-key violations were verified. Native queue delivery is open and
 the serial consumer is attached. These are live configuration checks, not a
 claim that every provider has passed its next eligible daily cycle.
@@ -129,8 +131,15 @@ cause. `user-library-read` authorizes saved-library access;
 establish the 403 cause. See [quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes),
 [saved episodes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes)
 and the [February changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026).
-The developer dashboard is signed out; owner account input is pending. No new
-app, subscription, reauthorization or credential change was made.
+The owner subsequently reported cancelling Premium and chose to restore it
+independently. Spotify requires active Premium for Development Mode apps and
+documents that a lapse stops the app. If the cancellation has taken effect,
+that is consistent with the observed 403; current app mode and subscription
+expiry remain unverified. Keep the existing Spotify configuration enabled and
+retry within the retained admission limits after Premium is active. If 403
+persists, continue the matching-app/allowlist/scopes diagnostic above. No new
+app, agent purchase, reauthorization or credential change was made; API recovery
+still needs a successful source and catalog retest.
 
 The reviewed legacy October 17 Hardcover and October 28 Spotify source runs had
 no active lease, progress, snapshot admission, catalog role or committed cursor.
@@ -140,6 +149,16 @@ zero-write no-op. Counts, evidence and admission accounting were retained; the
 completed October 29 Hardcover snapshot was untouched. Connections now shows
 that snapshot as succeeded and the abandoned Spotify run as interrupted rather
 than polling it indefinitely as running.
+
+The real hourly invocation at **2026-10-30 00:00:17.063 UTC** succeeded on the
+current deployed version. Admissions remained attached to their October 29
+allocations; a new UTC day alone did not bypass the 23-hour eligibility guard.
+The same cycle reserved 20 Reader content targets, all of which completed with
+one acquisition attempt each and no failures. Twenty full ready manifests and
+251 indexed chunks had no missing search mappings. New text/checksums, an
+owner-authenticated text search/excerpt, and controlled duplicate delivery passed
+the [catalog/content acceptance checks](catalog-operations.md). This observed
+hourly scheduling is distinct from a subsequent eligible daily source fetch.
 
 Full source closeout remains subject to the acceptance requirements above,
 including actual subsequent eligible scheduled runs. Local clocks and same-day

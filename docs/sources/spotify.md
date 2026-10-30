@@ -56,8 +56,9 @@ Recommended integration shape:
 
 This is still a good fit for a private, single-user app. Development mode is
 specifically intended for apps accessing one Spotify account, and the owner
-previously confirmed Premium. Current eligibility still needs an account-side
-check when investigating the October 29 HTTP 403.
+previously confirmed Premium, then reported cancellation during the October 29
+access investigation. The owner plans to restore Premium; API acceptance needs
+a bounded retest after active eligibility is restored.
 
 ## Source surfaces
 
@@ -111,8 +112,16 @@ The current hosted retry refreshed its token, then `GET /me/episodes` returned 4
 not explain it. Check the existing matching app's status, owner Premium and
 Users Management account before replacing the grant. The encrypted hosted store
 retains neither actual grant scopes nor account eligibility. A separate local
-probe's validated scopes do not prove the hosted grant's scope. No current cause
-has been established; no new app, purchase or reauthorization was performed.
+probe's validated scopes do not prove the hosted grant's scope. The owner later
+reported cancelling Premium and chose to restore it independently. Spotify's
+[migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
+states that Development Mode apps stop functioning when the owner's Premium
+lapses. This is consistent with the 403 if cancellation has taken effect;
+current app mode and subscription expiry have not been inspected. Keep the
+existing configuration and credentials ready for a bounded source/catalog retry
+after Premium is active. If 403 persists, check the matching app's status,
+allowlist and grant scopes. No API recovery, agent purchase, new app or
+reauthorization is claimed.
 See the [source rollout evidence](../planning/source-sync-rollout.md#live-closeout-evidence--october-29-2026).
 
 ### OAuth flow

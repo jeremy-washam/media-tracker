@@ -1,6 +1,6 @@
 # Imladris Implementation Plan
 
-Last updated: 2026-10-29
+Last updated: 2026-10-30 UTC
 
 Deployment closeout is the active priority. The[closeout checklist](deployment-closeout.md)
 tracks permanent cost safeguards, source recovery, recurring catalog/content,
@@ -24,14 +24,27 @@ and OAuth stages.
 The [AI Chat proposal](ai-chat-plan.md) details a proposed multi-provider query
 layer, model-access options, and delivery sequence; it is not shipped behavior.
 
-## Current checkout and production status (2026-10-29)
+## Current checkout and production status (2026-10-30 UTC)
 
-The normal production configuration is deployed from main revision `9a6a877` with
+Deployment acceptance recorded through 2026-10-30 00:10 UTC used main revision
+`3044d2ad` with
 migrations through 0034; foreign-key checks passed and a fresh protected local
 database/R2 copy passed independent restore verification. CI validation and
-guarded automatic production delivery are enabled; the first ordinary release
-still needs verification. See the closeout checklist for exact release evidence and later
-updates; deployment does not imply every provider has passed acceptance.
+guarded automatic production delivery are enabled. The first ordinary
+[main pipeline 40975073224](https://github.com/jeremy-washam/media-tracker/actions/runs/40975073224)
+passed validation, deployment and authenticated smoke at **23:56:29.258 UTC**.
+[PR 12](https://github.com/jeremy-washam/media-tracker/pull/12) resolved the YouTube
+publication CPU failure; `CATALOG_AUTO_REFRESH=true` was restored and reconciled
+with both protected environment configurations at **23:57:19.646 UTC**. The same
+existing YouTube job succeeded at **23:57:28.555 UTC** with unchanged provider
+counters, native publication/search/expiry checks and live artwork/inspector
+verification in dark and light appearance. The 00:00 UTC monitor read timed out;
+it retained the still-fresh 23:50 normal/open $5 estimate without inventing a new
+measurement or pausing. The next real collection recovered at
+**2026-10-30 00:10:25.976 UTC**, verified directly in R2 as normal/open with a $5
+estimate and unpaused queue.
+See the closeout checklist for exact release evidence and later updates;
+deployment does not imply every provider has passed acceptance.
 
 The initial Library implementations for all six media types are present across
 16 routed sections, with Connections as the seventeenth production route. The
@@ -49,8 +62,23 @@ are complete. The owner verified all six media families, search, filters,
 inspectors/history and article excerpts. Hourly source dispatch now checks daily
 eligibility; new hosted allocations are limited to one per source per UTC day
 and at least 23 hours apart. Hardcover's controlled hosted snapshot completed
-23 pages and 1,112 books without failed records. Spotify's HTTP 403, recurring
-catalog/content, and release automation require live acceptance. See the
+23 pages with 1,112 source records, 128 normalized records and zero failures.
+The owner reported canceling Spotify Premium and chose to restore it personally.
+Active Premium is required by Spotify's Development Mode policy; the app's actual
+mode and Premium expiration timing remain unverified. After owner restoration,
+retest the existing connection's bounded source sync and catalog job with API
+flags and the allowlist unchanged. If 403 persists, inspect the matching app's
+status, Users Management and granted scopes. No subscription purchase or manual
+Spotify credential change was made; API recovery remains unverified.
+The real October 30 hourly invocation completed at 00:00:17.063 UTC without an
+empty catalog refresh; five-minute maintenance also completed. Its article batch
+finished with 20 jobs / 20 attempts / zero failures, 20 ready/full manifests,
+251 chunks and no missing FTS. Newly acquired text/chunk checksums, owner text-only
+search and hydrated excerpt were verified. A controlled completed-key replay
+left attempts, acquisitions and manifest/chunk/FTS metadata unchanged; queue/log
+correlation supports duplicate-guard acceptance, with no direct message-ID proof
+or measured zero-write claim. The next genuinely eligible daily source cycle
+remains acceptance work. See the
 [deployment closeout](deployment-closeout.md) for the
 current checklist and[deployment runbook](deployment.md) for transfer evidence.
 
@@ -459,7 +487,8 @@ raw-page retention, canonical projection, manual sync, and hosted daily admissio
 are implemented. Hosted snapshots continue one durable 50-book page per
 invocation under the same run; only a completed scan advances the completed
 cursor and retires absent source relationships. Controlled hosted completion
-passed on October 29 across 23 pages and 1,112 books with no failed records. The
+passed on October 29 across 23 pages, 1,112 source records and 128 normalized
+records with zero failures. The
 earlier Read-shelf-only local validation returned
 127 Read books and 127 supported occurrences on repeated reconciliation without
 canonical duplicates; those counts describe the historical test, not the current

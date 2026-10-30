@@ -18,9 +18,55 @@ installed. The October 29 maintenance bootstrap began at 21:53:50 UTC with the
 gate closed, queue paused, consumer detached and only the monitor cron active;
 zero active source/catalog leases were confirmed at 21:59 UTC. Fresh capture,
 independent restore, protected Mac-copy verification and a separate migration
-rehearsal subsequently passed. The normal production configuration from main
-`9a6a877` is now deployed. Guarded ordinary production CD is enabled with normal configuration installed in both protected environments; its first ordinary release still needs verification. Spotify's HTTP 403
-failure remains unfinished. The original baseline's separate Mac-copy verification
+rehearsal subsequently passed before the protected migration release of
+`9a6a877`. The first ordinary
+[main pipeline 40975073224](https://github.com/jeremy-washam/media-tracker/actions/runs/40975073224)
+subsequently passed validation, automatic deployment of exact-main `3044d2ad`
+and authenticated smoke at **23:56:29.258 UTC**.
+
+The normal configuration now includes `CATALOG_AUTO_REFRESH=true`, restored at
+**23:57:19.646 UTC** and reconciled across the live Worker, canonical configuration
+and both protected GitHub environments. Native variables, bindings, limits,
+schedules, serial consumer and all six summary smoke checks passed. The existing
+YouTube job published successfully at **23:57:28.555 UTC**, resolving the earlier
+CPU failure and refresh hold.
+
+The real **2026-10-30 00:00:17.063 UTC** hourly invocation completed on the current
+deployed script, with unchanged catalog job/request totals and zero active jobs;
+it created no empty catalog job. Five-minute maintenance completed at
+00:00:44.992 UTC. The entire article batch finished by 00:02:53 UTC with
+20 jobs / 20 attempts / zero failures. Final 00:05:12 checks found
+20 ready/full manifests, 251 chunks and no missing FTS. Protected article text,
+all eight selected-article chunk checksums/mappings, owner text-only search and
+hydrated excerpt passed verification.
+
+The 00:03:25.411 UTC completed-key replay left durable attempts, raw acquisitions
+and manifest/chunk/FTS metadata unchanged. A complete controlled log window showed
+one successful queue batch of one and its acquisition-usage event; queue depth
+was zero before/after and approximate DLQ depth stayed three. Success logs omit
+message ID/key, so this is correlated duplicate-guard evidence rather than direct
+message-identity proof. The one observed `first()` statement was unmeasured;
+reported zero writes do not establish measured zero writes. Historical DLQ
+messages were retained without purge or replay.
+
+The 00:00 monitor collection timed out on a native API read. Its still-fresh
+23:50 normal/open $5 snapshot was retained without fabricated freshness or an
+automatic pause. The next real collection recovered at **2026-10-30 00:10:25.976
+UTC**, verified directly in R2 as normal/open with a $5 estimate and unpaused
+queue. This is release acceptance against `3044d2ad` through that timestamp;
+later main revisions retain their own exact-revision validation and receipts.
+
+The owner reported canceling Spotify Premium and chose to restore it personally.
+Spotify's Development Mode policy requires active Premium; a lapse is consistent
+with the 403 if already expired, while the actual app mode/expiration remain
+unverified. Keep Spotify API flags and the source allowlist unchanged. After
+owner restoration, retest the existing connection's bounded source sync and
+catalog job without resetting admissions or attempts. If 403 persists, inspect
+the matching app's status, Users Management and granted scopes before considering
+reauthorization. No subscription purchase, new app or manual credential
+replacement was performed; Spotify API recovery remains unverified. That recovery
+and the next genuinely eligible daily source cycle remain unfinished.
+The original baseline's separate Mac-copy verification
 passed at 21:59:41 UTC; fresh-backup evidence is recorded below.
 The [deployment closeout](deployment-closeout.md) records remaining live
 acceptance. No workflow creates another cloud resource,
