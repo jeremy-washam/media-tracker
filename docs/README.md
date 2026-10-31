@@ -14,6 +14,10 @@
 - [Desktop UI foundation](design/ui-foundation.md): selected Index shell, sidebar collapse,
   Chat/Library/Recaps requirements, writing preferences, and open design questions
 
+- [Approved typography](design/ui-foundation.md#approved-typography-balanced-october-29-2026):
+  system-font stack, Balanced sizes/weights, text roles, implementation tokens,
+  and responsive input sizing
+
 - [Saved interface mockups](design/mockups.md): source files, all seven layout
   links, and instructions to reopen the preview
 

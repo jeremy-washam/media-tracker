@@ -83,6 +83,10 @@ Library never starts provider syncs or catalog jobs.
 
 ## Typography
 
+The [UI foundation typography reference](../../docs/design/ui-foundation.md#approved-typography-balanced-october-29-2026)
+records the exact system-font stack, role table, token names, and approved
+exceptions. Use it when adding or reviewing interface text.
+
 Production uses the owner-approved original Balanced study: 12px supporting
 metadata/counts, 14px interface and inspector body/facts, 16px list titles, and
 22px inspector titles/wordmark. Weights are 400 for body/counts, 500 for controls

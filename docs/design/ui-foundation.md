@@ -94,33 +94,90 @@ their explicit pagination controls. Virtualization remains a measured follow-up.
 
 ## Approved typography: Balanced (October 29, 2026)
 
-The owner selected the original **Balanced** typography study and approved its
-implementation. The [saved comparison](typography-study/README.md) retains all
-three directions and the rejected smaller-inspector follow-up. This section
-supersedes older typography values in prior polish records and studies.
+This section is the production web client's typography reference. The owner
+selected the original **Balanced** study: a small, reusable set of text roles
+with readable supporting copy and restrained emphasis. It supersedes older
+values in polish records and historical studies. The [saved comparison](typography-study/README.md)
+retains the alternatives and the rejected smaller-inspector follow-up.
 
-Use one system-font role scale across production: **12, 14, 16, and 22px**, with
-weights **400, 500, and 600**. Shared tokens live in `apps/web/src/components.css`;
-CSS Modules and shared control compositions apply them. Nested `small`, `strong`,
-and heading elements must not create fractional sizes or an extra bold weight.
+### Font family
 
-| Role                                                              | Size / weight                         |
-| ----------------------------------------------------------------- | ------------------------------------- |
-| Supporting metadata, counts, summaries, grid subtitles            | 12px / 400                            |
-| Navigation and breadcrumb                                         | 14px / 400; selected identity 500     |
-| Controls, collection/inspector tabs, section headings             | 14px / 500                            |
-| Inspector overview, labels, values, descriptions and source links | 14px / 400                            |
-| Grid item titles                                                  | 14px / 600                            |
-| List item titles and subtitles                                    | 16px / 600 title; 14px / 400 subtitle |
-| Inspector item title and expanded wordmark                        | 22px / 500                            |
+Use the platform system sans-serif for interface text, media titles, inspectors,
+and the Imladris wordmark. The exact stack in `apps/web/src/styles.css` is:
 
-Keep inspector overview and label/value text at the same 14px size. The owner
-rejected the experiment that reduced both to 12px. Section headings use sentence
-case and ordinary letter spacing; supporting text should not rely on tiny all-caps
-labels. Counts remain normal-weight and muted. Narrow editable inputs retain the
-installed primitive's 16px size, returning to 14px on desktop. Typography changes
-preserve the existing controls, artwork dimensions, 101px row baseline, contained
-scrolling, source semantics, and inspector behavior.
+```css
+font-family:
+  ui-sans-serif,
+  system-ui,
+  -apple-system,
+  BlinkMacSystemFont,
+  'Segoe UI',
+  sans-serif;
+```
+
+This keeps the interface familiar on each platform and lets media artwork carry
+its visual character. The installed system font can differ by operating system;
+there is no separately downloaded interface or brand font. Serif, decorative,
+and custom wordmark fonts in saved explorations are historical references.
+Keep `font-synthesis: none` and let controls inherit the same family.
+
+### Sizes, weights, and roles
+
+Use four sizes: **12, 14, 16, and 22px**. Use three weights: **400 regular,
+500 medium, and 600 semibold**.
+
+| Role                                                           | Size | Weight                     |
+| -------------------------------------------------------------- | ---- | -------------------------- |
+| Supporting metadata, counts, summaries, grid subtitles         | 12px | 400                        |
+| Navigation and breadcrumb                                      | 14px | 400; selected identity 500 |
+| Controls, collection/inspector tabs, section headings          | 14px | 500                        |
+| Inspector overview, labels, values, descriptions, source links | 14px | 400                        |
+| Grid item titles                                               | 14px | 600                        |
+| List item titles                                               | 16px | 600                        |
+| List item subtitles                                            | 14px | 400                        |
+| Inspector item title and expanded wordmark                     | 22px | 500                        |
+
+Overview prose and inspector label/value rows must match at **14px / 400**.
+The owner rejected the follow-up that reduced them to 12px. Section headings use
+sentence case and ordinary letter spacing. Counts remain normal-weight and
+muted; tiny uppercase labels are not a separate typography role.
+
+### Implementation tokens
+
+`apps/web/src/components.css` owns the shared role tokens:
+
+| Token                   | Value |
+| ----------------------- | ----- |
+| `--app-text-caption`    | 12px  |
+| `--app-text-body`       | 14px  |
+| `--app-text-title`      | 16px  |
+| `--app-text-display`    | 22px  |
+| `--app-weight-normal`   | 400   |
+| `--app-weight-medium`   | 500   |
+| `--app-weight-semibold` | 600   |
+| `--app-leading-body`    | 1.45  |
+
+Tailwind `text-xs`, `text-sm`, and `text-base` map to the caption, body, and title
+sizes. Body text defaults to 14px / 400 with 1.45 line height; the text utilities
+share that leading. Existing title compositions can use tighter leading, such
+as 1.3 for list titles and 1.25 for inspector titles.
+
+The `--library-row-title-size`, `--library-row-subtitle-size`, and
+`--library-row-metadata-size` aliases map to 16, 14, and 12px respectively.
+CSS Modules apply the roles to custom content; shared shadcn/Base UI
+compositions and variants own control typography. Reuse those owners when
+adding a surface so equivalent elements keep the same role across media types.
+
+`apps/web/src/styles.css` explicitly sets `small` to the 12px caption role and
+`strong`/`b` to 600. Nested elements must not compound relative sizes or introduce
+an extra 700 bold weight. Semantic heading elements still need the appropriate
+shared role rather than an unrelated browser-default size.
+
+Narrow editable inputs retain the installed primitive's **16px** accommodation
+and return to **14px on desktop**. This is an intentional responsive use of the
+existing scale. Preserve the real controls, keyboard/focus behavior, artwork
+sizes, 101px row baseline, contained scrolling, and source semantics when
+applying typography.
 
 ## Control consistency audit (October 29, 2026)
 
