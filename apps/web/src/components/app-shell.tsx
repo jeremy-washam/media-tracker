@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from 'react'
 import type { AppIcon } from '@/components/icons'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import {
   BookOpen,
   ChartBar,
@@ -34,6 +35,7 @@ import {
 } from '@/components/icons'
 
 import { ChatSidebar } from '@/features/chat/chat-sidebar'
+import { chatKeys, chatRequest, snapshotSchema } from '@/features/chat/chat-api'
 import { HealthIndicator } from './health-indicator'
 
 type DisabledNavigationItem = {
@@ -78,6 +80,13 @@ export function AppShell() {
   const [headerTarget, setHeaderTarget] = useState<HTMLDivElement | null>(null)
   const location = useLocation()
   const inChat = location.pathname.startsWith('/chat')
+  const chatId = inChat ? location.pathname.split('/')[2] : undefined
+  const chatSnapshot = useQuery({
+    queryKey: chatKeys.snapshot(chatId ?? 'new'),
+    queryFn: ({ signal }) => chatRequest(`/conversations/${chatId}`, snapshotSchema, { signal }),
+    // Observe ChatPage's existing cache; the shell never starts another request.
+    enabled: false,
+  })
   const inBooks = location.pathname.startsWith('/library/books')
   const inMovies = location.pathname.startsWith('/library/movies')
   const inArticles = location.pathname.startsWith('/library/articles')
@@ -355,7 +364,9 @@ export function AppShell() {
                       </strong>
                     </>
                   ) : (
-                    <strong>{inChat ? 'Chat' : 'Connections'}</strong>
+                    <strong>
+                      {inChat ? (chatSnapshot.data?.conversation.title ?? 'Chat') : 'Connections'}
+                    </strong>
                   )}
                 </div>
                 <div

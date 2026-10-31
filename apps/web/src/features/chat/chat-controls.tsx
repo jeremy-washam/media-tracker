@@ -21,8 +21,8 @@ export function ChatSectionTrigger({ title, open }: { title: string; open: boole
     <CollapsibleTrigger
       render={
         <Button
-          variant="link"
-          className="h-9 justify-start gap-1 px-2.5 font-normal text-muted-foreground no-underline hover:text-foreground hover:no-underline"
+          variant="disclosure"
+          className="h-9 w-full justify-start gap-1 px-2.5 font-normal"
         />
       }
     >
@@ -55,7 +55,7 @@ export function ChatComposer({
   return (
     <InputGroup
       data-ui="chat-composer"
-      className="items-end rounded-[28px] border-transparent bg-secondary has-disabled:bg-secondary has-disabled:opacity-100 dark:bg-secondary dark:has-disabled:bg-secondary"
+      className="items-end rounded-[28px] border-transparent bg-secondary has-disabled:bg-secondary has-disabled:opacity-100 has-[[data-slot=input-group-control]:focus-visible]:ring-1 dark:bg-secondary dark:has-disabled:bg-secondary"
     >
       <InputGroupTextarea
         ref={inputRef}
@@ -73,11 +73,11 @@ export function ChatComposer({
           }
         }}
       />
-      <InputGroupAddon align="inline-end" className="self-end py-2 pr-2">
+      <InputGroupAddon align="inline-end" className="cursor-default self-end py-2 pr-2">
         <Button
           variant="default"
           size="icon"
-          className="size-10 rounded-full bg-foreground text-background hover:bg-foreground/85 disabled:opacity-35"
+          className="size-10 rounded-full bg-foreground text-background hover:bg-foreground/85 disabled:pointer-events-auto disabled:cursor-default disabled:opacity-35"
           aria-label={
             stopping
               ? 'Stopping response'

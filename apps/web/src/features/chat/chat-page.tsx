@@ -15,7 +15,15 @@ import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Hint, Notice, LoadingState } from '@/components/ui-patterns'
-import { CaretRight, Books, ArrowDown } from '@/components/icons'
+import {
+  CaretRight,
+  Books,
+  ArrowDown,
+  Check,
+  XCircle,
+  SpinnerGap,
+  ArrowSquareOut,
+} from '@/components/icons'
 import { ChatComposer } from './chat-controls'
 import {
   chatRequest,
@@ -484,7 +492,7 @@ const ChatMessage = memo(function ChatMessage({
                   />
                 }
               >
-                {running ? <span className={styles.pulse} /> : null}
+                <span className={running ? styles.pulse : styles.finishedDot} />
                 {running ? 'Thinking' : 'Thinking summary'}
                 <CaretRight className="size-3.5" />
               </CollapsibleTrigger>
@@ -516,17 +524,27 @@ const ChatMessage = memo(function ChatMessage({
                 <div className={styles.toolList}>
                   {tools.map((tool) => (
                     <div key={tool.id} className={styles.tool}>
-                      <span>{tool.title}</span>
-                      <small>{tool.detail}</small>
-                      <small>
-                        {tool.status === 'running'
-                          ? 'In progress…'
-                          : tool.status === 'cancelled'
-                            ? 'Stopped'
-                            : tool.status === 'failed'
-                              ? 'Unavailable'
-                              : 'Completed'}
-                      </small>
+                      {tool.name === 'search_web' ? <ArrowSquareOut /> : <Books />}
+                      <div>
+                        <span>{tool.title}</span>
+                        <small>{tool.detail}</small>
+                        <small>
+                          {tool.status === 'running'
+                            ? 'In progress…'
+                            : tool.status === 'cancelled'
+                              ? 'Stopped'
+                              : tool.status === 'failed'
+                                ? 'Unavailable'
+                                : 'Completed'}
+                        </small>
+                      </div>
+                      {tool.status === 'running' ? (
+                        <SpinnerGap className="animate-spin" />
+                      ) : tool.status === 'succeeded' ? (
+                        <Check />
+                      ) : (
+                        <XCircle />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -546,7 +564,7 @@ const ChatMessage = memo(function ChatMessage({
                       <Button
                         id={`chat-citation-${message.id}-${ref.id}`}
                         variant="link"
-                        className="h-auto whitespace-normal p-0 text-inherit font-inherit underline underline-offset-4"
+                        className="h-auto whitespace-normal p-0 text-inherit font-normal underline underline-offset-4"
                         onClick={(event) => {
                           event.currentTarget.focus()
                           onReference({ kind: ref.kind, id: ref.itemId }, event.currentTarget)

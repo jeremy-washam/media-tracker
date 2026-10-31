@@ -36,6 +36,15 @@ must also be keyboard accessible; section chevrons expose expanded state. Keep
 reduced-motion behavior and avoid announcing every streamed token to assistive
 technology. The existing shared media inspector remains the citation target.
 
+Familiar's sidebar uses 39px conversation rows, a 16px gap after New Chat and
+20px between sections. Section triggers span the available width and use the
+shared disclosure Button variant with a visible neutral hover. Chat titles stay
+muted in both themes, including hover and selection; the selected title uses
+medium weight and the selection background.
+Empty section text uses the same 14px system-font role as navigation. Chat text
+uses the approved 12/14/16/22px scale. The composer retains a visible keyboard
+focus ring; its Send/Stop addon and disabled button use the normal arrow cursor.
+
 Remember section collapse independently in versioned browser-local preferences,
 as with existing shell preferences. It survives browser reloads; cross-device
 sync is not a requirement and needs no backend preference subsystem. A fresh New

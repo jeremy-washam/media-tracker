@@ -232,6 +232,7 @@ function ChatSection({
                 to="/chat/$conversationId"
                 params={{ conversationId: chat.id }}
                 className={styles.chatLink}
+                aria-current={selected === chat.id ? 'page' : undefined}
                 onClick={onNavigate}
               >
                 {chat.title}
@@ -244,7 +245,7 @@ function ChatSection({
                     aria-label={`${chat.favorite ? 'Unfavorite' : 'Favorite'} ${chat.title}`}
                     onClick={() => onFavorite(chat)}
                   >
-                    <Star weight={chat.favorite ? 'fill' : 'regular'} />
+                    <Star className="size-4" weight={chat.favorite ? 'fill' : 'regular'} />
                   </Button>
                 </Hint>
                 <DropdownMenu>
@@ -257,7 +258,7 @@ function ChatSection({
                       />
                     }
                   >
-                    <DotsThree />
+                    <DotsThree className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuItem onClick={() => onEdit(chat, 'rename')}>

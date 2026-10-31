@@ -45,6 +45,38 @@ for (const dark of [false, true]) {
     const sidebar = page.locator('[data-ui="app-frame"] > [data-ui="app-sidebar"]'),
       chatNav = sidebar.locator('[data-ui="chat-sidebar"]')
     await expect(chatNav).toBeVisible()
+    const emptyFavorites = chatNav.getByText('No favorites yet', { exact: true })
+    await expect(emptyFavorites).toHaveCSS('font-size', '14px')
+    await expect(emptyFavorites).toHaveCSS(
+      'font-family',
+      await chatNav
+        .getByRole('button', { name: 'New Chat', exact: true })
+        .evaluate((node) => getComputedStyle(node).fontFamily),
+    )
+    for (const label of ['Favorites', 'Chats']) {
+      const heading = chatNav.getByRole('button', { name: label, exact: true })
+      const resting = await heading.evaluate((node) => getComputedStyle(node).backgroundColor)
+      await heading.hover()
+      await expect
+        .poll(() => heading.evaluate((node) => getComputedStyle(node).backgroundColor))
+        .not.toBe(resting)
+      await page.mouse.move(900, 100)
+    }
+    const emptySend = page.getByRole('button', { name: 'Send message', exact: true })
+    await expect(emptySend).toBeDisabled()
+    await expect(emptySend).toHaveCSS('cursor', 'default')
+    expect(
+      await emptySend.evaluate((node) => {
+        const bounds = node.getBoundingClientRect()
+        return node.contains(
+          document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+        )
+      }),
+    ).toBe(true)
+    await page.screenshot({
+      path: `.private/chat-implementation/chat-empty-${dark ? 'dark' : 'light'}.png`,
+      fullPage: true,
+    })
     expect(await chatNav.evaluate((node) => node.getBoundingClientRect().top)).toBeGreaterThan(
       (await sidebar
         .locator('[data-ui="global-navigation"]')
@@ -67,7 +99,11 @@ for (const dark of [false, true]) {
     ).toBeVisible()
     const row = chatNav.locator('div[data-selected="true"]')
     await expect(row).toBeVisible()
+    await expect(row.getByRole('link')).toHaveAttribute('aria-current', 'page')
+    const mutedTitleColor = await emptyFavorites.evaluate((node) => getComputedStyle(node).color)
+    await expect(row.getByRole('link')).toHaveCSS('color', mutedTitleColor)
     await row.hover()
+    await expect(row.getByRole('link')).toHaveCSS('color', mutedTitleColor)
     await row.getByRole('button', { name: /More actions/ }).click()
     await page.getByRole('menuitem', { name: 'Rename', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Rename chat' })
@@ -77,6 +113,9 @@ for (const dark of [false, true]) {
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(dialog).toBeHidden()
     await expect(row.getByRole('link')).toHaveText(`Reviewed ${dark ? 'dark' : 'light'} chat`)
+    await expect(page.locator('[data-ui="workspace-breadcrumb"]')).toHaveText(
+      `Reviewed ${dark ? 'dark' : 'light'} chat`,
+    )
     await row.hover()
     await row.getByRole('button', { name: /^Favorite / }).click()
     await expect(
